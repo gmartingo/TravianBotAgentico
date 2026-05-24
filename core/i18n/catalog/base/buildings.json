@@ -1,0 +1,322 @@
+{
+  "1": {
+    "alias": "woodcutter",
+    "es": "Leñador",
+    "en": "Woodcutter",
+    "de": "Holzfäller",
+    "fr": "Bûcheron",
+    "ru": "Лесопилка"
+  },
+  "2": {
+    "alias": "clay_pit",
+    "es": "Hoyo de arcilla",
+    "en": "Clay Pit",
+    "de": "Lehmgrube",
+    "fr": "Carrière d'argile",
+    "ru": "Глиняный карьер"
+  },
+  "3": {
+    "alias": "iron_mine",
+    "es": "Mina de hierro",
+    "en": "Iron Mine",
+    "de": "Eisenmine",
+    "fr": "Mine de fer",
+    "ru": "Железная шахта"
+  },
+  "4": {
+    "alias": "cropland",
+    "es": "Campo de trigo",
+    "en": "Cropland",
+    "de": "Getreidefeld",
+    "fr": "Champ de blé",
+    "ru": "Зерновое поле"
+  },
+  "5": {
+    "alias": "sawmill",
+    "es": "Aserradero",
+    "en": "Sawmill",
+    "de": "Sägewerk",
+    "fr": "Scierie",
+    "ru": "Лесопильный завод"
+  },
+  "6": {
+    "alias": "brickyard",
+    "es": "Ladrillería",
+    "en": "Brickyard",
+    "de": "Ziegelei",
+    "fr": "Briqueterie",
+    "ru": "Кирпичный завод"
+  },
+  "7": {
+    "alias": "iron_foundry",
+    "es": "Fundición de hierro",
+    "en": "Iron Foundry",
+    "de": "Eisengießerei",
+    "fr": "Fonderie de fer",
+    "ru": "Плавильный завод"
+  },
+  "8": {
+    "alias": "grain_mill",
+    "es": "Molino de grano",
+    "en": "Grain Mill",
+    "de": "Getreidemühle",
+    "fr": "Moulin à grain",
+    "ru": "Мельница"
+  },
+  "9": {
+    "alias": "bakery",
+    "es": "Panadería",
+    "en": "Bakery",
+    "de": "Bäckerei",
+    "fr": "Boulangerie",
+    "ru": "Пекарня"
+  },
+  "10": {
+    "alias": "warehouse",
+    "es": "Almacén",
+    "en": "Warehouse",
+    "de": "Lager",
+    "fr": "Entrepôt",
+    "ru": "Склад"
+  },
+  "11": {
+    "alias": "granary",
+    "es": "Granero",
+    "en": "Granary",
+    "de": "Speicher",
+    "fr": "Grenier",
+    "ru": "Амбар"
+  },
+  "12": {
+    "alias": "blacksmith",
+    "es": "Herrería",
+    "en": "Blacksmith",
+    "de": "Schmiede",
+    "fr": "Forgeron",
+    "ru": "Кузница"
+  },
+  "13": {
+    "alias": "rally_point",
+    "es": "Punto de encuentro",
+    "en": "Rally Point",
+    "de": "Versammlungsplatz",
+    "fr": "Point de rassemblement",
+    "ru": "Площадь сбора"
+  },
+  "14": {
+    "alias": "academy",
+    "es": "Academia",
+    "en": "Academy",
+    "de": "Akademie",
+    "fr": "Académie",
+    "ru": "Академия"
+  },
+  "15": {
+    "alias": "barracks",
+    "es": "Cuartel",
+    "en": "Barracks",
+    "de": "Kaserne",
+    "fr": "Caserne",
+    "ru": "Казармы"
+  },
+  "16": {
+    "alias": "stable",
+    "es": "Establo",
+    "en": "Stable",
+    "de": "Stall",
+    "fr": "Écurie",
+    "ru": "Конюшня"
+  },
+  "17": {
+    "alias": "workshop",
+    "es": "Taller",
+    "en": "Workshop",
+    "de": "Werkstatt",
+    "fr": "Atelier",
+    "ru": "Мастерская"
+  },
+  "18": {
+    "alias": "palace",
+    "es": "Palacio",
+    "en": "Palace",
+    "de": "Palast",
+    "fr": "Palais",
+    "ru": "Дворец"
+  },
+  "19": {
+    "alias": "treasury",
+    "es": "Tesoro",
+    "en": "Treasury",
+    "de": "Schatzkammer",
+    "fr": "Trésorerie",
+    "ru": "Сокровищница"
+  },
+  "20": {
+    "alias": "trade_office",
+    "es": "Oficina de comercio",
+    "en": "Trade Office",
+    "de": "Handelsbüro",
+    "fr": "Bureau de commerce",
+    "ru": "Торговый офис"
+  },
+  "21": {
+    "alias": "great_market",
+    "es": "Gran mercado",
+    "en": "Great Market",
+    "de": "Großer Marktplatz",
+    "fr": "Grand marché",
+    "ru": "Большой рынок"
+  },
+  "22": {
+    "alias": "embassy",
+    "es": "Embajada",
+    "en": "Embassy",
+    "de": "Botschaft",
+    "fr": "Ambassade",
+    "ru": "Посольство"
+  },
+  "23": {
+    "alias": "hero_mansion",
+    "es": "Mansión del héroe",
+    "en": "Hero's Mansion",
+    "de": "Heldenvilla",
+    "fr": "Manoir du héros",
+    "ru": "Особняк героя"
+  },
+  "24": {
+    "alias": "monument",
+    "es": "Monumento",
+    "en": "Monument",
+    "de": "Denkmal",
+    "fr": "Monument",
+    "ru": "Монумент"
+  },
+  "25": {
+    "alias": "great_granary",
+    "es": "Gran granero",
+    "en": "Great Granary",
+    "de": "Großspeicher",
+    "fr": "Grand grenier",
+    "ru": "Большой амбар"
+  },
+  "26": {
+    "alias": "great_warehouse",
+    "es": "Gran almacén",
+    "en": "Great Warehouse",
+    "de": "Großlager",
+    "fr": "Grand entrepôt",
+    "ru": "Большой склад"
+  },
+  "27": {
+    "alias": "world_wonder",
+    "es": "Maravilla del mundo",
+    "en": "World Wonder",
+    "de": "Weltwunder",
+    "fr": "Merveille du monde",
+    "ru": "Чудо света"
+  },
+  "28": {
+    "alias": "city_wall",
+    "es": "Muralla de la ciudad",
+    "en": "City Wall",
+    "de": "Stadtmauer",
+    "fr": "Mur de la cité",
+    "ru": "Городская стена"
+  },
+  "29": {
+    "alias": "earth_wall",
+    "es": "Terraplén",
+    "en": "Earth Wall",
+    "de": "Erdwall",
+    "fr": "Remblai de terre",
+    "ru": "Земляной вал"
+  },
+  "30": {
+    "alias": "palisade",
+    "es": "Palizada",
+    "en": "Palisade",
+    "de": "Palisade",
+    "fr": "Palissade",
+    "ru": "Частокол"
+  },
+  "31": {
+    "alias": "stonemasons_lodge",
+    "es": "Logia de canteros",
+    "en": "Stonemason's Lodge",
+    "de": "Steinmetzhütte",
+    "fr": "Loge du tailleur de pierre",
+    "ru": "Гильдия каменщиков"
+  },
+  "32": {
+    "alias": "residence",
+    "es": "Residencia",
+    "en": "Residence",
+    "de": "Residenz",
+    "fr": "Résidence",
+    "ru": "Резиденция"
+  },
+  "33": {
+    "alias": "mansion",
+    "es": "Mansión",
+    "en": "Mansion",
+    "de": "Anwesen",
+    "fr": "Manoir",
+    "ru": "Поместье"
+  },
+  "34": {
+    "alias": "roman_smithy",
+    "es": "Herrero romano",
+    "en": "Roman Smithy",
+    "de": "Römische Schmiede",
+    "fr": "Forgeron romain",
+    "ru": "Римская кузница"
+  },
+  "35": {
+    "alias": "teuton_smithy",
+    "es": "Herrero teutón",
+    "en": "Teutonic Smithy",
+    "de": "Teutonische Schmiede",
+    "fr": "Forgeron teuton",
+    "ru": "Тевтонская кузница"
+  },
+  "36": {
+    "alias": "gaul_smithy",
+    "es": "Herrero galo",
+    "en": "Gaul Smithy",
+    "de": "Gallische Schmiede",
+    "fr": "Forgeron gaulois",
+    "ru": "Галльская кузница"
+  },
+  "37": {
+    "alias": "egypt_smithy",
+    "es": "Herrería egipcia",
+    "en": "Egyptian Smithy",
+    "de": "Ägyptische Schmiede",
+    "fr": "Forgeron égyptien",
+    "ru": "Египетская кузница"
+  },
+  "38": {
+    "alias": "hun_smithy",
+    "es": "Herrería huna",
+    "en": "Hun Smithy",
+    "de": "Hunnische Schmiede",
+    "fr": "Forgeron hun",
+    "ru": "Гуннская кузница"
+  },
+  "39": {
+    "alias": "great_barracks",
+    "es": "Gran cuartel",
+    "en": "Great Barracks",
+    "de": "Großkaserne",
+    "fr": "Grande caserne",
+    "ru": "Большие казармы"
+  },
+  "40": {
+    "alias": "great_stable",
+    "es": "Gran establo",
+    "en": "Great Stable",
+    "de": "Großstall",
+    "fr": "Grande écurie",
+    "ru": "Большая конюшня"
+  }
+}
