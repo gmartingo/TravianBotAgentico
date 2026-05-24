@@ -1,0 +1,86 @@
+{
+  "ACCOUNT_NOT_FOUND": {
+    "es": "Cuenta {account_id} no encontrada",
+    "en": "Account {account_id} not found",
+    "de": "Konto {account_id} nicht gefunden",
+    "fr": "Compte {account_id} introuvable",
+    "ru": "Аккаунт {account_id} не найден"
+  },
+  "DUPLICATE_ACCOUNT": {
+    "es": "Ya existe una cuenta con el username '{username}'",
+    "en": "An account with username '{username}' already exists",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "WORLD_NOT_FOUND": {
+    "es": "Mundo {world_id} no encontrado",
+    "en": "World {world_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "SESSION_NOT_ACTIVE": {
+    "es": "No hay sesión activa — ejecuta login primero",
+    "en": "No active session — run login first",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "INVALID_CREDENTIALS": {
+    "es": "Credenciales incorrectas para '{username}'",
+    "en": "Invalid credentials for '{username}'",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "VILLAGE_NOT_FOUND": {
+    "es": "Aldea {village_id} no encontrada",
+    "en": "Village {village_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "FARM_LIST_NOT_FOUND": {
+    "es": "Lista de vacas {farm_list_id} no encontrada",
+    "en": "Farm list {farm_list_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "LOGIN_ERROR": {
+    "es": "Error durante el proceso de login en Travian",
+    "en": "Error during Travian login process",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "BROWSER_ERROR": {
+    "es": "Error en la capa de automatización del navegador",
+    "en": "Browser automation error",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "DATABASE_ERROR": {
+    "es": "Error al acceder a la base de datos local",
+    "en": "Error accessing local database",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "TROOP_NOT_FOUND": {
+    "es": "Tropa {ordinal} de {tribe} no encontrada",
+    "en": "Troop {ordinal} for tribe {tribe} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "BUILDING_NOT_FOUND": {
+    "es": "Edificio gid={gid} no encontrado",
+    "en": "Building gid={gid} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  }
+}

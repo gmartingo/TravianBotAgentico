@@ -59,3 +59,7 @@ documentacion/guia-agentes/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Artefactos de Claude Code (runtime del agente, no código del proyecto)
+.claude/agent-memory/
+.claude/settings.json

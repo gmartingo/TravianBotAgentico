@@ -1,9 +1,13 @@
 """
 Tests unitarios de las excepciones del dominio.
 Verifican mensajes, atributos y jerarquía de herencia.
+
+Sección 12.4 del spec i18n-backend: tests de migración de error_code + params.
+Los tests existentes (los primeros 16) no se modifican — compatibilidad garantizada.
 """
 import pytest
 
+from core.entities.tribe import Tribe
 from core.exceptions import (
     TravianBotError,
     AccountNotFoundError,
@@ -16,6 +20,8 @@ from core.exceptions import (
     LoginError,
     BrowserError,
     DatabaseError,
+    TroopNotFoundError,
+    BuildingNotFoundError,
 )
 
 
@@ -119,3 +125,52 @@ def test_todas_las_excepciones_heredan_de_exception():
         BrowserError, DatabaseError,
     ]:
         assert issubclass(exc_cls, Exception), f"{exc_cls} no hereda de Exception"
+
+
+# ---------------------------------------------------------------------------
+# Sección 12.4 — Tests de migración: error_code + params (NUEVOS)
+# ---------------------------------------------------------------------------
+
+_ALL_CONCRETE_EXCEPTIONS = [
+    AccountNotFoundError(1),
+    DuplicateAccountError("user"),
+    WorldNotFoundError(1),
+    SessionNotActiveError(),
+    InvalidCredentialsError("user"),
+    VillageNotFoundError(1),
+    FarmListNotFoundError(1),
+    LoginError(),
+    BrowserError(),
+    DatabaseError(),
+    TroopNotFoundError(tribe=Tribe.ROMANS, ordinal=1),
+    BuildingNotFoundError(gid=5),
+]
+
+
+def test_todas_las_excepciones_tienen_error_code():
+    """Todas las subclases concretas tienen atributo error_code no vacío."""
+    for exc in _ALL_CONCRETE_EXCEPTIONS:
+        assert hasattr(exc, "error_code"), f"{type(exc).__name__} sin error_code"
+        assert exc.error_code, f"{type(exc).__name__} tiene error_code vacío"
+
+
+def test_todas_las_excepciones_tienen_params():
+    """Todas las subclases concretas tienen atributo params (dict)."""
+    for exc in _ALL_CONCRETE_EXCEPTIONS:
+        assert hasattr(exc, "params"), f"{type(exc).__name__} sin params"
+        assert isinstance(exc.params, dict), f"{type(exc).__name__}.params no es dict"
+
+
+def test_account_not_found_error_code():
+    err = AccountNotFoundError(42)
+    assert err.error_code == "ACCOUNT_NOT_FOUND"
+
+
+def test_account_not_found_params():
+    err = AccountNotFoundError(42)
+    assert err.params == {"account_id": 42}
+
+
+def test_troop_not_found_error_code():
+    err = TroopNotFoundError(Tribe.ROMANS, 15)
+    assert err.error_code == "TROOP_NOT_FOUND"
