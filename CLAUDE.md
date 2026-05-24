@@ -45,8 +45,12 @@ El proyecto se construye delegando tareas a **agentes especializados**. El agent
 5. guardian          → Audita el contrato de API: ¿exposición de datos sensibles / riesgo de detección?
 6. desarrollador-funcionalidades → Implementa según spec
 7. guardian          → Audita el código implementado antes de commit
-8. git-flow-advisor  → Gestiona el commit / branch / PR
+8. *** PRUEBA MANUAL DEL USUARIO *** → El usuario prueba en el entorno real (Chrome real, Travian real)
+9. git-flow-advisor  → Gestiona el commit / branch / PR — SOLO si el usuario da el OK
 ```
+
+**El paso 8 es un gate humano no salteable.** Ningún agente puede darlo por aprobado.
+El usuario debe confirmar explícitamente "OK, funciona" antes de que git-flow-advisor haga cualquier commit.
 
 Para features con UI añadir entre el paso 2 y 3:
 ```
@@ -61,6 +65,7 @@ Para features con UI añadir entre el paso 2 y 3:
 - **Cualquier endpoint nuevo o modificado** → `desarrollador-apis` de forma proactiva.
 - **Cualquier cambio en `adapters/browser/`, selectores o timings** → `guardian-antideteccion` inmediatamente.
 - **`desarrollador-funcionalidades` solo entra con spec `ready-for-impl`** — si no hay spec, volver al `analista`.
+- **`git-flow-advisor` solo entra con OK explícito del usuario** — nunca commitear sin confirmación manual.
 - **Tarea con varios frentes** → primero `Plan`, luego ejecutar.
 - Los agentes arrancan en frío. Cada prompt debe ser **autocontenido**: objetivo, contexto, restricciones, criterios de aceptación.
 
@@ -451,11 +456,35 @@ Documentación técnica completa en `documentacion/`. **Consúltala antes de toc
 
 ---
 
+## Comunicación obligatoria al lanzar agentes
+
+El usuario usa la extensión de VSCode (no el CLI). Los outputs de Bash/PowerShell no son visibles.
+
+**Antes de lanzar cualquier agente** con la herramienta `Agent`, escribir en el texto de respuesta:
+```
+**`>> NOMBRE-AGENTE`** — descripción de la tarea que se le delega
+```
+
+**Al recibir el resultado**, escribir:
+```
+**`OK NOMBRE-AGENTE`** — resumen del resultado en una línea
+```
+
+**Si el agente se bloquea o devuelve un gap**:
+```
+**`!! NOMBRE-AGENTE`** — motivo del bloqueo
+```
+
+Esto es la única forma de que el usuario sepa qué agente está activo en cada momento.
+
+---
+
 ## Instrucciones para el próximo agente
 
 1. **Leer este archivo completo** antes de hacer nada.
 2. **Seguir el flujo de trabajo estándar** — `palantir` → `analista` → `guardian` → implementación. No saltarse pasos.
 3. **`guardian-antideteccion` es obligatorio en tres momentos**: tras el spec del analista, tras el contrato de APIs, y antes de cada commit. Sin excepciones.
+4. **Prueba manual del usuario antes de commitear** — el usuario prueba en entorno real y da OK explícito. Ningún agente puede sustituir esta validación.
 4. **Respetar la anti-detección** — es tu responsabilidad, no opcional. Si una feature compromete la indetectabilidad, rechazarla y proponer alternativa.
 5. **Toda API exige `Accept-Language`** — sin excepciones, sin fallback silencioso. Delega en `desarrollador-apis`.
 6. **Stack decidido** — Python 3.14.x + zendriver + FastAPI. No reabrir el debate.
