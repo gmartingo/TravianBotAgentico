@@ -49,6 +49,12 @@ frontend/dist/
 *.log
 logs/
 
+# Scripts de prueba manual (pueden contener credenciales reales)
+test_login_manual.py
+
+# Guía de agentes (documentación interna generada, no versionada)
+documentacion/guia-agentes/
+
 # pytest
 .pytest_cache/
 .coverage
