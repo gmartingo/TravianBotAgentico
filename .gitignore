@@ -1,0 +1,55 @@
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Perfiles de Chrome (datos sensibles y pesados)
+profiles/
+!profiles/.gitkeep
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Variables de entorno y secretos
+.env
+
+# IDEs y editores
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+logs/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
