@@ -12,6 +12,13 @@ import unittest.mock as mock
 
 import pytest
 
+# Raiz del repositorio, resuelta de forma relativa a ESTE archivo:
+#   tests/antideteccion/test_config_zendriver.py  ->  parents[2] = raiz del repo.
+# Antes estaba hardcodeada como "c:/Dev/Travian con Agentes/...", lo que hacia
+# fallar los tests al ejecutarlos en otro entorno (macOS, Raspberry Pi, u otra
+# ruta en Windows). Ahora es portable en cualquier maquina.
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
 
 # ---------------------------------------------------------------------------
 # Test 1: El objeto Config resultante contiene los flags obligatorios
@@ -87,7 +94,7 @@ def test_no_existen_flags_headless_en_driver():
     Parsea adapters/browser/driver.py con ast y busca patrones prohibidos.
     No abre Chrome.
     """
-    driver_path = pathlib.Path("c:/Dev/Travian con Agentes/adapters/browser/driver.py")
+    driver_path = REPO_ROOT / "adapters" / "browser" / "driver.py"
     source = driver_path.read_text(encoding="utf-8")
 
     patrones_prohibidos = [
@@ -114,7 +121,7 @@ def test_no_existen_selectores_por_texto_en_adapters_browser():
     Recorre todos los .py de adapters/browser/ y verifica que no hay
     selectores por texto visible.
     """
-    browser_dir = pathlib.Path("c:/Dev/Travian con Agentes/adapters/browser")
+    browser_dir = REPO_ROOT / "adapters" / "browser"
     py_files = list(browser_dir.rglob("*.py"))
 
     assert len(py_files) > 0, (
@@ -164,8 +171,8 @@ def test_no_hay_time_sleep_con_valor_constante_en_adapters_browser():
     import re
 
     directorios = [
-        pathlib.Path("c:/Dev/Travian con Agentes/adapters/browser"),
-        pathlib.Path("c:/Dev/Travian con Agentes/core"),
+        REPO_ROOT / "adapters" / "browser",
+        REPO_ROOT / "core",
     ]
 
     # Patron: time.sleep( seguido de un literal numerico
@@ -362,16 +369,20 @@ def test_user_agent_version_chrome_no_es_X_0_0_0():
 
     import re
 
-    # Si existe la version con _detect_chrome_major_version,
-    # mockear para que retorne un major realista
+    # _get_user_agent() construye el UA con _detect_chrome_full_version(), que
+    # devuelve la version COMPLETA de Chrome (4 segmentos). Mockeamos ESA funcion
+    # (la real) con una version realista para que el test sea deterministico en
+    # cualquier entorno. Antes se mockeaba _detect_chrome_major_version, que no
+    # existe en la implementacion: el mock era un no-op y en macOS el UA caia al
+    # fallback "136.0.0.0", haciendo fallar el test.
     with mock.patch("platform.system", return_value="Windows"):
         with mock.patch.object(
             driver_module, "_detect_chrome_path",
             return_value="/fake/chrome", create=True
         ):
             with mock.patch.object(
-                driver_module, "_detect_chrome_major_version",
-                return_value=136, create=True
+                driver_module, "_detect_chrome_full_version",
+                return_value="136.0.7103.114", create=True
             ):
                 ua = driver_module._get_user_agent()
 
