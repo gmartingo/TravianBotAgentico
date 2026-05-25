@@ -1,14 +1,13 @@
 """
 Lógica de scraping de travian.kirilloid.ru.
 
-Este módulo contiene SOLO las funciones puras de parseo y las funciones que
-interactúan con el browser (para capturas de iconos). El script CLI en
-scripts/load_kirilloid.py orquesta el flujo completo.
+Este módulo contiene las funciones que interactúan con el browser (para capturas
+de iconos). El script CLI en scripts/load_kirilloid.py orquesta el flujo completo.
+
+Las funciones puras de parseo han sido movidas a core.utils.parsing para ser
+compartidas con los parsers de overview: parse_time, parse_int, parse_int_or_none.
 
 Funciones sin dependencias de browser (testables sin Chrome):
-  - _parse_time        — "H:MM:SS" → segundos enteros
-  - _parse_int         — "1.200" / "1,200" → 1200
-  - _parse_int_or_none — igual pero devuelve None para "—" / vacío
   - _remove_background — Pillow flood-fill para quitar fondo de iconos
   - _merge_troop_names — base = fuente kirilloid (sobrescribe), override = manual intocable
 
@@ -26,12 +25,16 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import Counter
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PIL import Image, ImageDraw
+from PIL import Image
+
+# _color_distance, _remove_background y _wait_for_element viven en utils.py y se
+# re-exportan aquí para compatibilidad hacia atrás con los tests existentes.
+from adapters.scraper.utils import _color_distance, _remove_background, _wait_for_element  # noqa: F401
+from core.utils.parsing import parse_int, parse_int_or_none, parse_time
 
 if TYPE_CHECKING:
     # Importaciones solo en type-checking para no requerir zendriver en tests
@@ -114,121 +117,8 @@ UPGRADE_NEW_ICONS: frozenset[str] = frozenset(
     icon_id for _, icon_id, _ in UPGRADE_ICON_MAP
 )
 
-# ---------------------------------------------------------------------------
-# Utilidades de parseo puro (sin browser — testables)
-# ---------------------------------------------------------------------------
-
-
-def _parse_time(text: str) -> int:
-    """
-    Convierte "H:MM:SS" a segundos enteros.
-
-    El texto puede tener espacios u otras partes (p.ej. "0:30:00 / 2880 / jornada").
-    Solo se usa la primera parte antes del espacio (RN-08).
-
-    Caso especial (EC-02 / BUG-3): algunas unidades NPC o instantáneas muestran
-    el tiempo como un entero pelado sin ":" (p.ej. "0", "5"). Se interpreta
-    directamente como ese número de segundos, sin lanzar excepción.
-    Esto ocurre en natars reales y en otras tribus mientras la corrección del
-    off-by-one (BUG-1) no haya sido aplicada aún.
-
-    Lanza ValueError si el formato no es válido.
-    """
-    text = text.strip().split()[0]
-    # Entero pelado sin ":" → segundos directos (p.ej. "0" → 0, "5" → 5)
-    if ":" not in text:
-        try:
-            return int(text)
-        except ValueError:
-            raise ValueError(f"Formato de tiempo inesperado: '{text}'")
-    parts = text.split(":")
-    if len(parts) != 3:
-        raise ValueError(f"Formato de tiempo inesperado: '{text}'")
-    try:
-        h, m, s = int(parts[0]), int(parts[1]), int(parts[2])
-    except ValueError:
-        raise ValueError(f"Formato de tiempo inesperado: '{text}'")
-    return h * 3600 + m * 60 + s
-
-
-def _parse_int(text: str) -> int:
-    """
-    Convierte un entero con separadores de miles a int.
-
-    Acepta tanto "." como "," como separadores (p.ej. "1.200" → 1200, "1,200" → 1200).
-    Lanza ValueError si el texto no es numérico tras eliminar separadores.
-    """
-    cleaned = text.strip().replace(".", "").replace(",", "")
-    return int(cleaned)
-
-
-def _parse_int_or_none(text: str) -> int | None:
-    """
-    Como _parse_int pero devuelve None para "—", vacío o texto no numérico.
-    Conforme a RN-07: valores "—" → NULL/None, nunca 0.
-    """
-    stripped = text.strip()
-    if stripped in ("—", "", "-"):
-        return None
-    try:
-        return _parse_int(stripped)
-    except ValueError:
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Eliminación de fondo con Pillow (sin browser — testable)
-# ---------------------------------------------------------------------------
-
-
-def _color_distance(c1: tuple, c2: tuple) -> float:
-    """Distancia euclidiana entre dos colores RGBA."""
-    return sum((a - b) ** 2 for a, b in zip(c1[:3], c2[:3])) ** 0.5
-
-
-def _remove_background(img: Image.Image, tolerance: int = BG_FILL_TOLERANCE) -> Image.Image:
-    """
-    Elimina el fondo de un icono usando flood-fill desde las 4 esquinas.
-
-    Estrategia:
-    1. Lee el color de las 4 esquinas.
-    2. El color de fondo es el más frecuente entre las 4 esquinas.
-    3. Si las 4 esquinas tienen colores completamente distintos (len(set) == 4),
-       no hay fondo uniforme detectable → devuelve la imagen sin cambios (EC-11/EC-15).
-    4. Para cada esquina cuyo color esté dentro de la tolerancia del color de fondo,
-       aplica ImageDraw.floodfill con fill=(0,0,0,0) para hacerlo transparente.
-
-    La imagen debe estar en modo RGBA antes de llamar a esta función.
-    """
-    img = img.convert("RGBA")
-    corners = [
-        img.getpixel((0, 0)),
-        img.getpixel((img.width - 1, 0)),
-        img.getpixel((0, img.height - 1)),
-        img.getpixel((img.width - 1, img.height - 1)),
-    ]
-    # Color de fondo = más frecuente entre las 4 esquinas
-    # (si empate, max() toma el primero en orden de aparición)
-    corner_rgb = [c[:3] for c in corners]
-    counts = Counter(corner_rgb)
-    bg_color = counts.most_common(1)[0][0]
-
-    # Si todas las esquinas son distintas → no hay fondo uniforme → devolver sin cambios
-    if len(counts) == 4:
-        return img
-
-    fill_coords = [
-        (0, 0),
-        (img.width - 1, 0),
-        (0, img.height - 1),
-        (img.width - 1, img.height - 1),
-    ]
-    for (x, y) in fill_coords:
-        corner_color = img.getpixel((x, y))[:3]
-        if _color_distance(corner_color, bg_color) <= tolerance:
-            ImageDraw.floodfill(img, (x, y), (0, 0, 0, 0), thresh=tolerance)
-
-    return img
+# _color_distance, _remove_background y _wait_for_element se importan de
+# adapters/scraper/utils.py y se re-exportan desde el import de arriba.
 
 
 # ---------------------------------------------------------------------------
@@ -301,29 +191,6 @@ def _merge_troop_names(
 # ---------------------------------------------------------------------------
 
 
-async def _wait_for_element(page, selector: str, timeout: int = 30) -> None:
-    """
-    Espera a que un elemento sea visible en la página.
-    Lanza KirilloidScraperError si el timeout expira.
-    """
-    from core.exceptions import KirilloidScraperError
-    import asyncio
-
-    elapsed = 0
-    interval = 0.5
-    while elapsed < timeout:
-        try:
-            el = await page.query_selector(selector)
-            if el is not None:
-                return
-        except Exception:
-            pass
-        await asyncio.sleep(interval)
-        elapsed += interval
-    raise KirilloidScraperError(
-        message=f"Timeout esperando selector '{selector}' ({timeout}s)",
-    )
-
 
 async def _parse_main_table(
     page,
@@ -367,13 +234,13 @@ async def _parse_main_table(
                 stats[stat_name] = None
             elif stat_name == "train_time_s":
                 try:
-                    stats[stat_name] = _parse_time(text)
+                    stats[stat_name] = parse_time(text)
                 except ValueError as e:
                     logger.warning("Tiempo inválido en tribu '%s' ordinal %d: %s", tribe_value, ordinal, e)
                     stats[stat_name] = None
             else:
                 try:
-                    stats[stat_name] = _parse_int(text)
+                    stats[stat_name] = parse_int(text)
                 except ValueError as e:
                     logger.warning(
                         "Valor no numérico en tribu '%s' ordinal %d stat '%s': '%s' — %s",
@@ -407,143 +274,186 @@ async def _parse_troop_names(page) -> dict[int, str]:
 async def _parse_upgrade_table(
     page,
     tribe_value: str,
-) -> dict[int, list[dict]]:
+    ordinal: int,
+) -> list[dict]:
     """
-    Lee la tabla #upg_table y extrae las mejoras de herrería.
+    Lee el #upg_table de la página actual (URL ya cargada para la unidad concreta).
 
-    Solo procesa columnas visibles (sin display:none) — RN-09.
-    Ignora filas cuyo primer td no sea entero 0-20 — EC-13.
-    Detecta el ordinal de cada tropa desde las filas de cabecera de grupo.
+    La URL debe ser:
+        troops.php#s=1.45&tribe=T&s_lvl=0&t_lvl=1&u_lvl=0&unit=N
 
-    Devuelve: {ordinal: [upgrade_dict, ...]}
+    El #upg_table en esa URL muestra solo la unidad N — NO agrupa varias unidades.
+
+    Estructura real del HTML (verificada en navegador):
+    - Cabecera: 6 celdas td.upg con un <img class="stats X"> donde X es uno de:
+        att_all, def_i, def_c, eye, def_s, point
+      Las columnas que no aplican a la unidad llevan style="display:none".
+    - Filas de datos: <tr> con exactamente 13 celdas en este orden:
+        [0]  nivel (int 0-20)
+        [1]  madera (r1)
+        [2]  barro  (r2)
+        [3]  hierro (r3)
+        [4]  cereal (r4)
+        [5]  total  (r6)
+        [6]  tiempo (H:MM:SS o variante)
+        [7-12] valores de las 6 stats (en el mismo orden que la cabecera)
+               Las ocultas pueden tener style="display:none" en la fila de datos.
+               El valor viene como texto "40.5800" con posible <small> (se lee via .text).
+    - La fila de nivel 0 tiene primera celda vacía (la base ya está en troop_stats) →
+      se detecta por celdas[0].text vacío o "0" explícito; se trata como nivel 0 y
+      puede omitirse (solo capturamos niveles 1-20).
+
+    Solo procesa columnas VISIBLES (sin display:none) — RN-09.
+    Ignora filas cuyo primer td no sea dígito 1-20 — EC-13.
+
+    Devuelve: lista de upgrade_dicts (puede estar vacía si no hay tabla o 0 datos)
     """
     upg_table = await page.query_selector("#upg_table")
     if upg_table is None:
-        return {}
+        return []
 
-    resultado: dict[int, list[dict]] = {}
-    current_ordinal: int | None = None
+    # ------------------------------------------------------------------
+    # 1. Detectar qué columnas de stat están VISIBLES desde la cabecera.
+    #    Las 6 celdas td.upg están en la primera fila (<tr>) del #upg_table.
+    #    Cada una tiene un <img class="stats X">.  Si la celda tiene
+    #    style="display:none" la columna no aplica a esta unidad.
+    # ------------------------------------------------------------------
+    # Mapa clase-img → nombre de stat canónico (según spec)
+    _IMG_CLASS_TO_STAT: dict[str, str] = {
+        "att_all": "attack",
+        "def_i":   "def_infantry",
+        "def_c":   "def_cavalry",
+        "eye":     "scouting",
+        "def_s":   "counter_scouting",
+        "point":   "destructive",
+    }
 
-    rows = await upg_table.query_selector_all("tr")
-    for row in rows:
-        # Detectar filas de cabecera de grupo: tienen img.unit.uN
-        # que indica el ordinal de las tropas que siguen
-        try:
-            # Buscar la primera img con clase unit que tenga uN
-            unit_imgs = await row.query_selector_all("img.unit")
-            for img in unit_imgs:
-                # attrs["class"] se almacena como "class_" en ContraDict (zendriver remap)
-                classes = (img.attrs.get("class_") or img.attrs.get("class") or "").split()
-                for cls in classes:
-                    if cls.startswith("u") and cls[1:].isdigit():
-                        current_ordinal = int(cls[1:])
-                        break
-        except Exception:
-            pass
+    header_rows = await upg_table.query_selector_all("tr")
+    if not header_rows:
+        return []
 
-        # Detectar columnas visibles en filas de cabecera de tabla (th)
-        # y filas de datos (td)
-        tds = await row.query_selector_all("td")
-        if not tds or current_ordinal is None:
+    # Los td.upg SOLO existen en la fila de cabecera (las filas de datos usan <td>
+    # sin clase). OJO: la PRIMERA fila del #upg_table es un título con
+    # <td colspan="12" class="rbg">mejoras...</td> (sin td.upg); la cabecera real
+    # con los 6 td.upg es la 2ª fila. Por eso buscamos los td.upg en TODA la tabla
+    # (devuelve exactamente las 6 celdas de cabecera, en orden att_all..point).
+    header_cells = await upg_table.query_selector_all("td.upg")
+
+    # visible_stats: lista ordenada de (indice_posicional_en_fila_datos, stat_name)
+    # El índice en la fila de datos es 7 + posición en la cabecera (6 posiciones: 0-5)
+    visible_stats: list[tuple[int, str]] = []
+    for i, cell in enumerate(header_cells):
+        # Comprobar si la celda está oculta
+        cell_style = (cell.attrs.get("style") or "").replace(" ", "")
+        if "display:none" in cell_style:
             continue
-
-        level_text = ""
-        try:
-            level_text = tds[0].text.strip()
-        except Exception:
+        # Buscar el img con clase stats
+        img = await cell.query_selector("img.stats")
+        if img is None:
             continue
-
-        if not level_text.isdigit():
-            continue
-        level = int(level_text)
-        if level < 0 or level > 20:
+        # Obtener las clases del img (ContraDict: "class" → "class_")
+        img_classes = (img.attrs.get("class_") or img.attrs.get("class") or "").split()
+        stat_name: str | None = None
+        for cls in img_classes:
+            if cls in _IMG_CLASS_TO_STAT:
+                stat_name = _IMG_CLASS_TO_STAT[cls]
+                break
+        if stat_name is None:
             logger.warning(
-                "Nivel de mejora fuera de rango (%d) en tribu '%s' ordinal %d — ignorando",
-                level, tribe_value, current_ordinal
+                "Columna de mejora con clase img desconocida %s en tribu '%s' ordinal %d",
+                img_classes, tribe_value, ordinal
             )
             continue
+        data_col_index = 7 + i  # las 7 primeras celdas son nivel + costes + tiempo
+        visible_stats.append((data_col_index, stat_name))
 
-        # Leer columnas de upg (son las celdas td.upg visibles)
-        upg_tds = []
-        for td in tds:
-            try:
-                cls = td.attrs.get("class_") or td.attrs.get("class") or ""
-                style = td.attrs.get("style") or ""
-                if "upg" in cls and "display:none" not in style:
-                    text = td.text.strip()
-                    if text not in ("—", ""):
-                        upg_tds.append((cls, text))
-            except Exception:
-                pass
+    if not visible_stats:
+        # No hay columnas visibles → unidad sin mejoras detectables
+        return []
 
-        # Leer costes y tiempo (columnas fijas de la fila)
-        cost_wood = cost_clay = cost_iron = cost_crop = cost_sum = upgrade_time_s = None
-        for td in tds:
-            try:
-                cls = td.attrs.get("class_") or td.attrs.get("class") or ""
-                text = td.text.strip()
-                if "res1" in cls:
-                    cost_wood = _parse_int_or_none(text)
-                elif "res2" in cls:
-                    cost_clay = _parse_int_or_none(text)
-                elif "res3" in cls:
-                    cost_iron = _parse_int_or_none(text)
-                elif "res4" in cls:
-                    cost_crop = _parse_int_or_none(text)
-                elif "res_sum" in cls:
-                    cost_sum = _parse_int_or_none(text)
-                elif "time" in cls:
-                    try:
-                        upgrade_time_s = _parse_time(text) if text and text != "—" else None
-                    except ValueError:
-                        upgrade_time_s = None
-            except Exception:
-                pass
+    # ------------------------------------------------------------------
+    # 2. Leer filas de datos (niveles 1-20)
+    # ------------------------------------------------------------------
+    result: list[dict] = []
 
-        for cls, value_text in upg_tds:
-            # Mapear clase CSS de la celda upg al nombre de stat
-            stat_name = _upg_class_to_stat_name(cls)
-            if stat_name is None:
+    for row in header_rows[1:]:
+        tds = await row.query_selector_all("td")
+        if len(tds) < 13:
+            continue
+
+        # Celda 0: nivel
+        level_text = tds[0].text.strip()
+        if not level_text.isdigit():
+            continue  # cabecera de grupo, fila vacía u otra estructura
+        level = int(level_text)
+        if level < 1 or level > 20:
+            # Nivel 0 = base (ya en troop_stats) o fuera de rango → saltar
+            if level != 0:
+                logger.warning(
+                    "Nivel de mejora fuera de rango (%d) en tribu '%s' ordinal %d — ignorando",
+                    level, tribe_value, ordinal
+                )
+            continue
+
+        # Costes fijos: celdas 1-5 (madera, barro, hierro, cereal, total)
+        cost_wood     = parse_int_or_none(tds[1].text.strip())
+        cost_clay     = parse_int_or_none(tds[2].text.strip())
+        cost_iron     = parse_int_or_none(tds[3].text.strip())
+        cost_crop     = parse_int_or_none(tds[4].text.strip())
+        cost_sum      = parse_int_or_none(tds[5].text.strip())
+
+        # Tiempo: celda 6 (H:MM:SS)
+        time_text = tds[6].text.strip()
+        try:
+            upgrade_time_s = parse_time(time_text) if time_text and time_text != "—" else None
+        except ValueError:
+            upgrade_time_s = None
+
+        # Stats visibles: celdas en los índices detectados desde la cabecera
+        for data_col_index, stat_name in visible_stats:
+            if data_col_index >= len(tds):
                 continue
+
+            td_stat = tds[data_col_index]
+
+            # Comprobar si esta celda específica está oculta en esta fila
+            td_style = (td_stat.attrs.get("style") or "").replace(" ", "")
+            if "display:none" in td_style:
+                continue
+
+            # El valor viene como "40.<small>5800</small>". OJO: `.text` devuelve SOLO
+            # el nodo inmediato ("40.", → 40.0, pierde el decimal). Hay que usar
+            # `.text_all` (concatena descendientes), PERO une los nodos con ESPACIO
+            # ("40. 5800"), así que quitamos espacios para reconstruir "40.5800".
+            value_text = (td_stat.text_all or "").replace(" ", "").strip()
+            if not value_text or value_text == "—":
+                continue
+
             try:
                 stat_value = float(value_text.replace(",", "."))
             except ValueError:
+                logger.warning(
+                    "Valor de stat '%s' no parseable '%s' en tribu '%s' ordinal %d nivel %d",
+                    stat_name, value_text, tribe_value, ordinal, level
+                )
                 continue
 
-            upgrade: dict = {
+            result.append({
                 "server_version": SERVER_VERSION,
-                "tribe": tribe_value,
-                "ordinal": current_ordinal,
-                "level": level,
-                "stat_name": stat_name,
-                "stat_value": stat_value,
-                "cost_wood": cost_wood,
-                "cost_clay": cost_clay,
-                "cost_iron": cost_iron,
-                "cost_crop": cost_crop,
-                "cost_sum": cost_sum,
+                "tribe":          tribe_value,
+                "ordinal":        ordinal,
+                "level":          level,
+                "stat_name":      stat_name,
+                "stat_value":     stat_value,
+                "cost_wood":      cost_wood,
+                "cost_clay":      cost_clay,
+                "cost_iron":      cost_iron,
+                "cost_crop":      cost_crop,
+                "cost_sum":       cost_sum,
                 "upgrade_time_s": upgrade_time_s,
-            }
-            resultado.setdefault(current_ordinal, []).append(upgrade)
+            })
 
-    return resultado
-
-
-def _upg_class_to_stat_name(cls: str) -> str | None:
-    """Mapea la clase CSS de una celda td.upg al nombre de stat."""
-    # Mapeo basado en las clases que kirilloid usa en #upg_table
-    _MAP = {
-        "off":    "attack",
-        "def_i":  "def_infantry",
-        "def_c":  "def_cavalry",
-        "eye":    "spy",
-        "def_s":  "destructive",   # counter_scouting en kirilloid = destructive en el modelo
-        "point":  "carry",
-    }
-    for key, stat in _MAP.items():
-        if key in cls:
-            return stat
-    return None
+    return result
 
 
 async def _capture_troop_icon(

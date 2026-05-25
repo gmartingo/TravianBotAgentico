@@ -1614,3 +1614,65 @@ Reordenamiento del bucle principal por tribu:
 **Test añadido:** `test_names_before_stats_order_in_main_loop` en `tests/unit/test_kirilloid_scraper.py` — inspecciona el AST de `main()` para verificar que `_parse_troop_names` aparece en el código antes que `_parse_main_table` y las funciones de captura de iconos.
 
 **Resultado de tests tras el fix:** 203/203 pasan.
+
+---
+
+## Registro de implementación — Fase 2: Mejoras por unidad + endpoint
+
+**Fecha:** 2026-05-25
+**Implementado por:** desarrollador-funcionalidades
+
+### Motivación
+
+La implementación original de `_parse_upgrade_table` asumía que el `#upg_table` de la URL
+`troops.php#s=1.45&tribe=T&unit=1` contenía las mejoras de TODAS las unidades de la tribu
+agrupadas por secciones (detectando el ordinal via `img.unit.uN`). Esto era incorrecto:
+kirilloid muestra el `#upg_table` de UNA SOLA unidad por URL. La URL `&unit=N` determina
+qué unidad se muestra. La implementación anterior daba 0 filas en la práctica.
+
+### Ficheros modificados
+
+| Fichero | Cambio |
+|---|---|
+| `adapters/scraper/kirilloid_scraper.py` | Reescritura completa de `_parse_upgrade_table`: nueva firma `(page, tribe_value, ordinal)`, detección de columnas visibles desde cabecera de 6 `td.upg`, lectura de 13 celdas fijas por fila de datos, mapeo corregido (eye→scouting, def_s→counter_scouting, point→destructive); eliminado `_upg_class_to_stat_name` obsoleto. |
+| `scripts/load_kirilloid.py` | Añadido bucle interior por ordinal (paso 8): `about:blank` → `get(url&unit=N)` → wait `#upg_table` → `_parse_upgrade_table` → upsert + captura de iconos de mejora. Eliminado el paso 3 de parse por tribu (ya no aplica). |
+| `adapters/api/routes/game_data.py` | Añadidos DTOs `TroopUpgradeLevel` y `TroopUpgradesResponse` + endpoint `GET /catalog/troops/{tribe}/{ordinal}/upgrades`. |
+
+### Ficheros de tests modificados
+
+| Fichero | Tests añadidos |
+|---|---|
+| `tests/unit/test_kirilloid_scraper.py` | 8 tests nuevos de `_parse_upgrade_table`: sin tabla (EC-03), legionario (att_all+def_c), explorador (eye+def_s → scouting+counter_scouting), catapulta (point → destructive), múltiples niveles 1-20 sin el 0, celda oculta en fila de datos, sin columnas visibles, fila con pocas celdas. |
+| `tests/test_game_data_api.py` | 8 tests nuevos del endpoint de upgrades: 200 agrupado, 404 sin datos, 422 tribu inválida, 200 sin Accept-Language, 400 idioma inválido, server_version propagado, niveles ordenados, Cache-Control. |
+
+### Comando para ejecutar los tests
+
+```bash
+.venv/bin/python -m pytest tests/ -q
+```
+
+### Resultado de tests
+
+**671/673 tests pasan** (2 rojos preexistentes: `test_ca20_*` — ajenos a esta feature, son tests de anti-detección de nomenclatura de catálogo en adapters/browser/, presentes antes de esta implementación).
+
+### Decisiones de diseño (Fase 2)
+
+1. **Firma de `_parse_upgrade_table`**: la nueva firma recibe `ordinal: int` explícito porque
+   la URL ya es por unidad — el ordinal se conoce antes de llamar a la función, no hay que
+   inferirlo del DOM. Esto simplifica el parseo y elimina la detección via `img.unit.uN`.
+
+2. **Iteración `about:blank → get(url_unit)`**: patrón SPA. Navegar solo el hash no garantiza
+   re-render. Pasar por `about:blank` fuerza carga completa de cada unidad.
+
+3. **`_wait_for_element` con timeout=15** para `#upg_table` en el bucle de unidades (vs 30s
+   para `#main`): el #upg_table es más rápido de renderizar y un timeout largo ralentizaría
+   mucho el scraping (9 tribus × ~10 unidades × 30s = hasta 45 min en fallo).
+
+4. **`Accept-Language` OPCIONAL en el endpoint de upgrades**: la respuesta es puramente
+   numérica (costes, stats). No hay texto localizado. Se acepta via `resolve_language` para
+   validar que si viene un idioma, sea soportado (devuelve 400 si no lo es). Sin cabecera → 200.
+   Esto difiere de `/catalog/icons` (donde es obligatoria) y es coherente con la decisión
+   de que la obligatoriedad aplica solo cuando la cabecera afecta al contenido de la respuesta.
+
+5. **`_upg_class_to_stat_name` eliminado**: ya no se usa — la nueva implementación mapea
+   desde las clases del `<img>` en la cabecera (más limpio y sin ambigüedad de "off" vs "att_all").

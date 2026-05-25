@@ -32,11 +32,9 @@ from adapters.scraper.kirilloid_scraper import (
     ICONS_DIR,
     _color_distance,
     _merge_troop_names,
-    _parse_int,
-    _parse_int_or_none,
-    _parse_time,
     _remove_background,
 )
+from core.utils.parsing import parse_int as _parse_int, parse_int_or_none as _parse_int_or_none, parse_time as _parse_time
 
 
 # ---------------------------------------------------------------------------
@@ -748,3 +746,390 @@ def test_names_before_stats_order_in_main_loop(monkeypatch):
                 f"BUG DE ORDEN: _parse_troop_names debe aparecer antes que {capture_fn}. "
                 "Los iconos capturados antes del re-render corresponderían a la tribu anterior."
             )
+
+
+# ---------------------------------------------------------------------------
+# Tests — _parse_upgrade_table (URL por unidad, estructura real verificada)
+# ---------------------------------------------------------------------------
+#
+# Estructura HTML real del #upg_table (verificada en navegador):
+#   - Cabecera: fila de <tr> con 6 celdas td.upg, cada una con un
+#     <img class="stats X"> donde X en {att_all, def_i, def_c, eye, def_s, point}.
+#     Las que no aplican llevan style="display:none".
+#   - Filas de datos: <tr> con 13 celdas en orden:
+#       [0]  nivel (str dígito)
+#       [1]  madera
+#       [2]  barro
+#       [3]  hierro
+#       [4]  cereal
+#       [5]  total
+#       [6]  tiempo H:MM:SS
+#       [7]  att_all value  (o display:none si no aplica)
+#       [8]  def_i   value
+#       [9]  def_c   value
+#       [10] eye     value
+#       [11] def_s   value
+#       [12] point   value
+#     El texto de las celdas de stat puede contener <small>, pero .text ya los
+#     concatena: "40.5800" → se parsea como float 40.58.
+
+
+def _make_upg_header_cell(img_class: str, hidden: bool = False):
+    """
+    Crea una celda td.upg de cabecera con un <img class="stats X">.
+    Si hidden=True, la celda tiene style="display:none".
+    """
+    img_attrs = {"class_": f"stats {img_class}"}
+    img = _make_fake_element(attrs=img_attrs)
+    # La celda tiene query_selector("img.stats") → devuelve el img
+    cell = _make_fake_element(
+        attrs={"style": "display:none" if hidden else ""},
+    )
+    cell.query_selector = AsyncMock(return_value=img)
+    return cell
+
+
+def _make_upg_data_row(
+    level: str,
+    costs: tuple,          # (wood, clay, iron, crop, sum_)
+    time_str: str,
+    stat_values: tuple,    # 6 valores en orden att_all/def_i/def_c/eye/def_s/point
+    hidden_stat_indices: frozenset = frozenset(),  # índices de stats ocultos (0-5)
+):
+    """
+    Crea una fila de datos del #upg_table con 13 celdas.
+
+    hidden_stat_indices: set de índices (0-5) cuyas celdas de stat
+    tienen style="display:none".
+    """
+    # Las 13 celdas: [nivel, wood, clay, iron, crop, sum, tiempo, *6 stats]
+    wood, clay, iron, crop, sum_ = costs
+    cell_texts = [
+        level,
+        str(wood), str(clay), str(iron), str(crop), str(sum_),
+        time_str,
+    ] + [str(v) for v in stat_values]
+
+    cells = []
+    for i, text in enumerate(cell_texts):
+        stat_offset = i - 7  # stat_offset en [-7..5]; solo >=0 son stats
+        is_hidden = (stat_offset >= 0) and (stat_offset in hidden_stat_indices)
+        style = "display:none" if is_hidden else ""
+        cell = _make_fake_element(text=text, attrs={"style": style})
+        cells.append(cell)
+
+    row = MagicMock()
+    row.query_selector_all = AsyncMock(return_value=cells)
+    return row
+
+
+def _build_upg_table_page(header_cells, data_rows):
+    """
+    Construye el mock de página con un #upg_table.
+    header_cells: lista de 6 celdas td.upg (fila de cabecera)
+    data_rows: lista de filas de datos (ya con query_selector_all mockeado)
+    """
+    # Fila de cabecera
+    header_row = MagicMock()
+    header_row.query_selector_all = AsyncMock(return_value=header_cells)
+
+    # La tabla tiene cabecera + filas de datos
+    all_rows = [header_row] + data_rows
+    upg_table = MagicMock()
+    upg_table.query_selector_all = AsyncMock(return_value=all_rows)
+    upg_table.query_selector = AsyncMock(return_value=None)
+
+    # La página tiene query_selector("#upg_table") → upg_table
+    mock_page = MagicMock()
+
+    async def page_query_selector(selector):
+        if selector == "#upg_table":
+            return upg_table
+        return None
+
+    mock_page.query_selector = page_query_selector
+    return mock_page
+
+
+def test_parse_upgrade_table_sin_tabla():
+    """
+    Si #upg_table no existe, devuelve lista vacía sin error (EC-03).
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    mock_page = MagicMock()
+    mock_page.query_selector = AsyncMock(return_value=None)
+
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 1))
+    assert result == []
+
+
+def test_parse_upgrade_table_legionario_basico():
+    """
+    Legionario romano (tribe=1, unit=1): att_all y def_c visibles, resto ocultos.
+    Nivel 1: costes 940/800/1250/370/3360, tiempo 1:54:06, att=40.58, defc=50.65.
+
+    Verifica:
+      - Solo se capturan stats visibles (att_all y def_c)
+      - Los costes y tiempo se extraen correctamente
+      - stat_value es float
+      - Los niveles son 1-20 (la función acepta 1 en este test)
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    # Cabecera: att_all visible, def_i oculto, def_c visible, eye/def_s/point ocultos
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=False),   # índice 0 → celda datos[7]
+        _make_upg_header_cell("def_i",   hidden=True),    # índice 1 → celda datos[8]
+        _make_upg_header_cell("def_c",   hidden=False),   # índice 2 → celda datos[9]
+        _make_upg_header_cell("eye",     hidden=True),    # índice 3 → celda datos[10]
+        _make_upg_header_cell("def_s",   hidden=True),    # índice 4 → celda datos[11]
+        _make_upg_header_cell("point",   hidden=True),    # índice 5 → celda datos[12]
+    ]
+
+    # Una fila de nivel 1
+    data_row = _make_upg_data_row(
+        level="1",
+        costs=(940, 800, 1250, 370, 3360),
+        time_str="1:54:06",
+        # stat_values en orden: att_all, def_i, def_c, eye, def_s, point
+        stat_values=(40.58, 35.54, 50.65, 0.0, 0.0, 0.0),
+        hidden_stat_indices=frozenset({1, 3, 4, 5}),  # ocultos def_i, eye, def_s, point
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [data_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 1))
+
+    # Debe haber exactamente 2 filas: attack (level=1) y def_cavalry (level=1)
+    assert len(result) == 2
+
+    by_stat = {row["stat_name"]: row for row in result}
+    assert "attack" in by_stat
+    assert "def_cavalry" in by_stat
+    assert "def_infantry" not in by_stat
+    assert "scouting" not in by_stat
+
+    att = by_stat["attack"]
+    assert att["level"] == 1
+    assert att["stat_value"] == pytest.approx(40.58)
+    assert att["cost_wood"] == 940
+    assert att["cost_clay"] == 800
+    assert att["cost_iron"] == 1250
+    assert att["cost_crop"] == 370
+    assert att["cost_sum"] == 3360
+    assert att["upgrade_time_s"] == 6846  # 1*3600 + 54*60 + 6
+
+    defc = by_stat["def_cavalry"]
+    assert defc["stat_value"] == pytest.approx(50.65)
+    assert defc["tribe"] == "romans"
+    assert defc["ordinal"] == 1
+    assert defc["server_version"] == "1.45"
+
+
+def test_parse_upgrade_table_explorador_eye_y_def_s():
+    """
+    Unidad de espionaje (Equites Legati, tribe=1, unit=4):
+    eye y def_s visibles, resto ocultos.
+    Verifica que stat_names son "scouting" y "counter_scouting" (mapeo correcto).
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=True),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=True),
+        _make_upg_header_cell("eye",     hidden=False),   # visible
+        _make_upg_header_cell("def_s",   hidden=False),   # visible
+        _make_upg_header_cell("point",   hidden=True),
+    ]
+
+    data_row = _make_upg_data_row(
+        level="1",
+        costs=(500, 400, 300, 200, 1400),
+        time_str="0:30:00",
+        stat_values=(0.0, 0.0, 0.0, 12.5, 8.3, 0.0),
+        hidden_stat_indices=frozenset({0, 1, 2, 5}),
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [data_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 4))
+
+    assert len(result) == 2
+    stat_names = {row["stat_name"] for row in result}
+    assert "scouting" in stat_names
+    assert "counter_scouting" in stat_names
+    assert "attack" not in stat_names
+
+    scouting_row = next(r for r in result if r["stat_name"] == "scouting")
+    assert scouting_row["stat_value"] == pytest.approx(12.5)
+
+
+def test_parse_upgrade_table_catapulta_point():
+    """
+    Catapulta (tribe=1, unit=8): solo att_all y point visibles.
+    Verifica que stat_name para point es "destructive".
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=False),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=True),
+        _make_upg_header_cell("eye",     hidden=True),
+        _make_upg_header_cell("def_s",   hidden=True),
+        _make_upg_header_cell("point",   hidden=False),   # visible
+    ]
+
+    data_row = _make_upg_data_row(
+        level="1",
+        costs=(1000, 800, 750, 350, 2900),
+        time_str="2:00:00",
+        stat_values=(60.0, 0.0, 0.0, 0.0, 0.0, 15.5),
+        hidden_stat_indices=frozenset({1, 2, 3, 4}),
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [data_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 8))
+
+    stat_names = {row["stat_name"] for row in result}
+    assert "attack" in stat_names
+    assert "destructive" in stat_names
+
+    destr = next(r for r in result if r["stat_name"] == "destructive")
+    assert destr["stat_value"] == pytest.approx(15.5)
+
+
+def test_parse_upgrade_table_multiples_niveles():
+    """
+    Verifica que se capturan exactamente los niveles 1-20 (no el nivel 0).
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=False),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=True),
+        _make_upg_header_cell("eye",     hidden=True),
+        _make_upg_header_cell("def_s",   hidden=True),
+        _make_upg_header_cell("point",   hidden=True),
+    ]
+
+    # Nivel 0 (base) + niveles 1-3
+    data_rows = []
+    for lvl in range(0, 4):
+        data_rows.append(_make_upg_data_row(
+            level=str(lvl),
+            costs=(100, 100, 100, 100, 400),
+            time_str="0:30:00",
+            stat_values=(10.0 + lvl, 0.0, 0.0, 0.0, 0.0, 0.0),
+            hidden_stat_indices=frozenset({1, 2, 3, 4, 5}),
+        ))
+
+    mock_page = _build_upg_table_page(header_cells, data_rows)
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "teutons", 1))
+
+    # Solo niveles 1, 2, 3 (no el 0)
+    levels = [row["level"] for row in result]
+    assert 0 not in levels
+    assert sorted(set(levels)) == [1, 2, 3]
+
+
+def test_parse_upgrade_table_celdas_sin_display_none_en_datos():
+    """
+    Si una celda de stat en la fila de datos tiene style="display:none",
+    se omite esa stat para ese nivel aunque la cabecera la marque visible.
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    # Cabecera: att_all y def_c visibles
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=False),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=False),
+        _make_upg_header_cell("eye",     hidden=True),
+        _make_upg_header_cell("def_s",   hidden=True),
+        _make_upg_header_cell("point",   hidden=True),
+    ]
+
+    # En la fila de datos, la celda de def_c (índice 9 = stat_offset 2) está oculta
+    data_row = _make_upg_data_row(
+        level="1",
+        costs=(100, 100, 100, 100, 400),
+        time_str="0:10:00",
+        stat_values=(25.0, 0.0, 30.0, 0.0, 0.0, 0.0),
+        # Ocultar en fila: def_i (1), def_c (2), eye (3), def_s (4), point (5)
+        hidden_stat_indices=frozenset({1, 2, 3, 4, 5}),
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [data_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "gauls", 1))
+
+    # def_c está oculta en la fila de datos → solo attack debe aparecer
+    stat_names = {row["stat_name"] for row in result}
+    assert "attack" in stat_names
+    assert "def_cavalry" not in stat_names
+
+
+def test_parse_upgrade_table_sin_columnas_visibles():
+    """
+    Si ninguna columna de stat es visible (todas display:none en cabecera),
+    devuelve lista vacía sin error.
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    # Todas las celdas ocultas
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=True),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=True),
+        _make_upg_header_cell("eye",     hidden=True),
+        _make_upg_header_cell("def_s",   hidden=True),
+        _make_upg_header_cell("point",   hidden=True),
+    ]
+
+    data_row = _make_upg_data_row(
+        level="1",
+        costs=(100, 100, 100, 100, 400),
+        time_str="0:10:00",
+        stat_values=(10.0, 10.0, 10.0, 10.0, 10.0, 10.0),
+        hidden_stat_indices=frozenset(range(6)),
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [data_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 1))
+
+    assert result == []
+
+
+def test_parse_upgrade_table_fila_sin_suficientes_celdas():
+    """
+    Filas con menos de 13 celdas se ignoran sin error (estructura inesperada).
+    """
+    import asyncio
+    from adapters.scraper import kirilloid_scraper as ks
+
+    header_cells = [
+        _make_upg_header_cell("att_all", hidden=False),
+        _make_upg_header_cell("def_i",   hidden=True),
+        _make_upg_header_cell("def_c",   hidden=True),
+        _make_upg_header_cell("eye",     hidden=True),
+        _make_upg_header_cell("def_s",   hidden=True),
+        _make_upg_header_cell("point",   hidden=True),
+    ]
+
+    # Fila con solo 5 celdas (estructura inesperada)
+    short_row = MagicMock()
+    short_row.query_selector_all = AsyncMock(
+        return_value=[_make_fake_element(text=str(i)) for i in range(5)]
+    )
+
+    mock_page = _build_upg_table_page(header_cells, [short_row])
+    result = asyncio.run(ks._parse_upgrade_table(mock_page, "romans", 1))
+    assert result == []

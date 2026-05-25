@@ -1,18 +1,20 @@
 """
-Endpoints de datos de juego — stats de tropas e iconos.
+Endpoints de datos de juego — stats de tropas, stats de edificios e iconos.
 
-GET /catalog/troops/{tribe}/stats  — stats numéricos de tropas por tribu
-GET /catalog/icons                 — metadatos de iconos PNG
+GET /catalog/troops/{tribe}/stats      — stats numéricos de tropas por tribu
+GET /catalog/buildings/{gid}/stats     — stats numéricos de un edificio por gid (todos los niveles)
+GET /catalog/icons                     — metadatos de iconos PNG
 
-Ambos heredan el middleware Cache-Control (rutas bajo /catalog/ → public, max-age=3600).
+Todos heredan el middleware Cache-Control (rutas bajo /catalog/ → public, max-age=3600).
 
-Política de idioma:
-  - /catalog/troops/{tribe}/stats → selección con precedencia ?lang= > Accept-Language > todos:
-      ?lang=<código> presente y válido → language con ese idioma (+ fallback 'es');
-      Accept-Language presente y válido → language con ese idioma (+ fallback 'es');
-      sin ninguno → language con todos los idiomas disponibles (~25 claves);
-      valor presente pero no soportado (en cualquiera) → 400.
-      La respuesta incluye Vary: Accept-Language.
+Política de idioma para /catalog/troops/{tribe}/stats y /catalog/buildings/{gid}/stats:
+  Selección con precedencia ?lang= > Accept-Language > todos:
+    ?lang=<código> presente y válido → language con ese idioma (+ fallback 'es');
+    Accept-Language presente y válido → language con ese idioma (+ fallback 'es');
+    sin ninguno → language con todos los idiomas disponibles (~25 claves);
+    valor presente pero no soportado (en cualquiera) → 400.
+    La respuesta incluye Vary: Accept-Language.
+
   - /catalog/icons → Accept-Language OBLIGATORIA. El endpoint no devuelve campo `language`,
       pero mantener la cabecera obligatoria preserva la coherencia del catálogo autenticado
       y reserva la capacidad de filtrar por idioma en el futuro sin romper el contrato.
@@ -222,15 +224,15 @@ async def get_troop_stats(
     summary="Metadatos de iconos PNG",
     description=(
         "Devuelve la lista de metadatos de iconos disponibles. "
-        "Filtros opcionales: icon_type ('troop', 'stat', 'upgrade') y tribe. "
+        "Filtros opcionales: icon_type ('troop', 'stat', 'upgrade', 'building') y tribe. "
         "Lista vacía (200) si ningún icono cumple los filtros — no es un 404. "
         "Los iconos binarios se sirven directamente desde /static/icons/{icon_id}.png."
     ),
 )
 async def list_icons(
-    icon_type: Literal["troop", "stat", "upgrade"] | None = Query(
+    icon_type: Literal["troop", "stat", "upgrade", "building"] | None = Query(
         default=None,
-        description="Filtra por tipo de icono: troop, stat o upgrade",
+        description="Filtra por tipo de icono: troop, stat, upgrade o building",
     ),
     tribe: Tribe | None = Query(
         default=None,
@@ -267,3 +269,237 @@ async def list_icons(
     ]
 
     return IconListResponse(icons=icons)
+
+
+# ---------------------------------------------------------------------------
+# DTOs — edificios (stats por nivel)
+# ---------------------------------------------------------------------------
+
+
+class BuildingLevel(BaseModel):
+    """Un nivel de edificio con sus costes y efectos."""
+
+    level: int
+    cost_wood: int | None = None
+    cost_clay: int | None = None
+    cost_iron: int | None = None
+    cost_crop: int | None = None
+    cost_sum: int | None = None
+    upkeep: int | None = None
+    culture_points: int | None = None
+    build_time_s: int | None = None
+    effect_value: int | None = None
+    effect_label: str | None = None
+
+
+class BuildingStatsCatalogResponse(BaseModel):
+    """Respuesta de GET /catalog/buildings/{gid}/stats."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gid: int
+    server_version: str
+    alias: str
+    category: str | None
+    description: str | None
+    language: dict[str, str]
+    icon_url: str | None
+    levels: list[BuildingLevel]
+
+
+# ---------------------------------------------------------------------------
+# Endpoint — stats de un edificio por gid
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/catalog/buildings/{gid}/stats",
+    response_model=BuildingStatsCatalogResponse,
+    summary="Stats de niveles de un edificio",
+    description=(
+        "Devuelve los costes y efectos de todos los niveles de un edificio "
+        "identificado por su gid (entero positivo). "
+        "Selección de idioma con la siguiente precedencia (explícito gana a implícito): "
+        "1) ?lang=<código> — override explícito en query string; "
+        "2) Accept-Language (header) — preferencia estándar del cliente; "
+        "3) sin ninguno → language con todos los idiomas disponibles (~25 claves). "
+        "Devuelve 400 si cualquier valor presente no está entre los 25 idiomas soportados. "
+        "Devuelve 404 si el gid no tiene datos de stats cargados en la BD. "
+        "FastAPI valida el path param gid como entero (422 si es inválido). "
+        "La respuesta incluye Vary: Accept-Language."
+    ),
+)
+async def get_building_stats(
+    gid: int,
+    response: Response,
+    server_version: str = Query(default="1.45", description="Versión del servidor Travian"),
+    lang: str | None = Depends(resolve_language),
+    game_data_port: GameDataPort = Depends(get_game_data_port),
+    translation_port: TranslationPort = Depends(get_translation_port),
+) -> BuildingStatsCatalogResponse:
+    """
+    Handler de GET /catalog/buildings/{gid}/stats.
+
+    Inyecta DOS puertos:
+      - game_data_port   — stats numéricos y metadatos desde SQLite
+      - translation_port — nombre del edificio
+
+    Política de language (resolve_language con precedencia ?lang= > Accept-Language > None):
+      - lang is None → se devuelven todos los idiomas vía get_building_all_langs.
+      - lang tiene valor → se devuelve solo ese idioma con fallback 'es'.
+
+    El 404 incluye server_version en el detail para facilitar el debug.
+    """
+    response.headers["Vary"] = "Accept-Language"
+
+    levels = await game_data_port.get_building_stats(gid, server_version)
+    catalog_meta = await game_data_port.get_building_catalog(gid, server_version)
+
+    if not levels and catalog_meta is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No hay datos de stats para el edificio gid={gid} "
+                f"con server_version='{server_version}'"
+            ),
+        )
+
+    # Nombre localizado
+    if lang is None:
+        language = translation_port.get_building_all_langs(gid)
+    else:
+        nombre = translation_port.get_building_name(gid, lang)
+        language = {lang: nombre}
+
+    icon_id = catalog_meta.get("icon_id") if catalog_meta else None
+    icon_url = f"/static/icons/{icon_id}.png" if icon_id else None
+
+    return BuildingStatsCatalogResponse(
+        gid=gid,
+        server_version=server_version,
+        alias=catalog_meta.get("alias", "") if catalog_meta else "",
+        category=catalog_meta.get("category") if catalog_meta else None,
+        description=catalog_meta.get("description") if catalog_meta else None,
+        language=language,
+        icon_url=icon_url,
+        levels=[BuildingLevel(**row) for row in levels],
+    )
+
+
+# ---------------------------------------------------------------------------
+# DTOs — mejoras de herrería por tropa
+# ---------------------------------------------------------------------------
+
+
+class TroopUpgradeLevel(BaseModel):
+    """
+    Un nivel de mejora de herrería para una tropa.
+
+    stats: solo contiene los stat_names que aplican a esa unidad
+           (p.ej. Legionario romano solo tendrá "attack" y "def_cavalry").
+    """
+
+    level: int
+    cost_wood: int | None = None
+    cost_clay: int | None = None
+    cost_iron: int | None = None
+    cost_crop: int | None = None
+    cost_sum: int | None = None
+    upgrade_time_s: int | None = None
+    stats: dict[str, float]        # {stat_name: stat_value} — solo los visibles
+
+
+class TroopUpgradesResponse(BaseModel):
+    """Respuesta de GET /catalog/troops/{tribe}/{ordinal}/upgrades."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tribe: str
+    ordinal: int
+    server_version: str
+    levels: list[TroopUpgradeLevel]
+
+
+# ---------------------------------------------------------------------------
+# Endpoint — mejoras de herrería de una tropa
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/catalog/troops/{tribe}/{ordinal}/upgrades",
+    response_model=TroopUpgradesResponse,
+    summary="Mejoras de herrería de una tropa",
+    description=(
+        "Devuelve la tabla de mejoras de herrería de una tropa identificada "
+        "por su tribu y ordinal (posición dentro de la tribu, empieza en 1). "
+        "Los niveles se devuelven agrupados: cada nivel tiene sus costes y el mapa "
+        "de stats con los valores de ese nivel. Solo aparecen los stats que aplican "
+        "a la unidad (las columnas con display:none en kirilloid se omiten). "
+        "Devuelve 404 si no hay datos de mejora para esa tropa/tribu/versión. "
+        "FastAPI valida tribe contra el enum Tribe (422 si es inválido). "
+        "Accept-Language es OPCIONAL en este endpoint: la respuesta no contiene "
+        "texto localizado. Si se envía y el idioma no está soportado → 400. "
+        "Si no se envía → 200 igualmente (no hay campo 'language' en la respuesta)."
+    ),
+)
+async def get_troop_upgrades(
+    tribe: Tribe,
+    ordinal: int,
+    server_version: str = Query(default="1.45", description="Versión del servidor Travian"),
+    lang: str | None = Depends(resolve_language),
+    game_data_port: GameDataPort = Depends(get_game_data_port),
+) -> TroopUpgradesResponse:
+    """
+    Handler de GET /catalog/troops/{tribe}/{ordinal}/upgrades.
+
+    Política de Accept-Language:
+      - La respuesta es puramente numérica (niveles, costes, valores de mejora).
+      - No hay texto localizado → Accept-Language no modifica la respuesta.
+      - Se acepta igualmente via resolve_language para coherencia futura y para
+        validar que los valores enviados sean idiomas del catálogo soportado (400
+        si viene un idioma no soportado, evitando que el cliente asuma que funciona
+        cuando en realidad el idioma no existe en ningún endpoint del proyecto).
+      - Si no se envía → 200 sin campo language.
+    """
+    raw_rows = await game_data_port.get_troop_upgrades(tribe, ordinal, server_version)
+
+    if not raw_rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"No hay datos de mejora para la tropa ordinal={ordinal} "
+                f"de la tribu '{tribe.value}' con server_version='{server_version}'"
+            ),
+        )
+
+    # Agrupar por nivel: {level: {cost_*, upgrade_time_s, stats: {}}}
+    levels_by_num: dict[int, dict] = {}
+    for row in raw_rows:
+        lvl = row["level"]
+        if lvl not in levels_by_num:
+            levels_by_num[lvl] = {
+                "level":          lvl,
+                "cost_wood":      row.get("cost_wood"),
+                "cost_clay":      row.get("cost_clay"),
+                "cost_iron":      row.get("cost_iron"),
+                "cost_crop":      row.get("cost_crop"),
+                "cost_sum":       row.get("cost_sum"),
+                "upgrade_time_s": row.get("upgrade_time_s"),
+                "stats":          {},
+            }
+        # stat_value puede ser None si la BD lo tiene NULL; float si tiene valor
+        stat_val = row.get("stat_value")
+        if stat_val is not None:
+            levels_by_num[lvl]["stats"][row["stat_name"]] = stat_val
+
+    levels = [
+        TroopUpgradeLevel(**data)
+        for data in sorted(levels_by_num.values(), key=lambda d: d["level"])
+    ]
+
+    return TroopUpgradesResponse(
+        tribe=tribe.value,
+        ordinal=ordinal,
+        server_version=server_version,
+        levels=levels,
+    )
