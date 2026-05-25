@@ -67,14 +67,15 @@ def test_world_not_found_es_travian_bot_error():
 # DuplicateAccountError
 # ---------------------------------------------------------------------------
 
-def test_duplicate_account_mensaje_contiene_username():
-    err = DuplicateAccountError("player123")
-    assert "player123" in str(err)
+def test_duplicate_account_mensaje_contiene_email():
+    # La identidad de cuenta es por email (feature registro-cuentas-mundos, Sección 7.4).
+    err = DuplicateAccountError("player@example.com")
+    assert "player@example.com" in str(err)
 
 
-def test_duplicate_account_tiene_atributo_username():
-    err = DuplicateAccountError("player123")
-    assert err.username == "player123"
+def test_duplicate_account_tiene_atributo_email():
+    err = DuplicateAccountError("player@example.com")
+    assert err.email == "player@example.com"
 
 
 # ---------------------------------------------------------------------------
