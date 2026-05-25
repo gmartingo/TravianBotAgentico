@@ -162,6 +162,31 @@ class JsonTranslationAdapter(TranslationPort):
             })
         return result
 
+    def get_troop_all_langs_by_tribe(self, tribe: Tribe) -> list[dict]:
+        """
+        Devuelve todas las tropas de una tribu con todos los idiomas disponibles.
+
+        Cada elemento: {"ordinal": int, "key": str, "language": {lang: nombre, ...}}
+        Solo incluye pares idioma→nombre cuyo valor sea no vacío.
+        Lanza TroopNotFoundError (ordinal=None) si la tribu no tiene tropas en el catálogo.
+        """
+        prefix = f"{tribe.value.upper()}_"
+        entries = {k: v for k, v in self._troops.items() if k.startswith(prefix)}
+        if not entries:
+            raise TroopNotFoundError(tribe=tribe, ordinal=None)
+        result = []
+        for key, entry in sorted(entries.items(),
+                                  key=lambda kv: int(kv[0].split("_")[-1])):
+            ordinal = int(key.split("_")[-1])
+            language = {lang: name for lang, name in entry.items()
+                        if isinstance(name, str) and name.strip()}
+            result.append({
+                "ordinal": ordinal,
+                "key": key,
+                "language": language,
+            })
+        return result
+
     def get_message(self, code: str, lang: str, **params) -> str:
         """
         Devuelve el mensaje de error localizado para el code dado.

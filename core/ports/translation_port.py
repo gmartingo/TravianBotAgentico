@@ -71,6 +71,24 @@ class TranslationPort(ABC):
         """
 
     @abstractmethod
+    def get_troop_all_langs_by_tribe(self, tribe: Tribe) -> list[dict]:
+        """
+        Devuelve todas las tropas de una tribu con TODOS los idiomas disponibles
+        para cada tropa (todas las claves no vacías del catálogo).
+
+        Cada elemento del resultado:
+            {
+                "ordinal": int,
+                "key": str,
+                "language": dict[str, str]   # {lang: nombre} para todos los idiomas no vacíos
+            }
+
+        A diferencia de get_troop_names_by_tribe, NO aplica fallback a 'es':
+        simplemente incluye todos los pares (idioma, nombre) cuyo valor sea no vacío.
+        Lanza TroopNotFoundError (ordinal=None) si la tribu no tiene tropas en el catálogo.
+        """
+
+    @abstractmethod
     def get_message(self, code: str, lang: str, **params) -> str:
         """
         Devuelve el mensaje de error para el code dado en el idioma solicitado.
