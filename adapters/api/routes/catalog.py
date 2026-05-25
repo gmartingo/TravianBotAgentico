@@ -13,12 +13,15 @@ GET /catalog/troops/{tribe}   — tropas de una tribu con nombre localizado
   La respuesta incluye siempre Vary: Accept-Language.
 El campo `language` de cada item tiene como clave(s) el/los idiomas realmente servidos.
 """
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
 
-from adapters.api.dependencies import get_language, resolve_language, get_translation_port
+from adapters.api.dependencies import get_language, resolve_language, get_translation_port, get_game_data_port
 from core.entities.tribe import Tribe
 from core.exceptions import TroopNotFoundError
+from core.ports.game_data_port import GameDataPort
 from core.ports.translation_port import TranslationPort
 
 router = APIRouter(tags=["catalog"])
@@ -28,21 +31,40 @@ router = APIRouter(tags=["catalog"])
 # ---------------------------------------------------------------------------
 
 
+class BuildingLevel(BaseModel):
+    """Un nivel de edificio con sus costes y efectos."""
+
+    level: int
+    cost_wood: int | None = None
+    cost_clay: int | None = None
+    cost_iron: int | None = None
+    cost_crop: int | None = None
+    cost_sum: int | None = None
+    upkeep: int | None = None
+    culture_points: int | None = None
+    build_time_s: int | None = None
+    effect_value: int | None = None
+    effect_label: str | None = None
+
+
 class BuildingItem(BaseModel):
     """
     Item de edificio en la respuesta del catálogo.
     Abierto (sin extra="forbid") para recibir futuros campos de datos de juego
-    (levels, cost, build_time_s) sin romper el contrato actual.
+    sin romper el contrato actual.
 
-    Campos reservados para la feature "datos de juego" (fuera de alcance ahora):
-    # levels: list[BuildingLevel] | None = None
-    # cost: ResourceCost | None = None
-    # build_time_s: int | None = None
+    Los campos category, description, icon_url y levels son opcionales:
+    son None cuando no hay datos de stats cargados en la BD (BD vacía).
+    Retrocompatible: clientes que solo leen gid, alias y language no se ven afectados.
     """
 
     gid: int
     alias: str
-    language: dict[str, str]  # {lang_servido: nombre}
+    language: dict[str, str]        # {lang_servido: nombre}
+    category: str | None = None     # "resources" | "infrastructure" | "military"
+    description: str | None = None  # texto descriptivo del edificio
+    icon_url: str | None = None     # "/static/icons/building_{gid}.png" o None
+    levels: list[BuildingLevel] | None = None  # None si no hay datos de stats
 
 
 class BuildingsCatalogResponse(BaseModel):
@@ -92,22 +114,44 @@ class TroopsCatalogResponse(BaseModel):
     description=(
         "Devuelve todos los edificios con su nombre en el idioma solicitado. "
         "Si falta la traducción para un item concreto, el campo `language` lleva "
-        "la clave 'es' (fallback granular — visible item a item)."
+        "la clave 'es' (fallback granular — visible item a item). "
+        "Los campos category, description, icon_url y levels son null cuando "
+        "no hay datos de stats cargados en la BD (no es un error)."
     ),
 )
-def get_buildings_catalog(
+async def get_buildings_catalog(
     lang: str = Depends(get_language),
     translation_port: TranslationPort = Depends(get_translation_port),
+    game_data_port: GameDataPort = Depends(get_game_data_port),
 ) -> BuildingsCatalogResponse:
     items_raw = translation_port.get_all_buildings(lang)
-    buildings = [
-        BuildingItem(
-            gid=item["gid"],
-            alias=item["alias"],
-            language={item["lang_servido"]: item["nombre"]},
+
+    # Cargar stats y catálogo de edificios en una sola query cada uno (sin N+1)
+    try:
+        all_stats = await game_data_port.get_all_building_stats()
+        all_catalog = await game_data_port.get_all_building_catalog()
+    except Exception:
+        all_stats = {}
+        all_catalog = {}
+
+    buildings = []
+    for item in items_raw:
+        gid = item["gid"]
+        cat_meta = all_catalog.get(gid, {})
+        levels_rows = all_stats.get(gid, [])
+        icon_id = cat_meta.get("icon_id")
+
+        buildings.append(
+            BuildingItem(
+                gid=gid,
+                alias=item["alias"],
+                language={item["lang_servido"]: item["nombre"]},
+                category=cat_meta.get("category"),
+                description=cat_meta.get("description"),
+                icon_url=f"/static/icons/{icon_id}.png" if icon_id else None,
+                levels=[BuildingLevel(**r) for r in levels_rows] if levels_rows else None,
+            )
         )
-        for item in items_raw
-    ]
     return BuildingsCatalogResponse(buildings=buildings)
 
 

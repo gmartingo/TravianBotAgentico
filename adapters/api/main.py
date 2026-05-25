@@ -7,6 +7,7 @@ añade las cabeceras mínimas de seguridad a todas las respuestas.
 """
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from contextlib import asynccontextmanager
@@ -18,13 +19,22 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
+from adapters.api.routes.accounts import router as accounts_router
 from adapters.api.routes.catalog import router as catalog_router
 from adapters.api.routes.game_data import router as game_data_router
+from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
 from adapters.db.database import get_connection
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
+from core.crypto import load_fernet_key
 from core.exceptions import TravianBotError
 from core.i18n.languages import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
+from dotenv import load_dotenv
+
+# Carga las variables de .env (TRAVIAN_BOT_SECRET_KEY, mundo, tribu, etc.) en os.environ
+# al importar la app, para que load_fernet_key() y demás config funcionen sin exportarlas
+# a mano (en tests y en arranque normal). load_dotenv no pisa variables ya presentes.
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Patrones para el enmascarado de datos sensibles en modo verbose
@@ -101,9 +111,15 @@ async def lifespan(application: FastAPI):
     Inicializa los singletons de puertos al arrancar la aplicación:
       - translation_port (JsonTranslationAdapter) — catálogo de textos localizados
       - game_data_port   (GameDataSQLiteAdapter)  — stats de tropas e iconos
+      - db_port          (AccountSQLiteAdapter)   — cuentas, mundos y aldeas
+      - fernet           (Fernet)                 — cifrado de contraseñas
 
-    Ambos quedan disponibles en app.state para todos los handlers y dependencias.
+    Todos quedan disponibles en app.state para todos los handlers y dependencias.
     """
+    # --- Clave Fernet — FALLA al arrancar si TRAVIAN_BOT_SECRET_KEY no está ---
+    fernet = load_fernet_key()
+    application.state.fernet = fernet
+
     catalog_base = (
         Path(__file__).parent.parent.parent / "core" / "i18n" / "catalog" / "base"
     )
@@ -115,12 +131,19 @@ async def lifespan(application: FastAPI):
         override_dir=catalog_override,
     )
 
-    # GameDataSQLiteAdapter — conexión aiosqlite, crea tablas si no existen
+    # Conexión SQLite compartida (WAL mode)
     conn = await get_connection()
+    application.state._db_conn = conn  # guardar para cerrar en shutdown
+
+    # GameDataSQLiteAdapter — stats de tropas e iconos
     game_data_adapter = GameDataSQLiteAdapter(conn)
     await game_data_adapter.ensure_tables()
     application.state.game_data_port = game_data_adapter
-    application.state._db_conn = conn  # guardar para cerrar en shutdown
+
+    # AccountSQLiteAdapter — cuentas, mundos y aldeas
+    account_adapter = AccountSQLiteAdapter(conn)
+    await account_adapter.ensure_tables()
+    application.state.db_port = account_adapter
 
     yield
 
@@ -268,6 +291,7 @@ app.mount(
 # Routers
 # ---------------------------------------------------------------------------
 
+app.include_router(accounts_router)
 app.include_router(catalog_router)
 app.include_router(game_data_router)
 

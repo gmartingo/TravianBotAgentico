@@ -187,6 +187,24 @@ class JsonTranslationAdapter(TranslationPort):
             })
         return result
 
+    def get_building_all_langs(self, gid: int) -> dict[str, str]:
+        """
+        Devuelve todos los idiomas disponibles para un edificio dado su gid.
+
+        Devuelve {lang: nombre} para todos los pares cuyo valor sea no vacío.
+        Si el gid no existe en el catálogo devuelve {}.
+        Análogo a get_troop_all_langs_by_tribe pero para un edificio individual.
+        """
+        key = str(gid)
+        entry = self._buildings.get(key)
+        if entry is None:
+            return {}
+        return {
+            lang: name
+            for lang, name in entry.items()
+            if isinstance(name, str) and name.strip() and lang != "alias"
+        }
+
     def get_message(self, code: str, lang: str, **params) -> str:
         """
         Devuelve el mensaje de error localizado para el code dado.

@@ -4,7 +4,7 @@ No abren Chrome ni BD. Verifican invariantes y normalización.
 """
 import pytest
 
-from core.entities.tribe import Tribe
+from core.entities.tribe import Tribe, PLAYABLE_TRIBES
 from core.entities.village import Village
 from core.entities.world import World
 from core.entities.account import Account
@@ -65,41 +65,58 @@ def test_world_speed_no_match_devuelve_1():
 
 
 # ---------------------------------------------------------------------------
-# Account — validaciones
+# Account — validaciones (campo email añadido en registro-cuentas-mundos)
 # ---------------------------------------------------------------------------
 
 def test_account_username_vacio_lanza_value_error():
     with pytest.raises(ValueError, match="vacío"):
-        Account(id=1, username="", password="pass123")
+        Account(id=1, email="a@b.com", username="", password="pass123")
 
 
 def test_account_username_none_lanza_value_error():
     with pytest.raises(ValueError):
-        Account(id=1, username=None, password="pass123")  # type: ignore[arg-type]
+        Account(id=1, email="a@b.com", username=None, password="pass123")  # type: ignore[arg-type]
 
 
 def test_account_sin_worlds_tiene_lista_vacia():
-    account = Account(id=1, username="travian_user", password="secret")
+    account = Account(id=1, email="user@example.com", username="travian_user", password="secret")
     assert account.worlds == []
 
 
 def test_account_no_tiene_server_url():
     """account.py ya no debe tener el atributo server_url."""
-    account = Account(id=1, username="travian_user", password="secret")
+    account = Account(id=1, email="user@example.com", username="travian_user", password="secret")
     assert not hasattr(account, "server_url"), "server_url fue eliminado del modelo"
 
 
 def test_account_no_tiene_active():
     """account.py ya no debe tener el atributo active."""
-    account = Account(id=1, username="travian_user", password="secret")
+    account = Account(id=1, email="user@example.com", username="travian_user", password="secret")
     assert not hasattr(account, "active"), "active fue eliminado del modelo"
 
 
 def test_account_con_worlds_se_asigna():
     world = World(id=10, server="https://ts1.x1.international.travian.com/", tribe=Tribe.GAULS)
-    account = Account(id=1, username="travian_user", password="secret", worlds=[world])
+    account = Account(id=1, email="user@example.com", username="travian_user", password="secret", worlds=[world])
     assert len(account.worlds) == 1
     assert account.worlds[0].id == 10
+
+
+def test_account_email_se_normaliza_lower_strip():
+    """El email se normaliza a minúsculas y sin espacios."""
+    account = Account(id=1, email="  User@Example.COM  ", username="u", password="p")
+    assert account.email == "user@example.com"
+
+
+def test_account_email_vacio_lanza_value_error():
+    with pytest.raises(ValueError, match="email"):
+        Account(id=1, email="", username="u", password="p")
+
+
+def test_account_email_solo_espacios_lanza_value_error():
+    """Un email de solo espacios se normaliza a vacío → ValueError."""
+    with pytest.raises(ValueError, match="email"):
+        Account(id=1, email="   ", username="u", password="p")
 
 
 # ---------------------------------------------------------------------------
@@ -128,14 +145,41 @@ def test_tribe_acceso_por_nombre():
 
 
 # ---------------------------------------------------------------------------
+# Tribe — is_playable (UT-16, UT-17)
+# ---------------------------------------------------------------------------
+
+def test_tribe_is_playable_jugables():
+    """Las 7 tribus jugables deben tener is_playable=True."""
+    jugables = [Tribe.ROMANS, Tribe.TEUTONS, Tribe.GAULS, Tribe.EGYPTIANS,
+                Tribe.HUNS, Tribe.SPARTANS, Tribe.VIKINGS]
+    for t in jugables:
+        assert t.is_playable, f"{t} debería ser jugable"
+
+
+def test_tribe_is_playable_npc():
+    """NATURE y NATARS son NPC: is_playable=False."""
+    assert not Tribe.NATURE.is_playable
+    assert not Tribe.NATARS.is_playable
+
+
+def test_playable_tribes_tiene_siete_elementos():
+    assert len(PLAYABLE_TRIBES) == 7
+
+
+def test_playable_tribes_no_incluye_npc():
+    assert Tribe.NATURE not in PLAYABLE_TRIBES
+    assert Tribe.NATARS not in PLAYABLE_TRIBES
+
+
+# ---------------------------------------------------------------------------
 # Village — estructura básica
 # ---------------------------------------------------------------------------
 
 def test_village_campos():
-    v = Village(id=1, world_id=10, game_id=3, name="Mi Aldea", x=100, y=-50)
+    v = Village(id=1, world_id=10, data_id=3, name="Mi Aldea", x=100, y=-50)
     assert v.id == 1
     assert v.world_id == 10
-    assert v.game_id == 3
+    assert v.data_id == 3
     assert v.name == "Mi Aldea"
     assert v.x == 100
     assert v.y == -50

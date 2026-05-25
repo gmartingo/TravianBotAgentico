@@ -7,8 +7,22 @@
     "ru": "Аккаунт {account_id} не найден"
   },
   "DUPLICATE_ACCOUNT": {
-    "es": "Ya existe una cuenta con el username '{username}'",
-    "en": "An account with username '{username}' already exists",
+    "es": "Ya existe una cuenta con el email '{email}'",
+    "en": "An account with email '{email}' already exists",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "DUPLICATE_WORLD": {
+    "es": "Ya existe un mundo con server '{server}' en esta cuenta",
+    "en": "A world with server '{server}' already exists in this account",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "ACTIVE_SESSION_CONFLICT": {
+    "es": "Hay una sesión activa para el mundo {world_id}. Haz logout primero.",
+    "en": "There is an active session for world {world_id}. Log out first.",
     "de": "",
     "fr": "",
     "ru": ""

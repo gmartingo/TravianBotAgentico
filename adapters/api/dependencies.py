@@ -126,3 +126,24 @@ def get_game_data_port(request: Request) -> GameDataPort:
     Se inicializa en el lifespan de la aplicación junto al translation_port.
     """
     return request.app.state.game_data_port
+
+
+def get_db_port(request: Request):
+    """
+    Devuelve el singleton de DbPort (AccountSQLiteAdapter) almacenado en app.state.
+    Se inicializa en el lifespan de la aplicación junto a ensure_tables().
+
+    Usado por los endpoints de /accounts y /accounts/{id}/worlds.
+    No tipamos el retorno con DbPort para evitar import circular; el tipo
+    real es AccountSQLiteAdapter que implementa DbPort.
+    """
+    return request.app.state.db_port
+
+
+def get_fernet(request: Request):
+    """
+    Devuelve el objeto Fernet almacenado en app.state.
+    Se inicializa en el lifespan al llamar load_fernet_key().
+    Si la clave no estaba configurada, la app no habría arrancado.
+    """
+    return request.app.state.fernet

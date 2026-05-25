@@ -206,17 +206,7 @@ async def main() -> None:
             errors.append(f"stats/{tribe_value}: {e}")
             logger.error("  Error parseando stats de '%s': %s", tribe_value, e)
 
-        # ------------------------------------------------------------------
-        # 3. Leer tabla de mejoras  ← DESPUÉS del bucle de idiomas (tabla correcta)
-        # ------------------------------------------------------------------
-        upgrades_por_ordinal: dict = {}
-        try:
-            upgrades_por_ordinal = await _parse_upgrade_table(page, tribe_value)
-            total_upg = sum(len(v) for v in upgrades_por_ordinal.values())
-            logger.info("  Mejoras: %d filas", total_upg)
-        except Exception as e:
-            errors.append(f"upgrades/{tribe_value}: {e}")
-            logger.error("  Error parseando mejoras de '%s': %s", tribe_value, e)
+        # (El parseo de mejoras se realiza POR UNIDAD más abajo — paso 8)
 
         # ------------------------------------------------------------------
         # 4. Capturar iconos de stat (solo si alguno falta)
@@ -271,16 +261,73 @@ async def main() -> None:
                 logger.error("  Error guardando stats '%s_%d': %s", tribe_value, ordinal, e)
 
         # ------------------------------------------------------------------
-        # 8. Persistir mejoras en SQLite
+        # 8. Mejoras por unidad — navegación individual a troops.php#...&unit=N
+        #
+        # La tabla #upg_table de kirilloid es POR UNIDAD: la URL
+        #   troops.php#s=1.45&tribe=T&s_lvl=0&t_lvl=1&u_lvl=0&unit=N
+        # muestra el #upg_table de la unidad N exclusivamente.
+        #
+        # Lección SPA: navegar solo el hash no garantiza re-render en todos
+        # los navegadores. El patrón correcto es:
+        #   browser.get("about:blank") → browser.get(url_con_unit)
+        # Así cada unidad obtiene una carga fresca de la página.
+        #
+        # Los iconos de mejora (eye/def_s/point) también se capturan aquí,
+        # ya que solo son visibles en el #upg_table de la unidad concreta.
         # ------------------------------------------------------------------
-        for ordinal, upgrades in upgrades_por_ordinal.items():
-            for upgrade in upgrades:
+        logger.info("  Iniciando mejoras por unidad (%d ordinales)...", len(stats_por_ordinal))
+        for ordinal in sorted(stats_por_ordinal.keys()):
+            unit_url = (
+                f"{KIRILLOID_BASE_URL}"
+                f"#s={SERVER_VERSION}&tribe={tribe_id}"
+                f"&s_lvl=0&t_lvl=1&u_lvl=0&unit={ordinal}"
+            )
+            try:
+                # Carga fresca para que el SPA lea el nuevo hash &unit=N
+                await browser.get("about:blank")
+                unit_page = await browser.get(unit_url)
+                # Esperamos #upg_table — si no existe, la unidad no tiene mejoras
+                upg_exists = False
                 try:
-                    await game_data_port.upsert_troop_upgrade(upgrade)
-                    total_upgrades += 1
-                except Exception as e:
-                    errors.append(f"upsert_upgrade/{tribe_value}/{ordinal}: {e}")
-                    logger.error("  Error guardando mejora '%s_%d': %s", tribe_value, ordinal, e)
+                    await _wait_for_element(unit_page, "#upg_table", timeout=15)
+                    upg_exists = True
+                except Exception:
+                    pass  # sin #upg_table → 0 mejoras, OK (EC-03)
+
+                if upg_exists:
+                    # Parsear mejoras
+                    upgrades = await _parse_upgrade_table(unit_page, tribe_value, ordinal)
+                    for upgrade in upgrades:
+                        try:
+                            await game_data_port.upsert_troop_upgrade(upgrade)
+                            total_upgrades += 1
+                        except Exception as e:
+                            errors.append(f"upsert_upgrade/{tribe_value}/{ordinal}: {e}")
+                            logger.error(
+                                "  Error guardando mejora '%s_%d' nivel %d: %s",
+                                tribe_value, ordinal, upgrade.get("level", "?"), e
+                            )
+
+                    # Capturar iconos de mejora nuevos (eye/def_s/point) si faltan
+                    missing_upgrade_icons = [
+                        ic for ic in UPGRADE_NEW_ICONS
+                        if not (ICONS_DIR / f"{ic}.png").exists()
+                    ]
+                    if missing_upgrade_icons:
+                        try:
+                            await _capture_upgrade_icons(unit_page, conn)
+                        except Exception as e:
+                            errors.append(f"upgrade_icons/{tribe_value}/{ordinal}: {e}")
+                            logger.error(
+                                "  Error capturando iconos de mejora en %s_%d: %s",
+                                tribe_value, ordinal, e
+                            )
+
+            except Exception as e:
+                errors.append(f"upgrades_iter/{tribe_value}/{ordinal}: {e}")
+                logger.error(
+                    "  Error en iteración de mejoras '%s_%d': %s", tribe_value, ordinal, e
+                )
 
         # ------------------------------------------------------------------
         # 9. Merge de nombres en troops.json  ← nombres capturados en paso 1

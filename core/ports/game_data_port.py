@@ -112,8 +112,75 @@ class GameDataPort(ABC):
         Devuelve la lista de metadatos de iconos.
 
         Filtros opcionales:
-          icon_type: "troop" | "stat" | "upgrade" — filtra por tipo.
+          icon_type: "troop" | "stat" | "upgrade" | "building" — filtra por tipo.
           tribe: valor de Tribe.value — solo tiene efecto con icon_type="troop".
 
         Si ningún icono cumple los filtros, devuelve lista vacía (nunca lanza excepción).
+        """
+
+    # ------------------------------------------------------------------
+    # Edificios — métodos añadidos para la feature kirilloid-edificios
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def get_building_stats(
+        self,
+        gid: int,
+        server_version: str = "1.45",
+    ) -> list[dict]:
+        """
+        Devuelve la lista de niveles de un edificio ordenados por level.
+
+        Cada dict contiene: {level, cost_wood, cost_clay, cost_iron, cost_crop,
+        cost_sum, upkeep, culture_points, build_time_s, effect_value, effect_label}.
+        Lista vacía si no hay datos para ese gid/server_version.
+        """
+
+    @abstractmethod
+    async def get_all_building_stats(
+        self,
+        server_version: str = "1.45",
+    ) -> dict[int, list[dict]]:
+        """
+        Devuelve un dict {gid: [filas de building_stats ordenadas por level]}.
+        Útil para poblar el catálogo completo sin N queries individuales.
+        """
+
+    @abstractmethod
+    async def upsert_building_stats(self, stats: dict) -> None:
+        """
+        Inserta o actualiza una fila de building_stats (UPSERT idempotente).
+
+        stats debe incluir: server_version, gid, level y los campos de coste/efecto.
+        scraped_at lo rellena el adaptador.
+        """
+
+    @abstractmethod
+    async def upsert_building_catalog(self, catalog: dict) -> None:
+        """
+        Inserta o actualiza un registro de building_catalog (UPSERT idempotente).
+
+        catalog debe incluir: server_version, gid, alias, category, description, icon_id.
+        scraped_at lo rellena el adaptador.
+        """
+
+    @abstractmethod
+    async def get_building_catalog(
+        self,
+        gid: int,
+        server_version: str = "1.45",
+    ) -> dict | None:
+        """
+        Devuelve los metadatos de un edificio (categoría, descripción, icon_id),
+        o None si no existe.
+        """
+
+    @abstractmethod
+    async def get_all_building_catalog(
+        self,
+        server_version: str = "1.45",
+    ) -> dict[int, dict]:
+        """
+        Devuelve un dict {gid: meta_dict} con los metadatos de todos los edificios.
+        Útil para poblar el endpoint GET /catalog/buildings sin N queries individuales.
         """

@@ -36,10 +36,10 @@ class AccountNotFoundError(TravianBotError):
 class DuplicateAccountError(TravianBotError):
     error_code = "DUPLICATE_ACCOUNT"
 
-    def __init__(self, username: str) -> None:
-        super().__init__(f"Ya existe una cuenta con el username '{username}'")
-        self.username = username
-        self.params = {"username": username}
+    def __init__(self, email: str) -> None:
+        super().__init__(f"Ya existe una cuenta con el email '{email}'")
+        self.email = email
+        self.params = {"email": email}
 
 
 class WorldNotFoundError(TravianBotError):
@@ -136,6 +136,32 @@ class BuildingNotFoundError(TravianBotError):
         super().__init__(f"Edificio gid={gid} no encontrado")
         self.gid = gid
         self.params = {"gid": gid}
+
+
+# --- Excepciones añadidas en la feature registro-cuentas-mundos ---
+
+class DuplicateWorldError(TravianBotError):
+    """Se lanza cuando se intenta registrar un mundo con (account_id, server) ya existente."""
+
+    error_code = "DUPLICATE_WORLD"
+
+    def __init__(self, server: str) -> None:
+        super().__init__(f"Ya existe un mundo con server '{server}' en esta cuenta")
+        self.server = server
+        self.params = {"server": server}
+
+
+class ActiveSessionConflictError(TravianBotError):
+    """Se lanza al intentar borrar una cuenta/mundo con sesión activa en el bot."""
+
+    error_code = "ACTIVE_SESSION_CONFLICT"
+
+    def __init__(self, world_id: int) -> None:
+        super().__init__(
+            f"Hay una sesión activa para el mundo {world_id}. Haz logout primero."
+        )
+        self.world_id = world_id
+        self.params = {"world_id": world_id}
 
 
 # --- Excepciones añadidas en la feature kirilloid-tropas-scraper ---

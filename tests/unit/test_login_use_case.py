@@ -18,7 +18,7 @@ def _make_world(world_id: int = 1) -> World:
 
 
 def _make_account(worlds: list[World] | None = None) -> Account:
-    return Account(id=1, username="testuser", password="testpass", worlds=worlds or [])
+    return Account(id=1, email="test@example.com", username="testuser", password="testpass", worlds=worlds or [])
 
 
 def _make_use_case(db_account=None, registry_login_result=True):

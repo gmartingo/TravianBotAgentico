@@ -14,6 +14,12 @@ aiosqlite>=0.20.0
 # Procesamiento de imágenes (iconos del scraper kirilloid)
 pillow>=10.0.0
 
+# Cifrado de contraseñas (Fernet — AES-128-CBC + HMAC-SHA256)
+cryptography>=42.0.0
+
+# Validación de email para Pydantic EmailStr (CreateAccountRequest / UpdateAccountRequest)
+email-validator>=2.0.0
+
 # Tests
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
