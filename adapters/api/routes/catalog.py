@@ -4,14 +4,19 @@ Endpoints del catálogo de Travian: edificios y tropas con traducciones.
 GET /catalog/buildings        — todos los edificios con nombre localizado
 GET /catalog/troops/{tribe}   — tropas de una tribu con nombre localizado
 
-Ambos endpoints exigen Accept-Language y devuelven Cache-Control: public, max-age=3600.
-El campo `language` de cada item tiene como clave el idioma realmente servido
-(puede diferir del pedido cuando se aplica el fallback granular a 'es').
+/catalog/buildings exige Accept-Language y devuelve Cache-Control: public, max-age=3600.
+/catalog/troops/{tribe} acepta idioma mediante dos mecanismos con esta precedencia:
+  1. ?lang=<código> (query string) — override explícito; tiene precedencia sobre el header.
+  2. Accept-Language (header)      — preferencia estándar del cliente.
+  3. Ninguno de los dos            — devuelve todos los idiomas del catálogo (~25 claves).
+  Error 400 si cualquier valor presente no está entre los 25 soportados.
+  La respuesta incluye siempre Vary: Accept-Language.
+El campo `language` de cada item tiene como clave(s) el/los idiomas realmente servidos.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
 
-from adapters.api.dependencies import get_language, get_translation_port
+from adapters.api.dependencies import get_language, resolve_language, get_translation_port
 from core.entities.tribe import Tribe
 from core.exceptions import TroopNotFoundError
 from core.ports.translation_port import TranslationPort
@@ -111,30 +116,57 @@ def get_buildings_catalog(
     response_model=TroopsCatalogResponse,
     summary="Catálogo de tropas por tribu",
     description=(
-        "Devuelve las tropas de una tribu con su nombre en el idioma solicitado. "
+        "Devuelve las tropas de una tribu con su nombre localizado. "
+        "Selección de idioma con la siguiente precedencia (explícito gana a implícito): "
+        "1) ?lang=<código> — override explícito en query string; "
+        "2) Accept-Language (header) — preferencia estándar del cliente; "
+        "3) sin ninguno → language contiene todos los idiomas disponibles (~25 claves). "
+        "Devuelve 400 si cualquier valor presente no está entre los 25 idiomas soportados. "
         "FastAPI valida el path param contra el enum Tribe (422 si es inválido). "
-        "Si la tribu no tiene tropas en el catálogo, devuelve 404."
+        "Si la tribu no tiene tropas en el catálogo, devuelve 404. "
+        "La respuesta incluye Vary: Accept-Language."
     ),
 )
 def get_troops_catalog(
     tribe: Tribe,
-    lang: str = Depends(get_language),
+    response: Response,
+    lang: str | None = Depends(resolve_language),
     translation_port: TranslationPort = Depends(get_translation_port),
 ) -> TroopsCatalogResponse:
-    try:
-        items_raw = translation_port.get_troop_names_by_tribe(tribe, lang)
-    except TroopNotFoundError:
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=404,
-            detail=f"No hay tropas definidas para la tribu '{tribe.value}' en el catálogo",
-        )
-    troops = [
-        TroopItem(
-            ordinal=item["ordinal"],
-            key=item["key"],
-            language={item["lang_servido"]: item["nombre"]},
-        )
-        for item in items_raw
-    ]
+    from fastapi import HTTPException
+    response.headers["Vary"] = "Accept-Language"
+    if lang is None:
+        # Sin ninguna preferencia de idioma → devolver todos los idiomas disponibles
+        try:
+            items_raw = translation_port.get_troop_all_langs_by_tribe(tribe)
+        except TroopNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No hay tropas definidas para la tribu '{tribe.value}' en el catálogo",
+            )
+        troops = [
+            TroopItem(
+                ordinal=item["ordinal"],
+                key=item["key"],
+                language=item["language"],
+            )
+            for item in items_raw
+        ]
+    else:
+        # Idioma resuelto (vía ?lang= o Accept-Language) → un solo idioma con fallback a 'es'
+        try:
+            items_raw = translation_port.get_troop_names_by_tribe(tribe, lang)
+        except TroopNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No hay tropas definidas para la tribu '{tribe.value}' en el catálogo",
+            )
+        troops = [
+            TroopItem(
+                ordinal=item["ordinal"],
+                key=item["key"],
+                language={item["lang_servido"]: item["nombre"]},
+            )
+            for item in items_raw
+        ]
     return TroopsCatalogResponse(tribe=tribe.value, troops=troops)

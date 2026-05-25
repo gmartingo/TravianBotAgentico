@@ -15,9 +15,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
 from adapters.api.routes.catalog import router as catalog_router
+from adapters.api.routes.game_data import router as game_data_router
+from adapters.db.database import get_connection
+from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
 from core.exceptions import TravianBotError
 from core.i18n.languages import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
@@ -94,9 +98,11 @@ def _build_trace(exc: BaseException) -> list[dict]:
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """
-    Carga el catálogo de traducciones una sola vez al arrancar la aplicación.
-    El adaptador queda disponible en app.state.translation_port para todos los
-    handlers y dependencias.
+    Inicializa los singletons de puertos al arrancar la aplicación:
+      - translation_port (JsonTranslationAdapter) — catálogo de textos localizados
+      - game_data_port   (GameDataSQLiteAdapter)  — stats de tropas e iconos
+
+    Ambos quedan disponibles en app.state para todos los handlers y dependencias.
     """
     catalog_base = (
         Path(__file__).parent.parent.parent / "core" / "i18n" / "catalog" / "base"
@@ -108,7 +114,21 @@ async def lifespan(application: FastAPI):
         base_dir=catalog_base,
         override_dir=catalog_override,
     )
+
+    # GameDataSQLiteAdapter — conexión aiosqlite, crea tablas si no existen
+    conn = await get_connection()
+    game_data_adapter = GameDataSQLiteAdapter(conn)
+    await game_data_adapter.ensure_tables()
+    application.state.game_data_port = game_data_adapter
+    application.state._db_conn = conn  # guardar para cerrar en shutdown
+
     yield
+
+    # Cierre limpio de la conexión SQLite
+    try:
+        await conn.close()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -229,10 +249,27 @@ async def travian_bot_error_handler(request: Request, exc: TravianBotError) -> J
 
 
 # ---------------------------------------------------------------------------
+# StaticFiles — iconos PNG servidos directamente desde el filesystem
+# NOTA: el mount debe estar ANTES de include_router para que StaticFiles
+# tenga precedencia sobre rutas dinámicas en el mismo prefijo.
+# El directorio se crea automáticamente si no existe (assets/icons/).
+# ---------------------------------------------------------------------------
+
+_ICONS_DIR = Path(__file__).parent.parent.parent / "assets" / "icons"
+_ICONS_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount(
+    "/static/icons",
+    StaticFiles(directory=str(_ICONS_DIR)),
+    name="static_icons",
+)
+
+# ---------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------
 
 app.include_router(catalog_router)
+app.include_router(game_data_router)
 
 
 @app.get("/health")
