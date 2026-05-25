@@ -270,8 +270,8 @@
     "uk": "Поселенець"
   },
   "TEUTONS_1": {
-    "es": "Guerrero con porra",
-    "en": "Clubswinger",
+    "es": "Luchador de porra",
+    "en": "Maceman",
     "de": "Keulenschwinger",
     "fr": "Combattant au gourdin",
     "ru": "Дубинщик",
@@ -297,7 +297,7 @@
     "uk": "Дубинник"
   },
   "TEUTONS_2": {
-    "es": "Spearman",
+    "es": "Lancero",
     "en": "Spearman",
     "de": "Speerkämpfer",
     "fr": "Combattant à la lance",
@@ -324,7 +324,7 @@
     "uk": "Списник"
   },
   "TEUTONS_3": {
-    "es": "Explorador teutón",
+    "es": "Luchador de Hacha",
     "en": "Axeman",
     "de": "Axtkämpfer",
     "fr": "Combattant à la hache",
@@ -351,7 +351,7 @@
     "uk": "Сокирник"
   },
   "TEUTONS_4": {
-    "es": "Scout",
+    "es": "Emisario",
     "en": "Scout",
     "de": "Kundschafter",
     "fr": "Eclaireur",
@@ -378,7 +378,7 @@
     "uk": "Скаут"
   },
   "TEUTONS_5": {
-    "es": "Caballero teutón",
+    "es": "Paladín",
     "en": "Paladin",
     "de": "Paladin",
     "fr": "Paladin",
@@ -405,7 +405,7 @@
     "uk": "Паладин"
   },
   "TEUTONS_6": {
-    "es": "Caballero teutón II",
+    "es": "Jinete Teutón",
     "en": "Teutonic Knight",
     "de": "Teutonen Reiter",
     "fr": "Cavalier Teuton",
@@ -432,7 +432,7 @@
     "uk": "Тевтонський вершник"
   },
   "TEUTONS_7": {
-    "es": "Ariete teutón",
+    "es": "Ariete de madera",
     "en": "Ram",
     "de": "Ramme",
     "fr": "Bélier",
@@ -459,7 +459,7 @@
     "uk": "Стінобитне знаряддя"
   },
   "TEUTONS_8": {
-    "es": "Catapulta teutona",
+    "es": "Catapulta",
     "en": "Catapult",
     "de": "Katapult",
     "fr": "Catapulte",
@@ -486,7 +486,7 @@
     "uk": "Катапульта"
   },
   "TEUTONS_9": {
-    "es": "Jefe teutón",
+    "es": "Cabecilla",
     "en": "Chief",
     "de": "Stammesführer",
     "fr": "Chef de tribu",
@@ -513,8 +513,8 @@
     "uk": "Ватажок"
   },
   "TEUTONS_10": {
-    "es": "Colono teutón",
-    "en": "Teutonic Settler",
+    "es": "Colono",
+    "en": "Settler",
     "de": "Siedler",
     "fr": "Colon",
     "ru": "Поселенец",
@@ -540,7 +540,7 @@
     "uk": "Поселенець"
   },
   "GAULS_1": {
-    "es": "Falanx",
+    "es": "Falange",
     "en": "Phalanx",
     "de": "Phalanx",
     "fr": "Phalange",
@@ -567,7 +567,7 @@
     "uk": "Фаланга"
   },
   "GAULS_2": {
-    "es": "Espadachín galo",
+    "es": "Espadachín",
     "en": "Swordsman",
     "de": "Schwertkämpfer",
     "fr": "Combattant à l'épée",
@@ -594,7 +594,7 @@
     "uk": "Мечник"
   },
   "GAULS_3": {
-    "es": "Explorador galo",
+    "es": "Batidor",
     "en": "Pathfinder",
     "de": "Späher",
     "fr": "Éclaireur",
@@ -621,7 +621,7 @@
     "uk": "Слідопит"
   },
   "GAULS_4": {
-    "es": "Teutat Thunder",
+    "es": "Rayo de Theutates",
     "en": "Theutates Thunder",
     "de": "Theutates Blitz",
     "fr": "Éclair de Toutatis",
@@ -648,7 +648,7 @@
     "uk": "Тевтацький грім"
   },
   "GAULS_5": {
-    "es": "Druida",
+    "es": "Jinete Druida",
     "en": "Druidrider",
     "de": "Druidenreiter",
     "fr": "Cavalier druide",
@@ -675,7 +675,7 @@
     "uk": "Друїд-вершник"
   },
   "GAULS_6": {
-    "es": "Haeduan",
+    "es": "Jinete Eduo",
     "en": "Haeduan",
     "de": "Haeduaner",
     "fr": "Hédouin",
@@ -702,7 +702,7 @@
     "uk": "Едуйська кіннота"
   },
   "GAULS_7": {
-    "es": "Ariete galo",
+    "es": "Ariete de madera",
     "en": "Ram",
     "de": "Rammholz",
     "fr": "Bélier",
@@ -729,7 +729,7 @@
     "uk": "Таран"
   },
   "GAULS_8": {
-    "es": "Trebuchet",
+    "es": "Catapulta de guerra",
     "en": "Trebuchet",
     "de": "Kriegskatapult",
     "fr": "Catapulte de Guerre",
@@ -756,7 +756,7 @@
     "uk": "Катапульта"
   },
   "GAULS_9": {
-    "es": "Druida jefe",
+    "es": "Cacique",
     "en": "Chieftain",
     "de": "Häuptling",
     "fr": "Chef",
@@ -783,8 +783,8 @@
     "uk": "Лідер"
   },
   "GAULS_10": {
-    "es": "Colono galo",
-    "en": "Gaul Settler",
+    "es": "Colono",
+    "en": "Settler",
     "de": "Siedler",
     "fr": "Colon",
     "ru": "Поселенец",

@@ -89,6 +89,16 @@ class TranslationPort(ABC):
         """
 
     @abstractmethod
+    def get_building_all_langs(self, gid: int) -> dict[str, str]:
+        """
+        Devuelve todos los idiomas disponibles para un edificio dado su gid.
+
+        Devuelve un dict {lang: nombre} para todos los pares cuyo valor sea no vacío.
+        Si el gid no existe en el catálogo, devuelve {} (dict vacío).
+        Análogo a get_troop_all_langs_by_tribe pero para un edificio individual.
+        """
+
+    @abstractmethod
     def get_message(self, code: str, lang: str, **params) -> str:
         """
         Devuelve el mensaje de error para el code dado en el idioma solicitado.

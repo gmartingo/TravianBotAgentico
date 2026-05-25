@@ -4,10 +4,12 @@ Adaptador SQLite para datos de juego (GameDataPort).
 Implementa GameDataPort usando aiosqlite con SQL crudo (sin Alembic, sin ORM),
 coherente con el patrón del proyecto (ver adapters/db/database.py).
 
-Las tres tablas que gestiona son:
+Las tablas que gestiona son:
   - troop_stats      — stats base de cada tropa (PK: server_version, tribe, ordinal)
   - troop_upgrades   — tabla de mejoras de herrería (PK: server_version, tribe, ordinal, level, stat_name)
   - icon_metadata    — metadatos de iconos PNG en disco (PK: icon_id)
+  - building_stats   — costes por nivel de edificio (PK: server_version, gid, level)
+  - building_catalog — metadatos de edificio: categoría, descripción, icono (PK: server_version, gid)
 
 Todas las operaciones de escritura son UPSERT idempotentes (INSERT OR REPLACE).
 """
@@ -82,12 +84,47 @@ CREATE TABLE IF NOT EXISTS icon_metadata (
 );
 """
 
+_CREATE_BUILDING_STATS = """
+CREATE TABLE IF NOT EXISTS building_stats (
+    server_version   TEXT    NOT NULL,
+    gid              INTEGER NOT NULL,
+    level            INTEGER NOT NULL,
+    cost_wood        INTEGER,
+    cost_clay        INTEGER,
+    cost_iron        INTEGER,
+    cost_crop        INTEGER,
+    cost_sum         INTEGER,
+    upkeep           INTEGER,
+    culture_points   INTEGER,
+    build_time_s     INTEGER,
+    effect_value     INTEGER,
+    effect_label     TEXT,
+    scraped_at       TEXT    NOT NULL,
+    PRIMARY KEY (server_version, gid, level)
+);
+"""
+
+_CREATE_BUILDING_CATALOG = """
+CREATE TABLE IF NOT EXISTS building_catalog (
+    server_version   TEXT    NOT NULL,
+    gid              INTEGER NOT NULL,
+    alias            TEXT    NOT NULL,
+    category         TEXT    NOT NULL,
+    description      TEXT    NOT NULL DEFAULT "",
+    icon_id          TEXT,
+    scraped_at       TEXT    NOT NULL,
+    PRIMARY KEY (server_version, gid)
+);
+"""
+
 
 async def _create_tables_if_not_exist(conn: aiosqlite.Connection) -> None:
-    """Crea las tres tablas si no existen. Idempotente."""
+    """Crea todas las tablas si no existen. Idempotente."""
     await conn.execute(_CREATE_TROOP_STATS)
     await conn.execute(_CREATE_TROOP_UPGRADES)
     await conn.execute(_CREATE_ICON_METADATA)
+    await conn.execute(_CREATE_BUILDING_STATS)
+    await conn.execute(_CREATE_BUILDING_CATALOG)
     await conn.commit()
 
 
@@ -317,6 +354,141 @@ class GameDataSQLiteAdapter(GameDataPort):
         )
         await self._conn.commit()
 
+    # ------------------------------------------------------------------
+    # Edificios — métodos añadidos para la feature kirilloid-edificios
+    # ------------------------------------------------------------------
+
+    async def get_building_stats(
+        self,
+        gid: int,
+        server_version: str = "1.45",
+    ) -> list[dict]:
+        """Devuelve la lista de niveles de un edificio ordenados por level."""
+        async with self._conn.execute(
+            """
+            SELECT server_version, gid, level,
+                   cost_wood, cost_clay, cost_iron, cost_crop, cost_sum,
+                   upkeep, culture_points, build_time_s, effect_value, effect_label
+            FROM building_stats
+            WHERE server_version = ? AND gid = ?
+            ORDER BY level
+            """,
+            (server_version, gid),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_building_stats_dict(r) for r in rows]
+
+    async def get_all_building_stats(
+        self,
+        server_version: str = "1.45",
+    ) -> dict[int, list[dict]]:
+        """Devuelve {gid: [filas ordenadas por level]} para todos los edificios."""
+        async with self._conn.execute(
+            """
+            SELECT server_version, gid, level,
+                   cost_wood, cost_clay, cost_iron, cost_crop, cost_sum,
+                   upkeep, culture_points, build_time_s, effect_value, effect_label
+            FROM building_stats
+            WHERE server_version = ?
+            ORDER BY gid, level
+            """,
+            (server_version,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        result: dict[int, list[dict]] = {}
+        for r in rows:
+            d = _row_to_building_stats_dict(r)
+            result.setdefault(d["gid"], []).append(d)
+        return result
+
+    async def upsert_building_stats(self, stats: dict) -> None:
+        """Inserta o actualiza una fila de building_stats (UPSERT idempotente)."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            """
+            INSERT OR REPLACE INTO building_stats (
+                server_version, gid, level,
+                cost_wood, cost_clay, cost_iron, cost_crop, cost_sum,
+                upkeep, culture_points, build_time_s,
+                effect_value, effect_label, scraped_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                stats["server_version"],
+                stats["gid"],
+                stats["level"],
+                stats.get("cost_wood"),
+                stats.get("cost_clay"),
+                stats.get("cost_iron"),
+                stats.get("cost_crop"),
+                stats.get("cost_sum"),
+                stats.get("upkeep"),
+                stats.get("culture_points"),
+                stats.get("build_time_s"),
+                stats.get("effect_value"),
+                stats.get("effect_label", ""),
+                now,
+            ),
+        )
+        await self._conn.commit()
+
+    async def upsert_building_catalog(self, catalog: dict) -> None:
+        """Inserta o actualiza un registro de building_catalog (UPSERT idempotente)."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self._conn.execute(
+            """
+            INSERT OR REPLACE INTO building_catalog (
+                server_version, gid, alias, category, description, icon_id, scraped_at
+            ) VALUES (?,?,?,?,?,?,?)
+            """,
+            (
+                catalog["server_version"],
+                catalog["gid"],
+                catalog["alias"],
+                catalog["category"],
+                catalog.get("description", ""),
+                catalog.get("icon_id"),
+                now,
+            ),
+        )
+        await self._conn.commit()
+
+    async def get_building_catalog(
+        self,
+        gid: int,
+        server_version: str = "1.45",
+    ) -> dict | None:
+        """Devuelve los metadatos de un edificio, o None si no existe."""
+        async with self._conn.execute(
+            """
+            SELECT server_version, gid, alias, category, description, icon_id, scraped_at
+            FROM building_catalog
+            WHERE server_version = ? AND gid = ?
+            """,
+            (server_version, gid),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return _row_to_building_catalog_dict(row)
+
+    async def get_all_building_catalog(
+        self,
+        server_version: str = "1.45",
+    ) -> dict[int, dict]:
+        """Devuelve {gid: meta_dict} con los metadatos de todos los edificios."""
+        async with self._conn.execute(
+            """
+            SELECT server_version, gid, alias, category, description, icon_id, scraped_at
+            FROM building_catalog
+            WHERE server_version = ?
+            ORDER BY gid
+            """,
+            (server_version,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return {r[1]: _row_to_building_catalog_dict(r) for r in rows}
+
 
 # ---------------------------------------------------------------------------
 # Helpers de conversión row → dict
@@ -376,4 +548,36 @@ def _row_to_icon_dict(row: aiosqlite.Row) -> dict:
         "width_px": row[7],
         "height_px": row[8],
         "scraped_at": row[9],
+    }
+
+
+def _row_to_building_stats_dict(row: aiosqlite.Row) -> dict:
+    """Convierte una fila de building_stats en dict con keys tipadas."""
+    return {
+        "server_version": row[0],
+        "gid": row[1],
+        "level": row[2],
+        "cost_wood": row[3],
+        "cost_clay": row[4],
+        "cost_iron": row[5],
+        "cost_crop": row[6],
+        "cost_sum": row[7],
+        "upkeep": row[8],
+        "culture_points": row[9],
+        "build_time_s": row[10],
+        "effect_value": row[11],
+        "effect_label": row[12],
+    }
+
+
+def _row_to_building_catalog_dict(row: aiosqlite.Row) -> dict:
+    """Convierte una fila de building_catalog en dict."""
+    return {
+        "server_version": row[0],
+        "gid": row[1],
+        "alias": row[2],
+        "category": row[3],
+        "description": row[4],
+        "icon_id": row[5],
+        "scraped_at": row[6],
     }
