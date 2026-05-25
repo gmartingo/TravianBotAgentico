@@ -29,7 +29,7 @@ El proyecto se construye delegando tareas a **agentes especializados**. El agent
 | `desarrollador-funcionalidades` | Implementa el código según el spec de `docs/specs/` | Solo cuando existe un spec `ready-for-impl` — nunca sin spec |
 | `disenador-producto` | Diseña pantallas, navegación y wireframes en `docs/design/` | Antes de tocar cualquier UI — produce el spec visual |
 | `desarrollador-ux-ui` | Implementa la UI según el spec de `docs/design/` | Solo cuando existe un spec de diseño `ready-for-impl` |
-| `guardian-antideteccion` | Audita indetectabilidad del bot — **NO NEGOCIABLE** | Después del spec del analista, después del contrato de APIs, y antes de cada commit |
+| `guardian-antideteccion` | Audita indetectabilidad del bot — **NO NEGOCIABLE cuando aplica** | **Solo cuando hay funciones o lógica que impactan el browser o la interacción con la web de Travian** (`adapters/browser/`, selectores, timings, escritura humana, navegación, peticiones a Travian) |
 | `documentador` | Genera docs técnicas, de negocio y manuales de usuario en HTML | Al terminar un módulo/feature, o cuando el usuario pide documentación |
 | `git-flow-advisor` | Gestiona commits, branches y PRs siguiendo Git Flow | Antes de integrar cambios o cuando hay dudas sobre el flujo de git |
 | `Explore` | Búsqueda rápida read-only | Localizar código o ficheros antes de editar |
@@ -40,14 +40,16 @@ El proyecto se construye delegando tareas a **agentes especializados**. El agent
 ```
 1. palantir          → ¿Existe algo reutilizable? (gate de entrada)
 2. analista          → Descubre requisitos + escribe spec en docs/specs/
-3. guardian          → Audita el spec: ¿algún diseño compromete la anti-detección?
+3. guardian          → SOLO si el spec toca el browser o la interacción con Travian: ¿algún diseño compromete la anti-detección?
 4. desarrollador-apis (si hay endpoints) → Diseña contrato + genera tests
-5. guardian          → Audita el contrato de API: ¿exposición de datos sensibles / riesgo de detección?
+5. guardian          → SOLO si la API expone datos del browser / sesión de Travian o influye en la interacción: ¿riesgo de detección?
 6. desarrollador-funcionalidades → Implementa según spec
-7. guardian          → Audita el código implementado antes de commit
+7. guardian          → SOLO si el código implementado toca el browser o la interacción con Travian: audita antes de commit
 8. *** PRUEBA MANUAL DEL USUARIO *** → El usuario prueba en el entorno real (Chrome real, Travian real)
 9. git-flow-advisor  → Gestiona el commit / branch / PR — SOLO si el usuario da el OK
 ```
+
+> Los pasos 3, 5 y 7 son **condicionales**: el `guardian-antideteccion` solo entra cuando el trabajo incluye funciones o lógica que impactan el browser o la interacción con la web de Travian. Para cambios puramente de backend/API/BD/frontend que no tocan esa interacción, se omiten.
 
 **El paso 8 es un gate humano no salteable.** Ningún agente puede darlo por aprobado.
 El usuario debe confirmar explícitamente "OK, funciona" antes de que git-flow-advisor haga cualquier commit.
@@ -61,9 +63,9 @@ Para features con UI añadir entre el paso 2 y 3:
 ### Reglas de delegación
 
 - **Toda feature nueva** → primero `palantir` (¿ya existe?), luego `analista` (¿qué hay que hacer?).
-- **`guardian-antideteccion` es obligatorio en tres momentos**: (1) tras el spec del analista, (2) tras el contrato de APIs, (3) antes de cada commit.
+- **`guardian-antideteccion` entra solo cuando hay funciones o lógica que impactan el browser o la interacción con la web de Travian** (`adapters/browser/`, selectores, timings, escritura humana, navegación, peticiones a Travian). Cuando aplica, es obligatorio en los momentos relevantes del flujo (tras el spec, tras el contrato de APIs si expone esa interacción, y antes del commit). Para cambios puramente de backend/API/BD/frontend que no tocan esa interacción, **no se invoca**.
 - **Cualquier endpoint nuevo o modificado** → `desarrollador-apis` de forma proactiva.
-- **Cualquier cambio en `adapters/browser/`, selectores o timings** → `guardian-antideteccion` inmediatamente.
+- **Cualquier cambio en `adapters/browser/`, selectores o timings** → `guardian-antideteccion` inmediatamente (esto sí es siempre).
 - **`desarrollador-funcionalidades` solo entra con spec `ready-for-impl`** — si no hay spec, volver al `analista`.
 - **`git-flow-advisor` solo entra con OK explícito del usuario** — nunca commitear sin confirmación manual.
 - **Tarea con varios frentes** → primero `Plan`, luego ejecutar.
@@ -135,58 +137,97 @@ Usar siempre selectores estructurales:
 
 ---
 
-## 🌐 Convención obligatoria de API — Cabecera de idioma
+## 🌐 Convención de API — Selección de idioma
 
-**Toda definición de endpoint debe exigir el idioma del cliente en una cabecera HTTP.**
+`Accept-Language` y/o el parámetro de query `?lang=` controlan la localización en todos los endpoints que devuelven texto localizado. Esta regla aplica al agente `desarrollador-apis` y a cualquier modificación manual de rutas.
 
-Esta regla aplica al agente `desarrollador-apis` y a cualquier modificación manual de rutas.
+### Idiomas soportados — única fuente de verdad
 
-### Reglas
+**`SUPPORTED_LANGUAGES`** vive en `core/i18n/languages.py` y son exactamente los **25 códigos** que existen como claves en `core/i18n/catalog/base/troops.json` (generado por kirilloid):
 
-1. **Cabecera obligatoria**: `Accept-Language`.
-2. **Formato**: código BCP 47 simple (`es`, `en`, `de`, `fr`, `ru`). Sin pesos (`q=`), sin región salvo necesidad real.
-3. **Obligatoriedad**: el endpoint **rechaza** la petición con `400 Bad Request` si la cabecera falta o el valor no está soportado. El idioma por defecto es 'es'.
-4. **Validación centralizada**: usar una dependencia FastAPI compartida (`get_language` en `adapters/api/dependencies.py`) — no repetir la validación en cada ruta.
-5. **Documentación OpenAPI**: la cabecera debe aparecer en el Swagger generado (parámetro `Header(..., alias="Accept-Language")`).
-6. **Tests**: cada endpoint debe tener al menos tres tests — idioma válido (200), cabecera ausente (400), idioma no soportado (400).
-7. **Propagación**: el idioma resuelto se pasa por contexto al `core/` cuando una decisión depende del idioma (p. ej. selección de traducción de edificios en `buildings_data`).
+`ar, bg, cs, da, de, el, en, es, fa, fr, he, hu, it, ja, lt, lv, nl, pl, pt, rs, ru, sl, sv, tr, uk`
+
+Son códigos de kirilloid, NO BCP-47 estricto (p.ej. `rs` = serbio). Se mantienen tal cual para que todo código soportado resuelva directamente a datos en el catálogo. Cualquier código fuera de este conjunto → `400`.
+
+### Tres dependencias de idioma disponibles
+
+| Dependencia | Comportamiento | Cuándo usar |
+|---|---|---|
+| `get_language` | **Obligatoria**: `400` si `Accept-Language` falta O el idioma no está en los 25 | Endpoints que SIEMPRE devuelven un solo idioma (p.ej. `/catalog/buildings`) |
+| `get_language_optional` | **Opcional solo por header**: `None` si falta → todos los idiomas; código validado si soportado; `400` si presente y no soportado | Uso interno / endpoints legacy sin `?lang=` |
+| `resolve_language` | **Override + fallback**: prioridad `?lang=` > `Accept-Language` > `None` (todos). `400` si cualquier valor presente es inválido | Endpoints de catálogo con campo `language` que además ofrecen `?lang=` como override |
+
+Todas viven en `adapters/api/dependencies.py`.
+
+### Precedencia en endpoints que usan `resolve_language`
+
+**Explícito gana a implícito**: `?lang=<código>` > `Accept-Language` > (ninguno → todos los idiomas).
+
+Los endpoints `GET /catalog/troops/{tribe}` y `GET /catalog/troops/{tribe}/stats` usan `resolve_language`:
+
+| Entrada | Respuesta |
+|---|---|
+| `?lang=en` (válido) | `200` — `language` contiene solo ese idioma (con fallback granular a `es`) |
+| `?lang=xx` (inválido) | `400` — código no soportado |
+| `Accept-Language: it` + sin `?lang=` | `200` — `language` contiene `it` (ahora válido en los 25) |
+| `Accept-Language: zh` + sin `?lang=` | `400` — código no soportado |
+| `?lang=en` + `Accept-Language: es` | `200` — gana `?lang=en`, language con `en` |
+| Nada (sin header, sin `?lang=`) | `200` — `language` con todos los 25 idiomas del catálogo |
+
+### Caché: `Vary: Accept-Language`
+
+Los endpoints con `resolve_language` añaden `Vary: Accept-Language` en la respuesta, para que proxies/CDN cacheen correctamente por variante de idioma. Con `?lang=` la variación ya queda en la URL y `Vary` es redundante pero inofensivo.
+
+### Reglas comunes
+
+1. **Formato**: código simple en minúsculas (`es`, `it`, `ja`). Strip + lower + quitar región (`en-US` → `en`).
+2. **`SUPPORTED_LANGUAGES` = los 25 de `core/i18n/languages.py`.** Un idioma fuera → `400`. No hardcodear otro conjunto en ningún router ni test.
+3. **Validación centralizada**: siempre usar las dependencias de `adapters/api/dependencies.py`, nunca replicar la lógica en handlers.
+4. **Documentación OpenAPI**: tanto `Accept-Language` (header) como `lang` (query) deben aparecer en Swagger.
+5. **Propagación**: el idioma resuelto (o `None`) se pasa al `core/` cuando la lógica depende de él.
 
 ### Patrón de referencia (FastAPI)
 
 ```python
-# adapters/api/dependencies.py
-from fastapi import Header, HTTPException, status
+# adapters/api/dependencies.py  (ya implementado)
 
-SUPPORTED_LANGUAGES = {"es", "en", "de", "fr", "ru"}
+def get_language(accept_language: str | None = Header(default=None, alias="Accept-Language")) -> str:
+    """Obligatoria por header: 400 si falta o idioma no soportado."""
+    ...
 
-def get_language(accept_language: str = Header(..., alias="Accept-Language")) -> str:
-    code = accept_language.strip().lower().split("-")[0]
-    if code not in SUPPORTED_LANGUAGES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Idioma '{accept_language}' no soportado. Use: {sorted(SUPPORTED_LANGUAGES)}",
-        )
-    return code
+def resolve_language(
+    lang: str | None = Query(default=None, description="Override explícito; gana al header."),
+    accept_language: str | None = Header(default=None, alias="Accept-Language"),
+) -> str | None:
+    """Precedencia: ?lang= > Accept-Language > None (todos). 400 si presente e inválido."""
+    ...
 ```
 
 ```python
-# adapters/api/routes/buildings.py
-from fastapi import APIRouter, Depends
-from adapters.api.dependencies import get_language
+# Endpoint con idioma obligatorio (p.ej. /catalog/buildings)
+@router.get("/catalog/buildings")
+def get_buildings(lang: str = Depends(get_language), ...):
+    ...
 
-router = APIRouter(tags=["buildings"])
-
-@router.get("/villages/{village_id}/buildings")
-def list_buildings(village_id: int, lang: str = Depends(get_language)):
+# Endpoint con ?lang= override + Accept-Language (p.ej. /catalog/troops/{tribe})
+@router.get("/catalog/troops/{tribe}")
+def get_troops(tribe: Tribe, response: Response, lang: str | None = Depends(resolve_language), ...):
+    response.headers["Vary"] = "Accept-Language"
+    if lang is None:
+        items = translation_port.get_troop_all_langs_by_tribe(tribe)   # todos los idiomas
+    else:
+        items = translation_port.get_troop_names_by_tribe(tribe, lang) # un idioma + fallback 'es'
     ...
 ```
 
 ### Checklist para `desarrollador-apis` antes de cerrar tarea
 
-- [ ] Todos los endpoints nuevos/tocados declaran `lang: str = Depends(get_language)`.
-- [ ] Swagger muestra `Accept-Language` como header requerido.
-- [ ] Tests cubren los tres casos (válido, ausente, no soportado).
-- [ ] El idioma se propaga al core si la lógica depende de él.
+- [ ] Endpoints que devuelven texto localizado con override de query usan `resolve_language`; los que solo usan header obligatorio usan `get_language`.
+- [ ] Swagger muestra tanto `Accept-Language` (header) como `lang` (query, si aplica).
+- [ ] Tests de catálogo con `resolve_language` cubren: `?lang=` válido; `?lang=` inválido → `400`; solo header válido; header inválido → `400`; precedencia `?lang=` gana al header; sin nada → todos los idiomas; `Vary: Accept-Language` presente.
+- [ ] Tests de `get_language` obligatoria: header ausente → `400`; no soportado → `400`; válido → `200`.
+- [ ] `SUPPORTED_LANGUAGES` NO está hardcodeado en los tests: usar un código como `zh` o `xx` que definitivamente no está en los 25, no `it` o `ja` (que ahora son válidos).
+- [ ] El idioma resuelto (o `None`) se propaga al core si la lógica depende de él.
 
 ---
 
@@ -482,16 +523,16 @@ Esto es la única forma de que el usuario sepa qué agente está activo en cada 
 ## Instrucciones para el próximo agente
 
 1. **Leer este archivo completo** antes de hacer nada.
-2. **Seguir el flujo de trabajo estándar** — `palantir` → `analista` → `guardian` → implementación. No saltarse pasos.
-3. **`guardian-antideteccion` es obligatorio en tres momentos**: tras el spec del analista, tras el contrato de APIs, y antes de cada commit. Sin excepciones.
+2. **Seguir el flujo de trabajo estándar** — `palantir` → `analista` → (`guardian` si aplica) → implementación. No saltarse pasos.
+3. **`guardian-antideteccion` entra solo cuando el trabajo incluye funciones o lógica que impactan el browser o la interacción con la web de Travian** (`adapters/browser/`, selectores, timings, escritura humana, navegación, peticiones a Travian). Cuando aplica, es obligatorio en los momentos relevantes (tras el spec, tras el contrato de APIs si expone esa interacción, antes del commit) y no es negociable. Para cambios puramente de backend/API/BD/frontend que no tocan esa interacción, **no se invoca**.
 4. **Prueba manual del usuario antes de commitear** — el usuario prueba en entorno real y da OK explícito. Ningún agente puede sustituir esta validación.
-4. **Respetar la anti-detección** — es tu responsabilidad, no opcional. Si una feature compromete la indetectabilidad, rechazarla y proponer alternativa.
-5. **Toda API exige `Accept-Language`** — sin excepciones, sin fallback silencioso. Delega en `desarrollador-apis`.
-6. **Stack decidido** — Python 3.14.x + zendriver + FastAPI. No reabrir el debate.
-7. **Selectores siempre estructurales** — nunca por texto visible, Travian es multilenguaje.
-8. **Explicar cada decisión** — el usuario está aprendiendo, no solo quiere que funcione.
-9. **Nunca ejecutar el bot** sin que el usuario lo pida explícitamente.
-10. **Documentación primero** — antes de editar, leer `documentacion/README.md`. Después de editar, actualizar lo afectado y bumpear la marca de agua.
-11. **Orquesta, no implementes solo** — delega en los agentes cuando la tarea encaje con su responsabilidad.
+5. **Respetar la anti-detección** — es tu responsabilidad, no opcional. Si una feature compromete la indetectabilidad, rechazarla y proponer alternativa.
+6. **Toda API exige `Accept-Language`** — sin excepciones, sin fallback silencioso. Delega en `desarrollador-apis`.
+7. **Stack decidido** — Python 3.14.x + zendriver + FastAPI. No reabrir el debate.
+8. **Selectores siempre estructurales** — nunca por texto visible, Travian es multilenguaje.
+9. **Explicar cada decisión** — el usuario está aprendiendo, no solo quiere que funcione.
+10. **Nunca ejecutar el bot** sin que el usuario lo pida explícitamente.
+11. **Documentación primero** — antes de editar, leer `documentacion/README.md`. Después de editar, actualizar lo afectado y bumpear la marca de agua.
+12. **Orquesta, no implementes solo** — delega en los agentes cuando la tarea encaje con su responsabilidad.
 
-🔖 Última revisión: 2026-05-24 (corrección inconsistencias anti-detección)
+🔖 Última revisión: 2026-05-25 (gobernanza de idioma: SUPPORTED_LANGUAGES amplía a 25; resolve_language con precedencia ?lang= > Accept-Language > todos; Vary: Accept-Language en endpoints de catálogo de tropas)

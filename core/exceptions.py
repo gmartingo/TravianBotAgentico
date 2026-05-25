@@ -136,3 +136,25 @@ class BuildingNotFoundError(TravianBotError):
         super().__init__(f"Edificio gid={gid} no encontrado")
         self.gid = gid
         self.params = {"gid": gid}
+
+
+# --- Excepciones añadidas en la feature kirilloid-tropas-scraper ---
+
+class KirilloidScraperError(TravianBotError):
+    """
+    Error en el scraper de kirilloid.ru.
+    Se lanza cuando una tribu/URL no carga en el timeout configurado,
+    o cuando la estructura HTML de kirilloid ha cambiado de forma rompedora.
+
+    Hereda de TravianBotError para integrarse con el handler global de la API
+    y el sistema de logging del proyecto.
+    """
+
+    error_code = "KIRILLOID_SCRAPER_ERROR"
+
+    def __init__(self, message: str = "", tribe: str = "", url: str = "") -> None:
+        msg = message or f"Error en el scraper de kirilloid (tribu='{tribe}', url='{url}')"
+        super().__init__(msg)
+        self.tribe = tribe
+        self.url = url
+        self.params = {"tribe": tribe, "url": url}

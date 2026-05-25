@@ -114,8 +114,12 @@ def test_tribe_valores_correctos():
     assert Tribe.HUNS.value == "huns"
 
 
-def test_tribe_tiene_exactamente_cinco_valores():
-    assert len(Tribe) == 5
+def test_tribe_tiene_nueve_valores():
+    """
+    Tribe tiene 9 valores: los 5 originales + 4 añadidos en la feature kirilloid-tropas-scraper
+    (NATURE, NATARS, SPARTANS, VIKINGS).
+    """
+    assert len(Tribe) == 9
 
 
 def test_tribe_acceso_por_nombre():

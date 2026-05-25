@@ -52,7 +52,10 @@ def test_buildings_sin_header(client):
 
 
 def test_buildings_idioma_no_soportado(client):
-    response = client.get("/catalog/buildings", headers={"Accept-Language": "ja"})
+    """'zh' no está en los 25 idiomas soportados → 400.
+    Nota: 'ja' ya es válido (está en los 25); se usa 'zh' como código verdaderamente inválido.
+    """
+    response = client.get("/catalog/buildings", headers={"Accept-Language": "zh"})
     assert response.status_code == 400
 
 
