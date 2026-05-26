@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TravianBot · User manual</title>
+<style>
+  :root{
+    --bg:#f5f5f7; --surface:#ffffff; --surface-2:#ececef;
+    --text:#1d1d1f; --text-2:#5f5f66; --text-3:#8a8a90;
+    --border:#e2e2e6; --accent:#8a6418; --accent-soft:#f3edde;
+    --radius:12px; --radius-sm:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:56px 24px 96px;}
+  .langbar{text-align:center;font-size:14px;color:var(--text-3);margin-bottom:8px;}
+  .langbar a{color:var(--accent);text-decoration:none;}
+  .langbar a:hover{text-decoration:underline;}
+  .langbar .current{color:var(--text);font-weight:600;}
+  header.cover{text-align:center;padding:24px 0 12px;}
+  .logo{width:56px;height:56px;border-radius:14px;background:var(--text);color:#fff;
+    display:inline-grid;place-items:center;font-weight:700;font-size:20px;letter-spacing:.02em;}
+  h1{font-size:34px;letter-spacing:-.02em;margin:18px 0 6px;}
+  .sub{color:var(--text-2);font-size:16px;}
+  .meta{color:var(--text-3);font-size:13px;margin-top:8px;}
+  nav.toc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 22px;margin:36px 0 8px;}
+  nav.toc h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:10px;}
+  nav.toc ol{margin:0;padding-left:20px;}
+  nav.toc li{margin:5px 0;}
+  nav.toc a{color:var(--accent);text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+  section{margin-top:48px;scroll-margin-top:24px;}
+  section h2{font-size:24px;letter-spacing:-.01em;margin-bottom:6px;
+    padding-bottom:10px;border-bottom:1px solid var(--border);}
+  section h2 .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:10px;}
+  section p{margin:12px 0;color:var(--text);}
+  .lead{color:var(--text-2);}
+  figure{margin:20px 0;}
+  figure img{width:100%;height:auto;display:block;border:1px solid var(--border);
+    border-radius:var(--radius-sm);box-shadow:0 6px 24px rgba(0,0,0,.07);}
+  figcaption{color:var(--text-3);font-size:13px;margin-top:8px;text-align:center;}
+  ol.steps{margin:14px 0;padding-left:22px;}
+  ol.steps li{margin:8px 0;}
+  .tag{display:inline-block;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:6px;padding:1px 7px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .note{background:var(--accent-soft);border:1px solid #e6dcc0;border-left:3px solid var(--accent);
+    border-radius:var(--radius-sm);padding:14px 16px;margin:18px 0;font-size:15px;}
+  .note strong{color:var(--accent);}
+  .warn{background:#fdeeee;border:1px solid #f3cccc;border-left:3px solid #c0392b;
+    border-radius:var(--radius-sm);padding:14px 16px;margin:18px 0;font-size:15px;}
+  .warn strong{color:#c0392b;}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--border);
+    color:var(--text-3);font-size:13px;text-align:center;}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em;
+    background:var(--surface-2);padding:1px 5px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="langbar"><a href="../es/index.html">Español</a> · <span class="current">English</span></div>
+
+  <header class="cover">
+    <div class="logo">TB</div>
+    <h1>TravianBot · User manual</h1>
+    <p class="sub">How to manage your Travian accounts and their worlds from the panel.</p>
+    <p class="meta">Panel version v0.1.0 · Available in 25 languages</p>
+  </header>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#accounts">The Accounts screen</a></li>
+      <li><a href="#create">Create a new account</a></li>
+      <li><a href="#detail">Account detail and its worlds</a></li>
+      <li><a href="#world">Add a world</a></li>
+      <li><a href="#edit">Edit or delete an account</a></li>
+      <li><a href="#language">Language and theme</a></li>
+    </ol>
+  </nav>
+
+  <section>
+    <p class="lead">The TravianBot panel is where you register your Travian <strong>accounts</strong> and,
+    within each one, the <strong>worlds</strong> (servers) you play on — each world with its tribe. From here
+    you also start the bot's session in a world. An account can have several worlds, each with a different tribe.</p>
+  </section>
+
+  <section id="accounts">
+    <h2><span class="num">1</span>The Accounts screen</h2>
+    <p>This is the home screen. It lists all your registered accounts, with their email, username,
+    number of worlds and creation date.</p>
+    <figure>
+      <img src="img/01-lista-cuentas.png" alt="Accounts list" />
+      <figcaption>List of registered accounts.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>Click <span class="tag">+ New account</span> (top right) to register an account.</li>
+      <li>Click any <strong>row</strong> to open that account's detail and its worlds.</li>
+      <li>The <span class="tag">⋯</span> button on each row opens the menu with <strong>Edit account</strong>
+      and <strong>Delete account</strong>.</li>
+    </ol>
+  </section>
+
+  <section id="create">
+    <h2><span class="num">2</span>Create a new account</h2>
+    <p>Clicking <span class="tag">+ New account</span> opens a <strong>two-step</strong> wizard.</p>
+    <figure>
+      <img src="img/02-wizard-paso1.png" alt="New account wizard, step 1" />
+      <figcaption>Step 1 — Account details.</figcaption>
+    </figure>
+    <p><strong>Step 1 — Account details:</strong></p>
+    <ol class="steps">
+      <li><strong>Email</strong>: your Travian lobby email (it identifies the account; must be unique).</li>
+      <li><strong>Username</strong>: a display name to recognize it.</li>
+      <li><strong>Password</strong>: your Travian password. It is stored encrypted and never shown again.
+      Use the eye icon to reveal what you type.</li>
+      <li>Click <span class="tag">Next</span> to go to the second step.</li>
+    </ol>
+    <p><strong>Step 2 — First world:</strong> you enter the server URL and pick the tribe (the same fields
+    as in "Add a world", below). Clicking <span class="tag">Create account</span> creates the account with
+    its first world.</p>
+    <div class="note"><strong>Duplicate email:</strong> if the email is already registered, the warning appears
+    under the Email field and you stay on step 1 to fix it.</div>
+  </section>
+
+  <section id="detail">
+    <h2><span class="num">3</span>Account detail and its worlds</h2>
+    <p>When you open an account you see its worlds. For each world it shows the server in a readable format
+    (<span class="tag">ts20 · x2 · america</span>), the tribe, the date and the <strong>session status</strong>.</p>
+    <figure>
+      <img src="img/03-detalle-cuenta.png" alt="Account detail with its worlds" />
+      <figcaption>Account detail with its list of worlds.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>The breadcrumb <span class="tag">‹ Accounts</span> (top) takes you back to the list.</li>
+      <li>Click <span class="tag">+ Add world</span> to register another world in this account.</li>
+      <li>Each world's status can be <strong>Inactive</strong>, <strong>Connecting…</strong>,
+      <strong>Active</strong> or <strong>Error</strong>.</li>
+      <li>Click <span class="tag">Start</span> to begin the bot's session in that world.</li>
+    </ol>
+    <div class="warn"><strong>Start performs a real Travian login:</strong> it opens Chrome, signs in with
+    your credentials and may take a few seconds. When it succeeds, the world becomes <strong>Active</strong>
+    and you can <strong>Enter</strong> its space. To stop it, click <strong>Stop</strong>. (A world cannot be
+    deleted while its session is active.)</div>
+  </section>
+
+  <section id="world">
+    <h2><span class="num">4</span>Add a world</h2>
+    <p>From an account's detail, <span class="tag">+ Add world</span> opens this form.</p>
+    <figure>
+      <img src="img/04-anadir-mundo.png" alt="Add world form" />
+      <figcaption>Form to add a world.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li><strong>Server URL</strong>: paste the full server address, e.g.
+      <code>https://ts1.x1.international.travian.com/</code>. The panel then shows it in a readable way
+      (server · speed · region).</li>
+      <li><strong>Tribe</strong>: pick one of the 7 playable tribes (Romans, Teutons, Gauls, Egyptians, Huns,
+      Spartans, Vikings).</li>
+      <li>Click <span class="tag">Add</span>. If that server is already in the account, it warns you.</li>
+    </ol>
+  </section>
+
+  <section id="edit">
+    <h2><span class="num">5</span>Edit or delete an account</h2>
+    <p>From an account's <span class="tag">⋯</span> menu in the list, choose <strong>Edit account</strong>.</p>
+    <figure>
+      <img src="img/05-editar-cuenta.png" alt="Edit account" />
+      <figcaption>Edit account modal.</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>You can change the <strong>Email</strong> and the <strong>Username</strong>.</li>
+      <li>The password is not shown for security. To change it, click the
+      <span class="tag">Change password</span> link and the field will appear. If you don't touch it,
+      the password stays the same.</li>
+      <li>Click <span class="tag">Save</span>.</li>
+    </ol>
+    <div class="warn"><strong>Delete account</strong> (also in the ⋯ menu) removes the account and all its
+    worlds. It asks for confirmation, and is not allowed if any world has an active session (stop the session first).</div>
+  </section>
+
+  <section id="language">
+    <h2><span class="num">6</span>Language and theme</h2>
+    <p>In the top bar, on the right, you have the language selector and the theme button.</p>
+    <figure>
+      <img src="img/06-idioma.png" alt="Language selector" />
+      <figcaption>Language selector with search (25 languages).</figcaption>
+    </figure>
+    <ol class="steps">
+      <li>The <strong>language selector</strong> offers all 25 languages (with search). Arabic, Hebrew and
+      Persian display the panel right-to-left.</li>
+      <li>The <strong>moon/sun button</strong> toggles between light and dark theme. Your choice is remembered.</li>
+    </ol>
+  </section>
+
+  <footer>
+    TravianBot — User manual · 🔖 Last revised: 2026-05-26
+  </footer>
+
+</div>
+</body>
+</html>

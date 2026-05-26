@@ -42,6 +42,14 @@
 
 ---
 
+## Manual de usuario
+
+| Documento | Contenido |
+|---|---|
+| [`manual-usuario/index.html`](manual-usuario/index.html) | **Manual de usuario (HTML con capturas reales)** — landing con selector de idioma. Disponible en **español** (`manual-usuario/es/`) e **inglés** (`manual-usuario/en/`), cada uno con sus capturas en su idioma (estructura preparada para los 25 idiomas). Cubre: pantalla de Cuentas, crear cuenta (asistente), detalle y mundos, añadir mundo, arrancar sesión, editar/borrar, idioma y tema. Ábrelo en el navegador. |
+
+---
+
 ## Documentación de negocio (funcionalidades)
 
 | Documento | Feature |
