@@ -1575,7 +1575,7 @@ Wizard: cuentas.playground.html → click "Nueva cuenta" → wizard.playground.h
 
 ---
 
-*estado: implemented (etapa 1 / cimientos) — 2026-05-26*
+*estado: implemented (etapa 1 / cimientos + etapa 2 / wizard S3) — 2026-05-26*
 
 ---
 
@@ -1659,3 +1659,127 @@ Las pantallas reales (formularios, tablas, wizard, modales) son scope de las eta
 - Los 23 idiomas marcados `[AUTO]` tienen las claves de navegación, botones y errores más frecuentes. Las claves ausentes hacen fallback automático al español. Para claves nuevas: añadir en `es.js` (obligatorio) + `en.js` (recomendado); los 23 restantes reciben fallback.
 - El sidebar en móvil (`< md`) queda oculto en esta etapa; el drawer hamburguesa se implementa en Etapa 2 junto con el resto del shell.
 - Los endpoints de sesión (`/accounts/:id/worlds/:worldId/session`) están definidos en el cliente pero NO existen en el backend; el spec los marca como pendientes (§4b).
+
+---
+
+## Registro de implementación — Etapa 2 (Wizard S3 + routing /cuentas/nueva)
+
+**Fecha:** 2026-05-26
+**Implementado por:** desarrollador-ux-ui
+
+### Ficheros creados/modificados
+
+```
+frontend/src/
+├── App.jsx                                 — MODIFICADO: ruta /cuentas/nueva añadida antes de /cuentas/:id
+├── pages/
+│   └── NewAccountPage.jsx                  — NUEVO: renderiza AccountsListPage + WizardModal apilados
+├── components/ui/
+│   └── WizardModal.jsx                     — NUEVO: wizard S3 completo (2 pasos, estados, API, a11y)
+└── i18n/catalog/
+    ├── es.js                               — MODIFICADO: +wizard.error.tribe.required, +wizard.btn.showPassword/hidePassword, +wizard.toast.created
+    └── en.js                               — MODIFICADO: ídem en inglés
+```
+
+### Comandos
+
+```bash
+cd frontend && npm run build   # ✓ 0 errores, 0 warnings
+npm run dev                    # desarrollo http://localhost:5173
+```
+
+### Resultado del build (Etapa 2)
+
+```
+dist/assets/index-CUeQQzsM.css   29.59 kB │ gzip:  6.40 kB
+dist/assets/index-BcqlUMuQ.js   263.79 kB │ gzip: 78.84 kB
+✓ built in 697ms  —  0 errores, 0 warnings
+```
+
+### Criterios de aceptación cumplidos (§13 — Wizard de alta S3)
+
+- [x] El wizard se abre como modal centrado con backdrop (Topbar + Sidebar visibles detrás, atenuados).
+- [x] El stepper muestra claramente el paso activo (círculo dorado) y el pendiente.
+- [x] "Siguiente" deshabilitado hasta que todos los campos del paso 1 son válidos.
+- [x] Errores de validación (email inválido, campo vacío) aparecen inline bajo el campo al blur o al intentar avanzar.
+- [x] Toggle de visibilidad de la contraseña funciona.
+- [x] Paso 2: vista previa parseada ("ts1 · x1 · international") aparece debajo del input en tiempo real.
+- [x] Select de tribu muestra las 7 tribus jugables y solo esas.
+- [x] "Crear cuenta" deshabilitado hasta que URL y tribu son válidas.
+- [x] Durante el envío: botón spinner + "Creando…", campos readonly.
+- [x] Error 409 email → permanece en paso 1, error inline bajo email.
+- [x] Error 409 server / 422 URL → error inline bajo URL en paso 2.
+- [x] ESC y click fuera del modal cierran el wizard (sin datos guardados, mientras no esté enviando).
+- [x] Al éxito → navega a /cuentas/:id (detalle de la cuenta nueva).
+- [x] Routing corregido: /cuentas/nueva resuelve al wizard (no al placeholder de detalle).
+- [x] Accesibilidad: role="dialog" + aria-modal + aria-labelledby, focus trap, ESC, role="alert" en errores, aria-current="step" en stepper, aria-live="polite" en preview de servidor.
+- [x] CERO texto hardcodeado: todas las cadenas pasan por t().
+- [x] Reset en @layer base no tocado.
+- [x] Sidebar no modificado.
+
+### Secuencia de llamadas a la API
+
+1. Usuario completa paso 1 y pulsa "Siguiente".
+2. `POST /accounts { email, username, password }` → 201 `{ id, ... }`. Guarda el `id`.
+   - 409 → error inline en email, permanece en paso 1.
+3. Usuario completa paso 2 y pulsa "Crear cuenta".
+4. `POST /accounts/:id/worlds { server: <url>, tribe: <valor> }` → 201.
+   - 409 → error inline en URL.
+   - 422 → error inline en URL.
+5. Éxito → `navigate('/cuentas/:id')`.
+
+### Desviaciones respecto al diseño
+
+- El campo `server` enviado a la API usa la URL completa pegada por el usuario (sin normalización
+  adicional). El spec §9 especifica que la vista previa se parsea en cliente; el valor enviado
+  a la API es la URL tal como la escribió el usuario.
+- En error de red en paso 1 se muestra el mensaje bajo el campo email (no hay campo más
+  adecuado en ese punto del flujo). Alternativa anotada para futura iteración: banner inline
+  sobre el formulario.
+- La prop `triggerRef` de `WizardModal` en `NewAccountPage` es `null`; el foco al cerrar
+  el wizard vuelve a `/cuentas` por navegación, no a un elemento específico. Para el flujo
+  normal esto es adecuado (el usuario llega a la lista actualizada).
+
+---
+
+## Registro de implementación — Etapa 3 (S4 + modales S5–S8)
+
+**Fecha:** 2026-05-26
+**Implementado por:** desarrollador-ux-ui
+
+### Ficheros creados
+
+| Fichero | Descripción |
+|---|---|
+| `frontend/src/pages/AccountDetailPage.jsx` | Pantalla S4: cabecera, tabla mundos (desktop), tarjetas móvil, estados loading/404/error/vacío, máquina de sesión por mundo |
+| `frontend/src/components/ui/uiUtils.jsx` | Utilidades compartidas: `parseServerUrl`, `isValidServerUrl`, `Spinner`, `BadgeSpinner`, `useFocusTrap`, `showToast` |
+| `frontend/src/components/ui/EditAccountModal.jsx` | Modal S5: editar cuenta (email + usuario + contraseña opcional) |
+| `frontend/src/components/ui/AddWorldModal.jsx` | Modal S6: añadir mundo (URL + tribu, vista previa en tiempo real) |
+| `frontend/src/components/ui/ConfirmDeleteModal.jsx` | Modal S7/S8: confirmación de borrado (cuenta y mundo, con estado 409 inline) |
+
+### Ficheros modificados
+
+| Fichero | Cambios |
+|---|---|
+| `frontend/src/i18n/catalog/es.js` | Añadidas claves `modal.edit.closeBtn` y `modal.edit.error409` |
+| `frontend/src/i18n/catalog/en.js` | Añadidas claves `modal.edit.closeBtn` y `modal.edit.error409` |
+
+### Comando para ejecutar tests
+
+```bash
+cd frontend && npm run build
+```
+
+Build resultado: `✓ built in ~708ms`, 0 errores, 0 warnings.
+
+### Desviaciones respecto al diseño
+
+- Ninguna. La implementación es fiel al spec y al mockup aprobado `cuenta-detalle.playground.html`.
+- `fetchSessionState` (GET /session al montar) es silenciosa: cualquier error (404/501/red)
+  deja el mundo como `idle` sin romper la UI, tal como indica la nota del spec sobre que el
+  backend de sesión no existe aún.
+- `handleStart` navega a `/mundos/:worldId` solo tras recibir 200 OK del POST /session,
+  consistente con §4b "Al 200 → estado Activo + navega".
+- El `triggerRef` del modal de borrar mundo apunta a `deleteWorldBtnRef`, que se pasa desde
+  el padre; dado que el botón está en el `RowMenu` (dentro de la fila), el ref se declara
+  en `AccountDetailPage` y se reasigna al abrir el modal con la fila correcta.

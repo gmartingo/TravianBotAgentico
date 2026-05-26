@@ -34,11 +34,20 @@
 
 ---
 
+## Documentación de código (frontend)
+
+| Documento | Módulo/Feature |
+|---|---|
+| [`frontend/dashboard.md`](frontend/dashboard.md) | Dashboard React de gestión de cuentas/mundos: stack, rutas, i18n 25 idiomas + RTL, cliente HTTP, pantallas S2–S9, tokens de diseño, divergencias código/diseño |
+
+---
+
 ## Documentación de negocio (funcionalidades)
 
 | Documento | Feature |
 |---|---|
 | [`funcionalidades/i18n-backend.md`](funcionalidades/i18n-backend.md) | Internacionalización del backend: edificios, tropas y mensajes de error |
+| [`funcionalidades/cuentas-mundos.md`](funcionalidades/cuentas-mundos.md) | Registro y gestión de cuentas y mundos + sesión del bot de extremo a extremo (negocio: reglas, flujos, restricciones) |
 | [`funcionalidades/sesion.md`](funcionalidades/sesion.md) | Sesión del bot: login/logout/estado, seguridad de credenciales, nota de operación sobre `TRAVIAN_BOT_SECRET_KEY` |
 
 ---
@@ -48,6 +57,7 @@
 | Documento | Contenido |
 |---|---|
 | [`api/catalogo.md`](api/catalogo.md) | `GET /catalog/buildings`, `GET /catalog/troops/{tribe}`, exception handler global con traducciones |
+| [`api/cuentas-mundos.md`](api/cuentas-mundos.md) | `POST/GET/PUT/DELETE /accounts`, `POST/GET/DELETE /accounts/{id}/worlds` — CRUD de cuentas y mundos |
 | [`api/sesion.md`](api/sesion.md) | `POST`, `DELETE`, `GET /accounts/{id}/worlds/{id}/session` — login, logout y estado de sesión del bot |
 
 ---
@@ -67,4 +77,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-05-26
+🔖 Última revisión: 2026-05-26 (añadidos: api/cuentas-mundos.md, funcionalidades/cuentas-mundos.md, frontend/dashboard.md)
