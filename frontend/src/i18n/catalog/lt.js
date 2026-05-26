@@ -1,0 +1,202 @@
+/**
+ * Catálogo LT — Lietuvių
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const lt = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Paskyros',
+  'nav.resources':    'Ištekliai',
+  'nav.troops':       'Kariai',
+  'nav.construction': 'Statyba',
+  'nav.comingSoon':   'Netrukus',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Keisti temą',
+  'topbar.selectLanguage': 'Pasirinkti kalbą',
+  'topbar.backToWorlds':   '← Pasauliai',
+  'topbar.searchLanguage': 'Ieškoti kalbos…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Paskyros',
+  'page.accounts.caption':      '{n} paskyra',
+  'page.accounts.caption.pl':   '{n} paskyros',
+  'page.accounts.newAccount':   'Nauja paskyra',
+  'page.accounts.empty.title':  'Dar nėra paskyrų',
+  'page.accounts.empty.desc':   'Pridėkite pirmą, kad galėtumėte naudoti botą.',
+  'page.accounts.col.email':    'El. paštas',
+  'page.accounts.col.username': 'Vartotojo vardas',
+  'page.accounts.col.worlds':   'Pasauliai',
+  'page.accounts.col.created':  'Sukurta',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Redaguoti paskyrą',
+  'page.accounts.action.delete':'Ištrinti paskyrą',
+  'page.accounts.loading':      'Įkeliamos paskyros…',
+  'page.accounts.error':        'Nepavyko įkelti paskyrų.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Nauja paskyra',
+  'wizard.step':                 '{current} žingsnis iš {total}',
+  'wizard.section.account':      'Paskyros duomenys',
+  'wizard.section.world':        'Pirmas pasaulis',
+  'wizard.field.email':          'El. paštas',
+  'wizard.field.email.ph':       'zaidejas@pavyzdys.com',
+  'wizard.field.username':       'Vartotojo vardas',
+  'wizard.field.username.ph':    'ManoPaskyra',
+  'wizard.field.password':       'Slaptažodis',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'Serverio URL',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Gentis',
+  'wizard.field.tribe.ph':       'Pasirinkite gentį',
+  'wizard.btn.next':             'Toliau',
+  'wizard.btn.back':             'Atgal',
+  'wizard.btn.create':           'Sukurti paskyrą',
+  'wizard.btn.creating':         'Kuriama…',
+  'wizard.btn.cancel':           'Atšaukti',
+  'wizard.error.email.invalid':  'Įveskite teisingą el. paštą',
+  'wizard.error.email.taken':    'Šis el. paštas jau užregistruotas',
+  'wizard.error.server.invalid': 'Įveskite teisingą URL (http:// arba https://)',
+  'wizard.error.server.taken':   'Šis serveris jau yra šioje paskyroje',
+  'wizard.error.required':       'Šis laukas yra privalomas',
+  'wizard.error.tribe.required': 'Pasirinkite gentį',
+  'wizard.btn.showPassword':     'Rodyti slaptažodį',
+  'wizard.btn.hidePassword':     'Slėpti slaptažodį',
+  'wizard.toast.created':        'Paskyra sukurta',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Paskyros',
+  'page.account.createdAt':          'Sukurta: {date}',
+  'page.account.editBtn':            'Redaguoti',
+  'page.account.deleteBtn':          'Ištrinti paskyrą',
+  'page.account.worlds.title':       'Pasauliai ({n})',
+  'page.account.worlds.add':         'Pridėti pasaulį',
+  'page.account.worlds.empty':       'Šioje paskyroje dar nėra pasaulių.',
+  'page.account.col.server':         'Serveris',
+  'page.account.col.parsed':         'Serveris (skaitomas)',
+  'page.account.col.tribe':          'Gentis',
+  'page.account.col.session':        'Sesija',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Ištrinti pasaulį',
+  'page.account.notFound.title':     'Paskyra nerasta',
+  'page.account.notFound.desc':      'Ieškoma paskyra neegzistuoja arba buvo ištrinta.',
+  'page.account.notFound.back':      'Grįžti į paskyras',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Redaguoti paskyrą',
+  'modal.edit.changePassword':  'Keisti slaptažodį',
+  'modal.edit.newPassword':     'Naujas slaptažodis',
+  'modal.edit.confirmPassword': 'Patvirtinti slaptažodį',
+  'modal.edit.passwordMismatch':'Slaptažodžiai nesutampa',
+  'modal.edit.saveBtn':         'Išsaugoti',
+  'modal.edit.savingBtn':       'Saugoma…',
+  'modal.edit.cancelBtn':       'Atšaukti',
+  'modal.edit.closeBtn':        'Uždaryti',
+  'modal.edit.savedToast':      'Pakeitimai išsaugoti',
+  'modal.edit.error409':        'Šis el. paštas jau naudojamas kitoje paskyroje.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Pridėti pasaulį',
+  'modal.addWorld.addBtn':    'Pridėti',
+  'modal.addWorld.addingBtn': 'Pridedama…',
+  'modal.addWorld.cancelBtn': 'Atšaukti',
+  'modal.addWorld.toast':     'Pasaulis pridėtas',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Ištrinti paskyrą',
+  'modal.deleteAccount.body':    'Ištrinti paskyrą "{username}"?',
+  'modal.deleteAccount.warning': 'Šio veiksmo negalima atšaukti. Bus ištrinti ir visi jos pasauliai ({n} pasaulis/-iai).',
+  'modal.deleteAccount.confirm': 'Ištrinti',
+  'modal.deleteAccount.cancel':  'Atšaukti',
+  'modal.deleteAccount.toast':   'Paskyra ištrinta',
+  'modal.deleteAccount.active':  'Negalima ištrinti šios paskyros, kol botas turi aktyvią sesiją. Pirmiausia sustabdykite sesiją.',
+  'modal.deleteAccount.close':   'Uždaryti',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Ištrinti pasaulį',
+  'modal.deleteWorld.body':    'Ištrinti pasaulį "{parsed}"?',
+  'modal.deleteWorld.warning': 'Šio veiksmo negalima atšaukti. Bus ištrinti ir visi susiję kaimai.',
+  'modal.deleteWorld.confirm': 'Ištrinti',
+  'modal.deleteWorld.cancel':  'Atšaukti',
+  'modal.deleteWorld.toast':   'Pasaulis ištrintas',
+  'modal.deleteWorld.active':  'Šiam pasauliui yra aktyvi sesija. Pirmiausia sustabdykite sesiją.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Aktyvus',
+  'world.status.panelLabel':      'Aktyvi sesija',
+  'world.action.stop':            'Sustabdyti',
+  'world.tab.config':             'Konfigūracija',
+  'world.tab.resources':          'Ištekliai',
+  'world.tab.troops':             'Kariai',
+  'world.tab.construction':       'Statyba',
+  'world.tab.villages':           'Kaimai',
+  'world.config.automationTitle': 'Automatizavimas',
+  'world.config.tasksTitle':      'Boto užduotys',
+  'world.config.tasksDesc':       'Įjunkite arba pristabdykite automatines užduotis, kurias botas vykdo šiame pasaulyje.',
+  'world.config.task.buildQueue': 'Statybos eilė',
+  'world.config.task.buildQueueDesc': 'Stato pastatus pagal suplanuotą eilę',
+  'world.config.task.farmList':   'Ūkių sąrašas',
+  'world.config.task.farmListDesc': 'Automatiškai siunčia reidus',
+  'world.config.task.troops':     'Karių mokymas',
+  'world.config.task.troopsDesc': 'Palaiko aktyvią mokymo eilę',
+  'world.config.intervalsTitle':  'Intervalai',
+  'world.config.intervalsDesc':   'Laikas tarp boto patikrinimų. Didesnės reikšmės sumažina aptikimo riziką.',
+  'world.config.interval.check':  'Periodinis patikrinimas',
+  'world.config.interval.farm':   'Tarp reidų',
+  'world.config.interval.jitter': 'Atsitiktinis svyravimas',
+  'world.config.interval.min':    'min',
+  'world.config.comingSoonTitle': 'Netrukus šioje erdvėje',
+  'world.comingSoon.resourcesDesc':   'Medienos, molio, geležies ir javų stebėjimas realiuoju laiku.',
+  'world.comingSoon.troopsDesc':      'Vienetų inventorius, kovos statistika ir mokymo eilė.',
+  'world.comingSoon.constructionDesc':'Statybų eilė pagal kaimą, išlaidos ir laikas.',
+  'world.comingSoon.villagesDesc':    'Kaimų žemėlapis, koordinatės, pavadinimas ir tipas.',
+  'world.stop.toast':             'Botas sustabdytas. Grįžtama į paskyros informaciją…',
+
+  // ── Sesión del mundo (§4b) ─────────────────────────────
+  'world.session.start':    'Paleisti',
+  'world.session.stop':     'Sustabdyti',
+  'world.session.retry':    'Bandyti dar kartą',
+  'world.session.cancel':   'Atšaukti',
+  'world.session.enter':    'Įeiti',
+  'world.session.idle':     'Neaktyvus',
+  'world.session.connecting': 'Jungiamasi…',
+  'world.session.active':   'Aktyvus',
+  'world.session.error':    'Ryšio klaida',
+  'world.session.stopping': 'Stabdoma…',
+  'world.session.start.aria': 'Paleisti botą {world}',
+  'world.session.stop.aria':  'Sustabdyti botą {world}',
+  'world.session.retry.aria': 'Bandyti ryšį dar kartą {world}',
+  'world.session.enter.aria': 'Įeiti į {world} erdvę',
+  'world.session.disabled.delete':       'Sustabdykite sesiją prieš ištrinant šį pasaulį',
+  'world.session.disabled.editMenu':     'Negalima keisti pasaulio su aktyvia sesija',
+  'world.session.disabled.deleteAccount':'Sustabdykite visas aktyvias sesijas prieš ištrinant šią paskyrą',
+  'world.session.started.toast':  'Botas paleistas {world}',
+  'world.session.stopped.toast':  'Botas sustabdytas {world}',
+  'world.session.error.toast':    'Nepavyko prisijungti prie {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Ryšio klaida. Bandykite dar kartą.',
+  'error.retry':      'Bandyti dar kartą',
+  'error.loadFailed': 'Nepavyko įkelti duomenų.',
+
+  // ── Versión (sidebar footer) ───────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders de ruta (etapa 1) ────────────────────
+  'placeholder.accounts.list':   'Paskyrų sąrašas — netrukus',
+  'placeholder.account.detail':  'Paskyros informacija — netrukus',
+  'placeholder.world.space':     'Pasaulio erdvė — netrukus',
+}
+
+export default lt

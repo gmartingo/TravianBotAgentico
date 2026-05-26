@@ -6,6 +6,11 @@ env/
 # Perfiles de Chrome (datos sensibles y pesados)
 profiles/
 !profiles/.gitkeep
+# Perfil del scraper kirilloid (separado de perfiles de juego)
+profiles/scraper_kirilloid/
+
+# Iconos PNG generados por el scraper (recursos de juego, no código)
+assets/icons/*.png
 
 # Python cache
 __pycache__/
@@ -19,6 +24,8 @@ build/
 
 # Bases de datos locales
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -49,7 +56,24 @@ frontend/dist/
 *.log
 logs/
 
+# Scripts de prueba manual (pueden contener credenciales reales)
+test_login_manual.py
+
+# Guía de agentes (documentación interna generada, no versionada)
+documentacion/guia-agentes/
+
 # pytest
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Artefactos de Claude Code (runtime del agente, no código del proyecto)
+.claude/agent-memory/
+.claude/settings.json
+
+# graphify — grafo de conocimiento generado (salida + caché, no versionar)
+graphify-out/
+.graphifyignore
+
+# Metadatos de Obsidian (cliente local de documentación)
+docs/.obsidian/

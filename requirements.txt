@@ -11,6 +11,18 @@ pydantic>=2.7.0
 # Base de datos
 aiosqlite>=0.20.0
 
+# Procesamiento de imágenes (iconos del scraper kirilloid)
+pillow>=10.0.0
+
+# Parseo HTML (parsers de overview de Travian)
+beautifulsoup4>=4.12
+
+# Cifrado de contraseñas (Fernet — AES-128-CBC + HMAC-SHA256)
+cryptography>=42.0.0
+
+# Validación de email para Pydantic EmailStr (CreateAccountRequest / UpdateAccountRequest)
+email-validator>=2.0.0
+
 # Tests
 pytest>=8.2.0
 pytest-asyncio>=0.23.0

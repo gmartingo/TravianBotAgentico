@@ -1,0 +1,202 @@
+/**
+ * Catálogo EL — Ελληνικά
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const el = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Λογαριασμοί',
+  'nav.resources':    'Πόροι',
+  'nav.troops':       'Στρατός',
+  'nav.construction': 'Κατασκευή',
+  'nav.comingSoon':   'Σύντομα',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Εναλλαγή θέματος',
+  'topbar.selectLanguage': 'Επιλογή γλώσσας',
+  'topbar.backToWorlds':   '← Κόσμοι',
+  'topbar.searchLanguage': 'Αναζήτηση γλώσσας…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Λογαριασμοί',
+  'page.accounts.caption':      '{n} λογαριασμός',
+  'page.accounts.caption.pl':   '{n} λογαριασμοί',
+  'page.accounts.newAccount':   'Νέος λογαριασμός',
+  'page.accounts.empty.title':  'Δεν υπάρχουν λογαριασμοί ακόμα',
+  'page.accounts.empty.desc':   'Προσθέστε τον πρώτο για να αρχίσετε να χρησιμοποιείτε το bot.',
+  'page.accounts.col.email':    'Email',
+  'page.accounts.col.username': 'Όνομα χρήστη',
+  'page.accounts.col.worlds':   'Κόσμοι',
+  'page.accounts.col.created':  'Δημιουργήθηκε',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Επεξεργασία λογαριασμού',
+  'page.accounts.action.delete':'Διαγραφή λογαριασμού',
+  'page.accounts.loading':      'Φόρτωση λογαριασμών…',
+  'page.accounts.error':        'Δεν ήταν δυνατή η φόρτωση λογαριασμών.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Νέος λογαριασμός',
+  'wizard.step':                 'Βήμα {current} από {total}',
+  'wizard.section.account':      'Στοιχεία λογαριασμού',
+  'wizard.section.world':        'Πρώτος κόσμος',
+  'wizard.field.email':          'Email',
+  'wizard.field.email.ph':       'παίκτης@παράδειγμα.com',
+  'wizard.field.username':       'Όνομα χρήστη',
+  'wizard.field.username.ph':    'ΟΛογαριασμόςΜου',
+  'wizard.field.password':       'Κωδικός πρόσβασης',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'URL διακομιστή',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Φυλή',
+  'wizard.field.tribe.ph':       'Επιλέξτε φυλή',
+  'wizard.btn.next':             'Επόμενο',
+  'wizard.btn.back':             'Πίσω',
+  'wizard.btn.create':           'Δημιουργία λογαριασμού',
+  'wizard.btn.creating':         'Δημιουργία…',
+  'wizard.btn.cancel':           'Ακύρωση',
+  'wizard.error.email.invalid':  'Εισάγετε έγκυρο email',
+  'wizard.error.email.taken':    'Αυτό το email είναι ήδη καταχωρημένο',
+  'wizard.error.server.invalid': 'Εισάγετε έγκυρο URL (http:// ή https://)',
+  'wizard.error.server.taken':   'Αυτός ο διακομιστής υπάρχει ήδη σε αυτόν τον λογαριασμό',
+  'wizard.error.required':       'Αυτό το πεδίο είναι υποχρεωτικό',
+  'wizard.error.tribe.required': 'Επιλέξτε φυλή',
+  'wizard.btn.showPassword':     'Εμφάνιση κωδικού',
+  'wizard.btn.hidePassword':     'Απόκρυψη κωδικού',
+  'wizard.toast.created':        'Ο λογαριασμός δημιουργήθηκε',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Λογαριασμοί',
+  'page.account.createdAt':          'Δημιουργήθηκε: {date}',
+  'page.account.editBtn':            'Επεξεργασία',
+  'page.account.deleteBtn':          'Διαγραφή λογαριασμού',
+  'page.account.worlds.title':       'Κόσμοι ({n})',
+  'page.account.worlds.add':         'Προσθήκη κόσμου',
+  'page.account.worlds.empty':       'Δεν υπάρχουν κόσμοι σε αυτόν τον λογαριασμό ακόμα.',
+  'page.account.col.server':         'Διακομιστής',
+  'page.account.col.parsed':         'Διακομιστής (αναγνώσιμος)',
+  'page.account.col.tribe':          'Φυλή',
+  'page.account.col.session':        'Σύνοδος',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Διαγραφή κόσμου',
+  'page.account.notFound.title':     'Ο λογαριασμός δεν βρέθηκε',
+  'page.account.notFound.desc':      'Ο λογαριασμός που αναζητάτε δεν υπάρχει ή διαγράφηκε.',
+  'page.account.notFound.back':      'Επιστροφή στους λογαριασμούς',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Επεξεργασία λογαριασμού',
+  'modal.edit.changePassword':  'Αλλαγή κωδικού',
+  'modal.edit.newPassword':     'Νέος κωδικός',
+  'modal.edit.confirmPassword': 'Επιβεβαίωση κωδικού',
+  'modal.edit.passwordMismatch':'Οι κωδικοί δεν ταιριάζουν',
+  'modal.edit.saveBtn':         'Αποθήκευση',
+  'modal.edit.savingBtn':       'Αποθήκευση…',
+  'modal.edit.cancelBtn':       'Ακύρωση',
+  'modal.edit.closeBtn':        'Κλείσιμο',
+  'modal.edit.savedToast':      'Οι αλλαγές αποθηκεύτηκαν',
+  'modal.edit.error409':        'Αυτό το email χρησιμοποιείται ήδη από άλλον λογαριασμό.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Προσθήκη κόσμου',
+  'modal.addWorld.addBtn':    'Προσθήκη',
+  'modal.addWorld.addingBtn': 'Προσθήκη…',
+  'modal.addWorld.cancelBtn': 'Ακύρωση',
+  'modal.addWorld.toast':     'Ο κόσμος προστέθηκε',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Διαγραφή λογαριασμού',
+  'modal.deleteAccount.body':    'Διαγραφή λογαριασμού "{username}";',
+  'modal.deleteAccount.warning': 'Αυτή η ενέργεια δεν μπορεί να αναιρεθεί. Θα διαγραφούν επίσης όλοι οι κόσμοι του ({n} κόσμος/οι).',
+  'modal.deleteAccount.confirm': 'Διαγραφή',
+  'modal.deleteAccount.cancel':  'Ακύρωση',
+  'modal.deleteAccount.toast':   'Ο λογαριασμός διαγράφηκε',
+  'modal.deleteAccount.active':  'Δεν είναι δυνατή η διαγραφή αυτού του λογαριασμού ενώ το bot έχει ενεργή σύνοδο. Σταματήστε πρώτα τη σύνοδο.',
+  'modal.deleteAccount.close':   'Κλείσιμο',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Διαγραφή κόσμου',
+  'modal.deleteWorld.body':    'Διαγραφή κόσμου "{parsed}";',
+  'modal.deleteWorld.warning': 'Αυτή η ενέργεια δεν μπορεί να αναιρεθεί. Θα διαγραφούν επίσης όλα τα σχετικά χωριά.',
+  'modal.deleteWorld.confirm': 'Διαγραφή',
+  'modal.deleteWorld.cancel':  'Ακύρωση',
+  'modal.deleteWorld.toast':   'Ο κόσμος διαγράφηκε',
+  'modal.deleteWorld.active':  'Υπάρχει ενεργή σύνοδος για αυτόν τον κόσμο. Σταματήστε πρώτα τη σύνοδο.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Ενεργός',
+  'world.status.panelLabel':      'Ενεργή σύνοδος',
+  'world.action.stop':            'Διακοπή',
+  'world.tab.config':             'Ρυθμίσεις',
+  'world.tab.resources':          'Πόροι',
+  'world.tab.troops':             'Στρατός',
+  'world.tab.construction':       'Κατασκευή',
+  'world.tab.villages':           'Χωριά',
+  'world.config.automationTitle': 'Αυτοματισμός',
+  'world.config.tasksTitle':      'Εργασίες bot',
+  'world.config.tasksDesc':       'Ενεργοποιήστε ή παύστε τις αυτόματες εργασίες που εκτελεί το bot σε αυτόν τον κόσμο.',
+  'world.config.task.buildQueue': 'Ουρά κατασκευής',
+  'world.config.task.buildQueueDesc': 'Κατασκευάζει κτίρια σύμφωνα με την προγραμματισμένη ουρά',
+  'world.config.task.farmList':   'Λίστα αγροκτημάτων',
+  'world.config.task.farmListDesc': 'Αποστέλλει αυτόματα επιθέσεις αγροκτημάτων',
+  'world.config.task.troops':     'Εκπαίδευση στρατού',
+  'world.config.task.troopsDesc': 'Διατηρεί ενεργή την ουρά εκπαίδευσης',
+  'world.config.intervalsTitle':  'Διαστήματα',
+  'world.config.intervalsDesc':   'Χρόνος μεταξύ ελέγχων του bot. Υψηλότερες τιμές μειώνουν τον κίνδυνο εντοπισμού.',
+  'world.config.interval.check':  'Περιοδικός έλεγχος',
+  'world.config.interval.farm':   'Μεταξύ αγροκτημάτων',
+  'world.config.interval.jitter': 'Τυχαία μεταβολή',
+  'world.config.interval.min':    'λεπτ',
+  'world.config.comingSoonTitle': 'Σύντομα σε αυτόν τον χώρο',
+  'world.comingSoon.resourcesDesc':   'Παρακολούθηση σε πραγματικό χρόνο: ξύλο, πηλός, σίδηρος και σιτάρι.',
+  'world.comingSoon.troopsDesc':      'Απογραφή μονάδων, στατιστικά μάχης και ουρά εκπαίδευσης.',
+  'world.comingSoon.constructionDesc':'Ουρά κτιρίων ανά χωριό, κόστη και χρόνοι.',
+  'world.comingSoon.villagesDesc':    'Χάρτης χωριών, συντεταγμένες, όνομα και τύπος.',
+  'world.stop.toast':             'Το bot σταμάτησε. Επιστροφή στις λεπτομέρειες λογαριασμού…',
+
+  // ── Sesión del mundo ───────────────────────────────────
+  'world.session.start':    'Εκκίνηση',
+  'world.session.stop':     'Διακοπή',
+  'world.session.retry':    'Επανάληψη',
+  'world.session.cancel':   'Ακύρωση',
+  'world.session.enter':    'Είσοδος',
+  'world.session.idle':     'Ανενεργό',
+  'world.session.connecting': 'Σύνδεση…',
+  'world.session.active':   'Ενεργό',
+  'world.session.error':    'Σφάλμα σύνδεσης',
+  'world.session.stopping': 'Διακοπή…',
+  'world.session.start.aria': 'Εκκίνηση bot στον {world}',
+  'world.session.stop.aria':  'Διακοπή bot στον {world}',
+  'world.session.retry.aria': 'Επανάληψη σύνδεσης στον {world}',
+  'world.session.enter.aria': 'Είσοδος στον χώρο του {world}',
+  'world.session.disabled.delete':       'Σταματήστε τη σύνοδο πριν διαγράψετε αυτόν τον κόσμο',
+  'world.session.disabled.editMenu':     'Δεν είναι δυνατή η τροποποίηση κόσμου με ενεργή σύνοδο',
+  'world.session.disabled.deleteAccount':'Σταματήστε όλες τις ενεργές συνόδους πριν διαγράψετε αυτόν τον λογαριασμό',
+  'world.session.started.toast':  'Το bot εκκινήθηκε στον {world}',
+  'world.session.stopped.toast':  'Το bot σταμάτησε στον {world}',
+  'world.session.error.toast':    'Δεν ήταν δυνατή η σύνδεση στον {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Σφάλμα σύνδεσης. Δοκιμάστε ξανά.',
+  'error.retry':      'Δοκιμή ξανά',
+  'error.loadFailed': 'Δεν ήταν δυνατή η φόρτωση δεδομένων.',
+
+  // ── Versión (sidebar footer) ───────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders de ruta ──────────────────────────────
+  'placeholder.accounts.list':   'Λίστα λογαριασμών — σύντομα',
+  'placeholder.account.detail':  'Λεπτομέρειες λογαριασμού — σύντομα',
+  'placeholder.world.space':     'Χώρος κόσμου — σύντομα',
+}
+
+export default el

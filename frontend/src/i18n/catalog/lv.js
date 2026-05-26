@@ -1,0 +1,202 @@
+/**
+ * Catálogo LV — Latviešu
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const lv = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Konti',
+  'nav.resources':    'Resursi',
+  'nav.troops':       'Karaspēks',
+  'nav.construction': 'Celtniecība',
+  'nav.comingSoon':   'Drīzumā',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Mainīt tēmu',
+  'topbar.selectLanguage': 'Izvēlēties valodu',
+  'topbar.backToWorlds':   '← Pasaules',
+  'topbar.searchLanguage': 'Meklēt valodu…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Konti',
+  'page.accounts.caption':      '{n} konts',
+  'page.accounts.caption.pl':   '{n} konti',
+  'page.accounts.newAccount':   'Jauns konts',
+  'page.accounts.empty.title':  'Vēl nav kontu',
+  'page.accounts.empty.desc':   'Pievienojiet pirmo, lai sāktu izmantot botu.',
+  'page.accounts.col.email':    'E-pasts',
+  'page.accounts.col.username': 'Lietotājvārds',
+  'page.accounts.col.worlds':   'Pasaules',
+  'page.accounts.col.created':  'Izveidots',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Rediģēt kontu',
+  'page.accounts.action.delete':'Dzēst kontu',
+  'page.accounts.loading':      'Ielādē kontus…',
+  'page.accounts.error':        'Neizdevās ielādēt kontus.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Jauns konts',
+  'wizard.step':                 '{current}. solis no {total}',
+  'wizard.section.account':      'Konta dati',
+  'wizard.section.world':        'Pirmā pasaule',
+  'wizard.field.email':          'E-pasts',
+  'wizard.field.email.ph':       'speletajs@piemers.com',
+  'wizard.field.username':       'Lietotājvārds',
+  'wizard.field.username.ph':    'ManKonts',
+  'wizard.field.password':       'Parole',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'Servera URL',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Cilts',
+  'wizard.field.tribe.ph':       'Izvēlieties cilti',
+  'wizard.btn.next':             'Nākamais',
+  'wizard.btn.back':             'Atpakaļ',
+  'wizard.btn.create':           'Izveidot kontu',
+  'wizard.btn.creating':         'Izveido…',
+  'wizard.btn.cancel':           'Atcelt',
+  'wizard.error.email.invalid':  'Ievadiet derīgu e-pastu',
+  'wizard.error.email.taken':    'Šis e-pasts jau ir reģistrēts',
+  'wizard.error.server.invalid': 'Ievadiet derīgu URL (http:// vai https://)',
+  'wizard.error.server.taken':   'Šis serveris jau pastāv šajā kontā',
+  'wizard.error.required':       'Šis lauks ir obligāts',
+  'wizard.error.tribe.required': 'Izvēlieties cilti',
+  'wizard.btn.showPassword':     'Rādīt paroli',
+  'wizard.btn.hidePassword':     'Slēpt paroli',
+  'wizard.toast.created':        'Konts izveidots',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Konti',
+  'page.account.createdAt':          'Izveidots: {date}',
+  'page.account.editBtn':            'Rediģēt',
+  'page.account.deleteBtn':          'Dzēst kontu',
+  'page.account.worlds.title':       'Pasaules ({n})',
+  'page.account.worlds.add':         'Pievienot pasauli',
+  'page.account.worlds.empty':       'Šajā kontā vēl nav pasauļu.',
+  'page.account.col.server':         'Serveris',
+  'page.account.col.parsed':         'Serveris (lasāms)',
+  'page.account.col.tribe':          'Cilts',
+  'page.account.col.session':        'Sesija',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Dzēst pasauli',
+  'page.account.notFound.title':     'Konts nav atrasts',
+  'page.account.notFound.desc':      'Meklētais konts neeksistē vai ir dzēsts.',
+  'page.account.notFound.back':      'Atpakaļ uz kontiem',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Rediģēt kontu',
+  'modal.edit.changePassword':  'Mainīt paroli',
+  'modal.edit.newPassword':     'Jaunā parole',
+  'modal.edit.confirmPassword': 'Apstiprināt paroli',
+  'modal.edit.passwordMismatch':'Paroles nesakrīt',
+  'modal.edit.saveBtn':         'Saglabāt',
+  'modal.edit.savingBtn':       'Saglabā…',
+  'modal.edit.cancelBtn':       'Atcelt',
+  'modal.edit.closeBtn':        'Aizvērt',
+  'modal.edit.savedToast':      'Izmaiņas saglabātas',
+  'modal.edit.error409':        'Šis e-pasts jau tiek izmantots citā kontā.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Pievienot pasauli',
+  'modal.addWorld.addBtn':    'Pievienot',
+  'modal.addWorld.addingBtn': 'Pievieno…',
+  'modal.addWorld.cancelBtn': 'Atcelt',
+  'modal.addWorld.toast':     'Pasaule pievienota',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Dzēst kontu',
+  'modal.deleteAccount.body':    'Dzēst kontu "{username}"?',
+  'modal.deleteAccount.warning': 'Šo darbību nevar atsaukt. Tiks dzēstas arī visas tā pasaules ({n} pasaule/-es).',
+  'modal.deleteAccount.confirm': 'Dzēst',
+  'modal.deleteAccount.cancel':  'Atcelt',
+  'modal.deleteAccount.toast':   'Konts dzēsts',
+  'modal.deleteAccount.active':  'Nevar dzēst šo kontu, kamēr botam ir aktīva sesija. Vispirms apturiet sesiju.',
+  'modal.deleteAccount.close':   'Aizvērt',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Dzēst pasauli',
+  'modal.deleteWorld.body':    'Dzēst pasauli "{parsed}"?',
+  'modal.deleteWorld.warning': 'Šo darbību nevar atsaukt. Tiks dzēsti arī visi saistītie ciemati.',
+  'modal.deleteWorld.confirm': 'Dzēst',
+  'modal.deleteWorld.cancel':  'Atcelt',
+  'modal.deleteWorld.toast':   'Pasaule dzēsta',
+  'modal.deleteWorld.active':  'Šai pasaulei ir aktīva sesija. Vispirms apturiet sesiju.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Aktīvs',
+  'world.status.panelLabel':      'Aktīva sesija',
+  'world.action.stop':            'Apturēt',
+  'world.tab.config':             'Konfigurācija',
+  'world.tab.resources':          'Resursi',
+  'world.tab.troops':             'Karaspēks',
+  'world.tab.construction':       'Celtniecība',
+  'world.tab.villages':           'Ciemati',
+  'world.config.automationTitle': 'Automatizācija',
+  'world.config.tasksTitle':      'Bota uzdevumi',
+  'world.config.tasksDesc':       'Iespējojiet vai apturiet automatizētos uzdevumus, ko bots izpilda šajā pasaulē.',
+  'world.config.task.buildQueue': 'Būvniecības rinda',
+  'world.config.task.buildQueueDesc': 'Būvē ēkas saskaņā ar plānoto rindu',
+  'world.config.task.farmList':   'Fermu saraksts',
+  'world.config.task.farmListDesc': 'Automātiski sūta reidu uzbrukumus',
+  'world.config.task.troops':     'Karaspēka apmācība',
+  'world.config.task.troopsDesc': 'Uztur aktīvu apmācības rindu',
+  'world.config.intervalsTitle':  'Intervāli',
+  'world.config.intervalsDesc':   'Laiks starp bota pārbaudēm. Lielākas vērtības samazina atklāšanas risku.',
+  'world.config.interval.check':  'Periodiskā pārbaude',
+  'world.config.interval.farm':   'Starp reidiem',
+  'world.config.interval.jitter': 'Nejaušas svārstības',
+  'world.config.interval.min':    'min',
+  'world.config.comingSoonTitle': 'Drīzumā šajā telpā',
+  'world.comingSoon.resourcesDesc':   'Koka, māla, dzelzs un labības uzraudzība reāllaikā.',
+  'world.comingSoon.troopsDesc':      'Vienību inventārs, kaujas statistika un apmācības rinda.',
+  'world.comingSoon.constructionDesc':'Būvniecības rinda pēc ciemata, izmaksas un laiki.',
+  'world.comingSoon.villagesDesc':    'Ciematu karte, koordinātes, nosaukums un tips.',
+  'world.stop.toast':             'Bots apturēts. Atgriežas uz konta informāciju…',
+
+  // ── Sesión del mundo (§4b) ─────────────────────────────
+  'world.session.start':    'Palaist',
+  'world.session.stop':     'Apturēt',
+  'world.session.retry':    'Mēģināt vēlreiz',
+  'world.session.cancel':   'Atcelt',
+  'world.session.enter':    'Ienākt',
+  'world.session.idle':     'Neaktīvs',
+  'world.session.connecting': 'Savienojas…',
+  'world.session.active':   'Aktīvs',
+  'world.session.error':    'Savienojuma kļūda',
+  'world.session.stopping': 'Aptur…',
+  'world.session.start.aria': 'Palaist botu {world}',
+  'world.session.stop.aria':  'Apturēt botu {world}',
+  'world.session.retry.aria': 'Mēģināt savienojumu vēlreiz {world}',
+  'world.session.enter.aria': 'Ienākt {world} telpā',
+  'world.session.disabled.delete':       'Apturiet sesiju pirms šīs pasaules dzēšanas',
+  'world.session.disabled.editMenu':     'Nevar modificēt pasauli ar aktīvu sesiju',
+  'world.session.disabled.deleteAccount':'Apturiet visas aktīvās sesijas pirms šī konta dzēšanas',
+  'world.session.started.toast':  'Bots palaists {world}',
+  'world.session.stopped.toast':  'Bots apturēts {world}',
+  'world.session.error.toast':    'Neizdevās savienoties ar {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Savienojuma kļūda. Mēģiniet vēlreiz.',
+  'error.retry':      'Mēģināt vēlreiz',
+  'error.loadFailed': 'Neizdevās ielādēt datus.',
+
+  // ── Versión (sidebar footer) ───────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders de ruta (etapa 1) ────────────────────
+  'placeholder.accounts.list':   'Kontu saraksts — drīzumā',
+  'placeholder.account.detail':  'Konta informācija — drīzumā',
+  'placeholder.world.space':     'Pasaules telpa — drīzumā',
+}
+
+export default lv

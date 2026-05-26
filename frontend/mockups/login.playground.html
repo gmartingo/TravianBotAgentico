@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — login editable (drag & drop).
+  HTML autocontenido, desacoplado del backend. Sirve para COMPONER una vista:
+  entras en "Editar", arrastras cada bloque (botón, campo, enlace, etc.) donde
+  quieras (imán de 8px), y exportas el layout (JSON) para que se implemente la
+  vista real respetando frontend/DESIGN.md (incluido el responsive).
+
+  No es producción: es una herramienta de decisión visual.
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravianBot · Login (playground editable)</title>
+<style>
+  /* ===== TOKENS (frontend/DESIGN.md §15.1) ===== */
+  :root {
+    --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF2;
+    --border:#D2D2D7; --border-strong:#C7C7CC;
+    --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93;
+    --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012; --accent-subtle:rgba(138,100,24,.14);
+    --btn-primary-bg:#1D1D1F; --btn-primary-text:#FFFFFF; --btn-primary-hover:#3A3A3C;
+    --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+    --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+    --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+    --radius-sm:6px; --radius-md:10px; --radius-lg:14px;
+    --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+    --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C; --border:#3A3A3C; --border-strong:#48484A;
+      --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93;
+      --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+      --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+      --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+      --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C; --border:#3A3A3C; --border-strong:#48484A;
+    --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93;
+    --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+    --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+    --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+  }
+
+  /* ===== BASE ===== */
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;font-family:var(--font-sans);background:var(--bg);color:var(--text);
+       -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+       transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);}
+  a{color:var(--accent-text);text-decoration:none;} a:hover{color:var(--accent-hover);text-decoration:underline;}
+
+  /* ===== TOOLBAR ===== */
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+           padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);}
+  .toolbar .grow{flex:1;}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-inline-end:8px;}
+  .logo{width:26px;height:26px;border-radius:7px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+        display:grid;place-items:center;font-weight:700;font-size:12px;}
+  .tb-btn{appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+          height:34px;padding:0 12px;border-radius:var(--radius-sm);cursor:pointer;font-family:inherit;font-size:13px;
+          display:flex;align-items:center;gap:6px;transition:background var(--dur-fast) var(--ease);}
+  .tb-btn:hover{background:var(--surface-2);}
+  .tb-btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+  .tb-btn.primary:hover{background:var(--btn-primary-hover);}
+  .tb-btn.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--accent-subtle);}
+  .icon-btn{appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+            width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;cursor:pointer;}
+  .icon-btn:hover{background:var(--surface-2);color:var(--text);} .icon-btn svg{width:18px;height:18px;}
+  .hint{color:var(--text-tertiary);font-size:12px;margin-inline-start:4px;}
+
+  /* lang selector */
+  .lang-wrap{position:relative;}
+  .lang-btn{appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+            height:34px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;padding:0 12px;
+            cursor:pointer;font-family:inherit;font-size:13px;}
+  .lang-btn:hover{background:var(--surface-2);} .lang-btn svg{width:15px;height:15px;color:var(--text-secondary);}
+  .lang-panel{position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:280px;max-width:calc(100vw - 32px);
+              background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+              box-shadow:var(--shadow-lg);overflow:hidden;z-index:50;display:none;}
+  .lang-panel.open{display:block;}
+  .lang-search-wrap{padding:10px;border-bottom:1px solid var(--border);}
+  .lang-search{width:100%;height:32px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);
+               border-radius:var(--radius-sm);padding:0 10px;font-family:inherit;font-size:13px;outline:none;}
+  .lang-search:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+  .lang-list{max-height:300px;overflow-y:auto;padding:6px;}
+  .lang-item{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:8px 10px;
+             border-radius:var(--radius-sm);cursor:pointer;border:none;background:transparent;color:var(--text);
+             font-family:inherit;font-size:13px;text-align:start;}
+  .lang-item:hover{background:var(--surface-2);}
+  .lang-item .code{color:var(--text-tertiary);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;}
+  .lang-item[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent-text);font-weight:600;}
+  .lang-item[aria-selected="true"] .code{color:var(--accent-text);}
+
+  /* ===== STAGE / CANVAS ===== */
+  .stage{padding:32px;display:grid;place-items:center;}
+  .canvas{position:relative;width:480px;max-width:100%;height:440px;
+          background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+          box-shadow:var(--shadow-md);overflow:hidden;}
+  /* rejilla visible solo en modo edición */
+  body.editing .canvas{
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--border) 60%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--border) 60%, transparent) 1px, transparent 1px);
+    background-size:8px 8px;
+  }
+
+  .block{position:absolute;}
+  .block.full{width:416px;}
+  body.editing .block{outline:1px dashed transparent;border-radius:6px;cursor:grab;
+                      transition:outline-color var(--dur-fast) var(--ease);}
+  body.editing .block:hover{outline-color:var(--accent);}
+  body.editing .block.dragging{cursor:grabbing;outline:2px solid var(--accent);
+                               box-shadow:var(--shadow-md);z-index:10;}
+
+  /* ===== LOGIN COMPONENTS ===== */
+  .h1{font-size:22px;font-weight:600;letter-spacing:-.015em;margin:0;}
+  .sub{color:var(--text-secondary);font-size:14px;margin:0;}
+  .lbl{display:block;margin-bottom:6px;font-size:12px;color:var(--text-secondary);}
+  .inp{width:100%;height:40px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+       border-radius:var(--radius-sm);padding:0 12px;font-family:inherit;font-size:16px;outline:none;
+       transition:border-color var(--dur-fast) var(--ease);}
+  .inp::placeholder{color:var(--text-tertiary);}
+  .inp:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+  .check-lbl{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text-secondary);font-size:13px;user-select:none;}
+  .check-lbl input{position:absolute;opacity:0;width:0;height:0;}
+  .box{width:18px;height:18px;border-radius:5px;border:1px solid var(--border-strong);background:var(--surface);
+       display:grid;place-items:center;flex:0 0 auto;transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);}
+  .box svg{width:12px;height:12px;opacity:0;transition:opacity var(--dur-fast) var(--ease);}
+  .check-lbl input:checked + .box{background:var(--accent);border-color:var(--accent);}
+  .check-lbl input:checked + .box svg{opacity:1;color:#fff;}
+  .link{font-size:13px;}
+  .btn-primary{width:100%;height:42px;border:none;border-radius:var(--radius-sm);background:var(--btn-primary-bg);
+               color:var(--btn-primary-text);font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;
+               transition:background var(--dur-fast) var(--ease);}
+  .btn-primary:hover{background:var(--btn-primary-hover);}
+  .note{color:var(--text-tertiary);font-size:11px;margin:0;}
+
+  /* toast */
+  .toast{position:fixed;inset-inline:0;bottom:24px;margin:auto;width:max-content;max-width:90vw;
+         background:var(--btn-primary-bg);color:var(--btn-primary-text);padding:10px 16px;border-radius:var(--radius-sm);
+         box-shadow:var(--shadow-lg);font-size:13px;opacity:0;transform:translateY(8px);pointer-events:none;
+         transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+  <!-- ===== TOOLBAR ===== -->
+  <div class="toolbar">
+    <div class="brand"><div class="logo">TB</div><span>Playground · Login</span></div>
+
+    <button class="tb-btn toggle" id="editBtn" aria-pressed="false">✎ Editar</button>
+    <button class="tb-btn" id="saveBtn">Guardar</button>
+    <button class="tb-btn" id="resetBtn">Restablecer</button>
+    <button class="tb-btn primary" id="exportBtn">Exportar layout</button>
+    <span class="hint" id="hint">Pulsa “Editar” y arrastra los bloques.</span>
+
+    <span class="grow"></span>
+
+    <!-- tema -->
+    <button class="icon-btn" id="themeBtn" title="Tema" aria-label="Cambiar tema"></button>
+    <!-- idioma -->
+    <div class="lang-wrap">
+      <button class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span id="langBtnLabel">Español</span>
+      </button>
+      <div class="lang-panel" id="langPanel" role="listbox" aria-label="Idioma">
+        <div class="lang-search-wrap"><input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off" /></div>
+        <div class="lang-list" id="langList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STAGE ===== -->
+  <div class="stage">
+    <div class="canvas" id="canvas">
+      <div class="block" data-id="title"><h1 class="h1" data-i18n="title">Bienvenido de nuevo</h1></div>
+      <div class="block" data-id="subtitle"><p class="sub" data-i18n="subtitle">Accede a tu panel de control</p></div>
+
+      <div class="block full" data-id="fUser">
+        <label class="lbl" data-i18n="user">Usuario o email</label>
+        <input class="inp" type="text" data-i18n-ph="userPh" placeholder="tu@email.com" />
+      </div>
+
+      <div class="block full" data-id="fPass">
+        <label class="lbl" data-i18n="pass">Contraseña</label>
+        <input class="inp" type="password" data-i18n-ph="passPh" placeholder="••••••••" />
+      </div>
+
+      <div class="block" data-id="remember">
+        <label class="check-lbl">
+          <input type="checkbox" />
+          <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span data-i18n="remember">Recordarme</span>
+        </label>
+      </div>
+
+      <div class="block" data-id="forgot"><a href="#" class="link" data-i18n="forgot">¿Olvidaste tu contraseña?</a></div>
+
+      <div class="block full" data-id="signin"><button class="btn-primary" type="button" data-i18n="signin">Iniciar sesión</button></div>
+
+      <div class="block" data-id="note"><p class="note" data-i18n="demoNote">Maqueta editable · arrastra los bloques</p></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  /* ===== Idiomas (25) + endónimos ===== */
+  const LANGS=[
+    {code:"ar",name:"العربية"},{code:"bg",name:"Български"},{code:"cs",name:"Čeština"},{code:"da",name:"Dansk"},
+    {code:"de",name:"Deutsch"},{code:"el",name:"Ελληνικά"},{code:"en",name:"English"},{code:"es",name:"Español"},
+    {code:"fa",name:"فارسی"},{code:"fr",name:"Français"},{code:"he",name:"עברית"},{code:"hu",name:"Magyar"},
+    {code:"it",name:"Italiano"},{code:"ja",name:"日本語"},{code:"lt",name:"Lietuvių"},{code:"lv",name:"Latviešu"},
+    {code:"nl",name:"Nederlands"},{code:"pl",name:"Polski"},{code:"pt",name:"Português"},{code:"rs",name:"Srpski"},
+    {code:"ru",name:"Русский"},{code:"sl",name:"Slovenščina"},{code:"sv",name:"Svenska"},{code:"tr",name:"Türkçe"},
+    {code:"uk",name:"Українська"},
+  ];
+  const RTL=new Set(["ar","he","fa"]);
+  const I18N={
+    es:{title:"Bienvenido de nuevo",subtitle:"Accede a tu panel de control",user:"Usuario o email",userPh:"tu@email.com",pass:"Contraseña",passPh:"••••••••",remember:"Recordarme",forgot:"¿Olvidaste tu contraseña?",signin:"Iniciar sesión",search:"Buscar idioma…",demoNote:"Maqueta editable · arrastra los bloques"},
+    en:{title:"Welcome back",subtitle:"Sign in to your dashboard",user:"Username or email",userPh:"you@email.com",pass:"Password",passPh:"••••••••",remember:"Remember me",forgot:"Forgot your password?",signin:"Sign in",search:"Search language…",demoNote:"Editable mockup · drag the blocks"},
+    de:{title:"Willkommen zurück",subtitle:"Melde dich in deinem Dashboard an",user:"Benutzername oder E-Mail",userPh:"du@email.com",pass:"Passwort",passPh:"••••••••",remember:"Angemeldet bleiben",forgot:"Passwort vergessen?",signin:"Anmelden",search:"Sprache suchen…",demoNote:"Bearbeitbares Mockup · Blöcke ziehen"},
+    fr:{title:"Bon retour",subtitle:"Connectez-vous à votre tableau de bord",user:"Nom d’utilisateur ou e-mail",userPh:"vous@email.com",pass:"Mot de passe",passPh:"••••••••",remember:"Se souvenir de moi",forgot:"Mot de passe oublié ?",signin:"Se connecter",search:"Rechercher une langue…",demoNote:"Maquette éditable · glissez les blocs"},
+    it:{title:"Bentornato",subtitle:"Accedi al tuo pannello",user:"Nome utente o email",userPh:"tu@email.com",pass:"Password",passPh:"••••••••",remember:"Ricordami",forgot:"Password dimenticata?",signin:"Accedi",search:"Cerca lingua…",demoNote:"Mockup modificabile · trascina i blocchi"},
+    ja:{title:"おかえりなさい",subtitle:"ダッシュボードにログイン",user:"ユーザー名またはメール",userPh:"you@email.com",pass:"パスワード",passPh:"••••••••",remember:"ログイン状態を保持",forgot:"パスワードをお忘れですか？",signin:"ログイン",search:"言語を検索…",demoNote:"編集可能なモックアップ · ブロックをドラッグ"},
+    ru:{title:"С возвращением",subtitle:"Войдите в панель управления",user:"Имя пользователя или эл. почта",userPh:"you@email.com",pass:"Пароль",passPh:"••••••••",remember:"Запомнить меня",forgot:"Забыли пароль?",signin:"Войти",search:"Поиск языка…",demoNote:"Редактируемый макет · перетащите блоки"},
+    ar:{title:"مرحبًا بعودتك",subtitle:"سجّل الدخول إلى لوحة التحكم",user:"اسم المستخدم أو البريد الإلكتروني",userPh:"you@email.com",pass:"كلمة المرور",passPh:"••••••••",remember:"تذكرني",forgot:"هل نسيت كلمة المرور؟",signin:"تسجيل الدخول",search:"ابحث عن لغة…",demoNote:"نموذج قابل للتعديل · اسحب الكتل"},
+    he:{title:"ברוך שובך",subtitle:"התחבר ללוח הבקרה שלך",user:"שם משתמש או אימייל",userPh:"you@email.com",pass:"סיסמה",passPh:"••••••••",remember:"זכור אותי",forgot:"שכחת את הסיסמה?",signin:"התחברות",search:"חיפוש שפה…",demoNote:"מוקאפ ניתן לעריכה · גרור את הבלוקים"},
+  };
+  const t=(l,k)=>(I18N[l]&&I18N[l][k])||I18N.en[k];
+
+  const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+  const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+
+  const root=document.documentElement;
+  const THEME_KEY="theme", LANG_KEY="lang", LAYOUT_KEY="loginPlaygroundLayout";
+
+  /* posiciones por defecto (rejilla 8px) */
+  const DEFAULTS={
+    title:{x:32,y:24}, subtitle:{x:32,y:64}, fUser:{x:32,y:112}, fPass:{x:32,y:192},
+    remember:{x:32,y:272}, forgot:{x:256,y:274}, signin:{x:32,y:312}, note:{x:32,y:376},
+  };
+
+  /* ===== TEMA ===== */
+  const themeBtn=document.getElementById("themeBtn");
+  const curTheme=()=>root.dataset.theme==="dark"?"dark":"light";
+  const paintTheme=()=>themeBtn.innerHTML=curTheme()==="dark"?SUN:MOON;
+  (function(){ const s=localStorage.getItem(THEME_KEY); root.dataset.theme=s||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"); paintTheme(); })();
+  themeBtn.addEventListener("click",()=>{ const n=curTheme()==="dark"?"light":"dark"; root.dataset.theme=n; localStorage.setItem(THEME_KEY,n); paintTheme(); });
+
+  /* ===== IDIOMA ===== */
+  const langBtn=document.getElementById("langBtn"), langBtnLabel=document.getElementById("langBtnLabel");
+  const langPanel=document.getElementById("langPanel"), langList=document.getElementById("langList"), langSearch=document.getElementById("langSearch");
+  let curLang=localStorage.getItem(LANG_KEY)||"es";
+  function applyLang(code){
+    curLang=code; localStorage.setItem(LANG_KEY,code); root.lang=code; root.dir=RTL.has(code)?"rtl":"ltr";
+    document.querySelectorAll("[data-i18n]").forEach(el=>el.textContent=t(code,el.dataset.i18n));
+    document.querySelectorAll("[data-i18n-ph]").forEach(el=>el.placeholder=t(code,el.dataset.i18nPh));
+    langSearch.placeholder=t(code,"search");
+    const f=LANGS.find(l=>l.code===code); langBtnLabel.textContent=f?f.name:code;
+    renderLangList(langSearch.value);
+  }
+  function renderLangList(filter){
+    const q=(filter||"").trim().toLowerCase();
+    const items=LANGS.filter(l=>!q||l.name.toLowerCase().includes(q)||l.code.includes(q));
+    langList.innerHTML=items.map(l=>`<button class="lang-item" role="option" data-code="${l.code}" aria-selected="${l.code===curLang}"><span>${l.name}</span><span class="code">${l.code}</span></button>`).join("");
+    langList.querySelectorAll(".lang-item").forEach(b=>b.addEventListener("click",()=>{applyLang(b.dataset.code);langPanel.classList.remove("open");langBtn.setAttribute("aria-expanded","false");}));
+  }
+  langBtn.addEventListener("click",()=>{
+    const open=langPanel.classList.toggle("open"); langBtn.setAttribute("aria-expanded",open?"true":"false");
+    if(open){ langSearch.value=""; renderLangList(""); setTimeout(()=>langSearch.focus(),0); }
+  });
+  langSearch.addEventListener("input",()=>renderLangList(langSearch.value));
+  document.addEventListener("click",e=>{ if(!e.target.closest(".lang-wrap")){langPanel.classList.remove("open");langBtn.setAttribute("aria-expanded","false");} });
+
+  /* ===== LAYOUT (posiciones) ===== */
+  const canvas=document.getElementById("canvas");
+  const blocks=[...canvas.querySelectorAll(".block")];
+  function place(id,x,y){ const el=canvas.querySelector(`.block[data-id="${id}"]`); if(el){ el.style.left=x+"px"; el.style.top=y+"px"; } }
+  function loadLayout(){
+    let saved=null; try{ saved=JSON.parse(localStorage.getItem(LAYOUT_KEY)||"null"); }catch(e){}
+    const layout=saved||DEFAULTS;
+    Object.entries(layout).forEach(([id,p])=>place(id,p.x,p.y));
+  }
+  function currentLayout(){
+    const out={};
+    blocks.forEach(el=>{ out[el.dataset.id]={x:el.offsetLeft,y:el.offsetTop}; });
+    return out;
+  }
+
+  /* ===== EDIT MODE + DRAG ===== */
+  const editBtn=document.getElementById("editBtn"), hint=document.getElementById("hint");
+  let editing=false;
+  editBtn.addEventListener("click",()=>{
+    editing=!editing;
+    document.body.classList.toggle("editing",editing);
+    editBtn.setAttribute("aria-pressed",editing?"true":"false");
+    editBtn.textContent=editing?"✓ Listo":"✎ Editar";
+    hint.textContent=editing?"Arrastra cualquier bloque (imán de 8px). Pulsa “Listo” al terminar.":"Pulsa “Editar” y arrastra los bloques.";
+  });
+
+  const snap=v=>Math.round(v/8)*8;
+  let drag=null;
+  canvas.addEventListener("pointerdown",e=>{
+    if(!editing) return;
+    const el=e.target.closest(".block"); if(!el) return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId); el.classList.add("dragging");
+    drag={el,startX:e.clientX,startY:e.clientY,origX:el.offsetLeft,origY:el.offsetTop};
+  });
+  canvas.addEventListener("pointermove",e=>{
+    if(!drag) return;
+    const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
+    const maxX=canvas.clientWidth-drag.el.offsetWidth, maxY=canvas.clientHeight-drag.el.offsetHeight;
+    const nx=Math.max(0,Math.min(maxX,snap(drag.origX+dx)));
+    const ny=Math.max(0,Math.min(maxY,snap(drag.origY+dy)));
+    drag.el.style.left=nx+"px"; drag.el.style.top=ny+"px";
+  });
+  function endDrag(e){ if(!drag) return; drag.el.classList.remove("dragging"); try{drag.el.releasePointerCapture(e.pointerId);}catch(x){} drag=null; }
+  canvas.addEventListener("pointerup",endDrag);
+  canvas.addEventListener("pointercancel",endDrag);
+
+  /* ===== TOOLBAR ACTIONS ===== */
+  const toast=document.getElementById("toast"); let toastT=null;
+  function showToast(msg){ toast.textContent=msg; toast.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>toast.classList.remove("show"),1800); }
+
+  document.getElementById("saveBtn").addEventListener("click",()=>{
+    localStorage.setItem(LAYOUT_KEY,JSON.stringify(currentLayout())); showToast("Layout guardado");
+  });
+  document.getElementById("resetBtn").addEventListener("click",()=>{
+    localStorage.removeItem(LAYOUT_KEY); Object.entries(DEFAULTS).forEach(([id,p])=>place(id,p.x,p.y)); showToast("Layout restablecido");
+  });
+  document.getElementById("exportBtn").addEventListener("click",async()=>{
+    const data={view:"login",canvas:{w:canvas.clientWidth,h:canvas.clientHeight},grid:8,blocks:currentLayout()};
+    const json=JSON.stringify(data,null,2);
+    try{ await navigator.clipboard.writeText(json); showToast("Layout copiado al portapapeles — pégamelo en el chat"); }
+    catch(e){ showToast("Descargando layout…"); }
+    const blob=new Blob([json],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="login.layout.json"; a.click(); URL.revokeObjectURL(a.href);
+  });
+
+  /* ===== INIT ===== */
+  loadLayout();
+  applyLang(curLang);
+</script>
+</body>
+</html>

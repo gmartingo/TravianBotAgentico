@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TravianBot · Manual de usuario / User manual</title>
+<style>
+  :root{
+    --bg:#f5f5f7; --surface:#ffffff; --surface-2:#ececef;
+    --text:#1d1d1f; --text-2:#5f5f66; --text-3:#8a8a90;
+    --border:#e2e2e6; --accent:#8a6418; --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);min-height:100vh;display:grid;place-items:center;
+    -webkit-font-smoothing:antialiased;padding:24px;}
+  .card{text-align:center;max-width:440px;width:100%;}
+  .logo{width:60px;height:60px;border-radius:15px;background:var(--text);color:#fff;
+    display:inline-grid;place-items:center;font-weight:700;font-size:22px;}
+  h1{font-size:26px;letter-spacing:-.02em;margin:18px 0 4px;}
+  p.sub{color:var(--text-2);font-size:15px;margin-bottom:28px;}
+  .langs{display:flex;flex-direction:column;gap:12px;}
+  a.lang{display:flex;align-items:center;justify-content:space-between;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 20px;text-decoration:none;color:var(--text);font-size:16px;font-weight:500;
+    transition:border-color .15s ease, transform .15s ease;}
+  a.lang:hover{border-color:var(--accent);transform:translateY(-1px);}
+  a.lang .arrow{color:var(--accent);font-size:18px;}
+  .note{color:var(--text-3);font-size:13px;margin-top:24px;line-height:1.5;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">TB</div>
+    <h1>TravianBot · Manual de usuario</h1>
+    <p class="sub">Elige tu idioma · Choose your language</p>
+    <div class="langs">
+      <a class="lang" href="es/index.html"><span>🇪🇸 Español</span><span class="arrow">→</span></a>
+      <a class="lang" href="en/index.html"><span>🇬🇧 English</span><span class="arrow">→</span></a>
+    </div>
+    <p class="note">Más idiomas próximamente — el panel soporta 25.<br/>More languages coming — the panel supports 25.</p>
+  </div>
+</body>
+</html>

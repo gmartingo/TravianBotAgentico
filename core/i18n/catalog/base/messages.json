@@ -1,0 +1,121 @@
+{
+  "ACCOUNT_NOT_FOUND": {
+    "es": "Cuenta {account_id} no encontrada",
+    "en": "Account {account_id} not found",
+    "de": "Konto {account_id} nicht gefunden",
+    "fr": "Compte {account_id} introuvable",
+    "ru": "Аккаунт {account_id} не найден"
+  },
+  "DUPLICATE_ACCOUNT": {
+    "es": "Ya existe una cuenta con el email '{email}'",
+    "en": "An account with email '{email}' already exists",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "DUPLICATE_WORLD": {
+    "es": "Ya existe un mundo con server '{server}' en esta cuenta",
+    "en": "A world with server '{server}' already exists in this account",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "ACTIVE_SESSION_CONFLICT": {
+    "es": "Hay una sesión activa para el mundo {world_id}. Haz logout primero.",
+    "en": "There is an active session for world {world_id}. Log out first.",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "WORLD_NOT_FOUND": {
+    "es": "Mundo {world_id} no encontrado",
+    "en": "World {world_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "SESSION_NOT_ACTIVE": {
+    "es": "No hay sesión activa — ejecuta login primero",
+    "en": "No active session — run login first",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "INVALID_CREDENTIALS": {
+    "es": "Credenciales incorrectas para '{username}'",
+    "en": "Invalid credentials for '{username}'",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "VILLAGE_NOT_FOUND": {
+    "es": "Aldea {village_id} no encontrada",
+    "en": "Village {village_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "FARM_LIST_NOT_FOUND": {
+    "es": "Lista de vacas {farm_list_id} no encontrada",
+    "en": "Farm list {farm_list_id} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "LOGIN_ERROR": {
+    "es": "Error durante el proceso de login en Travian",
+    "en": "Error during Travian login process",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "BROWSER_ERROR": {
+    "es": "Error en la capa de automatización del navegador",
+    "en": "Browser automation error",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "DATABASE_ERROR": {
+    "es": "Error al acceder a la base de datos local",
+    "en": "Error accessing local database",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "TROOP_NOT_FOUND": {
+    "es": "Tropa {ordinal} de {tribe} no encontrada",
+    "en": "Troop {ordinal} for tribe {tribe} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "BUILDING_NOT_FOUND": {
+    "es": "Edificio gid={gid} no encontrado",
+    "en": "Building gid={gid} not found",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  },
+  "OVERVIEW_PAGE_NOT_LOADED": {
+    "es": "La página '{page}' de Travian no cargó a tiempo (world_id={world_id}). Inténtalo de nuevo.",
+    "en": "Travian page '{page}' did not load in time (world_id={world_id}). Please try again.",
+    "de": "Die Travian-Seite '{page}' hat nicht rechtzeitig geladen (world_id={world_id}). Bitte erneut versuchen.",
+    "fr": "La page Travian '{page}' n'a pas chargé à temps (world_id={world_id}). Réessayez.",
+    "ru": "Страница Travian '{page}' не загрузилась вовремя (world_id={world_id}). Попробуйте ещё раз."
+  },
+  "OVERVIEW_FIXTURE_NOT_FOUND": {
+    "es": "Fixture no encontrado para la página '{page}'. Comprueba que existe el fichero '{page}.html' en el directorio de fixtures.",
+    "en": "Fixture not found for page '{page}'. Make sure '{page}.html' exists in the fixtures directory.",
+    "de": "Fixture für Seite '{page}' nicht gefunden. Prüfe, ob '{page}.html' im Fixtures-Verzeichnis vorhanden ist.",
+    "fr": "Fixture introuvable pour la page '{page}'. Vérifiez que le fichier '{page}.html' existe dans le répertoire des fixtures.",
+    "ru": "Fixture для страницы '{page}' не найден. Убедитесь, что файл '{page}.html' существует в директории fixtures."
+  },
+  "LOGIN_FAILED": {
+    "es": "Login fallido para '{username}'. Verifica las credenciales o el estado del servidor.",
+    "en": "Login failed for '{username}'. Check your credentials or server status.",
+    "de": "",
+    "fr": "",
+    "ru": ""
+  }
+}

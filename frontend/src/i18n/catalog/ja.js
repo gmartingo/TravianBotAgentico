@@ -1,0 +1,202 @@
+/**
+ * Catálogo JA — 日本語
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const ja = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'アカウント',
+  'nav.resources':    'リソース',
+  'nav.troops':       '軍隊',
+  'nav.construction': '建設',
+  'nav.comingSoon':   '近日公開',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'テーマを切り替え',
+  'topbar.selectLanguage': '言語を選択',
+  'topbar.backToWorlds':   '← ワールド',
+  'topbar.searchLanguage': '言語を検索…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'アカウント',
+  'page.accounts.caption':      '{n}件のアカウント',
+  'page.accounts.caption.pl':   '{n}件のアカウント',
+  'page.accounts.newAccount':   '新規アカウント',
+  'page.accounts.empty.title':  'アカウントがありません',
+  'page.accounts.empty.desc':   'ボットを使用するには最初のアカウントを追加してください。',
+  'page.accounts.col.email':    'メール',
+  'page.accounts.col.username': 'ユーザー名',
+  'page.accounts.col.worlds':   'ワールド',
+  'page.accounts.col.created':  '作成日',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'アカウントを編集',
+  'page.accounts.action.delete':'アカウントを削除',
+  'page.accounts.loading':      'アカウントを読み込んでいます…',
+  'page.accounts.error':        'アカウントを読み込めませんでした。',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                '新規アカウント',
+  'wizard.step':                 'ステップ {current} / {total}',
+  'wizard.section.account':      'アカウント情報',
+  'wizard.section.world':        '最初のワールド',
+  'wizard.field.email':          'メールアドレス',
+  'wizard.field.email.ph':       'player@example.com',
+  'wizard.field.username':       'ユーザー名',
+  'wizard.field.username.ph':    'マイアカウント',
+  'wizard.field.password':       'パスワード',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'サーバーURL',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          '部族',
+  'wizard.field.tribe.ph':       '部族を選択',
+  'wizard.btn.next':             '次へ',
+  'wizard.btn.back':             '戻る',
+  'wizard.btn.create':           'アカウントを作成',
+  'wizard.btn.creating':         '作成中…',
+  'wizard.btn.cancel':           'キャンセル',
+  'wizard.error.email.invalid':  '有効なメールアドレスを入力してください',
+  'wizard.error.email.taken':    'このメールアドレスは既に登録されています',
+  'wizard.error.server.invalid': '有効なURL（http:// または https://）を入力してください',
+  'wizard.error.server.taken':   'このサーバーはすでにこのアカウントに存在します',
+  'wizard.error.required':       'このフィールドは必須です',
+  'wizard.error.tribe.required': '部族を選択してください',
+  'wizard.btn.showPassword':     'パスワードを表示',
+  'wizard.btn.hidePassword':     'パスワードを非表示',
+  'wizard.toast.created':        'アカウントが作成されました',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'アカウント',
+  'page.account.createdAt':          '作成日: {date}',
+  'page.account.editBtn':            '編集',
+  'page.account.deleteBtn':          'アカウントを削除',
+  'page.account.worlds.title':       'ワールド ({n})',
+  'page.account.worlds.add':         'ワールドを追加',
+  'page.account.worlds.empty':       'このアカウントにはまだワールドがありません。',
+  'page.account.col.server':         'サーバー',
+  'page.account.col.parsed':         'サーバー（読みやすい形式）',
+  'page.account.col.tribe':          '部族',
+  'page.account.col.session':        'セッション',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'ワールドを削除',
+  'page.account.notFound.title':     'アカウントが見つかりません',
+  'page.account.notFound.desc':      '指定されたアカウントは存在しないか、削除されました。',
+  'page.account.notFound.back':      'アカウント一覧に戻る',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'アカウントを編集',
+  'modal.edit.changePassword':  'パスワードを変更',
+  'modal.edit.newPassword':     '新しいパスワード',
+  'modal.edit.confirmPassword': 'パスワードを確認',
+  'modal.edit.passwordMismatch':'パスワードが一致しません',
+  'modal.edit.saveBtn':         '保存',
+  'modal.edit.savingBtn':       '保存中…',
+  'modal.edit.cancelBtn':       'キャンセル',
+  'modal.edit.closeBtn':        '閉じる',
+  'modal.edit.savedToast':      '変更が保存されました',
+  'modal.edit.error409':        'このメールアドレスは別のアカウントに登録されています。',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'ワールドを追加',
+  'modal.addWorld.addBtn':    '追加',
+  'modal.addWorld.addingBtn': '追加中…',
+  'modal.addWorld.cancelBtn': 'キャンセル',
+  'modal.addWorld.toast':     'ワールドが追加されました',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'アカウントを削除',
+  'modal.deleteAccount.body':    'アカウント "{username}" を削除しますか？',
+  'modal.deleteAccount.warning': 'この操作は取り消せません。すべてのワールドも削除されます（{n}件）。',
+  'modal.deleteAccount.confirm': '削除',
+  'modal.deleteAccount.cancel':  'キャンセル',
+  'modal.deleteAccount.toast':   'アカウントが削除されました',
+  'modal.deleteAccount.active':  'ボットがアクティブなセッションを持っている間はこのアカウントを削除できません。先にセッションを停止してください。',
+  'modal.deleteAccount.close':   '閉じる',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'ワールドを削除',
+  'modal.deleteWorld.body':    'ワールド "{parsed}" を削除しますか？',
+  'modal.deleteWorld.warning': 'この操作は取り消せません。関連するすべての村も削除されます。',
+  'modal.deleteWorld.confirm': '削除',
+  'modal.deleteWorld.cancel':  'キャンセル',
+  'modal.deleteWorld.toast':   'ワールドが削除されました',
+  'modal.deleteWorld.active':  'このワールドにはアクティブなセッションがあります。先にセッションを停止してください。',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'アクティブ',
+  'world.status.panelLabel':      'アクティブなセッション',
+  'world.action.stop':            '停止',
+  'world.tab.config':             '設定',
+  'world.tab.resources':          'リソース',
+  'world.tab.troops':             '軍隊',
+  'world.tab.construction':       '建設',
+  'world.tab.villages':           '村',
+  'world.config.automationTitle': '自動化',
+  'world.config.tasksTitle':      'ボットのタスク',
+  'world.config.tasksDesc':       'このワールドでボットが実行する自動タスクを有効または一時停止します。',
+  'world.config.task.buildQueue': '建設キュー',
+  'world.config.task.buildQueueDesc': '計画されたキューに従って建物を建設します',
+  'world.config.task.farmList':   '農場リスト',
+  'world.config.task.farmListDesc': '自動的に農場攻撃を送信します',
+  'world.config.task.troops':     '軍隊の訓練',
+  'world.config.task.troopsDesc': '訓練キューをアクティブに保ちます',
+  'world.config.intervalsTitle':  'インターバル',
+  'world.config.intervalsDesc':   'ボットのチェック間隔。値が大きいほど検出リスクが低下します。',
+  'world.config.interval.check':  '定期チェック',
+  'world.config.interval.farm':   '農場間隔',
+  'world.config.interval.jitter': 'ランダム変動',
+  'world.config.interval.min':    '分',
+  'world.config.comingSoonTitle': 'このスペースで近日公開',
+  'world.comingSoon.resourcesDesc':   '木材・粘土・鉄・小麦のリアルタイム監視。',
+  'world.comingSoon.troopsDesc':      'ユニット一覧、戦闘統計、訓練キュー。',
+  'world.comingSoon.constructionDesc':'村ごとの建設キュー、コスト、時間。',
+  'world.comingSoon.villagesDesc':    '村のマップ、座標、名前、種類。',
+  'world.stop.toast':             'ボットが停止しました。アカウント詳細に戻ります…',
+
+  // ── Sesión del mundo (§4b) ─────────────────────────────
+  'world.session.start':    '起動',
+  'world.session.stop':     '停止',
+  'world.session.retry':    '再試行',
+  'world.session.cancel':   'キャンセル',
+  'world.session.enter':    '入る',
+  'world.session.idle':     '待機中',
+  'world.session.connecting': '接続中…',
+  'world.session.active':   'アクティブ',
+  'world.session.error':    '接続エラー',
+  'world.session.stopping': '停止中…',
+  'world.session.start.aria': '{world} でボットを起動',
+  'world.session.stop.aria':  '{world} でボットを停止',
+  'world.session.retry.aria': '{world} で接続を再試行',
+  'world.session.enter.aria': '{world} のスペースに入る',
+  'world.session.disabled.delete':       'このワールドを削除する前にセッションを停止してください',
+  'world.session.disabled.editMenu':     'アクティブなセッションがあるワールドは編集できません',
+  'world.session.disabled.deleteAccount':'このアカウントを削除する前にすべてのアクティブなセッションを停止してください',
+  'world.session.started.toast':  '{world} でボットが起動しました',
+  'world.session.stopped.toast':  '{world} でボットが停止しました',
+  'world.session.error.toast':    '{world} での接続に失敗しました',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    '接続エラー。もう一度お試しください。',
+  'error.retry':      '再試行',
+  'error.loadFailed': 'データを読み込めませんでした。',
+
+  // ── Versión (sidebar footer) ───────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders de ruta (etapa 1) ────────────────────
+  'placeholder.accounts.list':   'アカウント一覧 — 近日公開',
+  'placeholder.account.detail':  'アカウント詳細 — 近日公開',
+  'placeholder.world.space':     'ワールドスペース — 近日公開',
+}
+
+export default ja

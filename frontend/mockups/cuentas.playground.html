@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Shell + S2 Lista de cuentas (todos sus estados).
+  HTML autocontenido, desacoplado del backend.
+  Abrir directamente en el navegador — sin build, sin servidor.
+
+  Toolbar:
+    Editar / Listo — activa modo drag & drop con imán de 8px sobre rejilla.
+    Guardar        — persiste posiciones de los bloques en localStorage.
+    Restablecer    — vuelve a las posiciones originales del spec.
+    Exportar layout — copia / descarga JSON con las posiciones.
+    Estado         — selector para conmutar entre los estados de S2.
+    Tema           — toggle claro / oscuro.
+    Idioma         — selector de los 25 idiomas con buscador y RTL.
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravianBot · Cuentas (playground editable)</title>
+<style>
+/* ===== TOKENS (frontend/DESIGN.md §15.1) ===== */
+:root {
+  --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93;
+  --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012;
+  --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#FFFFFF; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+  --sidebar-w:200px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+    --border:#3A3A3C; --border-strong:#48484A;
+    --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+    --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+    --accent-subtle:rgba(203,176,121,.16);
+    --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+    --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+  --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET / BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans); background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.4;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+  display:flex; flex-direction:column;
+}
+a{color:var(--accent-text);text-decoration:none;}
+a:hover{color:var(--accent-hover);text-decoration:underline;}
+
+/* ===== TOOLBAR (heredada del login playground) ===== */
+.toolbar{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:10px 16px; border-bottom:1px solid var(--border);
+  background:var(--surface); flex-shrink:0; z-index:100;
+}
+.toolbar .grow{flex:1; min-width:0;}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-inline-end:4px;white-space:nowrap;}
+.logo{width:26px;height:26px;border-radius:7px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+      display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0;}
+.tb-btn{
+  appearance:none; border:1px solid var(--border-strong); background:var(--surface); color:var(--text);
+  height:32px; padding:0 12px; border-radius:var(--radius-sm); cursor:pointer;
+  font-family:inherit; font-size:13px; display:flex; align-items:center; gap:6px;
+  transition:background var(--dur-fast) var(--ease); white-space:nowrap;
+}
+.tb-btn:hover{background:var(--surface-2);}
+.tb-btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.tb-btn.primary:hover{background:var(--btn-primary-hover);}
+.tb-btn.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--accent-subtle);}
+.icon-btn{
+  appearance:none; border:1px solid var(--border); background:var(--surface); color:var(--text-secondary);
+  width:32px; height:32px; border-radius:var(--radius-sm); display:grid; place-items:center;
+  cursor:pointer; flex-shrink:0;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);}
+.icon-btn svg{width:17px;height:17px;}
+.hint{color:var(--text-tertiary);font-size:12px;white-space:nowrap;}
+
+/* Estado selector */
+.state-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.state-select{
+  height:32px; border:1px solid var(--border-strong); background:var(--surface); color:var(--text);
+  border-radius:var(--radius-sm); padding:0 8px; font-family:inherit; font-size:13px; cursor:pointer;
+}
+
+/* lang selector */
+.lang-wrap{position:relative;}
+.lang-btn{
+  appearance:none; border:1px solid var(--border-strong); background:var(--surface); color:var(--text);
+  height:32px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:8px; padding:0 12px;
+  cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap;
+}
+.lang-btn:hover{background:var(--surface-2);}
+.lang-btn svg{width:15px;height:15px;color:var(--text-secondary);}
+.lang-panel{
+  position:absolute; inset-inline-end:0; top:calc(100% + 8px); width:280px; max-width:calc(100vw - 32px);
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg); overflow:hidden; z-index:200; display:none;
+}
+.lang-panel.open{display:block;}
+.lang-search-wrap{padding:10px;border-bottom:1px solid var(--border);}
+.lang-search{
+  width:100%; height:32px; border:1px solid var(--border-strong); background:var(--surface-2);
+  color:var(--text); border-radius:var(--radius-sm); padding:0 10px;
+  font-family:inherit; font-size:13px; outline:none;
+}
+.lang-search:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.lang-list{max-height:280px;overflow-y:auto;padding:6px;}
+.lang-item{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+  padding:8px 10px; border-radius:var(--radius-sm); cursor:pointer; border:none;
+  background:transparent; color:var(--text); font-family:inherit; font-size:13px; text-align:start;
+}
+.lang-item:hover{background:var(--surface-2);}
+.lang-item .code{color:var(--text-tertiary);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;}
+.lang-item[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent-text);font-weight:600;}
+.lang-item[aria-selected="true"] .code{color:var(--accent-text);}
+
+/* ===== SHELL: TOPBAR DE LA APP ===== */
+.app-topbar{
+  display:flex; align-items:center; gap:12px; padding:0 20px; height:52px;
+  background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.app-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;}
+.app-logo{
+  width:28px;height:28px;border-radius:7px;background:var(--btn-primary-bg);
+  color:var(--btn-primary-text);display:grid;place-items:center;font-weight:700;font-size:12px;
+}
+.app-topbar-grow{flex:1;}
+.app-theme-btn{
+  appearance:none; border:1px solid var(--border); background:transparent; color:var(--text-secondary);
+  width:32px; height:32px; border-radius:var(--radius-sm); display:grid; place-items:center;
+  cursor:pointer;
+}
+.app-theme-btn:hover{background:var(--surface-2);color:var(--text);}
+.app-theme-btn svg{width:16px;height:16px;}
+.app-lang-btn{
+  appearance:none; border:1px solid var(--border-strong); background:var(--surface); color:var(--text);
+  height:30px; border-radius:var(--radius-sm); display:flex; align-items:center; gap:6px; padding:0 10px;
+  cursor:pointer; font-family:inherit; font-size:13px;
+}
+.app-lang-btn:hover{background:var(--surface-2);}
+.app-lang-btn svg{width:14px;height:14px;color:var(--text-secondary);}
+
+/* ===== SHELL: BODY (sidebar + contenido) ===== */
+.app-body{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ===== SIDEBAR ===== */
+.sidebar{
+  width:var(--sidebar-w); flex-shrink:0;
+  background:var(--surface); border-inline-end:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  display:flex; align-items:center; gap:10px; padding:8px 10px;
+  border-radius:var(--radius-sm); cursor:pointer; border:none;
+  background:transparent; color:var(--text); font-family:inherit; font-size:14px;
+  text-align:start; width:100%; position:relative; transition:background var(--dur-fast) var(--ease);
+}
+.nav-item:hover:not([disabled]){background:var(--surface-2);}
+.nav-item[disabled]{color:var(--text-disabled);cursor:not-allowed;}
+.nav-item.active{
+  background:var(--accent-subtle); color:var(--accent-text); font-weight:500;
+}
+.nav-item.active::before{
+  content:''; position:absolute; inset-block:4px; inset-inline-start:0;
+  width:3px; border-radius:var(--radius-full); background:var(--accent);
+}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.nav-item .nav-label{flex:1;}
+.nav-item .nav-soon{
+  font-size:10px; color:var(--text-disabled); font-family:var(--font-mono);
+  text-transform:uppercase; letter-spacing:0.04em;
+}
+
+.sidebar-footer{
+  padding:12px 16px; border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-tertiary); font-family:var(--font-mono);
+}
+
+/* ===== CONTENT AREA ===== */
+.content{flex:1;overflow-y:auto;padding:28px 32px;}
+
+/* ===== PAGE HEADER ===== */
+.page-header{display:flex;align-items:baseline;gap:12px;margin-bottom:20px;}
+.page-header h1{font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;}
+.page-caption{flex:1;font-size:12px;color:var(--text-secondary);}
+.btn-primary{
+  appearance:none; border:none; background:var(--btn-primary-bg); color:var(--btn-primary-text);
+  height:32px; padding:0 14px; border-radius:var(--radius-sm); cursor:pointer;
+  font-family:inherit; font-size:13px; font-weight:500; white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease); display:flex; align-items:center; gap:6px;
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* ===== TABLE ===== */
+.data-table{width:100%;border-collapse:collapse;font-size:14px;}
+.data-table th{
+  background:var(--surface-2); color:var(--text-secondary);
+  font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.04em;
+  padding:0 14px; height:34px; text-align:start; border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.data-table th.col-num{text-align:end;}
+.data-table td{
+  padding:0 14px; height:40px; border-bottom:1px solid var(--border);
+  vertical-align:middle;
+}
+.data-table tr.data-row{cursor:pointer; transition:background var(--dur-fast) var(--ease);}
+.data-table tr.data-row:hover td{background:var(--surface-2);}
+.data-table tr:last-child td{border-bottom:none;}
+.col-email{font-weight:500;}
+.col-num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:end;}
+.col-date{color:var(--text-secondary);font-size:13px;}
+.col-actions{width:48px;text-align:end;}
+
+/* Col "Creada" (P3) oculta en <lg — aquí la maqueta es desktop fija */
+@media (max-width:1023px){.hide-lg{display:none;}}
+
+/* ===== SKELETON (estado cargando) ===== */
+@keyframes pulse{0%,100%{opacity:.45;}50%{opacity:1;}}
+.skel{background:var(--surface-2);border-radius:4px;display:inline-block;}
+.skel-row td{padding-top:10px;padding-bottom:10px;}
+.skel-cell{height:16px;border-radius:4px;background:var(--surface-2);display:block;animation:pulse 1.2s ease-in-out infinite;}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:64px 24px;text-align:center;
+}
+.empty-icon{
+  width:52px;height:52px;border-radius:var(--radius-full);background:var(--surface-2);
+  display:grid;place-items:center;color:var(--text-tertiary);
+}
+.empty-icon svg{width:28px;height:28px;}
+.empty-title{font-size:16px;font-weight:600;color:var(--text);}
+.empty-desc{font-size:14px;color:var(--text-secondary);max-width:300px;line-height:1.5;}
+
+/* ===== ERROR BANNER ===== */
+.error-banner{
+  display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:rgba(201,53,44,.08);border:1px solid var(--danger);
+  border-radius:var(--radius-sm);margin-bottom:20px;font-size:13px;
+}
+[data-theme="dark"] .error-banner{background:rgba(255,69,58,.10);}
+.error-banner svg{width:16px;height:16px;color:var(--danger);flex-shrink:0;}
+.error-banner .err-msg{flex:1;color:var(--text);}
+.error-banner .err-retry{
+  background:none;border:none;color:var(--accent-text);font-family:inherit;
+  font-size:13px;cursor:pointer;padding:0;text-decoration:underline;
+}
+.error-banner .err-retry:hover{color:var(--accent-hover);}
+
+/* ===== ICON BUTTON (menú ⋯) ===== */
+.row-menu-btn{
+  appearance:none;border:1px solid transparent;background:transparent;color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;font-size:16px;
+  transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);
+}
+.row-menu-btn:hover{background:var(--surface-2);border-color:var(--border);color:var(--text);}
+
+/* ===== CONTEXT MENU ===== */
+.ctx-menu{
+  position:fixed;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:6px;
+  min-width:160px;z-index:300;display:none;
+}
+.ctx-menu.open{display:block;}
+.ctx-item{
+  display:block;width:100%;padding:8px 12px;border:none;background:transparent;
+  text-align:start;font-family:inherit;font-size:13px;color:var(--text);
+  border-radius:var(--radius-sm);cursor:pointer;
+}
+.ctx-item:hover{background:var(--surface-2);}
+.ctx-item.danger{color:var(--danger);}
+
+/* ===== ACCOUNT CARDS (móvil < md) ===== */
+@media (max-width:767px){
+  .data-table{display:none;}
+  .account-cards{display:block;}
+}
+@media (min-width:768px){
+  .account-cards{display:none;}
+}
+.account-cards{display:none;}
+.account-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;
+  cursor:pointer;transition:background var(--dur-fast) var(--ease);
+}
+.account-card:hover{background:var(--surface-2);}
+.account-card .card-main{flex:1;min-width:0;}
+.account-card .card-email{font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.account-card .card-meta{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+
+/* ===== FOCO ACCESIBLE ===== */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ===== DRAG EDIT (rejilla visible en modo edición) ===== */
+body.editing .canvas-area{
+  background-image:
+    linear-gradient(to right,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px),
+    linear-gradient(to bottom,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px);
+  background-size:8px 8px;
+}
+.drag-block{position:relative;}
+body.editing .drag-block{outline:1px dashed transparent;border-radius:4px;cursor:grab;transition:outline-color var(--dur-fast);}
+body.editing .drag-block:hover{outline-color:var(--accent);}
+body.editing .drag-block.dragging{cursor:grabbing;outline:2px solid var(--accent);box-shadow:var(--shadow-md);z-index:10;}
+
+/* ===== TOAST ===== */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);padding:10px 16px;
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);font-size:13px;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  z-index:500;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important;}}
+</style>
+</head>
+<body>
+
+<!-- ==================== PLAYGROUND TOOLBAR ==================== -->
+<div class="toolbar">
+  <div class="brand">
+    <div class="logo">TB</div>
+    <span>Playground · Cuentas</span>
+  </div>
+
+  <button class="tb-btn toggle" id="editBtn" aria-pressed="false">&#9998; Editar</button>
+  <button class="tb-btn" id="saveBtn">Guardar</button>
+  <button class="tb-btn" id="resetBtn">Restablecer</button>
+  <button class="tb-btn primary" id="exportBtn">Exportar layout</button>
+
+  <span style="width:1px;height:20px;background:var(--border);flex-shrink:0;"></span>
+
+  <label class="state-label" for="stateSelect" data-i18n="toolbar.stateLabel">Estado:</label>
+  <select class="state-select" id="stateSelect">
+    <option value="data"    data-i18n="state.data">Con datos</option>
+    <option value="empty"   data-i18n="state.empty">Vacío</option>
+    <option value="loading" data-i18n="state.loading">Cargando</option>
+    <option value="error"   data-i18n="state.error">Error</option>
+  </select>
+
+  <span class="hint" id="hint">Pulsa &ldquo;Editar&rdquo; y arrastra los bloques.</span>
+  <span class="grow"></span>
+
+  <!-- tema -->
+  <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema"></button>
+
+  <!-- idioma -->
+  <div class="lang-wrap">
+    <button class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="langBtnLabel">Español</span>
+    </button>
+    <div class="lang-panel" id="langPanel" role="listbox" aria-label="Idioma">
+      <div class="lang-search-wrap">
+        <input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off" />
+      </div>
+      <div class="lang-list" id="langList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APP SHELL ==================== -->
+<!-- Topbar de la app (misma que login, solo cambia el título) -->
+<div class="app-topbar">
+  <div class="app-brand">
+    <div class="app-logo">TB</div>
+    <span>TravianBot</span>
+  </div>
+  <div class="app-topbar-grow"></div>
+  <button class="app-theme-btn" id="appThemeBtn" aria-label="Cambiar tema">
+    <!-- icono espejo del toggle de la toolbar, se sincroniza -->
+    <svg id="appThemeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+  <div class="lang-wrap" style="position:relative;">
+    <button class="app-lang-btn" id="appLangBtn" aria-haspopup="listbox" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="appLangLabel">Español</span>
+    </button>
+  </div>
+</div>
+
+<!-- Body del shell: sidebar + content -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" aria-label="Navegación principal">
+    <div class="sidebar-nav">
+      <!-- Ítem activo: Cuentas -->
+      <button class="nav-item active" aria-current="page" data-i18n-label="nav.accounts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span class="nav-label" data-i18n="nav.accounts">Cuentas</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">v0.1.0-dev</div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="content canvas-area" id="contentArea">
+
+    <!-- DRAG BLOCK: cabecera de página -->
+    <div class="drag-block" data-drag-id="pageHeader">
+      <!-- Estado ERROR — banner inline -->
+      <div id="errorBanner" class="error-banner" style="display:none;" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span class="err-msg" data-i18n="error.loadFailed">No se pudieron cargar los datos.</span>
+        <button class="err-retry" type="button" data-i18n="error.retry">Reintentar</button>
+      </div>
+
+      <div class="page-header">
+        <h1 data-i18n="page.accounts.title">Cuentas</h1>
+        <span class="page-caption" id="pageCaption" data-i18n="page.accounts.caption">2 cuentas</span>
+        <button class="btn-primary" id="newAccountBtn" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span data-i18n="page.accounts.newAccount">Nueva cuenta</span>
+        </button>
+      </div>
+    </div><!-- /drag-block pageHeader -->
+
+    <!-- DRAG BLOCK: cuerpo de la lista -->
+    <div class="drag-block" data-drag-id="accountsBody">
+
+      <!-- ── ESTADO: CON DATOS ── -->
+      <div id="stateData">
+        <!-- Tabla desktop -->
+        <table class="data-table" role="table" aria-label="Lista de cuentas">
+          <thead>
+            <tr>
+              <th data-i18n="page.accounts.col.email">Email</th>
+              <th data-i18n="page.accounts.col.username">Usuario</th>
+              <th class="col-num" data-i18n="page.accounts.col.worlds">Mundos</th>
+              <th class="hide-lg" data-i18n="page.accounts.col.created">Creada</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody id="accountsTableBody">
+            <!-- filas inyectadas por JS -->
+          </tbody>
+        </table>
+
+        <!-- Tarjetas móvil -->
+        <div class="account-cards" id="accountsCards">
+          <!-- tarjetas inyectadas por JS -->
+        </div>
+      </div>
+
+      <!-- ── ESTADO: CARGANDO ── -->
+      <div id="stateLoading" style="display:none;" aria-busy="true">
+        <table class="data-table" role="table">
+          <thead>
+            <tr>
+              <th data-i18n="page.accounts.col.email">Email</th>
+              <th data-i18n="page.accounts.col.username">Usuario</th>
+              <th class="col-num" data-i18n="page.accounts.col.worlds">Mundos</th>
+              <th class="hide-lg" data-i18n="page.accounts.col.created">Creada</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="skel-row" aria-hidden="true">
+              <td><span class="skel-cell" style="width:180px;"></span></td>
+              <td><span class="skel-cell" style="width:100px;"></span></td>
+              <td><span class="skel-cell" style="width:24px;margin-inline:auto;display:block;"></span></td>
+              <td class="hide-lg"><span class="skel-cell" style="width:80px;"></span></td>
+              <td></td>
+            </tr>
+            <tr class="skel-row" aria-hidden="true">
+              <td><span class="skel-cell" style="width:160px;"></span></td>
+              <td><span class="skel-cell" style="width:90px;"></span></td>
+              <td><span class="skel-cell" style="width:24px;margin-inline:auto;display:block;"></span></td>
+              <td class="hide-lg"><span class="skel-cell" style="width:80px;"></span></td>
+              <td></td>
+            </tr>
+            <tr class="skel-row" aria-hidden="true">
+              <td><span class="skel-cell" style="width:200px;"></span></td>
+              <td><span class="skel-cell" style="width:120px;"></span></td>
+              <td><span class="skel-cell" style="width:24px;margin-inline:auto;display:block;"></span></td>
+              <td class="hide-lg"><span class="skel-cell" style="width:80px;"></span></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── ESTADO: VACÍO ── -->
+      <div id="stateEmpty" style="display:none;">
+        <!-- La tabla vacía da estructura; el empty state es el contenido centrado -->
+        <table class="data-table" role="table">
+          <thead>
+            <tr>
+              <th data-i18n="page.accounts.col.email">Email</th>
+              <th data-i18n="page.accounts.col.username">Usuario</th>
+              <th class="col-num" data-i18n="page.accounts.col.worlds">Mundos</th>
+              <th class="hide-lg" data-i18n="page.accounts.col.created">Creada</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+        </table>
+        <div class="empty-state">
+          <div class="empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <p class="empty-title" data-i18n="page.accounts.empty.title">Aún no tienes cuentas</p>
+          <p class="empty-desc" data-i18n="page.accounts.empty.desc">Añade la primera para empezar a usar el bot.</p>
+          <button class="btn-primary" type="button" id="emptyNewAccountBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span data-i18n="page.accounts.newAccount">Nueva cuenta</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ESTADO: ERROR ── -->
+      <div id="stateError" style="display:none;">
+        <table class="data-table" role="table">
+          <thead>
+            <tr>
+              <th data-i18n="page.accounts.col.email">Email</th>
+              <th data-i18n="page.accounts.col.username">Usuario</th>
+              <th class="col-num" data-i18n="page.accounts.col.worlds">Mundos</th>
+              <th class="hide-lg" data-i18n="page.accounts.col.created">Creada</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+    </div><!-- /drag-block accountsBody -->
+
+  </main>
+</div><!-- /app-body -->
+
+<!-- Menú contextual (compartido) -->
+<div class="ctx-menu" id="ctxMenu" role="menu">
+  <button class="ctx-item danger" role="menuitem" id="ctxDeleteBtn" data-i18n="page.accounts.action.delete">Borrar cuenta</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===== DATOS DE EJEMPLO ===== */
+const SAMPLE_ACCOUNTS = [
+  { id: 1, email: "gladiator@travian.com", username: "Gladiator", worlds: 2, created: "2026-05-20" },
+  { id: 2, email: "vikingo_norte@travian.es", username: "VikingoPro", worlds: 1, created: "2026-05-24" },
+  { id: 3, email: "centurion42@gamemail.com", username: "Centurion42", worlds: 3, created: "2026-05-25" },
+];
+
+/* ===== IDIOMAS (25) ===== */
+const LANGS=[
+  {code:"ar",name:"العربية"},{code:"bg",name:"Български"},{code:"cs",name:"Čeština"},{code:"da",name:"Dansk"},
+  {code:"de",name:"Deutsch"},{code:"el",name:"Ελληνικά"},{code:"en",name:"English"},{code:"es",name:"Español"},
+  {code:"fa",name:"فارسی"},{code:"fr",name:"Français"},{code:"he",name:"עברית"},{code:"hu",name:"Magyar"},
+  {code:"it",name:"Italiano"},{code:"ja",name:"日本語"},{code:"lt",name:"Lietuvių"},{code:"lv",name:"Latviešu"},
+  {code:"nl",name:"Nederlands"},{code:"pl",name:"Polski"},{code:"pt",name:"Português"},{code:"rs",name:"Srpski"},
+  {code:"ru",name:"Русский"},{code:"sl",name:"Slovenščina"},{code:"sv",name:"Svenska"},{code:"tr",name:"Türkçe"},
+  {code:"uk",name:"Українська"},
+];
+const RTL = new Set(["ar","he","fa"]);
+
+/* ===== I18N ===== */
+const I18N = {
+  es:{
+    "toolbar.stateLabel":"Estado:",
+    "state.data":"Con datos","state.empty":"Vacío","state.loading":"Cargando","state.error":"Error",
+    "nav.accounts":"Cuentas","nav.resources":"Recursos","nav.troops":"Tropas",
+    "nav.construction":"Construcción","nav.comingSoon":"Pronto",
+    "page.accounts.title":"Cuentas",
+    "page.accounts.caption":"{n} cuenta","page.accounts.caption.pl":"{n} cuentas",
+    "page.accounts.newAccount":"Nueva cuenta",
+    "page.accounts.empty.title":"Aún no tienes cuentas",
+    "page.accounts.empty.desc":"Añade la primera para empezar a usar el bot.",
+    "page.accounts.col.email":"Email","page.accounts.col.username":"Usuario",
+    "page.accounts.col.worlds":"Mundos","page.accounts.col.created":"Creada",
+    "page.accounts.action.delete":"Borrar cuenta",
+    "error.loadFailed":"No se pudieron cargar las cuentas.",
+    "error.retry":"Reintentar",
+    "search":"Buscar idioma…",
+    "hint.edit":"Arrastra cualquier bloque (imán de 8px). Pulsa “Listo” al terminar.",
+    "hint.view":"Pulsa “Editar” y arrastra los bloques.",
+    "tooltip.comingSoon":"Próximamente",
+  },
+  en:{
+    "toolbar.stateLabel":"State:",
+    "state.data":"With data","state.empty":"Empty","state.loading":"Loading","state.error":"Error",
+    "nav.accounts":"Accounts","nav.resources":"Resources","nav.troops":"Troops",
+    "nav.construction":"Construction","nav.comingSoon":"Soon",
+    "page.accounts.title":"Accounts",
+    "page.accounts.caption":"{n} account","page.accounts.caption.pl":"{n} accounts",
+    "page.accounts.newAccount":"New account",
+    "page.accounts.empty.title":"No accounts yet",
+    "page.accounts.empty.desc":"Add the first one to start using the bot.",
+    "page.accounts.col.email":"Email","page.accounts.col.username":"Username",
+    "page.accounts.col.worlds":"Worlds","page.accounts.col.created":"Created",
+    "page.accounts.action.delete":"Delete account",
+    "error.loadFailed":"Could not load accounts.",
+    "error.retry":"Retry",
+    "search":"Search language…",
+    "hint.edit":"Drag any block (8px snap). Click “Done” when finished.",
+    "hint.view":"Click “Edit” to drag the blocks.",
+    "tooltip.comingSoon":"Coming soon",
+  },
+  de:{
+    "toolbar.stateLabel":"Zustand:",
+    "state.data":"Mit Daten","state.empty":"Leer","state.loading":"Lädt","state.error":"Fehler",
+    "nav.accounts":"Konten","nav.resources":"Ressourcen","nav.troops":"Truppen",
+    "nav.construction":"Bau","nav.comingSoon":"Bald",
+    "page.accounts.title":"Konten",
+    "page.accounts.caption":"{n} Konto","page.accounts.caption.pl":"{n} Konten",
+    "page.accounts.newAccount":"Neues Konto",
+    "page.accounts.empty.title":"Noch keine Konten",
+    "page.accounts.empty.desc":"Füge das erste Konto hinzu, um den Bot zu nutzen.",
+    "page.accounts.col.email":"E-Mail","page.accounts.col.username":"Benutzername",
+    "page.accounts.col.worlds":"Welten","page.accounts.col.created":"Erstellt",
+    "page.accounts.action.delete":"Konto löschen",
+    "error.loadFailed":"Konten konnten nicht geladen werden.",
+    "error.retry":"Erneut versuchen",
+    "search":"Sprache suchen…",
+    "hint.edit":"Blöcke ziehen (8px-Raster). “Fertig” drücken.",
+    "hint.view":"Klicke “Bearbeiten” zum Verschieben.",
+    "tooltip.comingSoon":"Demnächst",
+  },
+  ar:{
+    "toolbar.stateLabel":"الحالة:",
+    "state.data":"مع بيانات","state.empty":"فارغ","state.loading":"جار التحميل","state.error":"خطأ",
+    "nav.accounts":"الحسابات","nav.resources":"الموارد","nav.troops":"الجنود",
+    "nav.construction":"البناء","nav.comingSoon":"قريباً",
+    "page.accounts.title":"الحسابات",
+    "page.accounts.caption":"{n} حساب","page.accounts.caption.pl":"{n} حسابات",
+    "page.accounts.newAccount":"حساب جديد",
+    "page.accounts.empty.title":"لا توجد حسابات بعد",
+    "page.accounts.empty.desc":"أضف الأول لبدء استخدام البوت.",
+    "page.accounts.col.email":"البريد","page.accounts.col.username":"المستخدم",
+    "page.accounts.col.worlds":"العوالم","page.accounts.col.created":"تاريخ الإنشاء",
+    "page.accounts.action.delete":"حذف الحساب",
+    "error.loadFailed":"تعذّر تحميل الحسابات.",
+    "error.retry":"إعادة المحاولة",
+    "search":"ابحث عن لغة…",
+    "hint.edit":"اسحب أي كتلة. اضغط “تم” عند الانتهاء.",
+    "hint.view":"اضغط “تعديل” لسحب الكتل.",
+    "tooltip.comingSoon":"قريباً",
+  },
+};
+const t = (l, k) => {
+  const dict = I18N[l] || I18N.en;
+  return (dict[k] !== undefined ? dict[k] : (I18N.en[k] !== undefined ? I18N.en[k] : k));
+};
+
+/* ===== ICONOS TEMA ===== */
+const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+
+const root = document.documentElement;
+const THEME_KEY = "theme", LANG_KEY = "lang", LAYOUT_KEY = "cuentasPlaygroundLayout";
+
+/* ===== TEMA ===== */
+const themeBtn = document.getElementById("themeBtn");
+const appThemeBtn = document.getElementById("appThemeBtn");
+const appThemeIcon = document.getElementById("appThemeIcon");
+
+function curTheme(){ return root.dataset.theme === "dark" ? "dark" : "light"; }
+function paintTheme(){
+  const isDark = curTheme() === "dark";
+  themeBtn.innerHTML = isDark ? SUN : MOON;
+  // Sync app topbar icon
+  appThemeIcon.innerHTML = (isDark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
+    : '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>');
+  appThemeIcon.setAttribute("viewBox","0 0 24 24");
+}
+(function(){
+  const s = localStorage.getItem(THEME_KEY);
+  root.dataset.theme = s || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  paintTheme();
+})();
+function toggleTheme(){
+  const n = curTheme() === "dark" ? "light" : "dark";
+  root.dataset.theme = n; localStorage.setItem(THEME_KEY, n); paintTheme();
+}
+themeBtn.addEventListener("click", toggleTheme);
+appThemeBtn.addEventListener("click", toggleTheme);
+
+/* ===== IDIOMA ===== */
+const langBtn = document.getElementById("langBtn");
+const langBtnLabel = document.getElementById("langBtnLabel");
+const langPanel = document.getElementById("langPanel");
+const langList = document.getElementById("langList");
+const langSearch = document.getElementById("langSearch");
+const appLangBtn = document.getElementById("appLangBtn");
+const appLangLabel = document.getElementById("appLangLabel");
+let curLang = localStorage.getItem(LANG_KEY) || "es";
+
+function applyLang(code){
+  curLang = code; localStorage.setItem(LANG_KEY, code);
+  root.lang = code; root.dir = RTL.has(code) ? "rtl" : "ltr";
+  const f = LANGS.find(l => l.code === code);
+  const name = f ? f.name : code;
+  langBtnLabel.textContent = name;
+  appLangLabel.textContent = name;
+  langSearch.placeholder = t(code, "search");
+  // Actualizar todos los data-i18n
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.dataset.i18n;
+    if(key) el.textContent = t(code, key);
+  });
+  // Actualizar opciones del state select
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.dataset.i18n;
+    if(key && el.tagName === "OPTION") el.textContent = t(code, key);
+  });
+  // Actualizar label de la toolbar
+  document.getElementById("hint").textContent = document.body.classList.contains("editing")
+    ? t(code, "hint.edit") : t(code, "hint.view");
+  // Tooltips de "próximamente"
+  document.querySelectorAll("[data-soon]").forEach(el => {
+    el.title = t(code, "tooltip.comingSoon");
+  });
+  // Caption de nº de cuentas
+  updateCaption();
+  // Re-render tabla para fechas formateadas
+  const s = document.getElementById("stateSelect").value;
+  if(s === "data") renderTableData();
+  renderLangList(langSearch.value);
+}
+
+function renderLangList(filter){
+  const q = (filter||"").trim().toLowerCase();
+  const items = LANGS.filter(l => !q || l.name.toLowerCase().includes(q) || l.code.includes(q));
+  langList.innerHTML = items.map(l =>
+    `<button class="lang-item" role="option" data-code="${l.code}" aria-selected="${l.code === curLang}">
+      <span>${l.name}</span><span class="code">${l.code}</span>
+    </button>`
+  ).join("");
+  langList.querySelectorAll(".lang-item").forEach(b => b.addEventListener("click", () => {
+    applyLang(b.dataset.code);
+    langPanel.classList.remove("open");
+    langBtn.setAttribute("aria-expanded","false");
+  }));
+}
+langBtn.addEventListener("click", () => {
+  const open = langPanel.classList.toggle("open");
+  langBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if(open){ langSearch.value=""; renderLangList(""); setTimeout(() => langSearch.focus(), 0); }
+});
+langSearch.addEventListener("input", () => renderLangList(langSearch.value));
+document.addEventListener("click", e => {
+  if(!e.target.closest(".lang-wrap")){
+    langPanel.classList.remove("open");
+    langBtn.setAttribute("aria-expanded","false");
+  }
+});
+
+/* ===== CAPTION (N cuentas) ===== */
+function updateCaption(){
+  const n = SAMPLE_ACCOUNTS.length;
+  const key = n === 1 ? "page.accounts.caption" : "page.accounts.caption.pl";
+  document.getElementById("pageCaption").textContent = t(curLang, key).replace("{n}", n);
+}
+
+/* ===== FORMATO FECHA ===== */
+function fmtDate(dateStr){
+  try{
+    const d = new Date(dateStr + "T00:00:00");
+    return new Intl.DateTimeFormat(curLang, {day:"numeric", month:"short", year:"numeric"}).format(d);
+  }catch(e){ return dateStr; }
+}
+
+/* ===== RENDER TABLA CON DATOS ===== */
+function renderTableData(){
+  const tbody = document.getElementById("accountsTableBody");
+  tbody.innerHTML = SAMPLE_ACCOUNTS.map(a => `
+    <tr class="data-row" role="row" tabindex="0" data-id="${a.id}"
+        aria-label="${a.username}">
+      <td class="col-email">${a.email}</td>
+      <td>${a.username}</td>
+      <td class="col-num">${a.worlds}</td>
+      <td class="col-date hide-lg">${fmtDate(a.created)}</td>
+      <td class="col-actions">
+        <button class="row-menu-btn" type="button" aria-label="Acciones para ${a.username}"
+                data-acct-id="${a.id}" data-acct-name="${a.username}">&#8943;</button>
+      </td>
+    </tr>
+  `).join("");
+
+  // Tarjetas móvil
+  const cardsEl = document.getElementById("accountsCards");
+  cardsEl.innerHTML = SAMPLE_ACCOUNTS.map(a => `
+    <div class="account-card" role="button" tabindex="0" data-id="${a.id}">
+      <div class="card-main">
+        <div class="card-email">${a.email}</div>
+        <div class="card-meta">${a.username} &middot; ${a.worlds} ${t(curLang,"page.accounts.col.worlds").toLowerCase()}</div>
+      </div>
+      <button class="row-menu-btn" type="button" aria-label="Acciones para ${a.username}"
+              data-acct-id="${a.id}" data-acct-name="${a.username}">&#8943;</button>
+    </div>
+  `).join("");
+
+  // Navegar a detalle al hacer clic en la fila — solo en modo PREVIEW (no en modo edición)
+  tbody.querySelectorAll(".data-row").forEach(row => {
+    row.addEventListener("click", e => {
+      if(e.target.closest(".row-menu-btn")) return;
+      if(document.body.classList.contains("editing")) return;
+      window.location = "cuenta-detalle.playground.html";
+    });
+    row.addEventListener("keydown", e => {
+      if((e.key === "Enter" || e.key === " ") && !e.target.closest(".row-menu-btn")){
+        e.preventDefault();
+        if(document.body.classList.contains("editing")) return;
+        window.location = "cuenta-detalle.playground.html";
+      }
+    });
+  });
+  cardsEl.querySelectorAll(".account-card").forEach(card => {
+    card.addEventListener("click", e => {
+      if(e.target.closest(".row-menu-btn")) return;
+      if(document.body.classList.contains("editing")) return;
+      window.location = "cuenta-detalle.playground.html";
+    });
+  });
+
+  // Menú ⋯
+  document.querySelectorAll(".row-menu-btn").forEach(btn => {
+    btn.addEventListener("click", e => { e.stopPropagation(); openCtxMenu(e, btn); });
+  });
+}
+
+/* ===== CONTEXT MENU ===== */
+const ctxMenu = document.getElementById("ctxMenu");
+let ctxTarget = null;
+function openCtxMenu(e, btn){
+  ctxTarget = btn;
+  const r = btn.getBoundingClientRect();
+  ctxMenu.style.top = (r.bottom + 4) + "px";
+  ctxMenu.style.insetInlineStart = "auto";
+  ctxMenu.style.insetInlineEnd = (window.innerWidth - r.right) + "px";
+  ctxMenu.classList.add("open");
+  document.getElementById("ctxDeleteBtn").dataset.name = btn.dataset.acctName;
+}
+document.addEventListener("click", e => {
+  if(!e.target.closest(".ctx-menu") && !e.target.closest(".row-menu-btn")){
+    ctxMenu.classList.remove("open");
+  }
+});
+document.getElementById("ctxDeleteBtn").addEventListener("click", () => {
+  const name = document.getElementById("ctxDeleteBtn").dataset.name;
+  showToast("Abriendo confirmación para borrar \"" + (name || "cuenta") + "\"…");
+  ctxMenu.classList.remove("open");
+});
+
+/* ===== ESTADO SWITCHER ===== */
+function applyState(state){
+  const data    = document.getElementById("stateData");
+  const loading = document.getElementById("stateLoading");
+  const empty   = document.getElementById("stateEmpty");
+  const error   = document.getElementById("stateError");
+  const errBanner = document.getElementById("errorBanner");
+  const newBtn  = document.getElementById("newAccountBtn");
+  const caption = document.getElementById("pageCaption");
+
+  // Ocultar todo primero
+  data.style.display = "none";
+  loading.style.display = "none";
+  empty.style.display = "none";
+  error.style.display = "none";
+  errBanner.style.display = "none";
+
+  if(state === "data"){
+    data.style.display = "";
+    newBtn.disabled = false;
+    caption.style.display = "";
+    updateCaption();
+    renderTableData();
+  } else if(state === "loading"){
+    loading.style.display = "";
+    newBtn.disabled = true;
+    caption.textContent = "";
+  } else if(state === "empty"){
+    empty.style.display = "";
+    newBtn.disabled = false;
+    caption.textContent = t(curLang,"page.accounts.caption").replace("{n}","0");
+  } else if(state === "error"){
+    error.style.display = "";
+    errBanner.style.display = "";
+    newBtn.disabled = false;
+    caption.textContent = "";
+  }
+}
+
+document.getElementById("stateSelect").addEventListener("change", e => {
+  applyState(e.target.value);
+});
+
+/* ===== TOAST ===== */
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent = msg; toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
+/* ===== BOTONES "Nueva cuenta" — navegan al wizard en modo PREVIEW ===== */
+document.getElementById("newAccountBtn").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  window.location = "wizard.playground.html";
+});
+document.getElementById("emptyNewAccountBtn").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  window.location = "wizard.playground.html";
+});
+
+/* ===== DRAG & DROP (imán 8px) ===== */
+const contentArea = document.getElementById("contentArea");
+const dragBlocks = () => [...contentArea.querySelectorAll(".drag-block")];
+
+function snap(v){ return Math.round(v/8)*8; }
+
+let drag = null;
+contentArea.addEventListener("pointerdown", e => {
+  if(!document.body.classList.contains("editing")) return;
+  const el = e.target.closest(".drag-block"); if(!el) return;
+  e.preventDefault();
+  el.setPointerCapture(e.pointerId); el.classList.add("dragging");
+  drag = {
+    el,
+    startX: e.clientX, startY: e.clientY,
+    origX: el.offsetLeft, origY: el.offsetTop,
+  };
+});
+contentArea.addEventListener("pointermove", e => {
+  if(!drag) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  const maxX = contentArea.clientWidth - drag.el.offsetWidth;
+  const maxY = contentArea.scrollHeight - drag.el.offsetHeight;
+  const nx = Math.max(0, Math.min(maxX, snap(drag.origX + dx)));
+  const ny = Math.max(0, Math.min(maxY, snap(drag.origY + dy)));
+  drag.el.style.left = nx + "px"; drag.el.style.top = ny + "px";
+});
+function endDrag(e){
+  if(!drag) return;
+  drag.el.classList.remove("dragging");
+  try{ drag.el.releasePointerCapture(e.pointerId); } catch(x){}
+  drag = null;
+}
+contentArea.addEventListener("pointerup", endDrag);
+contentArea.addEventListener("pointercancel", endDrag);
+
+/* ===== EDIT MODE ===== */
+const editBtn = document.getElementById("editBtn");
+const hintEl  = document.getElementById("hint");
+let editing = false;
+
+editBtn.addEventListener("click", () => {
+  editing = !editing;
+  document.body.classList.toggle("editing", editing);
+  editBtn.setAttribute("aria-pressed", editing ? "true" : "false");
+  editBtn.textContent = editing ? "✓ Listo" : "✎ Editar";
+  hintEl.textContent = editing ? t(curLang,"hint.edit") : t(curLang,"hint.view");
+
+  if(editing){
+    // En modo edición ponemos los drag-blocks en position:absolute para poder moverlos
+    dragBlocks().forEach(b => {
+      const rect = b.getBoundingClientRect();
+      const parentRect = contentArea.getBoundingClientRect();
+      const x = snap(rect.left - parentRect.left + contentArea.scrollLeft);
+      const y = snap(rect.top  - parentRect.top  + contentArea.scrollTop);
+      b.style.position = "absolute";
+      b.style.left = x + "px";
+      b.style.top  = y + "px";
+      b.style.width = b.offsetWidth + "px";
+    });
+    contentArea.style.position = "relative";
+    contentArea.style.height = contentArea.scrollHeight + "px";
+  } else {
+    // Salir del modo edición: devolver flujo normal
+    dragBlocks().forEach(b => {
+      b.style.position = "";
+      b.style.left = ""; b.style.top = ""; b.style.width = "";
+    });
+    contentArea.style.position = "";
+    contentArea.style.height = "";
+  }
+});
+
+/* ===== GUARDAR / RESTABLECER / EXPORTAR ===== */
+function currentLayout(){
+  const out = {};
+  dragBlocks().forEach(b => {
+    if(b.style.left) out[b.dataset.dragId] = { x: b.offsetLeft, y: b.offsetTop };
+  });
+  return out;
+}
+document.getElementById("saveBtn").addEventListener("click", () => {
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(currentLayout()));
+  showToast("Layout guardado");
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  localStorage.removeItem(LAYOUT_KEY);
+  dragBlocks().forEach(b => { b.style.left=""; b.style.top=""; b.style.width=""; b.style.position=""; });
+  contentArea.style.position=""; contentArea.style.height="";
+  editing = false;
+  document.body.classList.remove("editing");
+  editBtn.setAttribute("aria-pressed","false");
+  editBtn.textContent = "✎ Editar";
+  hintEl.textContent = t(curLang,"hint.view");
+  showToast("Layout restablecido");
+});
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const data = {
+    view: "cuentas", state: document.getElementById("stateSelect").value,
+    canvas: { w: contentArea.clientWidth, h: contentArea.clientHeight }, grid: 8,
+    blocks: currentLayout(),
+  };
+  const json = JSON.stringify(data, null, 2);
+  try{
+    await navigator.clipboard.writeText(json);
+    showToast("Layout copiado al portapapeles — pégamelo en el chat");
+  } catch(e){ showToast("Descargando layout…"); }
+  const blob = new Blob([json], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "cuentas.layout.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ===== INIT ===== */
+applyLang(curLang);
+applyState("data");
+</script>
+</body>
+</html>

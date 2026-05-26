@@ -1,0 +1,202 @@
+/**
+ * Catálogo CS — Čeština
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const cs = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Účty',
+  'nav.resources':    'Zdroje',
+  'nav.troops':       'Vojska',
+  'nav.construction': 'Stavba',
+  'nav.comingSoon':   'Brzy',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Přepnout motiv',
+  'topbar.selectLanguage': 'Vybrat jazyk',
+  'topbar.backToWorlds':   '← Světy',
+  'topbar.searchLanguage': 'Hledat jazyk…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Účty',
+  'page.accounts.caption':      '{n} účet',
+  'page.accounts.caption.pl':   '{n} účtů',
+  'page.accounts.newAccount':   'Nový účet',
+  'page.accounts.empty.title':  'Zatím žádné účty',
+  'page.accounts.empty.desc':   'Přidejte první, abyste mohli používat bota.',
+  'page.accounts.col.email':    'E-mail',
+  'page.accounts.col.username': 'Uživatelské jméno',
+  'page.accounts.col.worlds':   'Světy',
+  'page.accounts.col.created':  'Vytvořeno',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Upravit účet',
+  'page.accounts.action.delete':'Smazat účet',
+  'page.accounts.loading':      'Načítání účtů…',
+  'page.accounts.error':        'Účty se nepodařilo načíst.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Nový účet',
+  'wizard.step':                 'Krok {current} z {total}',
+  'wizard.section.account':      'Údaje účtu',
+  'wizard.section.world':        'První svět',
+  'wizard.field.email':          'E-mail',
+  'wizard.field.email.ph':       'hrac@priklad.cz',
+  'wizard.field.username':       'Uživatelské jméno',
+  'wizard.field.username.ph':    'MůjÚčet',
+  'wizard.field.password':       'Heslo',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'URL serveru',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Kmen',
+  'wizard.field.tribe.ph':       'Vyberte kmen',
+  'wizard.btn.next':             'Další',
+  'wizard.btn.back':             'Zpět',
+  'wizard.btn.create':           'Vytvořit účet',
+  'wizard.btn.creating':         'Vytváření…',
+  'wizard.btn.cancel':           'Zrušit',
+  'wizard.error.email.invalid':  'Zadejte platný e-mail',
+  'wizard.error.email.taken':    'Tento e-mail je již zaregistrován',
+  'wizard.error.server.invalid': 'Zadejte platnou URL (http:// nebo https://)',
+  'wizard.error.server.taken':   'Tento server již v tomto účtu existuje',
+  'wizard.error.required':       'Toto pole je povinné',
+  'wizard.error.tribe.required': 'Vyberte kmen',
+  'wizard.btn.showPassword':     'Zobrazit heslo',
+  'wizard.btn.hidePassword':     'Skrýt heslo',
+  'wizard.toast.created':        'Účet vytvořen',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Účty',
+  'page.account.createdAt':          'Vytvořeno: {date}',
+  'page.account.editBtn':            'Upravit',
+  'page.account.deleteBtn':          'Smazat účet',
+  'page.account.worlds.title':       'Světy ({n})',
+  'page.account.worlds.add':         'Přidat svět',
+  'page.account.worlds.empty':       'V tomto účtu zatím nejsou žádné světy.',
+  'page.account.col.server':         'Server',
+  'page.account.col.parsed':         'Server (čitelný)',
+  'page.account.col.tribe':          'Kmen',
+  'page.account.col.session':        'Relace',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Smazat svět',
+  'page.account.notFound.title':     'Účet nenalezen',
+  'page.account.notFound.desc':      'Hledaný účet neexistuje nebo byl smazán.',
+  'page.account.notFound.back':      'Zpět na účty',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Upravit účet',
+  'modal.edit.changePassword':  'Změnit heslo',
+  'modal.edit.newPassword':     'Nové heslo',
+  'modal.edit.confirmPassword': 'Potvrdit heslo',
+  'modal.edit.passwordMismatch':'Hesla se neshodují',
+  'modal.edit.saveBtn':         'Uložit',
+  'modal.edit.savingBtn':       'Ukládání…',
+  'modal.edit.cancelBtn':       'Zrušit',
+  'modal.edit.closeBtn':        'Zavřít',
+  'modal.edit.savedToast':      'Změny uloženy',
+  'modal.edit.error409':        'Tento e-mail je již použit jiným účtem.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Přidat svět',
+  'modal.addWorld.addBtn':    'Přidat',
+  'modal.addWorld.addingBtn': 'Přidávání…',
+  'modal.addWorld.cancelBtn': 'Zrušit',
+  'modal.addWorld.toast':     'Svět přidán',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Smazat účet',
+  'modal.deleteAccount.body':    'Smazat účet "{username}"?',
+  'modal.deleteAccount.warning': 'Tuto akci nelze vrátit. Budou smazány také všechny jeho světy ({n} svět/ů).',
+  'modal.deleteAccount.confirm': 'Smazat',
+  'modal.deleteAccount.cancel':  'Zrušit',
+  'modal.deleteAccount.toast':   'Účet smazán',
+  'modal.deleteAccount.active':  'Nelze smazat tento účet, pokud bot má aktivní relaci. Nejprve relaci zastavte.',
+  'modal.deleteAccount.close':   'Zavřít',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Smazat svět',
+  'modal.deleteWorld.body':    'Smazat svět "{parsed}"?',
+  'modal.deleteWorld.warning': 'Tuto akci nelze vrátit. Budou smazány také všechny přidružené vesnice.',
+  'modal.deleteWorld.confirm': 'Smazat',
+  'modal.deleteWorld.cancel':  'Zrušit',
+  'modal.deleteWorld.toast':   'Svět smazán',
+  'modal.deleteWorld.active':  'Pro tento svět je aktivní relace. Nejprve relaci zastavte.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Aktivní',
+  'world.status.panelLabel':      'Aktivní relace',
+  'world.action.stop':            'Zastavit',
+  'world.tab.config':             'Konfigurace',
+  'world.tab.resources':          'Zdroje',
+  'world.tab.troops':             'Vojska',
+  'world.tab.construction':       'Stavba',
+  'world.tab.villages':           'Vesnice',
+  'world.config.automationTitle': 'Automatizace',
+  'world.config.tasksTitle':      'Úkoly bota',
+  'world.config.tasksDesc':       'Povolte nebo pozastavte automatické úkoly, které bot provádí v tomto světě.',
+  'world.config.task.buildQueue': 'Fronta stavby',
+  'world.config.task.buildQueueDesc': 'Staví budovy podle naplánované fronty',
+  'world.config.task.farmList':   'Seznam farem',
+  'world.config.task.farmListDesc': 'Automaticky odesílá farmovací útoky',
+  'world.config.task.troops':     'Výcvik vojsk',
+  'world.config.task.troopsDesc': 'Udržuje frontu výcviku aktivní',
+  'world.config.intervalsTitle':  'Intervaly',
+  'world.config.intervalsDesc':   'Čas mezi kontrolami bota. Vyšší hodnoty snižují riziko detekce.',
+  'world.config.interval.check':  'Periodická kontrola',
+  'world.config.interval.farm':   'Mezi farmami',
+  'world.config.interval.jitter': 'Náhodná variace',
+  'world.config.interval.min':    'min',
+  'world.config.comingSoonTitle': 'Brzy v tomto prostoru',
+  'world.comingSoon.resourcesDesc':   'Monitorování dřeva, hlíny, železa a obilí v reálném čase.',
+  'world.comingSoon.troopsDesc':      'Inventář jednotek, bojové statistiky a fronta výcviku.',
+  'world.comingSoon.constructionDesc':'Fronta budov na vesnici, náklady a časy.',
+  'world.comingSoon.villagesDesc':    'Mapa vesnic, souřadnice, jméno a typ.',
+  'world.stop.toast':             'Bot zastaven. Návrat na detail účtu…',
+
+  // ── Sesión del mundo ─────────────────────────────────────
+  'world.session.start':    'Spustit',
+  'world.session.stop':     'Zastavit',
+  'world.session.retry':    'Opakovat',
+  'world.session.cancel':   'Zrušit',
+  'world.session.enter':    'Vstoupit',
+  'world.session.idle':     'Nečinný',
+  'world.session.connecting': 'Připojování…',
+  'world.session.active':   'Aktivní',
+  'world.session.error':    'Chyba připojení',
+  'world.session.stopping': 'Zastavování…',
+  'world.session.start.aria': 'Spustit bota na {world}',
+  'world.session.stop.aria':  'Zastavit bota na {world}',
+  'world.session.retry.aria': 'Opakovat připojení na {world}',
+  'world.session.enter.aria': 'Vstoupit do prostoru {world}',
+  'world.session.disabled.delete':       'Zastavte relaci před smazáním tohoto světa',
+  'world.session.disabled.editMenu':     'Svět s aktivní relací nelze upravit',
+  'world.session.disabled.deleteAccount':'Zastavte všechny aktivní relace před smazáním tohoto účtu',
+  'world.session.started.toast':  'Bot spuštěn na {world}',
+  'world.session.stopped.toast':  'Bot zastaven na {world}',
+  'world.session.error.toast':    'Nelze se připojit na {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Chyba připojení. Zkuste to znovu.',
+  'error.retry':      'Zkusit znovu',
+  'error.loadFailed': 'Data se nepodařilo načíst.',
+
+  // ── Versión ────────────────────────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders ──────────────────────────────────────
+  'placeholder.accounts.list':   'Seznam účtů — brzy',
+  'placeholder.account.detail':  'Detail účtu — brzy',
+  'placeholder.world.space':     'Prostor světa — brzy',
+}
+
+export default cs

@@ -1,0 +1,202 @@
+/**
+ * Catálogo RU — Русский
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const ru = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Аккаунты',
+  'nav.resources':    'Ресурсы',
+  'nav.troops':       'Войска',
+  'nav.construction': 'Строительство',
+  'nav.comingSoon':   'Скоро',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Сменить тему',
+  'topbar.selectLanguage': 'Выбрать язык',
+  'topbar.backToWorlds':   '← Миры',
+  'topbar.searchLanguage': 'Поиск языка…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Аккаунты',
+  'page.accounts.caption':      '{n} аккаунт',
+  'page.accounts.caption.pl':   '{n} аккаунтов',
+  'page.accounts.newAccount':   'Новый аккаунт',
+  'page.accounts.empty.title':  'Аккаунтов пока нет',
+  'page.accounts.empty.desc':   'Добавьте первый, чтобы начать использовать бота.',
+  'page.accounts.col.email':    'Email',
+  'page.accounts.col.username': 'Имя пользователя',
+  'page.accounts.col.worlds':   'Миры',
+  'page.accounts.col.created':  'Создан',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Редактировать аккаунт',
+  'page.accounts.action.delete':'Удалить аккаунт',
+  'page.accounts.loading':      'Загрузка аккаунтов…',
+  'page.accounts.error':        'Не удалось загрузить аккаунты.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Новый аккаунт',
+  'wizard.step':                 'Шаг {current} из {total}',
+  'wizard.section.account':      'Данные аккаунта',
+  'wizard.section.world':        'Первый мир',
+  'wizard.field.email':          'Email',
+  'wizard.field.email.ph':       'игрок@пример.com',
+  'wizard.field.username':       'Имя пользователя',
+  'wizard.field.username.ph':    'МойАккаунт',
+  'wizard.field.password':       'Пароль',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'URL сервера',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Племя',
+  'wizard.field.tribe.ph':       'Выберите племя',
+  'wizard.btn.next':             'Далее',
+  'wizard.btn.back':             'Назад',
+  'wizard.btn.create':           'Создать аккаунт',
+  'wizard.btn.creating':         'Создание…',
+  'wizard.btn.cancel':           'Отмена',
+  'wizard.error.email.invalid':  'Введите корректный email',
+  'wizard.error.email.taken':    'Этот email уже зарегистрирован',
+  'wizard.error.server.invalid': 'Введите корректный URL (http:// или https://)',
+  'wizard.error.server.taken':   'Этот сервер уже существует в данном аккаунте',
+  'wizard.error.required':       'Это поле обязательно',
+  'wizard.error.tribe.required': 'Выберите племя',
+  'wizard.btn.showPassword':     'Показать пароль',
+  'wizard.btn.hidePassword':     'Скрыть пароль',
+  'wizard.toast.created':        'Аккаунт создан',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Аккаунты',
+  'page.account.createdAt':          'Создан: {date}',
+  'page.account.editBtn':            'Редактировать',
+  'page.account.deleteBtn':          'Удалить аккаунт',
+  'page.account.worlds.title':       'Миры ({n})',
+  'page.account.worlds.add':         'Добавить мир',
+  'page.account.worlds.empty':       'В этом аккаунте пока нет миров.',
+  'page.account.col.server':         'Сервер',
+  'page.account.col.parsed':         'Сервер (читаемый)',
+  'page.account.col.tribe':          'Племя',
+  'page.account.col.session':        'Сессия',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Удалить мир',
+  'page.account.notFound.title':     'Аккаунт не найден',
+  'page.account.notFound.desc':      'Аккаунт, который вы ищете, не существует или был удалён.',
+  'page.account.notFound.back':      'Вернуться к аккаунтам',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Редактировать аккаунт',
+  'modal.edit.changePassword':  'Изменить пароль',
+  'modal.edit.newPassword':     'Новый пароль',
+  'modal.edit.confirmPassword': 'Подтвердить пароль',
+  'modal.edit.passwordMismatch':'Пароли не совпадают',
+  'modal.edit.saveBtn':         'Сохранить',
+  'modal.edit.savingBtn':       'Сохранение…',
+  'modal.edit.cancelBtn':       'Отмена',
+  'modal.edit.closeBtn':        'Закрыть',
+  'modal.edit.savedToast':      'Изменения сохранены',
+  'modal.edit.error409':        'Этот email уже используется другим аккаунтом.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Добавить мир',
+  'modal.addWorld.addBtn':    'Добавить',
+  'modal.addWorld.addingBtn': 'Добавление…',
+  'modal.addWorld.cancelBtn': 'Отмена',
+  'modal.addWorld.toast':     'Мир добавлен',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Удалить аккаунт',
+  'modal.deleteAccount.body':    'Удалить аккаунт "{username}"?',
+  'modal.deleteAccount.warning': 'Это действие нельзя отменить. Также будут удалены все его миры ({n} мир/ов).',
+  'modal.deleteAccount.confirm': 'Удалить',
+  'modal.deleteAccount.cancel':  'Отмена',
+  'modal.deleteAccount.toast':   'Аккаунт удалён',
+  'modal.deleteAccount.active':  'Невозможно удалить аккаунт, пока бот имеет активную сессию. Сначала остановите сессию.',
+  'modal.deleteAccount.close':   'Закрыть',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Удалить мир',
+  'modal.deleteWorld.body':    'Удалить мир "{parsed}"?',
+  'modal.deleteWorld.warning': 'Это действие нельзя отменить. Также будут удалены все связанные деревни.',
+  'modal.deleteWorld.confirm': 'Удалить',
+  'modal.deleteWorld.cancel':  'Отмена',
+  'modal.deleteWorld.toast':   'Мир удалён',
+  'modal.deleteWorld.active':  'Для этого мира есть активная сессия. Сначала остановите сессию.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Активен',
+  'world.status.panelLabel':      'Активная сессия',
+  'world.action.stop':            'Остановить',
+  'world.tab.config':             'Настройки',
+  'world.tab.resources':          'Ресурсы',
+  'world.tab.troops':             'Войска',
+  'world.tab.construction':       'Строительство',
+  'world.tab.villages':           'Деревни',
+  'world.config.automationTitle': 'Автоматизация',
+  'world.config.tasksTitle':      'Задачи бота',
+  'world.config.tasksDesc':       'Включите или приостановите автоматические задачи, которые бот выполняет в этом мире.',
+  'world.config.task.buildQueue': 'Очередь строительства',
+  'world.config.task.buildQueueDesc': 'Строит здания согласно запланированной очереди',
+  'world.config.task.farmList':   'Список ферм',
+  'world.config.task.farmListDesc': 'Автоматически отправляет рейды на фармы',
+  'world.config.task.troops':     'Обучение войск',
+  'world.config.task.troopsDesc': 'Поддерживает активную очередь обучения',
+  'world.config.intervalsTitle':  'Интервалы',
+  'world.config.intervalsDesc':   'Время между проверками бота. Более высокие значения снижают риск обнаружения.',
+  'world.config.interval.check':  'Периодическая проверка',
+  'world.config.interval.farm':   'Между фармами',
+  'world.config.interval.jitter': 'Случайная вариация',
+  'world.config.interval.min':    'мин',
+  'world.config.comingSoonTitle': 'Скоро в этом пространстве',
+  'world.comingSoon.resourcesDesc':   'Мониторинг в реальном времени: дерево, глина, железо и зерно.',
+  'world.comingSoon.troopsDesc':      'Инвентарь юнитов, боевая статистика и очередь обучения.',
+  'world.comingSoon.constructionDesc':'Очередь зданий по деревне, стоимость и время.',
+  'world.comingSoon.villagesDesc':    'Карта деревень, координаты, название и тип.',
+  'world.stop.toast':             'Бот остановлен. Возврат к деталям аккаунта…',
+
+  // ── Sesión del mundo ───────────────────────────────────
+  'world.session.start':    'Запустить',
+  'world.session.stop':     'Остановить',
+  'world.session.retry':    'Повторить',
+  'world.session.cancel':   'Отмена',
+  'world.session.enter':    'Войти',
+  'world.session.idle':     'Неактивен',
+  'world.session.connecting': 'Подключение…',
+  'world.session.active':   'Активен',
+  'world.session.error':    'Ошибка соединения',
+  'world.session.stopping': 'Остановка…',
+  'world.session.start.aria': 'Запустить бота в {world}',
+  'world.session.stop.aria':  'Остановить бота в {world}',
+  'world.session.retry.aria': 'Повторить подключение в {world}',
+  'world.session.enter.aria': 'Войти в пространство {world}',
+  'world.session.disabled.delete':       'Остановите сессию перед удалением этого мира',
+  'world.session.disabled.editMenu':     'Невозможно изменить мир с активной сессией',
+  'world.session.disabled.deleteAccount':'Остановите все активные сессии перед удалением этого аккаунта',
+  'world.session.started.toast':  'Бот запущен в {world}',
+  'world.session.stopped.toast':  'Бот остановлен в {world}',
+  'world.session.error.toast':    'Не удалось подключиться к {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Ошибка соединения. Попробуйте снова.',
+  'error.retry':      'Повторить',
+  'error.loadFailed': 'Не удалось загрузить данные.',
+
+  // ── Versión (sidebar footer) ───────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders de ruta ──────────────────────────────
+  'placeholder.accounts.list':   'Список аккаунтов — скоро',
+  'placeholder.account.detail':  'Детали аккаунта — скоро',
+  'placeholder.world.space':     'Пространство мира — скоро',
+}
+
+export default ru
