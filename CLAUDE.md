@@ -74,6 +74,7 @@ Para features con UI añadir entre el paso 2 y 3:
 ### Reglas de delegación
 
 - **Toda feature nueva** → primero `palantir` (¿ya existe?), luego `analista` (¿qué hay que hacer?).
+- **Una feature = una rama propia.** ANTES de empezar cualquier feature nueva, crear/cambiar a `feature/<nombre-acorde>` partiendo de `develop` (reutilizar una rama existente si encaja, p. ej. `feature/login`). NO acumular trabajo no relacionado en una rama mal nombrada (pasó: `feature/kirilloid-buildings` acabó conteniendo login-sesión + frontend + docs). El flujo de ramas es `feature/*` → `develop` (integración) → `main` (release). **`git-flow-advisor` debe verificar, ANTES de commitear, que el contenido encaja con el nombre/alcance de la rama activa y AVISAR si no** (proponiendo crear/cambiar de rama), en vez de commitear a ciegas en la rama checkouteada. El orquestador tampoco sigue commiteando en la rama activa sin comprobar que corresponde a la feature.
 - **`guardian-antideteccion` entra solo cuando hay funciones o lógica que impactan el browser o la interacción con la web de Travian** (`adapters/browser/`, selectores, timings, escritura humana, navegación, peticiones a Travian). Cuando aplica, es obligatorio en los momentos relevantes del flujo (tras el spec, tras el contrato de APIs si expone esa interacción, y antes del commit). Para cambios puramente de backend/API/BD/frontend que no tocan esa interacción, **no se invoca**.
 - **Cualquier endpoint nuevo o modificado** → `desarrollador-apis` de forma proactiva.
 - **Cualquier cambio en `adapters/browser/`, selectores o timings** → `guardian-antideteccion` inmediatamente (esto sí es siempre).
@@ -554,4 +555,4 @@ Esto es la única forma de que el usuario sepa qué agente está activo en cada 
 11. **Documentación primero** — antes de editar, leer `documentacion/README.md`. Después de editar, actualizar lo afectado y bumpear la marca de agua.
 12. **Orquesta, no implementes solo** — delega en los agentes cuando la tarea encaje con su responsabilidad.
 
-🔖 Última revisión: 2026-05-25 (gobernanza de idioma: SUPPORTED_LANGUAGES amplía a 25; resolve_language con precedencia ?lang= > Accept-Language > todos; Vary: Accept-Language en endpoints de catálogo de tropas)
+🔖 Última revisión: 2026-05-26 (convención de ramas Git Flow: una feature = una rama propia `feature/<nombre>` desde develop; git-flow-advisor avisa si el contenido no encaja con la rama activa. + gobernanza de idioma previa: SUPPORTED_LANGUAGES 25; resolve_language ?lang= > Accept-Language > todos; Vary: Accept-Language)
