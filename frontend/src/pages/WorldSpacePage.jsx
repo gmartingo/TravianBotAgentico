@@ -5,14 +5,12 @@
  * Tiene su propia Topbar mínima con "← Mundos".
  * Contenido real se implementa en Etapa 2.
  */
-import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '../components/ui/ThemeToggle.jsx'
 import { LangPicker } from '../components/ui/LangPicker.jsx'
 import { useI18n } from '../i18n/index.jsx'
 
 export function WorldSpacePage() {
-  const { worldId } = useParams()
   const navigate = useNavigate()
   const { t } = useI18n()
 
@@ -42,12 +40,7 @@ export function WorldSpacePage() {
           "
           aria-label={t('topbar.backToWorlds')}
         >
-          {/* La flecha se espeja en RTL gracias a logical transform */}
-          <ArrowLeft
-            size={14}
-            aria-hidden="true"
-            className="rtl:rotate-180"
-          />
+          {/* El texto ya incluye la flecha orientada por idioma (← / →). Sin icono extra. */}
           <span>{t('topbar.backToWorlds')}</span>
         </button>
 
@@ -80,12 +73,8 @@ export function WorldSpacePage() {
         <LangPicker />
       </header>
 
-      {/* ── Contenido placeholder ── */}
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-        <p className="text-[var(--text-secondary)] text-[13px] p-4 bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius-md)]">
-          {t('placeholder.world.space')} — world ID: {worldId}
-        </p>
-      </main>
+      {/* Contenido del mundo: AÚN SIN DISEÑAR. Por ahora solo la vuelta atrás. */}
+      <main className="flex-1 overflow-y-auto" />
     </div>
   )
 }

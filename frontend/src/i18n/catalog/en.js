@@ -26,6 +26,7 @@ const en = {
   'page.accounts.col.worlds':   'Worlds',
   'page.accounts.col.created':  'Created',
   'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Edit account',
   'page.accounts.action.delete':'Delete account',
   'page.accounts.loading':      'Loading accounts…',
   'page.accounts.error':        'Could not load accounts.',
@@ -54,6 +55,10 @@ const en = {
   'wizard.error.server.invalid': 'Enter a valid URL (http:// or https://)',
   'wizard.error.server.taken':   'This server already exists in this account',
   'wizard.error.required':       'This field is required',
+  'wizard.error.tribe.required': 'Select a tribe',
+  'wizard.btn.showPassword':     'Show password',
+  'wizard.btn.hidePassword':     'Hide password',
+  'wizard.toast.created':        'Account created',
 
   'page.account.breadcrumb':         'Accounts',
   'page.account.createdAt':          'Created: {date}',
@@ -80,7 +85,9 @@ const en = {
   'modal.edit.saveBtn':         'Save',
   'modal.edit.savingBtn':       'Saving…',
   'modal.edit.cancelBtn':       'Cancel',
+  'modal.edit.closeBtn':        'Close',
   'modal.edit.savedToast':      'Changes saved',
+  'modal.edit.error409':        'This email is already used by another account.',
 
   'modal.addWorld.title':     'Add world',
   'modal.addWorld.addBtn':    'Add',

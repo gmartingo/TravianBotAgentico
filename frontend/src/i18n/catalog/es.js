@@ -35,6 +35,7 @@ const es = {
   'page.accounts.col.worlds':   'Mundos',
   'page.accounts.col.created':  'Creada',
   'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Editar cuenta',
   'page.accounts.action.delete':'Borrar cuenta',
   'page.accounts.loading':      'Cargando cuentas…',
   'page.accounts.error':        'No se pudieron cargar las cuentas.',
@@ -64,6 +65,10 @@ const es = {
   'wizard.error.server.invalid': 'Introduce una URL válida (http:// o https://)',
   'wizard.error.server.taken':   'Este servidor ya existe en esta cuenta',
   'wizard.error.required':       'Este campo es obligatorio',
+  'wizard.error.tribe.required': 'Selecciona una tribu',
+  'wizard.btn.showPassword':     'Mostrar contraseña',
+  'wizard.btn.hidePassword':     'Ocultar contraseña',
+  'wizard.toast.created':        'Cuenta creada',
 
   // ── S4 — Detalle de cuenta ─────────────────────────────
   'page.account.breadcrumb':         'Cuentas',
@@ -92,7 +97,9 @@ const es = {
   'modal.edit.saveBtn':         'Guardar',
   'modal.edit.savingBtn':       'Guardando…',
   'modal.edit.cancelBtn':       'Cancelar',
+  'modal.edit.closeBtn':        'Cerrar',
   'modal.edit.savedToast':      'Cambios guardados',
+  'modal.edit.error409':        'Este email ya está registrado en otra cuenta.',
 
   // ── S6 — Modal añadir mundo ────────────────────────────
   'modal.addWorld.title':     'Añadir mundo',

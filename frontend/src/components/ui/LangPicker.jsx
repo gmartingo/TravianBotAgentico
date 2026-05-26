@@ -14,10 +14,12 @@ import { useI18n } from '../../i18n/index.jsx'
 
 export function LangPicker() {
   const { lang, setLang, t } = useI18n()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false)   // controla el montaje del panel
+  const [show, setShow] = useState(false)   // controla las clases de animación (zoom)
   const [search, setSearch] = useState('')
   const wrapRef  = useRef(null)
   const searchRef = useRef(null)
+  const closeTimer = useRef(null)
 
   // Filtrar idiomas por endónimo o código
   const filtered = LANGUAGES.filter((l) =>
@@ -25,38 +27,54 @@ export function LangPicker() {
     l.code.toLowerCase().includes(search.toLowerCase())
   )
 
-  // Enfocar el buscador al abrir
+  function openPanel() {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
+    setOpen(true)
+  }
+
+  // Cierre con zoom-out: quita las clases (anima) y desmonta tras la transición.
+  const close = useCallback(() => {
+    setShow(false)
+    closeTimer.current = setTimeout(() => {
+      setOpen(false)
+      setSearch('')
+    }, 160)
+  }, [])
+
+  // Al montar: activar el zoom-in tras pintar el estado inicial (doble rAF para
+  // garantizar que el navegador pinte scale(0.95)/opacity-0 antes de transicionar).
   useEffect(() => {
-    if (open && searchRef.current) {
-      searchRef.current.focus()
-    }
+    if (!open) return
+    let raf2
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setShow(true)
+        searchRef.current?.focus()
+      })
+    })
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2) }
   }, [open])
 
   // Cerrar al hacer clic fuera
   useEffect(() => {
     if (!open) return
     function handleClick(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
-        setOpen(false)
-        setSearch('')
-      }
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) close()
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
+  }, [open, close])
 
-  // Cerrar con Escape
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      setOpen(false)
-      setSearch('')
-    }
-  }, [])
+  // Limpiar el timer al desmontar
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
+
+  function handleKeyDown(e) {
+    if (e.key === 'Escape') close()
+  }
 
   function selectLang(code) {
     setLang(code)
-    setOpen(false)
-    setSearch('')
+    close()   // anima el zoom-out antes de desmontar
   }
 
   const currentLang = LANGUAGES.find((l) => l.code === lang)
@@ -66,7 +84,7 @@ export function LangPicker() {
       {/* Botón disparador */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? close() : openPanel())}
         aria-label={t('topbar.selectLanguage')}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -97,6 +115,12 @@ export function LangPicker() {
             rounded-[var(--radius-md)] shadow-[var(--shadow-lg)]
             overflow-hidden z-[200]
           "
+          style={{
+            transformOrigin: 'top center',
+            transition: 'transform 150ms cubic-bezier(0.16,1,0.3,1), opacity 150ms ease-out',
+            transform: show ? 'scale(1)' : 'scale(0.95)',
+            opacity: show ? 1 : 0,
+          }}
         >
           {/* Buscador */}
           <div className="p-[10px] border-b border-[var(--border)]">
@@ -110,7 +134,7 @@ export function LangPicker() {
                 w-full h-8 border border-[var(--border-strong)]
                 bg-[var(--surface-2)] text-[var(--text)]
                 rounded-[var(--radius-sm)] px-[10px]
-                font-[inherit] text-[13px]
+                font-[inherit] text-[16px] md:text-[13px]
                 placeholder:text-[var(--text-tertiary)]
                 focus-visible:outline-none
                 focus-visible:border-[var(--accent)]

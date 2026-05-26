@@ -48,11 +48,17 @@
   --font-mono: var(--font-mono);
 }
 
-/* ── Reset y base ───────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ── Reset y base ─────────────────────────────────────────
+   IMPORTANTE: va dentro de @layer base. En Tailwind v4 las
+   utilidades viven en @layer utilities; un reset SIN capa
+   ganaría a TODAS las utilidades de espaciado (px-, py-, gap-…)
+   y dejaría la app sin paddings/márgenes. */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html, body, #root {

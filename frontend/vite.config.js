@@ -9,6 +9,9 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
+    // host:true expone el dev server en la red local (0.0.0.0) para poder
+    // abrirlo desde el móvil en la misma WiFi: http://<IP-del-Mac>:5173
+    host: true,
     proxy: {
       // El proxy retira /api antes de redirigir al backend.
       // Frontend usa /api/accounts → backend recibe /accounts en :8000.

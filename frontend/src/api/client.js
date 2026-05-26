@@ -84,8 +84,8 @@ async function request(method, path, body, extraHeaders) {
 
 // Cuentas
 export const api = {
-  /** GET /accounts → lista de cuentas */
-  getAccounts: () => request('GET', '/accounts'),
+  /** GET /accounts → lista de cuentas (la API responde {accounts:[...]}, devolvemos el array) */
+  getAccounts: () => request('GET', '/accounts').then((d) => d?.accounts ?? []),
 
   /** GET /accounts/:id → detalle de cuenta */
   getAccount: (id) => request('GET', `/accounts/${id}`),
@@ -100,8 +100,9 @@ export const api = {
   deleteAccount: (id) => request('DELETE', `/accounts/${id}`),
 
   // Mundos
-  /** GET /accounts/:id/worlds → lista de mundos */
-  getWorlds: (accountId) => request('GET', `/accounts/${accountId}/worlds`),
+  /** GET /accounts/:id/worlds → lista de mundos (la API responde {worlds:[...]}, devolvemos el array) */
+  getWorlds: (accountId) =>
+    request('GET', `/accounts/${accountId}/worlds`).then((d) => d?.worlds ?? []),
 
   /** POST /accounts/:id/worlds → { server_url, tribe } → 201 */
   createWorld: (accountId, data) => request('POST', `/accounts/${accountId}/worlds`, data),
@@ -110,9 +111,9 @@ export const api = {
   deleteWorld: (accountId, worldId) =>
     request('DELETE', `/accounts/${accountId}/worlds/${worldId}`),
 
-  // Sesión (backend pendiente — §4b del spec)
-  // Estos endpoints NO existen aún. El frontend los llama y maneja
-  // 404/501 como estado de error sin romper la interfaz.
+  // Sesión (backend YA implementado: POST/DELETE/GET .../session).
+  // POST es síncrono (~3-10s, login real). El frontend espera el 200 para entrar al mundo;
+  // 401 = login fallido (se queda en el detalle con error).
 
   /** GET /accounts/:id/worlds/:worldId/session → estado de sesión */
   getSession: (accountId, worldId) =>
