@@ -51,6 +51,7 @@ Desktop.ini
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 
 # Logs
 *.log
@@ -67,9 +68,12 @@ documentacion/guia-agentes/
 .coverage
 htmlcov/
 
-# Artefactos de Claude Code (runtime del agente, no código del proyecto)
-.claude/agent-memory/
-.claude/settings.json
+# Claude Code — el "cerebro" del workspace SÍ se versiona (ver bootstrap.sh / SETUP-WORKSPACE.md):
+#   .claude/agent-memory/  -> memoria de los subagentes (analista, palantir, ...), viaja con el repo
+#   .claude/claude-memory/ -> memoria de Claude (auto-memorias), enlazada por bootstrap
+#   .claude/settings.json  -> permisos/acceptEdits (sin secretos), misma experiencia en cada PC
+# Lo que NUNCA debe versionarse vive fuera (perfiles/, *.db, .env) — ver SETUP-WORKSPACE.md.
+.claude/settings.local.json
 
 # graphify — grafo de conocimiento generado (salida + caché, no versionar)
 graphify-out/

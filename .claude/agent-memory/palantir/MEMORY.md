@@ -1,0 +1,2 @@
+- [Mapa de capacidades TravianBot](capability_map.md) — qué existe, dónde, quién lo usa. Incluye feature i18n-backend completa. Recargado 2026-05-24.
+- [Consolidación 4 bloques overview](overview_consolidation.md) — decisiones vinculantes del gate de cierre: hexagonal, mercaderes, frozen DTOs, helpers _common.py, API naming.
