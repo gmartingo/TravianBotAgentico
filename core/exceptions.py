@@ -138,7 +138,47 @@ class BuildingNotFoundError(TravianBotError):
         self.params = {"gid": gid}
 
 
-# --- Excepciones añadidas en la feature registro-cuentas-mundos ---
+# --- Excepciones añadidas en la feature lectura-overview-tronco-comun ---
+
+class OverviewPageNotLoadedError(TravianBotError):
+    """
+    La página de overview de Travian no cargó en el timeout configurado.
+    Se lanza desde LiveOverviewAdapter cuando wait_for(#content) expira o el
+    HTML devuelto está vacío.
+    """
+
+    error_code = "OVERVIEW_PAGE_NOT_LOADED"
+
+    def __init__(self, world_id: int = 0, page: object = None) -> None:
+        page_name = page.value if hasattr(page, "value") else str(page)
+        super().__init__(
+            f"La página '{page_name}' de overview no cargó (world_id={world_id})"
+        )
+        self.world_id = world_id
+        self.page = page
+        self.params = {"world_id": str(world_id), "page": page_name}
+
+
+class OverviewFixtureNotFoundError(TravianBotError):
+    """
+    No se encontró el fichero fixture HTML para la página solicitada.
+    Se lanza desde FixtureOverviewAdapter cuando {page.value}.html no existe
+    en el directorio de fixtures.
+    """
+
+    error_code = "OVERVIEW_FIXTURE_NOT_FOUND"
+
+    def __init__(self, page: object = None) -> None:
+        page_name = page.value if hasattr(page, "value") else str(page)
+        super().__init__(
+            f"Fixture no encontrado para la página '{page_name}' "
+            f"(se esperaba el fichero '{page_name}.html')"
+        )
+        self.page = page
+        self.params = {"page": page_name}
+
+
+# --- Excepciones añadidas en la feature kirilloid-tropas-scraper ---
 
 class DuplicateWorldError(TravianBotError):
     """Se lanza cuando se intenta registrar un mundo con (account_id, server) ya existente."""
@@ -164,8 +204,6 @@ class ActiveSessionConflictError(TravianBotError):
         self.params = {"world_id": world_id}
 
 
-# --- Excepciones añadidas en la feature kirilloid-tropas-scraper ---
-
 class KirilloidScraperError(TravianBotError):
     """
     Error en el scraper de kirilloid.ru.
@@ -184,3 +222,22 @@ class KirilloidScraperError(TravianBotError):
         self.tribe = tribe
         self.url = url
         self.params = {"tribe": tribe, "url": url}
+
+
+# --- Excepciones añadidas en la feature login-sesion-api ---
+
+class LoginFailedError(TravianBotError):
+    """
+    El login en Travian falló: credenciales incorrectas, error de red,
+    o cualquier excepción interna de zendriver.
+    El browser ya fue cerrado por login.py antes de llegar aquí.
+    No se distingue entre "credenciales incorrectas" y "error de red" (RN-13):
+    previene enumeración de información.
+    """
+
+    error_code = "LOGIN_FAILED"
+
+    def __init__(self, username: str) -> None:
+        super().__init__(f"Login fallido para '{username}'")
+        self.username = username
+        self.params = {"username": username}

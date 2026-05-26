@@ -220,6 +220,58 @@ def test_update_account_sin_password_no_cambia_token():
 
 
 # ---------------------------------------------------------------------------
+# A1.9.1 — Tests del nuevo método get_account_password_cipher (Amendment A1)
+# ---------------------------------------------------------------------------
+
+def test_get_account_password_cipher_existing():
+    """A1: cuenta existente → devuelve bytes exactos del token almacenado."""
+    async def _run():
+        adapter, conn = await _make_adapter()
+        try:
+            password_cifrada = b"faketoken123"
+            account = await _save_test_account(adapter, password=password_cifrada)
+
+            result = await adapter.get_account_password_cipher(account.id)
+
+            assert result == password_cifrada
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def test_get_account_password_cipher_not_found():
+    """A1: account_id que no existe → devuelve None."""
+    async def _run():
+        adapter, conn = await _make_adapter()
+        try:
+            result = await adapter.get_account_password_cipher(99999)
+            assert result is None
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def test_get_account_still_returns_empty_password():
+    """A1: get_account() sigue devolviendo password="" — no ha cambiado (intencional)."""
+    async def _run():
+        adapter, conn = await _make_adapter()
+        try:
+            password_cifrada = b"real_fernet_token_bytes"
+            saved = await _save_test_account(adapter, password=password_cifrada)
+
+            account = await adapter.get_account(saved.id)
+
+            assert account is not None
+            assert account.password == ""
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
 # Extra: UT-20 — IntegrityError en save_account → DuplicateAccountError
 # ---------------------------------------------------------------------------
 

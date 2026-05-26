@@ -80,3 +80,19 @@ class DbPort(ABC):
     @abstractmethod
     async def delete_world(self, world_id: int) -> None:
         """Elimina un mundo por su ID. FK ON DELETE CASCADE borra villages."""
+
+    # ------------------------------------------------------------------
+    # Operaciones especiales de credenciales — uso exclusivo de LoginUseCase
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def get_account_password_cipher(self, account_id: int) -> Optional[bytes]:
+        """
+        Devuelve el token Fernet cifrado (BLOB) de la contraseña de la cuenta,
+        o None si la cuenta no existe.
+
+        SOLO para uso en LoginUseCase. El resto del sistema usa get_account(),
+        que devuelve password="" para no filtrar el cifrado en respuestas de API.
+
+        El adaptador lee el BLOB opaco y lo devuelve sin interpretar — no conoce Fernet.
+        """

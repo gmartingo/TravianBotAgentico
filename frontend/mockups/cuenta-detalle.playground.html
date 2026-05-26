@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — S4 Detalle de cuenta + S5 Modal editar + S7/S8 Confirmación borrado.
+  HTML autocontenido, desacoplado del backend.
+  Abrir directamente en el navegador — sin build, sin servidor.
+
+  Toolbar — selector "Vista":
+    S4 con mundos        — Detalle de cuenta con 2 mundos de ejemplo (estados mixtos)
+    S4 — todos idle      — Los 4 mundos en estado Inactivo
+    S4 — todos activos   — Los 4 mundos en estado Activo
+    S4 — todos error     — Los 4 mundos en estado Error
+    S4 — estados mixtos  — idle + connecting + active + error (todos a la vez)
+    S4 sin mundos        — Empty state (CTA "Añadir mundo")
+    S4 cargando          — Skeleton cabecera + tabla
+    S4 error 404         — "Cuenta no encontrada"
+    Modal editar (S5)    — Normal (campos prefilled)
+    Modal editar 409     — Error email duplicado inline
+    Confirmar borrado cuenta (S7) — Normal
+    Confirmar borrado mundo (S8)  — Normal
+    Borrado cuenta 409   — Sesión activa inline en modal
+    Borrado mundo 409    — Sesión activa inline en modal
+
+  Affordance de sesión (§4b del spec):
+    - Cada fila de mundo muestra un SessionStatusBadge (icono+texto, nunca solo color)
+    - Botón de acción contextual: Arrancar / Parar / Cancelar / Reintentar
+    - Transiciones simuladas: Arrancar→Conectando 1.5s→Activo; Parar→Inactivo; Reintentar como Arrancar
+    - Restricciones: mundo active/connecting no puede borrarse (⋯ deshabilitado)
+    - El botón "Borrar cuenta" se deshabilita si algún mundo está active o connecting
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravianBot · Detalle de cuenta (playground)</title>
+<style>
+/* ===== TOKENS — idénticos a cuentas.playground.html y wizard.playground.html ===== */
+:root {
+  --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93;
+  --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012;
+  --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#FFFFFF; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+  --sidebar-w:200px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+    --border:#3A3A3C; --border-strong:#48484A;
+    --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+    --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+    --accent-subtle:rgba(203,176,121,.16);
+    --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+    --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+  --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET / BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans); background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.4;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+  display:flex; flex-direction:column;
+}
+a{color:var(--accent-text);text-decoration:none;}
+a:hover{color:var(--accent-hover);text-decoration:underline;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ===== TOOLBAR — idéntica a los playgrounds hermanos ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:100;
+}
+.toolbar .grow{flex:1;min-width:0;}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-inline-end:4px;white-space:nowrap;}
+.logo{width:26px;height:26px;border-radius:7px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+      display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0;}
+.tb-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;padding:0 12px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;display:flex;align-items:center;gap:6px;
+  transition:background var(--dur-fast) var(--ease);white-space:nowrap;
+}
+.tb-btn:hover{background:var(--surface-2);}
+.tb-btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.tb-btn.primary:hover{background:var(--btn-primary-hover);}
+.tb-btn.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--accent-subtle);}
+.icon-btn{
+  appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;flex-shrink:0;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);}
+.hint{color:var(--text-tertiary);font-size:12px;white-space:nowrap;}
+.state-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.state-select{
+  height:32px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  border-radius:var(--radius-sm);padding:0 8px;font-family:inherit;font-size:13px;cursor:pointer;
+}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* lang picker */
+.lang-wrap{position:relative;}
+.lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;padding:0 12px;
+  cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;
+}
+.lang-btn:hover{background:var(--surface-2);}
+.lang-btn svg{width:15px;height:15px;color:var(--text-secondary);}
+.lang-panel{
+  position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:280px;max-width:calc(100vw - 32px);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;z-index:200;display:none;
+}
+.lang-panel.open{display:block;}
+.lang-search-wrap{padding:10px;border-bottom:1px solid var(--border);}
+.lang-search{
+  width:100%;height:32px;border:1px solid var(--border-strong);background:var(--surface-2);
+  color:var(--text);border-radius:var(--radius-sm);padding:0 10px;
+  font-family:inherit;font-size:13px;outline:none;
+}
+.lang-search:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.lang-list{max-height:280px;overflow-y:auto;padding:6px;}
+.lang-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:13px;text-align:start;
+}
+.lang-item:hover{background:var(--surface-2);}
+.lang-item .code{color:var(--text-tertiary);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;}
+.lang-item[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent-text);font-weight:600;}
+.lang-item[aria-selected="true"] .code{color:var(--accent-text);}
+
+/* ===== APP TOPBAR — idéntica a los hermanos ===== */
+.app-topbar{
+  display:flex;align-items:center;gap:12px;padding:0 20px;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.app-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;}
+.app-logo{
+  width:28px;height:28px;border-radius:7px;background:var(--btn-primary-bg);
+  color:var(--btn-primary-text);display:grid;place-items:center;font-weight:700;font-size:12px;
+}
+.app-topbar-grow{flex:1;}
+.app-theme-btn{
+  appearance:none;border:1px solid var(--border);background:transparent;color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;cursor:pointer;
+}
+.app-theme-btn:hover{background:var(--surface-2);color:var(--text);}
+.app-theme-btn svg{width:16px;height:16px;}
+.app-lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:30px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;padding:0 10px;
+  cursor:pointer;font-family:inherit;font-size:13px;
+}
+.app-lang-btn:hover{background:var(--surface-2);}
+.app-lang-btn svg{width:14px;height:14px;color:var(--text-secondary);}
+
+/* ===== SHELL BODY ===== */
+.app-body{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ===== SIDEBAR — idéntico a los hermanos ===== */
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:14px;
+  text-align:start;width:100%;position:relative;transition:background var(--dur-fast) var(--ease);
+}
+.nav-item:hover:not([disabled]){background:var(--surface-2);}
+.nav-item[disabled]{color:var(--text-disabled);cursor:not-allowed;}
+.nav-item.active{background:var(--accent-subtle);color:var(--accent-text);font-weight:500;}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.nav-item .nav-label{flex:1;}
+.nav-item .nav-soon{font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.04em;}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);}
+
+/* ===== CONTENT AREA ===== */
+.content{flex:1;overflow-y:auto;padding:28px 32px;position:relative;}
+
+/* ===== DRAG & DROP ===== */
+body.editing .canvas-area{
+  background-image:
+    linear-gradient(to right,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px),
+    linear-gradient(to bottom,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px);
+  background-size:8px 8px;
+}
+.drag-block{position:relative;}
+body.editing .drag-block{outline:1px dashed transparent;border-radius:4px;cursor:grab;transition:outline-color var(--dur-fast);}
+body.editing .drag-block:hover{outline-color:var(--accent);}
+body.editing .drag-block.dragging{cursor:grabbing;outline:2px solid var(--accent);box-shadow:var(--shadow-md);z-index:10;}
+
+/* ===== BREADCRUMB ===== */
+.breadcrumb{
+  display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);
+  margin-bottom:20px;
+}
+.breadcrumb-back{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  font-family:inherit;font-size:13px;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;
+}
+.breadcrumb-back:hover{color:var(--accent-hover);}
+.breadcrumb-sep{color:var(--text-tertiary);}
+.breadcrumb-current{color:var(--text-secondary);}
+
+/* ===== ACCOUNT HEADER ===== */
+.account-header{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  margin-bottom:32px;
+}
+.account-info h1{font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;margin-bottom:4px;}
+.account-info .email{font-size:14px;color:var(--text-secondary);margin-bottom:2px;}
+.account-info .created-at{font-size:12px;color:var(--text-tertiary);}
+.account-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:4px;}
+
+/* ===== BUTTONS ===== */
+.btn-primary{
+  appearance:none;border:none;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:500;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-primary:hover:not(:disabled){background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed;}
+
+.btn-secondary{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-secondary:hover:not(:disabled){background:var(--surface-2);}
+.btn-secondary:disabled{opacity:0.5;cursor:not-allowed;}
+
+.btn-ghost{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  height:32px;padding:0 10px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:color var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-ghost:hover:not(:disabled){color:var(--accent-hover);}
+
+/* Botón destructivo (borde + texto rojo, nunca fondo) */
+.btn-destructive{
+  appearance:none;border:1px solid var(--danger);background:transparent;color:var(--danger);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-destructive:hover:not(:disabled){background:rgba(201,53,44,.06);}
+[data-theme="dark"] .btn-destructive:hover:not(:disabled){background:rgba(255,69,58,.10);}
+.btn-destructive:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* Botón solo rojo relleno (en modales de confirmación) */
+.btn-danger{
+  appearance:none;border:none;background:var(--danger);color:#fff;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:500;white-space:nowrap;
+  transition:opacity var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-danger:hover:not(:disabled){opacity:.88;}
+.btn-danger:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* ===== SECTION HEADER (Mundos) ===== */
+.section-header{
+  display:flex;align-items:baseline;gap:8px;margin-bottom:12px;
+}
+.section-header h3{font-size:17px;font-weight:600;letter-spacing:-0.01em;}
+.section-count{font-size:14px;color:var(--text-secondary);}
+.section-header-grow{flex:1;}
+
+/* ===== DATA TABLE ===== */
+.data-table{width:100%;border-collapse:collapse;font-size:14px;}
+.data-table th{
+  background:var(--surface-2);color:var(--text-secondary);
+  font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;
+  padding:0 14px;height:34px;text-align:start;border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.data-table td{
+  padding:0 14px;height:40px;border-bottom:1px solid var(--border);vertical-align:middle;
+}
+.data-table tr:last-child td{border-bottom:none;}
+.col-parsed{color:var(--accent-text);font-family:var(--font-mono);font-size:13px;}
+.col-server{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);
+  max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.col-tribe{text-transform:capitalize;}
+.col-date-created{color:var(--text-secondary);font-size:13px;font-variant-numeric:tabular-nums;}
+.col-num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:end;}
+.col-actions{width:48px;text-align:end;}
+
+/* Ocultar columna URL completa en < md (P2) */
+@media (max-width:767px){.hide-md{display:none;}}
+
+/* ===== SKELETON ===== */
+@keyframes pulse{0%,100%{opacity:.45;}50%{opacity:1;}}
+.skel{background:var(--surface-2);border-radius:4px;display:inline-block;}
+.skel-cell{height:16px;border-radius:4px;background:var(--surface-2);display:block;animation:pulse 1.2s ease-in-out infinite;}
+.skel-h1{height:28px;border-radius:5px;background:var(--surface-2);display:block;animation:pulse 1.2s ease-in-out infinite;margin-bottom:8px;}
+.skel-line{height:14px;border-radius:4px;background:var(--surface-2);display:block;animation:pulse 1.2s ease-in-out infinite;margin-bottom:6px;}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:48px 24px;text-align:center;
+}
+.empty-icon{
+  width:52px;height:52px;border-radius:var(--radius-full);background:var(--surface-2);
+  display:grid;place-items:center;color:var(--text-tertiary);
+}
+.empty-icon svg{width:28px;height:28px;}
+.empty-title{font-size:16px;font-weight:600;color:var(--text);}
+.empty-desc{font-size:14px;color:var(--text-secondary);max-width:320px;line-height:1.5;}
+
+/* ===== 404 STATE ===== */
+.not-found{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;padding:80px 24px;text-align:center;
+}
+.not-found-icon{
+  width:56px;height:56px;border-radius:var(--radius-full);background:var(--surface-2);
+  display:grid;place-items:center;color:var(--text-tertiary);
+}
+.not-found-icon svg{width:30px;height:30px;}
+.not-found h2{font-size:20px;font-weight:600;letter-spacing:-0.01em;}
+.not-found p{font-size:14px;color:var(--text-secondary);max-width:320px;line-height:1.5;}
+
+/* ===== ROW MENU BTN ===== */
+.row-menu-btn{
+  appearance:none;border:1px solid transparent;background:transparent;color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;font-size:16px;
+  transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);
+}
+.row-menu-btn:hover{background:var(--surface-2);border-color:var(--border);color:var(--text);}
+
+/* ===== CONTEXT MENU ===== */
+.ctx-menu{
+  position:fixed;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:6px;
+  min-width:160px;z-index:300;display:none;
+}
+.ctx-menu.open{display:block;}
+.ctx-item{
+  display:block;width:100%;padding:8px 12px;border:none;background:transparent;
+  text-align:start;font-family:inherit;font-size:13px;color:var(--text);
+  border-radius:var(--radius-sm);cursor:pointer;
+}
+.ctx-item:hover{background:var(--surface-2);}
+.ctx-item.danger{color:var(--danger);}
+
+/* ===== WORLD CARDS (móvil < md) ===== */
+@media (max-width:767px){
+  .worlds-table{display:none;}
+  .world-cards{display:block;}
+}
+@media (min-width:768px){
+  .world-cards{display:none;}
+}
+.world-cards{display:none;}
+.world-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;
+}
+.world-card .card-main{flex:1;min-width:0;}
+.world-card .card-parsed{font-weight:500;font-size:14px;color:var(--accent-text);font-family:var(--font-mono);}
+.world-card .card-tribe{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+
+/* ===== MODAL ===== */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);
+  backdrop-filter:blur(2px);z-index:400;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity var(--dur-slow) var(--ease);
+}
+.modal-backdrop.open{opacity:1;pointer-events:auto;}
+.modal{
+  background:var(--surface);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);width:min(440px,92vw);
+  max-height:90vh;display:flex;flex-direction:column;
+  transform:translateY(8px);
+  transition:transform var(--dur-slow) var(--ease);
+}
+.modal-backdrop.open .modal{transform:translateY(0);}
+.modal.narrow{width:min(420px,92vw);}
+.modal-header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:18px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.modal-title{font-size:17px;font-weight:600;letter-spacing:-0.01em;}
+.modal-close{
+  appearance:none;border:none;background:transparent;color:var(--text-secondary);
+  width:28px;height:28px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;font-size:18px;line-height:1;flex-shrink:0;
+}
+.modal-close:hover{background:var(--surface-2);color:var(--text);}
+.modal-body{padding:20px;overflow-y:auto;flex:1;}
+.modal-footer{
+  display:flex;align-items:center;gap:8px;justify-content:flex-end;
+  padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0;
+}
+
+/* ===== FORM FIELDS ===== */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:16px;}
+.field:last-child{margin-bottom:0;}
+.field-label{font-size:12px;font-weight:500;color:var(--text-secondary);}
+.field-label .req{color:var(--danger);margin-inline-start:2px;}
+.inp{
+  width:100%;height:36px;border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--text);border-radius:var(--radius-sm);padding:0 10px;
+  font-family:inherit;font-size:14px;outline:none;
+  transition:border-color var(--dur-fast) var(--ease);
+}
+@media (max-width:767px){.inp{font-size:16px;}}
+.inp::placeholder{color:var(--text-tertiary);}
+.inp:focus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.inp.error{border-color:var(--danger);}
+.inp.error:focus{outline-color:var(--danger);}
+.field-error{font-size:12px;color:var(--danger);display:none;}
+.field-error.show{display:block;}
+
+/* password toggle */
+.pw-wrap{position:relative;display:flex;align-items:center;}
+.pw-wrap .inp{padding-inline-end:38px;width:100%;}
+.pw-toggle{
+  position:absolute;inset-inline-end:8px;top:50%;transform:translateY(-50%);
+  appearance:none;border:none;background:transparent;color:var(--text-secondary);
+  width:24px;height:24px;display:grid;place-items:center;cursor:pointer;border-radius:4px;
+}
+.pw-toggle:hover{color:var(--text);}
+.pw-toggle svg{width:16px;height:16px;}
+
+/* change-password link */
+.change-pw-link{
+  display:inline-flex;align-items:center;gap:6px;
+  background:none;border:none;color:var(--accent-text);font-family:inherit;font-size:13px;
+  cursor:pointer;padding:0;margin-top:4px;
+}
+.change-pw-link:hover{color:var(--accent-hover);}
+.change-pw-link svg{width:14px;height:14px;}
+.pw-fields{margin-top:12px;}
+.field-divider{height:1px;background:var(--border);margin:16px 0;}
+
+/* ===== ERROR BLOCK (409 sesión activa) ===== */
+.error-block{
+  display:flex;gap:10px;padding:12px 14px;
+  background:rgba(201,53,44,.08);
+  border-inline-start:3px solid var(--danger);
+  border-radius:var(--radius-sm);margin-bottom:4px;
+}
+[data-theme="dark"] .error-block{background:rgba(255,69,58,.10);}
+.error-block svg{width:16px;height:16px;color:var(--danger);flex-shrink:0;margin-top:1px;}
+.error-block-text{font-size:13px;color:var(--text);flex:1;line-height:1.4;}
+
+/* ===== CONFIRM MODAL BODY ===== */
+.confirm-body{}
+.confirm-question{font-size:15px;font-weight:600;margin-bottom:8px;line-height:1.3;}
+.confirm-warning{font-size:13px;color:var(--text-secondary);line-height:1.5;}
+
+/* ===== SPINNER ===== */
+.spinner{
+  width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;display:inline-block;animation:spin .6s linear infinite;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ===== TOAST ===== */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);padding:10px 16px;
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);font-size:13px;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  z-index:500;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* ===== RESPONSIVE MODAL (bottom sheet en móvil) ===== */
+@media (max-width:767px){
+  .content{padding:16px;}
+  .modal{width:100vw!important;border-bottom-left-radius:0;border-bottom-right-radius:0;align-self:flex-end;}
+  .modal-backdrop{align-items:flex-end;}
+  .btn-primary,.btn-secondary,.btn-danger{width:100%;justify-content:center;}
+  .modal-footer{flex-direction:column-reverse;align-items:stretch;}
+  .account-header{flex-direction:column;gap:12px;}
+  .account-actions{width:100%;}
+}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important;}}
+
+/* ===== SESSION STATUS BADGE (§4b del spec) ===== */
+/* Regla DESIGN.md §5: siempre icono + texto, nunca solo color */
+.session-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:500;white-space:nowrap;
+}
+.session-badge .badge-icon{flex-shrink:0;font-size:13px;line-height:1;}
+/* Variantes por estado */
+.session-badge.state-idle     { color:var(--text-tertiary); }
+.session-badge.state-connecting{ color:var(--accent); }
+.session-badge.state-active   { color:var(--success); }
+.session-badge.state-error    { color:var(--danger); }
+.session-badge.state-stopping { color:var(--text-tertiary); }
+
+/* Spinner inline para connecting / stopping */
+.badge-spinner{
+  width:11px;height:11px;
+  border:1.8px solid currentColor;border-top-color:transparent;
+  border-radius:50%;display:inline-block;
+  animation:spin .7s linear infinite;flex-shrink:0;
+}
+
+/* ===== WORLD SESSION BUTTON (§4b del spec) ===== */
+/* altura 28px, texto 12px para no saturar la celda de acciones */
+.btn-session{
+  appearance:none;height:28px;padding:0 10px;border-radius:var(--radius-sm);
+  font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap;
+  cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+  transition:background var(--dur-fast) var(--ease),opacity var(--dur-fast) var(--ease);
+  flex-shrink:0;
+}
+/* Arrancar / Reintentar / Cancelar → btn-secondary pequeño */
+.btn-session.session-start,
+.btn-session.session-retry,
+.btn-session.session-cancel{
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+}
+.btn-session.session-start:hover:not(:disabled),
+.btn-session.session-retry:hover:not(:disabled),
+.btn-session.session-cancel:hover:not(:disabled){ background:var(--surface-2); }
+/* Entrar → btn terciario / ghost accent (para mundo ya activo sin re-login) */
+.btn-session.session-enter{
+  border:1px solid var(--accent-subtle);background:var(--accent-subtle);color:var(--accent-text);
+}
+.btn-session.session-enter:hover:not(:disabled){
+  background:rgba(138,100,24,.22);border-color:var(--accent);
+}
+[data-theme="dark"] .btn-session.session-enter:hover:not(:disabled){
+  background:rgba(203,176,121,.24);
+}
+/* Parar → btn-destructive pequeño (borde + texto rojo, nunca fondo) */
+.btn-session.session-stop{
+  border:1px solid var(--danger);background:transparent;color:var(--danger);
+}
+.btn-session.session-stop:hover:not(:disabled){ background:rgba(201,53,44,.06); }
+[data-theme="dark"] .btn-session.session-stop:hover:not(:disabled){ background:rgba(255,69,58,.10); }
+.btn-session:disabled{ opacity:.45;cursor:not-allowed; }
+
+/* ===== CELDA ACCIONES con badge + botón de sesión ===== */
+/* En la columna ACCIONES de la tabla de mundos */
+.col-session-actions{
+  display:inline-flex;align-items:center;gap:4px;
+  justify-content:flex-end;width:100%;
+}
+
+/* ===== COLUMNA SESIÓN en la tabla ===== */
+.col-session{ white-space:nowrap;min-width:130px; }
+
+/* Anchura extendida de la columna ACCIONES cuando lleva botón de sesión */
+.col-actions-wide{ width:160px;text-align:end; }
+</style>
+</head>
+<body>
+
+<!-- ==================== PLAYGROUND TOOLBAR ==================== -->
+<div class="toolbar">
+  <div class="brand">
+    <div class="logo">TB</div>
+    <span>Playground · Detalle de cuenta</span>
+  </div>
+
+  <span class="state-label" data-i18n="toolbar.viewLabel">Vista:</span>
+  <select class="state-select" id="viewSelect">
+    <optgroup label="─── Sesión ───">
+      <option value="s4-session-mixed"    data-i18n="toolbar.view.s4sessionMixed">S4 — estados mixtos (idle/connecting/active/error)</option>
+      <option value="s4-session-idle"     data-i18n="toolbar.view.s4sessionIdle">S4 — todos inactivos</option>
+      <option value="s4-session-active"   data-i18n="toolbar.view.s4sessionActive">S4 — todos activos</option>
+      <option value="s4-session-error"    data-i18n="toolbar.view.s4sessionError">S4 — todos en error</option>
+    </optgroup>
+    <optgroup label="─── Vistas ───">
+      <option value="s4-data"        data-i18n="toolbar.view.s4data">S4 — con mundos</option>
+      <option value="s4-empty"       data-i18n="toolbar.view.s4empty">S4 — sin mundos</option>
+      <option value="s4-loading"     data-i18n="toolbar.view.s4loading">S4 — cargando</option>
+      <option value="s4-404"         data-i18n="toolbar.view.s4404">S4 — error 404</option>
+    </optgroup>
+    <optgroup label="─── Modales ───">
+      <option value="s5-normal"      data-i18n="toolbar.view.s5normal">Modal editar (S5)</option>
+      <option value="s5-409"         data-i18n="toolbar.view.s5409">Modal editar — 409</option>
+      <option value="s7-normal"      data-i18n="toolbar.view.s7normal">Borrar cuenta (S7)</option>
+      <option value="s7-409"         data-i18n="toolbar.view.s7409">Borrar cuenta — 409</option>
+      <option value="s8-normal"      data-i18n="toolbar.view.s8normal">Borrar mundo (S8)</option>
+      <option value="s8-409"         data-i18n="toolbar.view.s8409">Borrar mundo — 409</option>
+    </optgroup>
+  </select>
+
+  <div class="sep"></div>
+
+  <button class="tb-btn toggle" id="editBtn" aria-pressed="false">&#9998; Editar</button>
+  <button class="tb-btn" id="saveBtn" data-i18n="toolbar.save">Guardar</button>
+  <button class="tb-btn" id="resetBtn" data-i18n="toolbar.reset">Restablecer</button>
+  <button class="tb-btn primary" id="exportBtn" data-i18n="toolbar.export">Exportar JSON</button>
+
+  <span class="hint" id="hint"></span>
+  <span class="grow"></span>
+
+  <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema"></button>
+
+  <div class="lang-wrap">
+    <button class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="langBtnLabel">Español</span>
+    </button>
+    <div class="lang-panel" id="langPanel" role="listbox" aria-label="Idioma">
+      <div class="lang-search-wrap">
+        <input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off" />
+      </div>
+      <div class="lang-list" id="langList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APP TOPBAR ==================== -->
+<div class="app-topbar">
+  <div class="app-brand">
+    <div class="app-logo">TB</div>
+    <span>TravianBot</span>
+  </div>
+  <div class="app-topbar-grow"></div>
+  <button class="app-theme-btn" id="appThemeBtn" aria-label="Cambiar tema">
+    <svg id="appThemeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+  <div class="lang-wrap" style="position:relative;">
+    <button class="app-lang-btn" id="appLangBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="appLangLabel">Español</span>
+    </button>
+  </div>
+</div>
+
+<!-- ==================== APP BODY ==================== -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" aria-label="Navegación principal">
+    <div class="sidebar-nav">
+      <button class="nav-item active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span class="nav-label" data-i18n="nav.accounts">Cuentas</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">v0.1.0-dev</div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="content canvas-area" id="contentArea">
+
+    <!-- ==================== S4: DETALLE (con datos) ==================== -->
+    <div id="viewS4" style="display:none;">
+
+      <!-- breadcrumb -->
+      <div class="drag-block" data-drag-id="breadcrumb">
+        <div class="breadcrumb">
+          <button class="breadcrumb-back" id="backToCuentas" type="button">
+            <svg id="backArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span data-i18n="page.account.breadcrumb">Cuentas</span>
+          </button>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current" id="breadcrumbUsername">Gladiator</span>
+        </div>
+      </div>
+
+      <!-- account header -->
+      <div class="drag-block" data-drag-id="accountHeader">
+        <div class="account-header">
+          <div class="account-info">
+            <h1 id="acctUsername">Gladiator</h1>
+            <p class="email" id="acctEmail">gladiator@travian.com</p>
+            <p class="created-at" id="acctCreatedAt"></p>
+          </div>
+          <div class="account-actions">
+            <button class="btn-secondary" id="editAccountBtn" type="button" data-i18n="page.account.editBtn">Editar</button>
+            <button class="btn-destructive" id="deleteAccountBtn" type="button" data-i18n="page.account.deleteBtn">Borrar cuenta</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- worlds section -->
+      <div class="drag-block" data-drag-id="worldsSection">
+        <div class="section-header">
+          <h3 data-i18n="page.account.worlds.title.prefix">Mundos</h3>
+          <span class="section-count" id="worldsCount">(2)</span>
+          <span class="section-header-grow"></span>
+          <button class="btn-secondary" id="addWorldBtn" type="button" style="height:30px;font-size:13px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span data-i18n="page.account.worlds.add">Añadir mundo</span>
+          </button>
+        </div>
+
+        <!-- Tabla desktop -->
+        <div class="worlds-table">
+          <table class="data-table" id="worldsTable" role="table">
+            <thead>
+              <tr>
+                <th class="hide-md" data-i18n="page.account.col.server">Servidor</th>
+                <th data-i18n="page.account.col.parsed">Servidor (legible)</th>
+                <th data-i18n="page.account.col.tribe">Tribu</th>
+                <th class="col-session" data-i18n="page.account.col.session">Sesión</th>
+                <th class="col-actions-wide"></th>
+              </tr>
+            </thead>
+            <tbody id="worldsTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Tarjetas móvil -->
+        <div class="world-cards" id="worldCards"></div>
+
+        <!-- Empty state mundos (se muestra cuando worlds.length === 0) -->
+        <div id="worldsEmpty" style="display:none;">
+          <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <p class="empty-title" data-i18n="page.account.worlds.empty">Todavía no hay mundos en esta cuenta.</p>
+            <button class="btn-secondary" id="emptyAddWorldBtn" type="button" data-i18n="page.account.worlds.add">Añadir mundo</button>
+          </div>
+        </div>
+
+      </div><!-- /worlds drag-block -->
+    </div><!-- /viewS4 -->
+
+    <!-- ==================== S4: CARGANDO ==================== -->
+    <div id="viewS4Loading" style="display:none;" aria-busy="true">
+      <div class="drag-block" data-drag-id="skeletonBreadcrumb">
+        <div class="breadcrumb" style="margin-bottom:20px;">
+          <span class="skel-cell" style="width:80px;" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="drag-block" data-drag-id="skeletonHeader">
+        <div style="margin-bottom:32px;">
+          <span class="skel-h1" style="width:200px;" aria-hidden="true"></span>
+          <span class="skel-line" style="width:180px;" aria-hidden="true"></span>
+          <span class="skel-line" style="width:120px;" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="drag-block" data-drag-id="skeletonTable">
+        <div style="margin-bottom:12px;">
+          <span class="skel-line" style="width:100px;height:20px;" aria-hidden="true"></span>
+        </div>
+        <table class="data-table" role="table" aria-hidden="true">
+          <thead>
+            <tr>
+              <th class="hide-md">Servidor</th>
+              <th>Servidor (legible)</th>
+              <th>Tribu</th>
+              <th class="col-session">Sesión</th>
+              <th class="col-actions-wide"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="hide-md"><span class="skel-cell" style="width:180px;"></span></td><td><span class="skel-cell" style="width:140px;"></span></td><td><span class="skel-cell" style="width:70px;"></span></td><td><span class="skel-cell" style="width:100px;"></span></td><td></td></tr>
+            <tr><td class="hide-md"><span class="skel-cell" style="width:160px;"></span></td><td><span class="skel-cell" style="width:120px;"></span></td><td><span class="skel-cell" style="width:60px;"></span></td><td><span class="skel-cell" style="width:100px;"></span></td><td></td></tr>
+            <tr><td class="hide-md"><span class="skel-cell" style="width:200px;"></span></td><td><span class="skel-cell" style="width:150px;"></span></td><td><span class="skel-cell" style="width:80px;"></span></td><td><span class="skel-cell" style="width:100px;"></span></td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== S4: 404 ==================== -->
+    <div id="viewS4404" style="display:none;">
+      <div class="drag-block" data-drag-id="notFoundContent">
+        <div class="breadcrumb" style="margin-bottom:0;">
+          <button class="breadcrumb-back" type="button">
+            <svg id="backArrow404" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span data-i18n="page.account.breadcrumb">Cuentas</span>
+          </button>
+        </div>
+        <div class="not-found">
+          <div class="not-found-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <h2 data-i18n="page.account.notFound.title">Cuenta no encontrada</h2>
+          <p data-i18n="page.account.notFound.desc">La cuenta que buscas no existe o fue eliminada.</p>
+          <button class="btn-primary" type="button" id="notFoundBackBtn" data-i18n="page.account.notFound.back">Volver a cuentas</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ==================== MODAL EDITAR CUENTA (S5) ==================== -->
+<div class="modal-backdrop" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="editModalTitle" data-i18n="modal.edit.title">Editar cuenta</span>
+      <button class="modal-close" id="editModalClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label class="field-label" for="editEmail">
+          <span data-i18n="wizard.field.email">Email</span><span class="req">*</span>
+        </label>
+        <input class="inp" type="email" id="editEmail" value="gladiator@travian.com" autocomplete="username" />
+        <span class="field-error" id="editEmailError" role="alert"></span>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="editUsername">
+          <span data-i18n="wizard.field.username">Usuario</span><span class="req">*</span>
+        </label>
+        <input class="inp" type="text" id="editUsername" value="Gladiator" autocomplete="off" />
+        <span class="field-error" id="editUsernameError" role="alert"></span>
+      </div>
+
+      <div class="field-divider"></div>
+
+      <!-- Enlace "Cambiar contraseña" o campos desplegados -->
+      <div id="changePwLink">
+        <button class="change-pw-link" type="button" id="changePwBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <span data-i18n="modal.edit.changePassword">Cambiar contraseña</span>
+        </button>
+      </div>
+
+      <div class="pw-fields" id="pwFields" style="display:none;">
+        <div class="field">
+          <label class="field-label" for="editNewPw">
+            <span data-i18n="modal.edit.newPassword">Contraseña nueva</span>
+          </label>
+          <div class="pw-wrap">
+            <input class="inp" type="password" id="editNewPw" autocomplete="new-password" placeholder="••••••••" />
+            <button class="pw-toggle" type="button" id="editNewPwToggle" aria-label="Mostrar contraseña">
+              <svg id="editNewPwEye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="editConfirmPw">
+            <span data-i18n="modal.edit.confirmPassword">Confirmar contraseña</span>
+          </label>
+          <div class="pw-wrap">
+            <input class="inp" type="password" id="editConfirmPw" autocomplete="new-password" placeholder="••••••••" />
+            <button class="pw-toggle" type="button" id="editConfirmPwToggle" aria-label="Mostrar contraseña">
+              <svg id="editConfirmPwEye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <span class="field-error" id="editPwMismatch" role="alert" data-i18n="modal.edit.passwordMismatch">Las contraseñas no coinciden</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="editCancelBtn" data-i18n="modal.edit.cancelBtn">Cancelar</button>
+      <button class="btn-primary" id="editSaveBtn" data-i18n="modal.edit.saveBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL CONFIRMAR BORRADO CUENTA (S7) ==================== -->
+<div class="modal-backdrop" id="deleteAccountModal" role="dialog" aria-modal="true" aria-labelledby="deleteAccountTitle">
+  <div class="modal narrow">
+    <div class="modal-header">
+      <span class="modal-title" id="deleteAccountTitle" data-i18n="modal.deleteAccount.title">Borrar cuenta</span>
+      <button class="modal-close" id="deleteAccountClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="modal-body" id="deleteAccountBody">
+      <!-- contenido inyectado por JS según el estado (normal vs 409) -->
+    </div>
+    <div class="modal-footer" id="deleteAccountFooter">
+      <!-- botones inyectados por JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL CONFIRMAR BORRADO MUNDO (S8) ==================== -->
+<div class="modal-backdrop" id="deleteWorldModal" role="dialog" aria-modal="true" aria-labelledby="deleteWorldTitle">
+  <div class="modal narrow">
+    <div class="modal-header">
+      <span class="modal-title" id="deleteWorldTitle" data-i18n="modal.deleteWorld.title">Borrar mundo</span>
+      <button class="modal-close" id="deleteWorldClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="modal-body" id="deleteWorldBody">
+      <!-- contenido inyectado por JS según el estado (normal vs 409) -->
+    </div>
+    <div class="modal-footer" id="deleteWorldFooter">
+      <!-- botones inyectados por JS -->
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div class="ctx-menu" id="ctxMenu" role="menu">
+  <button class="ctx-item danger" role="menuitem" id="ctxDeleteWorldBtn" data-i18n="page.account.action.deleteWorld">Borrar mundo</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===================================================================
+   DATOS DE EJEMPLO
+   =================================================================== */
+const ACCOUNT = {
+  id: 1,
+  email: "gladiator@travian.com",
+  username: "Gladiator",
+  created: "2026-05-20"
+};
+
+// Datos base de mundos — el campo "session" es el estado inicial de cada uno
+// Estados válidos: "idle" | "connecting" | "active" | "error" | "stopping"
+const WORLDS_BASE = [
+  { id: 1, url: "https://ts1.x1.international.travian.com/", tribe: "romans",   added: "2026-05-20", session: "active"     },
+  { id: 2, url: "https://ts3.x3.europe.travian.com/",        tribe: "teutons",  added: "2026-05-22", session: "idle"       },
+  { id: 3, url: "https://ts5.x5.com.travian.com/",           tribe: "huns",     added: "2026-05-23", session: "connecting" },
+  { id: 4, url: "https://ts2.x2.arabia.travian.com/",        tribe: "gauls",    added: "2026-05-24", session: "error"      },
+];
+
+// Conjuntos de mundos para cada vista de estado de sesión
+const WORLDS_ALL_IDLE     = WORLDS_BASE.map(w => ({...w, session:"idle"}));
+const WORLDS_ALL_ACTIVE   = WORLDS_BASE.map(w => ({...w, session:"active"}));
+const WORLDS_ALL_ERROR    = WORLDS_BASE.map(w => ({...w, session:"error"}));
+const WORLDS_MIXED        = [...WORLDS_BASE]; // idle + connecting + active + error
+
+// Referencia mutable — apunta al conjunto activo en cada vista
+// El campo session de cada mundo se puede cambiar en tiempo real por las transiciones JS
+let WORLDS = WORLDS_BASE.map(w => ({...w}));
+
+/* ===================================================================
+   IDIOMAS Y I18N
+   =================================================================== */
+const LANGS=[
+  {code:"ar",name:"العربية"},{code:"bg",name:"Български"},{code:"cs",name:"Čeština"},
+  {code:"da",name:"Dansk"},{code:"de",name:"Deutsch"},{code:"el",name:"Ελληνικά"},
+  {code:"en",name:"English"},{code:"es",name:"Español"},{code:"fa",name:"فارسی"},
+  {code:"fr",name:"Français"},{code:"he",name:"עברית"},{code:"hu",name:"Magyar"},
+  {code:"it",name:"Italiano"},{code:"ja",name:"日本語"},{code:"lt",name:"Lietuvių"},
+  {code:"lv",name:"Latviešu"},{code:"nl",name:"Nederlands"},{code:"pl",name:"Polski"},
+  {code:"pt",name:"Português"},{code:"rs",name:"Srpski"},{code:"ru",name:"Русский"},
+  {code:"sl",name:"Slovenščina"},{code:"sv",name:"Svenska"},{code:"tr",name:"Türkçe"},
+  {code:"uk",name:"Українська"},
+];
+const RTL = new Set(["ar","he","fa"]);
+
+const I18N = {
+  es:{
+    /* toolbar */
+    "toolbar.viewLabel":"Vista:",
+    "toolbar.view.s4data":"S4 — con mundos",
+    "toolbar.view.s4empty":"S4 — sin mundos",
+    "toolbar.view.s4loading":"S4 — cargando",
+    "toolbar.view.s4404":"S4 — error 404",
+    "toolbar.view.s5normal":"Modal editar (S5)",
+    "toolbar.view.s5409":"Modal editar — 409",
+    "toolbar.view.s7normal":"Borrar cuenta (S7)",
+    "toolbar.view.s7409":"Borrar cuenta — 409",
+    "toolbar.view.s8normal":"Borrar mundo (S8)",
+    "toolbar.view.s8409":"Borrar mundo — 409",
+    "toolbar.save":"Guardar",
+    "toolbar.reset":"Restablecer",
+    "toolbar.export":"Exportar JSON",
+    /* nav */
+    "nav.accounts":"Cuentas","nav.resources":"Recursos","nav.troops":"Tropas",
+    "nav.construction":"Construcción","nav.comingSoon":"Pronto",
+    "tooltip.comingSoon":"Próximamente",
+    /* breadcrumb / detalle */
+    "page.account.breadcrumb":"Cuentas",
+    "page.account.createdAt":"Creada: {date}",
+    "page.account.editBtn":"Editar",
+    "page.account.deleteBtn":"Borrar cuenta",
+    "page.account.worlds.title.prefix":"Mundos",
+    "page.account.worlds.add":"Añadir mundo",
+    "page.account.worlds.empty":"Todavía no hay mundos en esta cuenta.",
+    "page.account.col.server":"Servidor",
+    "page.account.col.parsed":"Servidor (legible)",
+    "page.account.col.tribe":"Tribu",
+    "page.account.col.created":"Añadido",
+    "page.account.action.deleteWorld":"Borrar mundo",
+    "page.account.notFound.title":"Cuenta no encontrada",
+    "page.account.notFound.desc":"La cuenta que buscas no existe o fue eliminada.",
+    "page.account.notFound.back":"Volver a cuentas",
+    /* modal editar */
+    "modal.edit.title":"Editar cuenta",
+    "modal.edit.changePassword":"Cambiar contraseña",
+    "modal.edit.newPassword":"Contraseña nueva",
+    "modal.edit.confirmPassword":"Confirmar contraseña",
+    "modal.edit.passwordMismatch":"Las contraseñas no coinciden",
+    "modal.edit.saveBtn":"Guardar",
+    "modal.edit.savingBtn":"Guardando…",
+    "modal.edit.cancelBtn":"Cancelar",
+    "modal.edit.savedToast":"Cambios guardados",
+    "modal.edit.error409":"Este email ya está registrado en otra cuenta.",
+    /* modal borrar cuenta */
+    "modal.deleteAccount.title":"Borrar cuenta",
+    "modal.deleteAccount.body":"¿Borrar la cuenta \"{username}\"?",
+    "modal.deleteAccount.warning":"Esta acción no se puede deshacer. Se borrarán también todos sus mundos ({n} mundo/s).",
+    "modal.deleteAccount.confirm":"Borrar",
+    "modal.deleteAccount.cancel":"Cancelar",
+    "modal.deleteAccount.toast":"Cuenta eliminada",
+    "modal.deleteAccount.active":"No es posible borrar esta cuenta mientras el bot tiene una sesión activa. Detén la sesión primero.",
+    "modal.deleteAccount.close":"Cerrar",
+    /* modal borrar mundo */
+    "modal.deleteWorld.title":"Borrar mundo",
+    "modal.deleteWorld.body":"¿Borrar el mundo \"{parsed}\"?",
+    "modal.deleteWorld.warning":"Esta acción no se puede deshacer. Se borrarán también todas las aldeas asociadas.",
+    "modal.deleteWorld.confirm":"Borrar",
+    "modal.deleteWorld.cancel":"Cancelar",
+    "modal.deleteWorld.toast":"Mundo eliminado",
+    "modal.deleteWorld.active":"Hay una sesión activa para este mundo. Detén la sesión primero.",
+    /* form */
+    "wizard.field.email":"Email",
+    "wizard.field.username":"Usuario",
+    /* tribus */
+    "tribe.romans":"Romans","tribe.teutons":"Teutons","tribe.gauls":"Gauls",
+    "tribe.egyptians":"Egyptians","tribe.huns":"Huns","tribe.spartans":"Spartans",
+    "tribe.vikings":"Vikings",
+    /* columna sesión */
+    "page.account.col.session":"Sesión",
+    /* SessionStatusBadge — icono + texto por estado */
+    "world.session.idle":"Inactivo",
+    "world.session.connecting":"Conectando…",
+    "world.session.active":"Activo",
+    "world.session.error":"Error de conexión",
+    "world.session.stopping":"Parando…",
+    /* WorldSessionButton — etiquetas de acción */
+    "world.session.start":"Arrancar",
+    "world.session.stop":"Parar",
+    "world.session.retry":"Reintentar",
+    "world.session.cancel":"Cancelar",
+    "world.session.enter":"Entrar",
+    /* aria-labels de botones de sesión */
+    "world.session.start.aria":"Arrancar bot en {world}",
+    "world.session.stop.aria":"Parar bot en {world}",
+    "world.session.retry.aria":"Reintentar conexión en {world}",
+    "world.session.enter.aria":"Entrar al espacio de {world}",
+    /* tooltips de elementos deshabilitados por sesión activa */
+    "world.session.disabled.delete":"Detén la sesión antes de borrar este mundo",
+    "world.session.disabled.editMenu":"No es posible modificar un mundo con sesión activa",
+    "world.session.disabled.deleteAccount":"Detén todas las sesiones activas antes de borrar esta cuenta",
+    /* toast feedback de acciones */
+    "world.session.started.toast":"Bot arrancado en {world}",
+    "world.session.stopped.toast":"Bot detenido en {world}",
+    "world.session.error.toast":"No se pudo conectar en {world}",
+    /* opciones del selector de vista de sesión */
+    "toolbar.view.s4sessionMixed":"S4 — estados mixtos (idle/connecting/active/error)",
+    "toolbar.view.s4sessionIdle":"S4 — todos inactivos",
+    "toolbar.view.s4sessionActive":"S4 — todos activos",
+    "toolbar.view.s4sessionError":"S4 — todos en error",
+    /* misc */
+    "search":"Buscar idioma…",
+    "hint.edit":"Arrastra cualquier bloque (imán de 8px). Pulsa «Listo» al terminar.",
+    "hint.view":"Pulsa «Editar» para arrastrar los bloques.",
+    "error.network":"Error de conexión. Inténtalo de nuevo.",
+  },
+  en:{
+    "toolbar.viewLabel":"View:",
+    "toolbar.view.s4data":"S4 — with worlds",
+    "toolbar.view.s4empty":"S4 — no worlds",
+    "toolbar.view.s4loading":"S4 — loading",
+    "toolbar.view.s4404":"S4 — error 404",
+    "toolbar.view.s5normal":"Edit modal (S5)",
+    "toolbar.view.s5409":"Edit modal — 409",
+    "toolbar.view.s7normal":"Delete account (S7)",
+    "toolbar.view.s7409":"Delete account — 409",
+    "toolbar.view.s8normal":"Delete world (S8)",
+    "toolbar.view.s8409":"Delete world — 409",
+    "toolbar.save":"Save",
+    "toolbar.reset":"Reset",
+    "toolbar.export":"Export JSON",
+    "nav.accounts":"Accounts","nav.resources":"Resources","nav.troops":"Troops",
+    "nav.construction":"Construction","nav.comingSoon":"Soon",
+    "tooltip.comingSoon":"Coming soon",
+    "page.account.breadcrumb":"Accounts",
+    "page.account.createdAt":"Created: {date}",
+    "page.account.editBtn":"Edit",
+    "page.account.deleteBtn":"Delete account",
+    "page.account.worlds.title.prefix":"Worlds",
+    "page.account.worlds.add":"Add world",
+    "page.account.worlds.empty":"No worlds yet in this account.",
+    "page.account.col.server":"Server",
+    "page.account.col.parsed":"Server (readable)",
+    "page.account.col.tribe":"Tribe",
+    "page.account.col.created":"Added",
+    "page.account.action.deleteWorld":"Delete world",
+    "page.account.notFound.title":"Account not found",
+    "page.account.notFound.desc":"The account you're looking for doesn't exist or was deleted.",
+    "page.account.notFound.back":"Back to accounts",
+    "modal.edit.title":"Edit account",
+    "modal.edit.changePassword":"Change password",
+    "modal.edit.newPassword":"New password",
+    "modal.edit.confirmPassword":"Confirm password",
+    "modal.edit.passwordMismatch":"Passwords do not match",
+    "modal.edit.saveBtn":"Save",
+    "modal.edit.savingBtn":"Saving…",
+    "modal.edit.cancelBtn":"Cancel",
+    "modal.edit.savedToast":"Changes saved",
+    "modal.edit.error409":"This email is already used by another account.",
+    "modal.deleteAccount.title":"Delete account",
+    "modal.deleteAccount.body":"Delete account \"{username}\"?",
+    "modal.deleteAccount.warning":"This action cannot be undone. All worlds ({n}) will also be deleted.",
+    "modal.deleteAccount.confirm":"Delete",
+    "modal.deleteAccount.cancel":"Cancel",
+    "modal.deleteAccount.toast":"Account deleted",
+    "modal.deleteAccount.active":"Cannot delete this account while the bot has an active session. Stop the session first.",
+    "modal.deleteAccount.close":"Close",
+    "modal.deleteWorld.title":"Delete world",
+    "modal.deleteWorld.body":"Delete world \"{parsed}\"?",
+    "modal.deleteWorld.warning":"This action cannot be undone. All associated villages will also be deleted.",
+    "modal.deleteWorld.confirm":"Delete",
+    "modal.deleteWorld.cancel":"Cancel",
+    "modal.deleteWorld.toast":"World deleted",
+    "modal.deleteWorld.active":"There is an active session for this world. Stop the session first.",
+    "wizard.field.email":"Email",
+    "wizard.field.username":"Username",
+    "tribe.romans":"Romans","tribe.teutons":"Teutons","tribe.gauls":"Gauls",
+    "tribe.egyptians":"Egyptians","tribe.huns":"Huns","tribe.spartans":"Spartans",
+    "tribe.vikings":"Vikings",
+    "page.account.col.session":"Session",
+    "world.session.idle":"Inactive",
+    "world.session.connecting":"Connecting…",
+    "world.session.active":"Active",
+    "world.session.error":"Connection error",
+    "world.session.stopping":"Stopping…",
+    "world.session.start":"Start",
+    "world.session.stop":"Stop",
+    "world.session.retry":"Retry",
+    "world.session.cancel":"Cancel",
+    "world.session.enter":"Enter",
+    "world.session.start.aria":"Start bot on {world}",
+    "world.session.stop.aria":"Stop bot on {world}",
+    "world.session.retry.aria":"Retry connection on {world}",
+    "world.session.enter.aria":"Enter world space for {world}",
+    "world.session.disabled.delete":"Stop the session before deleting this world",
+    "world.session.disabled.editMenu":"Cannot modify a world with an active session",
+    "world.session.disabled.deleteAccount":"Stop all active sessions before deleting this account",
+    "world.session.started.toast":"Bot started on {world}",
+    "world.session.stopped.toast":"Bot stopped on {world}",
+    "world.session.error.toast":"Could not connect to {world}",
+    "toolbar.view.s4sessionMixed":"S4 — mixed states (idle/connecting/active/error)",
+    "toolbar.view.s4sessionIdle":"S4 — all inactive",
+    "toolbar.view.s4sessionActive":"S4 — all active",
+    "toolbar.view.s4sessionError":"S4 — all error",
+    "search":"Search language…",
+    "hint.edit":"Drag any block (8px snap). Click «Done» when finished.",
+    "hint.view":"Click «Edit» to drag the blocks.",
+    "error.network":"Connection error. Please try again.",
+  },
+  ar:{
+    "toolbar.viewLabel":"العرض:",
+    "toolbar.view.s4data":"S4 — مع عوالم",
+    "toolbar.view.s4empty":"S4 — بدون عوالم",
+    "toolbar.view.s4loading":"S4 — جار التحميل",
+    "toolbar.view.s4404":"S4 — خطأ 404",
+    "toolbar.view.s5normal":"نافذة التعديل (S5)",
+    "toolbar.view.s5409":"نافذة التعديل — 409",
+    "toolbar.view.s7normal":"حذف الحساب (S7)",
+    "toolbar.view.s7409":"حذف الحساب — 409",
+    "toolbar.view.s8normal":"حذف العالم (S8)",
+    "toolbar.view.s8409":"حذف العالم — 409",
+    "toolbar.save":"حفظ",
+    "toolbar.reset":"إعادة تعيين",
+    "toolbar.export":"تصدير JSON",
+    "nav.accounts":"الحسابات","nav.resources":"الموارد","nav.troops":"الجنود",
+    "nav.construction":"البناء","nav.comingSoon":"قريباً",
+    "tooltip.comingSoon":"قريباً",
+    "page.account.breadcrumb":"الحسابات",
+    "page.account.createdAt":"تاريخ الإنشاء: {date}",
+    "page.account.editBtn":"تعديل",
+    "page.account.deleteBtn":"حذف الحساب",
+    "page.account.worlds.title.prefix":"العوالم",
+    "page.account.worlds.add":"إضافة عالم",
+    "page.account.worlds.empty":"لا توجد عوالم في هذا الحساب بعد.",
+    "page.account.col.server":"الخادم",
+    "page.account.col.parsed":"الخادم (مقروء)",
+    "page.account.col.tribe":"القبيلة",
+    "page.account.col.created":"تاريخ الإضافة",
+    "page.account.action.deleteWorld":"حذف العالم",
+    "page.account.notFound.title":"الحساب غير موجود",
+    "page.account.notFound.desc":"الحساب الذي تبحث عنه غير موجود أو تم حذفه.",
+    "page.account.notFound.back":"العودة إلى الحسابات",
+    "modal.edit.title":"تعديل الحساب",
+    "modal.edit.changePassword":"تغيير كلمة المرور",
+    "modal.edit.newPassword":"كلمة المرور الجديدة",
+    "modal.edit.confirmPassword":"تأكيد كلمة المرور",
+    "modal.edit.passwordMismatch":"كلمتا المرور غير متطابقتين",
+    "modal.edit.saveBtn":"حفظ",
+    "modal.edit.savingBtn":"جارٍ الحفظ…",
+    "modal.edit.cancelBtn":"إلغاء",
+    "modal.edit.savedToast":"تم حفظ التغييرات",
+    "modal.edit.error409":"هذا البريد الإلكتروني مسجل لحساب آخر.",
+    "modal.deleteAccount.title":"حذف الحساب",
+    "modal.deleteAccount.body":"هل تريد حذف الحساب \"{username}\"؟",
+    "modal.deleteAccount.warning":"لا يمكن التراجع عن هذا الإجراء. سيتم حذف جميع العوالم ({n}) أيضاً.",
+    "modal.deleteAccount.confirm":"حذف",
+    "modal.deleteAccount.cancel":"إلغاء",
+    "modal.deleteAccount.toast":"تم حذف الحساب",
+    "modal.deleteAccount.active":"لا يمكن حذف هذا الحساب بينما يوجد جلسة نشطة للبوت. أوقف الجلسة أولاً.",
+    "modal.deleteAccount.close":"إغلاق",
+    "modal.deleteWorld.title":"حذف العالم",
+    "modal.deleteWorld.body":"هل تريد حذف العالم \"{parsed}\"؟",
+    "modal.deleteWorld.warning":"لا يمكن التراجع عن هذا الإجراء. ستُحذف جميع القرى المرتبطة أيضاً.",
+    "modal.deleteWorld.confirm":"حذف",
+    "modal.deleteWorld.cancel":"إلغاء",
+    "modal.deleteWorld.toast":"تم حذف العالم",
+    "modal.deleteWorld.active":"يوجد جلسة نشطة لهذا العالم. أوقف الجلسة أولاً.",
+    "wizard.field.email":"البريد الإلكتروني",
+    "wizard.field.username":"اسم المستخدم",
+    "tribe.romans":"الرومان","tribe.teutons":"التيوتون","tribe.gauls":"الغاليين",
+    "tribe.egyptians":"المصريين","tribe.huns":"الهون","tribe.spartans":"الإسبارطيين",
+    "tribe.vikings":"الفايكنغ",
+    "page.account.col.session":"الجلسة",
+    "world.session.idle":"غير نشط",
+    "world.session.connecting":"جارٍ الاتصال…",
+    "world.session.active":"نشط",
+    "world.session.error":"خطأ في الاتصال",
+    "world.session.stopping":"جارٍ الإيقاف…",
+    "world.session.start":"تشغيل",
+    "world.session.stop":"إيقاف",
+    "world.session.retry":"إعادة المحاولة",
+    "world.session.cancel":"إلغاء",
+    "world.session.enter":"دخول",
+    "world.session.start.aria":"تشغيل البوت في {world}",
+    "world.session.stop.aria":"إيقاف البوت في {world}",
+    "world.session.retry.aria":"إعادة محاولة الاتصال بـ {world}",
+    "world.session.enter.aria":"دخول فضاء العالم {world}",
+    "world.session.disabled.delete":"أوقف الجلسة قبل حذف هذا العالم",
+    "world.session.disabled.editMenu":"لا يمكن تعديل عالم بجلسة نشطة",
+    "world.session.disabled.deleteAccount":"أوقف جميع الجلسات النشطة قبل حذف هذا الحساب",
+    "world.session.started.toast":"تم تشغيل البوت في {world}",
+    "world.session.stopped.toast":"تم إيقاف البوت في {world}",
+    "world.session.error.toast":"تعذر الاتصال بـ {world}",
+    "toolbar.view.s4sessionMixed":"S4 — حالات مختلطة",
+    "toolbar.view.s4sessionIdle":"S4 — جميعها غير نشطة",
+    "toolbar.view.s4sessionActive":"S4 — جميعها نشطة",
+    "toolbar.view.s4sessionError":"S4 — جميعها خطأ",
+    "search":"ابحث عن لغة…",
+    "hint.edit":"اسحب أي كتلة. اضغط «تم» عند الانتهاء.",
+    "hint.view":"اضغط «تعديل» لسحب الكتل.",
+    "error.network":"خطأ في الاتصال. حاول مرة أخرى.",
+  },
+  de:{
+    "toolbar.viewLabel":"Ansicht:",
+    "toolbar.view.s4data":"S4 — mit Welten",
+    "toolbar.view.s4empty":"S4 — keine Welten",
+    "toolbar.view.s4loading":"S4 — lädt",
+    "toolbar.view.s4404":"S4 — Fehler 404",
+    "toolbar.view.s5normal":"Bearbeiten-Modal (S5)",
+    "toolbar.view.s5409":"Bearbeiten-Modal — 409",
+    "toolbar.view.s7normal":"Konto löschen (S7)",
+    "toolbar.view.s7409":"Konto löschen — 409",
+    "toolbar.view.s8normal":"Welt löschen (S8)",
+    "toolbar.view.s8409":"Welt löschen — 409",
+    "toolbar.save":"Speichern",
+    "toolbar.reset":"Zurücksetzen",
+    "toolbar.export":"JSON exportieren",
+    "nav.accounts":"Konten","nav.resources":"Ressourcen","nav.troops":"Truppen",
+    "nav.construction":"Bau","nav.comingSoon":"Bald",
+    "tooltip.comingSoon":"Demnächst",
+    "page.account.breadcrumb":"Konten",
+    "page.account.createdAt":"Erstellt: {date}",
+    "page.account.editBtn":"Bearbeiten",
+    "page.account.deleteBtn":"Konto löschen",
+    "page.account.worlds.title.prefix":"Welten",
+    "page.account.worlds.add":"Welt hinzufügen",
+    "page.account.worlds.empty":"Noch keine Welten in diesem Konto.",
+    "page.account.col.server":"Server",
+    "page.account.col.parsed":"Server (lesbar)",
+    "page.account.col.tribe":"Stamm",
+    "page.account.col.created":"Hinzugefügt",
+    "page.account.action.deleteWorld":"Welt löschen",
+    "page.account.notFound.title":"Konto nicht gefunden",
+    "page.account.notFound.desc":"Das gesuchte Konto existiert nicht oder wurde gelöscht.",
+    "page.account.notFound.back":"Zurück zu Konten",
+    "modal.edit.title":"Konto bearbeiten",
+    "modal.edit.changePassword":"Passwort ändern",
+    "modal.edit.newPassword":"Neues Passwort",
+    "modal.edit.confirmPassword":"Passwort bestätigen",
+    "modal.edit.passwordMismatch":"Passwörter stimmen nicht überein",
+    "modal.edit.saveBtn":"Speichern",
+    "modal.edit.savingBtn":"Speichert…",
+    "modal.edit.cancelBtn":"Abbrechen",
+    "modal.edit.savedToast":"Änderungen gespeichert",
+    "modal.edit.error409":"Diese E-Mail wird bereits von einem anderen Konto verwendet.",
+    "modal.deleteAccount.title":"Konto löschen",
+    "modal.deleteAccount.body":"Konto \"{username}\" löschen?",
+    "modal.deleteAccount.warning":"Diese Aktion kann nicht rückgängig gemacht werden. Alle Welten ({n}) werden ebenfalls gelöscht.",
+    "modal.deleteAccount.confirm":"Löschen",
+    "modal.deleteAccount.cancel":"Abbrechen",
+    "modal.deleteAccount.toast":"Konto gelöscht",
+    "modal.deleteAccount.active":"Das Konto kann nicht gelöscht werden, solange der Bot eine aktive Sitzung hat. Sitzung zuerst beenden.",
+    "modal.deleteAccount.close":"Schließen",
+    "modal.deleteWorld.title":"Welt löschen",
+    "modal.deleteWorld.body":"Welt \"{parsed}\" löschen?",
+    "modal.deleteWorld.warning":"Diese Aktion kann nicht rückgängig gemacht werden. Alle zugehörigen Dörfer werden ebenfalls gelöscht.",
+    "modal.deleteWorld.confirm":"Löschen",
+    "modal.deleteWorld.cancel":"Abbrechen",
+    "modal.deleteWorld.toast":"Welt gelöscht",
+    "modal.deleteWorld.active":"Für diese Welt gibt es eine aktive Sitzung. Sitzung zuerst beenden.",
+    "wizard.field.email":"E-Mail",
+    "wizard.field.username":"Benutzername",
+    "tribe.romans":"Römer","tribe.teutons":"Germanen","tribe.gauls":"Gallier",
+    "tribe.egyptians":"Ägypter","tribe.huns":"Hunnen","tribe.spartans":"Spartaner",
+    "tribe.vikings":"Wikinger",
+    "page.account.col.session":"Sitzung",
+    "world.session.idle":"Inaktiv",
+    "world.session.connecting":"Verbinde…",
+    "world.session.active":"Aktiv",
+    "world.session.error":"Verbindungsfehler",
+    "world.session.stopping":"Stoppt…",
+    "world.session.start":"Starten",
+    "world.session.stop":"Stoppen",
+    "world.session.retry":"Wiederholen",
+    "world.session.cancel":"Abbrechen",
+    "world.session.enter":"Öffnen",
+    "world.session.start.aria":"Bot auf {world} starten",
+    "world.session.stop.aria":"Bot auf {world} stoppen",
+    "world.session.retry.aria":"Verbindung zu {world} wiederholen",
+    "world.session.enter.aria":"Weltraum für {world} öffnen",
+    "world.session.disabled.delete":"Sitzung beenden, bevor diese Welt gelöscht wird",
+    "world.session.disabled.editMenu":"Welt mit aktiver Sitzung kann nicht geändert werden",
+    "world.session.disabled.deleteAccount":"Alle aktiven Sitzungen beenden, bevor das Konto gelöscht wird",
+    "world.session.started.toast":"Bot auf {world} gestartet",
+    "world.session.stopped.toast":"Bot auf {world} gestoppt",
+    "world.session.error.toast":"Verbindung zu {world} fehlgeschlagen",
+    "toolbar.view.s4sessionMixed":"S4 — gemischte Zustände",
+    "toolbar.view.s4sessionIdle":"S4 — alle inaktiv",
+    "toolbar.view.s4sessionActive":"S4 — alle aktiv",
+    "toolbar.view.s4sessionError":"S4 — alle Fehler",
+    "search":"Sprache suchen…",
+    "hint.edit":"Blöcke ziehen (8px-Raster). «Fertig» drücken.",
+    "hint.view":"«Bearbeiten» klicken zum Verschieben.",
+    "error.network":"Verbindungsfehler. Bitte erneut versuchen.",
+  },
+};
+
+const t = (l, k) => {
+  const dict = I18N[l] || I18N.en;
+  return (dict[k] !== undefined ? dict[k] : (I18N.en[k] !== undefined ? I18N.en[k] : k));
+};
+
+/* ===================================================================
+   PARSEO DE URL DE SERVIDOR
+   =================================================================== */
+function parseServer(url){
+  try{
+    const h = new URL(url).hostname; // "ts1.x1.international.travian.com"
+    const parts = h.split(".");
+    const server = parts[0];
+    const speed  = parts.find(p => /^x\d+$/.test(p)) || null;
+    const region = parts.find((p,i) => i > 0 && !/^x\d+$/.test(p) && p !== "travian" && p !== "com" && p !== "net") || null;
+    if(!server) return null;
+    const bits = [server, speed, region].filter(Boolean);
+    return bits.join(" · ");
+  }catch(e){ return null; }
+}
+
+/* ===================================================================
+   TEMA
+   =================================================================== */
+const SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+const root = document.documentElement;
+const THEME_KEY = "theme", LANG_KEY = "lang", LAYOUT_KEY = "detallePlaygroundLayout";
+
+function curTheme(){ return root.dataset.theme === "dark" ? "dark" : "light"; }
+function paintTheme(){
+  const isDark = curTheme() === "dark";
+  document.getElementById("themeBtn").innerHTML = isDark ? SUN : MOON;
+  const icon = document.getElementById("appThemeIcon");
+  icon.innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
+    : '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>';
+  icon.setAttribute("viewBox","0 0 24 24");
+}
+(function(){
+  const s = localStorage.getItem(THEME_KEY);
+  root.dataset.theme = s || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light");
+  paintTheme();
+})();
+function toggleTheme(){
+  const n = curTheme() === "dark" ? "light" : "dark";
+  root.dataset.theme = n; localStorage.setItem(THEME_KEY, n); paintTheme();
+}
+document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+document.getElementById("appThemeBtn").addEventListener("click", toggleTheme);
+
+/* ===================================================================
+   IDIOMA
+   =================================================================== */
+let curLang = localStorage.getItem(LANG_KEY) || "es";
+const langBtn      = document.getElementById("langBtn");
+const langBtnLabel = document.getElementById("langBtnLabel");
+const langPanel    = document.getElementById("langPanel");
+const langList     = document.getElementById("langList");
+const langSearch   = document.getElementById("langSearch");
+const appLangLabel = document.getElementById("appLangLabel");
+
+function applyLang(code){
+  curLang = code; localStorage.setItem(LANG_KEY, code);
+  root.lang = code; root.dir = RTL.has(code) ? "rtl" : "ltr";
+
+  // Espejar flechas de breadcrumb en RTL
+  const isRTL = RTL.has(code);
+  document.querySelectorAll("#backArrow, #backArrow404").forEach(svg => {
+    svg.innerHTML = isRTL
+      ? '<polyline points="9 18 15 12 9 6"/>'
+      : '<polyline points="15 18 9 12 15 6"/>';
+  });
+
+  const f = LANGS.find(l => l.code === code);
+  const name = f ? f.name : code;
+  langBtnLabel.textContent = name;
+  appLangLabel.textContent = name;
+  langSearch.placeholder = t(code, "search");
+
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const k = el.dataset.i18n;
+    if(k && el.tagName !== "OPTION") el.textContent = t(code, k);
+  });
+  document.querySelectorAll("option[data-i18n]").forEach(el => {
+    el.textContent = t(code, el.dataset.i18n);
+  });
+  document.getElementById("hint").textContent = document.body.classList.contains("editing")
+    ? t(code,"hint.edit") : t(code,"hint.view");
+  document.querySelectorAll("[data-soon]").forEach(el => {
+    el.title = t(code,"tooltip.comingSoon");
+  });
+
+  // Re-renderizar fechas y contenido dependiente del idioma
+  renderAccountCreatedAt();
+  renderWorldsRows(currentWorldsData);
+  renderLangList(langSearch.value);
+}
+
+function renderLangList(filter){
+  const q = (filter||"").trim().toLowerCase();
+  const items = LANGS.filter(l => !q || l.name.toLowerCase().includes(q) || l.code.includes(q));
+  langList.innerHTML = items.map(l =>
+    `<button class="lang-item" role="option" data-code="${l.code}" aria-selected="${l.code===curLang}">
+      <span>${l.name}</span><span class="code">${l.code}</span>
+    </button>`
+  ).join("");
+  langList.querySelectorAll(".lang-item").forEach(b => b.addEventListener("click", () => {
+    applyLang(b.dataset.code);
+    langPanel.classList.remove("open"); langBtn.setAttribute("aria-expanded","false");
+  }));
+}
+langBtn.addEventListener("click", () => {
+  const open = langPanel.classList.toggle("open");
+  langBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if(open){ langSearch.value=""; renderLangList(""); setTimeout(()=>langSearch.focus(),0); }
+});
+langSearch.addEventListener("input", () => renderLangList(langSearch.value));
+document.addEventListener("click", e => {
+  if(!e.target.closest(".lang-wrap")){ langPanel.classList.remove("open"); langBtn.setAttribute("aria-expanded","false"); }
+});
+
+/* ===================================================================
+   FORMATO FECHA
+   =================================================================== */
+function fmtDate(dateStr){
+  try{
+    return new Intl.DateTimeFormat(curLang, {day:"numeric",month:"short",year:"numeric"}).format(new Date(dateStr+"T00:00:00"));
+  }catch(e){ return dateStr; }
+}
+
+/* ===================================================================
+   RENDER: cabecera de cuenta
+   =================================================================== */
+function renderAccountCreatedAt(){
+  const el = document.getElementById("acctCreatedAt");
+  if(el) el.textContent = t(curLang,"page.account.createdAt").replace("{date}", fmtDate(ACCOUNT.created));
+}
+
+/* ===================================================================
+   SESSION STATUS BADGE — genera el HTML del badge icono+texto (§4b)
+   DESIGN.md §5: nunca solo color — siempre icono + texto
+   =================================================================== */
+function sessionBadgeHTML(state){
+  // Icono SVG inline según estado
+  const icons = {
+    idle:       '<svg class="badge-icon" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="5"/></svg>',
+    connecting: '<span class="badge-spinner" aria-hidden="true"></span>',
+    active:     '<svg class="badge-icon" width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="5"/></svg>',
+    error:      '<svg class="badge-icon" width="11" height="11" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 1L1 13h14L8 1z"/><line x1="8" y1="5.5" x2="8" y2="8.5"/><circle cx="8" cy="11" r=".5" fill="currentColor" stroke="none"/></svg>',
+    stopping:   '<span class="badge-spinner" aria-hidden="true"></span>',
+  };
+  const labelKey = {
+    idle:'world.session.idle', connecting:'world.session.connecting',
+    active:'world.session.active', error:'world.session.error', stopping:'world.session.stopping',
+  };
+  const icon  = icons[state]  || icons.idle;
+  const label = t(curLang, labelKey[state] || 'world.session.idle');
+  return `<span class="session-badge state-${state}">${icon}<span>${label}</span></span>`;
+}
+
+/* ===================================================================
+   WORLD SESSION BUTTON — genera el HTML del botón de acción (§4b)
+   =================================================================== */
+function sessionButtonHTML(w){
+  const parsed = parseServer(w.url) || w.url;
+  switch(w.session){
+    case 'idle':
+      return `<button class="btn-session session-start" type="button"
+                data-world-id="${w.id}"
+                aria-label="${t(curLang,'world.session.start.aria').replace('{world}',parsed)}">
+                ${t(curLang,'world.session.start')}
+              </button>`;
+    case 'connecting':
+      // Cancelar deshabilitado visualmente (spec §4b: "visual only" — no hace nada real)
+      return `<button class="btn-session session-cancel" type="button" disabled
+                data-world-id="${w.id}"
+                title="${t(curLang,'world.session.cancel')}">
+                <span class="spinner" style="width:11px;height:11px;border-width:1.8px;" aria-hidden="true"></span>
+                ${t(curLang,'world.session.cancel')}
+              </button>`;
+    case 'active':
+      return `<span style="display:inline-flex;align-items:center;gap:4px;">
+                <button class="btn-session session-enter" type="button"
+                  data-world-id="${w.id}"
+                  aria-label="${t(curLang,'world.session.enter.aria').replace('{world}',parsed)}">
+                  ${t(curLang,'world.session.enter')}
+                </button>
+                <button class="btn-session session-stop" type="button"
+                  data-world-id="${w.id}"
+                  aria-label="${t(curLang,'world.session.stop.aria').replace('{world}',parsed)}">
+                  ${t(curLang,'world.session.stop')}
+                </button>
+              </span>`;
+    case 'error':
+      return `<button class="btn-session session-retry" type="button"
+                data-world-id="${w.id}"
+                aria-label="${t(curLang,'world.session.retry.aria').replace('{world}',parsed)}">
+                ${t(curLang,'world.session.retry')}
+              </button>`;
+    case 'stopping':
+      // Sin botón visible; el badge ya muestra el spinner (spec §4b tabla)
+      return '';
+    default:
+      return '';
+  }
+}
+
+/* ===================================================================
+   RENDER: tabla de mundos — ACTUALIZADO con sesión
+   =================================================================== */
+let currentWorldsData = WORLDS;
+
+// Estado mutable de sesión por mundo (worldId → state string)
+// Separado de los datos base para que las transiciones no afecten los datos originales
+const worldSessionState = {};
+
+function getWorldSession(worldId){
+  return worldSessionState[worldId] || 'idle';
+}
+function setWorldSession(worldId, state){
+  worldSessionState[worldId] = state;
+}
+
+function renderWorldsRows(worlds){
+  currentWorldsData = worlds;
+
+  // Inicializar el estado de sesión desde los datos si no existe ya
+  worlds.forEach(w => {
+    if(worldSessionState[w.id] === undefined){
+      worldSessionState[w.id] = w.session || 'idle';
+    }
+  });
+
+  const tbody = document.getElementById("worldsTableBody");
+  const cards  = document.getElementById("worldCards");
+  const empty  = document.getElementById("worldsEmpty");
+  const count  = document.getElementById("worldsCount");
+
+  if(count) count.textContent = "(" + worlds.length + ")";
+
+  // Actualizar estado del botón "Borrar cuenta" — deshabilitado si algún mundo está active/connecting
+  updateDeleteAccountBtn();
+
+  if(!worlds.length){
+    if(tbody) { const table = tbody.closest("table"); if(table) table.style.display="none"; }
+    if(cards) cards.style.display="none";
+    if(empty) empty.style.display="";
+    return;
+  }
+
+  const worldTable = tbody ? tbody.closest("table") : null;
+  if(worldTable) worldTable.style.display="";
+  if(empty) empty.style.display="none";
+
+  if(tbody){
+    tbody.innerHTML = worlds.map(w => {
+      const parsed    = parseServer(w.url) || w.url;
+      const tribeKey  = "tribe." + w.tribe;
+      const state     = getWorldSession(w.id);
+      const isBlocked = (state === 'active' || state === 'connecting' || state === 'stopping');
+
+      // Botón ⋯ deshabilitado si sesión activa/connecting/stopping (con tooltip)
+      const menuBtnDisabled = isBlocked ? 'disabled' : '';
+      const menuBtnTitle    = isBlocked
+        ? t(curLang, 'world.session.disabled.delete')
+        : t(curLang, 'page.account.action.deleteWorld') + ' ' + parsed;
+
+      return `
+        <tr role="row" data-world-id="${w.id}">
+          <td class="col-server hide-md" title="${w.url}">${w.url}</td>
+          <td class="col-parsed">${parsed}</td>
+          <td class="col-tribe">${t(curLang, tribeKey)}</td>
+          <td class="col-session">${sessionBadgeHTML(state)}</td>
+          <td class="col-actions-wide">
+            <div class="col-session-actions">
+              ${sessionButtonHTML({...w, session: state})}
+              <button class="row-menu-btn" type="button"
+                      aria-label="${menuBtnTitle}"
+                      title="${menuBtnTitle}"
+                      data-world-id="${w.id}"
+                      data-world-parsed="${parsed}"
+                      ${menuBtnDisabled}>&#8943;</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join("");
+
+    // Botones de sesión
+    tbody.querySelectorAll(".btn-session").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        if(btn.classList.contains("session-enter")){
+          // Mundo ya activo → navegar directamente al Espacio del mundo (sin re-login)
+          if(!document.body.classList.contains("editing")){
+            window.location = "mundo.playground.html";
+          }
+          return;
+        }
+        const wid = parseInt(btn.dataset.worldId, 10);
+        handleSessionAction(wid);
+      });
+    });
+    // Botón ⋯
+    tbody.querySelectorAll(".row-menu-btn:not([disabled])").forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); openCtxMenu(e, btn); });
+    });
+  }
+
+  if(cards){
+    cards.innerHTML = worlds.map(w => {
+      const parsed   = parseServer(w.url) || w.url;
+      const tribeKey = "tribe." + w.tribe;
+      const state    = getWorldSession(w.id);
+      const isBlocked = (state === 'active' || state === 'connecting' || state === 'stopping');
+      const menuBtnDisabled = isBlocked ? 'disabled' : '';
+      const menuBtnTitle    = isBlocked ? t(curLang,'world.session.disabled.delete') : '';
+      return `
+        <div class="world-card" data-world-id="${w.id}">
+          <div class="card-main">
+            <div class="card-parsed">${parsed}</div>
+            <div class="card-tribe">${t(curLang, tribeKey)}</div>
+            <div style="margin-top:6px;">${sessionBadgeHTML(state)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            ${sessionButtonHTML({...w, session: state})}
+            <button class="row-menu-btn" type="button"
+                    aria-label="${t(curLang,'page.account.action.deleteWorld')} ${parsed}"
+                    data-world-id="${w.id}" data-world-parsed="${parsed}"
+                    title="${menuBtnTitle}"
+                    ${menuBtnDisabled}>&#8943;</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    cards.querySelectorAll(".btn-session").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        if(btn.classList.contains("session-enter")){
+          if(!document.body.classList.contains("editing")){
+            window.location = "mundo.playground.html";
+          }
+          return;
+        }
+        const wid = parseInt(btn.dataset.worldId, 10);
+        handleSessionAction(wid);
+      });
+    });
+    cards.querySelectorAll(".row-menu-btn:not([disabled])").forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); openCtxMenu(e, btn); });
+    });
+  }
+}
+
+/* ===================================================================
+   TRANSICIONES DE SESIÓN SIMULADAS (100% estático, sin backend)
+   Spec §12b: Arrancar→Conectando 1.5s→Activo | Parar→Inactivo | Reintentar como Arrancar
+   =================================================================== */
+function handleSessionAction(worldId){
+  const state  = getWorldSession(worldId);
+  const world  = currentWorldsData.find(w => w.id === worldId);
+  const parsed = world ? (parseServer(world.url) || world.url) : `mundo ${worldId}`;
+
+  if(state === 'idle' || state === 'error'){
+    // Arrancar o Reintentar → Conectando
+    setWorldSession(worldId, 'connecting');
+    renderWorldsRows(currentWorldsData);
+
+    // Simular 1.5s de login síncrono y navegar al Espacio del mundo (200 simulado)
+    setTimeout(() => {
+      // Verificar que el mundo sigue en "connecting" (el usuario no lo canceló)
+      if(getWorldSession(worldId) === 'connecting'){
+        setWorldSession(worldId, 'active');
+        renderWorldsRows(currentWorldsData);
+        showToast(t(curLang,'world.session.started.toast').replace('{world}', parsed));
+        // Navegar al Espacio del mundo (solo en modo PREVIEW, con el guard de edición)
+        if(!document.body.classList.contains("editing")){
+          setTimeout(() => { window.location = "mundo.playground.html"; }, 800);
+        }
+      }
+    }, 1500);
+
+  } else if(state === 'active'){
+    // Parar → Inactivo directamente (v1: sin estado "stopping")
+    setWorldSession(worldId, 'idle');
+    renderWorldsRows(currentWorldsData);
+    showToast(t(curLang,'world.session.stopped.toast').replace('{world}', parsed));
+  }
+  // connecting y stopping: botón deshabilitado, no hay acción
+}
+
+/* ===================================================================
+   ACTUALIZAR BOTÓN "BORRAR CUENTA" según estado de sesión
+   Se deshabilita si algún mundo está active o connecting (§4b restricciones)
+   =================================================================== */
+function updateDeleteAccountBtn(){
+  const btn = document.getElementById("deleteAccountBtn");
+  if(!btn) return;
+  const hasActiveSession = currentWorldsData.some(w => {
+    const s = getWorldSession(w.id);
+    return s === 'active' || s === 'connecting';
+  });
+  btn.disabled = hasActiveSession;
+  btn.title = hasActiveSession
+    ? t(curLang, 'world.session.disabled.deleteAccount')
+    : '';
+}
+
+/* ===================================================================
+   CONTEXT MENU (borrar mundo)
+   =================================================================== */
+const ctxMenu = document.getElementById("ctxMenu");
+let ctxWorldId = null, ctxWorldParsed = "";
+
+function openCtxMenu(e, btn){
+  ctxWorldId     = btn.dataset.worldId;
+  ctxWorldParsed = btn.dataset.worldParsed;
+  const r = btn.getBoundingClientRect();
+  ctxMenu.style.top = (r.bottom + 4) + "px";
+  ctxMenu.style.insetInlineStart = "auto";
+  ctxMenu.style.insetInlineEnd   = (window.innerWidth - r.right) + "px";
+  ctxMenu.classList.add("open");
+}
+document.addEventListener("click", e => {
+  if(!e.target.closest(".ctx-menu") && !e.target.closest(".row-menu-btn"))
+    ctxMenu.classList.remove("open");
+});
+document.getElementById("ctxDeleteWorldBtn").addEventListener("click", () => {
+  ctxMenu.classList.remove("open");
+  showToast("Abriendo confirmación para borrar mundo…");
+});
+
+/* ===================================================================
+   MODAL HELPERS
+   =================================================================== */
+function openModal(id){
+  const bd = document.getElementById(id);
+  if(!bd) return;
+  bd.classList.add("open");
+  // focus trap: primer elemento focusable
+  setTimeout(()=>{
+    const first = bd.querySelector("input:not([disabled]),button:not([disabled]),select");
+    if(first) first.focus();
+  }, 50);
+}
+function closeModal(id){
+  const bd = document.getElementById(id);
+  if(bd) bd.classList.remove("open");
+}
+
+// Cerrar con ESC
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape"){
+    ["editModal","deleteAccountModal","deleteWorldModal"].forEach(closeModal);
+  }
+});
+// Cerrar con click en backdrop
+["editModal","deleteAccountModal","deleteWorldModal"].forEach(id => {
+  document.getElementById(id).addEventListener("click", function(e){
+    if(e.target === this) closeModal(id);
+  });
+});
+
+/* ===================================================================
+   MODAL EDITAR CUENTA (S5)
+   =================================================================== */
+document.getElementById("editModalClose").addEventListener("click",  () => closeModal("editModal"));
+document.getElementById("editCancelBtn").addEventListener("click",   () => closeModal("editModal"));
+
+// Toggle "Cambiar contraseña"
+document.getElementById("changePwBtn").addEventListener("click", () => {
+  document.getElementById("changePwLink").style.display = "none";
+  document.getElementById("pwFields").style.display = "";
+  document.getElementById("editNewPw").focus();
+});
+
+// Toggle visibilidad password
+function makePwToggle(inputId, toggleId, eyeId){
+  document.getElementById(toggleId).addEventListener("click", () => {
+    const inp = document.getElementById(inputId);
+    const eye = document.getElementById(eyeId);
+    const show = inp.type === "password";
+    inp.type = show ? "text" : "password";
+    eye.innerHTML = show
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  });
+}
+makePwToggle("editNewPw","editNewPwToggle","editNewPwEye");
+makePwToggle("editConfirmPw","editConfirmPwToggle","editConfirmPwEye");
+
+// Validar coincidencia de contraseñas
+function validatePw(){
+  const p1 = document.getElementById("editNewPw").value;
+  const p2 = document.getElementById("editConfirmPw").value;
+  const err = document.getElementById("editPwMismatch");
+  const visible = document.getElementById("pwFields").style.display !== "none";
+  if(visible && p1 && p2 && p1 !== p2){
+    err.classList.add("show");
+    document.getElementById("editNewPw").classList.add("error");
+    document.getElementById("editConfirmPw").classList.add("error");
+    document.getElementById("editSaveBtn").disabled = true;
+  } else {
+    err.classList.remove("show");
+    document.getElementById("editNewPw").classList.remove("error");
+    document.getElementById("editConfirmPw").classList.remove("error");
+    document.getElementById("editSaveBtn").disabled = false;
+  }
+}
+["editNewPw","editConfirmPw"].forEach(id =>
+  document.getElementById(id).addEventListener("input", validatePw));
+
+document.getElementById("editSaveBtn").addEventListener("click", () => {
+  showToast(t(curLang, "modal.edit.savedToast"));
+  closeModal("editModal");
+});
+
+// Vincular botón "Editar" de la cabecera
+document.getElementById("editAccountBtn").addEventListener("click", () => {
+  // Resetear estado del modal
+  document.getElementById("editEmailError").classList.remove("show");
+  document.getElementById("editEmailError").textContent = "";
+  document.getElementById("editEmail").classList.remove("error");
+  document.getElementById("changePwLink").style.display = "";
+  document.getElementById("pwFields").style.display = "none";
+  document.getElementById("editNewPw").value = "";
+  document.getElementById("editConfirmPw").value = "";
+  document.getElementById("editPwMismatch").classList.remove("show");
+  document.getElementById("editSaveBtn").disabled = false;
+  openModal("editModal");
+});
+document.getElementById("deleteAccountBtn").addEventListener("click", () => {
+  renderDeleteAccountModal(false);
+  openModal("deleteAccountModal");
+});
+if(document.getElementById("addWorldBtn"))
+  document.getElementById("addWorldBtn").addEventListener("click", () => showToast("Abriendo modal Añadir mundo…"));
+if(document.getElementById("emptyAddWorldBtn"))
+  document.getElementById("emptyAddWorldBtn").addEventListener("click", () => showToast("Abriendo modal Añadir mundo…"));
+
+/* ===================================================================
+   MODAL BORRAR CUENTA (S7) — normal vs 409
+   =================================================================== */
+function renderDeleteAccountModal(is409){
+  const body   = document.getElementById("deleteAccountBody");
+  const footer = document.getElementById("deleteAccountFooter");
+
+  if(is409){
+    body.innerHTML = `
+      <div class="error-block" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="error-block-text">${t(curLang,"modal.deleteAccount.active")}</span>
+      </div>`;
+    footer.innerHTML = `
+      <button class="btn-secondary" id="deleteAccountClose409">${t(curLang,"modal.deleteAccount.close")}</button>`;
+    setTimeout(() => {
+      const btn409 = document.getElementById("deleteAccountClose409");
+      if(btn409) btn409.addEventListener("click", () => closeModal("deleteAccountModal"));
+    }, 0);
+  } else {
+    const n = currentWorldsData.length;
+    body.innerHTML = `
+      <p class="confirm-question">${t(curLang,"modal.deleteAccount.body").replace("{username}", ACCOUNT.username)}</p>
+      <p class="confirm-warning">${t(curLang,"modal.deleteAccount.warning").replace("{n}", n)}</p>`;
+    footer.innerHTML = `
+      <button class="btn-secondary" id="deleteAccountCancelBtn">${t(curLang,"modal.deleteAccount.cancel")}</button>
+      <button class="btn-danger"    id="deleteAccountConfirmBtn">${t(curLang,"modal.deleteAccount.confirm")}</button>`;
+    setTimeout(() => {
+      document.getElementById("deleteAccountCancelBtn").addEventListener("click", () => closeModal("deleteAccountModal"));
+      document.getElementById("deleteAccountConfirmBtn").addEventListener("click", () => {
+        showToast(t(curLang,"modal.deleteAccount.toast"));
+        closeModal("deleteAccountModal");
+      });
+    }, 0);
+  }
+}
+document.getElementById("deleteAccountClose").addEventListener("click", () => closeModal("deleteAccountModal"));
+
+/* ===================================================================
+   MODAL BORRAR MUNDO (S8) — normal vs 409
+   =================================================================== */
+function renderDeleteWorldModal(is409){
+  const body   = document.getElementById("deleteWorldBody");
+  const footer = document.getElementById("deleteWorldFooter");
+  const w0     = currentWorldsData[0] || WORLDS_BASE[0];
+  const parsed = parseServer(w0.url) || w0.url;
+
+  if(is409){
+    body.innerHTML = `
+      <div class="error-block" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <span class="error-block-text">${t(curLang,"modal.deleteWorld.active")}</span>
+      </div>`;
+    footer.innerHTML = `
+      <button class="btn-secondary" id="deleteWorldClose409">${t(curLang,"modal.deleteAccount.close")}</button>`;
+    setTimeout(() => {
+      const btn = document.getElementById("deleteWorldClose409");
+      if(btn) btn.addEventListener("click", () => closeModal("deleteWorldModal"));
+    }, 0);
+  } else {
+    body.innerHTML = `
+      <p class="confirm-question">${t(curLang,"modal.deleteWorld.body").replace("{parsed}", parsed)}</p>
+      <p class="confirm-warning">${t(curLang,"modal.deleteWorld.warning")}</p>`;
+    footer.innerHTML = `
+      <button class="btn-secondary" id="deleteWorldCancelBtn">${t(curLang,"modal.deleteWorld.cancel")}</button>
+      <button class="btn-danger"    id="deleteWorldConfirmBtn">${t(curLang,"modal.deleteWorld.confirm")}</button>`;
+    setTimeout(() => {
+      document.getElementById("deleteWorldCancelBtn").addEventListener("click",  () => closeModal("deleteWorldModal"));
+      document.getElementById("deleteWorldConfirmBtn").addEventListener("click", () => {
+        showToast(t(curLang,"modal.deleteWorld.toast"));
+        closeModal("deleteWorldModal");
+      });
+    }, 0);
+  }
+}
+document.getElementById("deleteWorldClose").addEventListener("click", () => closeModal("deleteWorldModal"));
+
+/* ===================================================================
+   FOCUS TRAP en modales
+   =================================================================== */
+function trapFocus(backdropId, e){
+  const bd = document.getElementById(backdropId);
+  if(!bd || !bd.classList.contains("open")) return;
+  const focusable = [...bd.querySelectorAll(
+    'button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )];
+  if(!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length-1];
+  if(e.key === "Tab"){
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  }
+}
+document.addEventListener("keydown", e => {
+  ["editModal","deleteAccountModal","deleteWorldModal"].forEach(id => trapFocus(id, e));
+});
+
+/* ===================================================================
+   VISTA SWITCHER
+   =================================================================== */
+// Reinicializa los estados de sesión de un conjunto de mundos dado
+function initSessionStates(worlds){
+  worlds.forEach(w => {
+    worldSessionState[w.id] = w.session || 'idle';
+  });
+}
+
+function showS4WithWorlds(worlds){
+  document.getElementById("viewS4").style.display = "";
+  renderAccountCreatedAt();
+  document.getElementById("breadcrumbUsername").textContent = ACCOUNT.username;
+  document.getElementById("acctUsername").textContent = ACCOUNT.username;
+  document.getElementById("acctEmail").textContent    = ACCOUNT.email;
+  initSessionStates(worlds);
+  renderWorldsRows(worlds);
+}
+
+function applyView(view){
+  // Ocultar todo
+  document.getElementById("viewS4").style.display       = "none";
+  document.getElementById("viewS4Loading").style.display = "none";
+  document.getElementById("viewS4404").style.display     = "none";
+  closeModal("editModal");
+  closeModal("deleteAccountModal");
+  closeModal("deleteWorldModal");
+
+  // ── VISTAS DE SESIÓN ──────────────────────────────────────────────
+  if(view === "s4-session-mixed"){
+    // Cuatro mundos, uno por estado: idle / connecting / active / error
+    showS4WithWorlds(WORLDS_MIXED);
+    return;
+
+  } else if(view === "s4-session-idle"){
+    showS4WithWorlds(WORLDS_ALL_IDLE);
+    return;
+
+  } else if(view === "s4-session-active"){
+    showS4WithWorlds(WORLDS_ALL_ACTIVE);
+    return;
+
+  } else if(view === "s4-session-error"){
+    showS4WithWorlds(WORLDS_ALL_ERROR);
+    return;
+
+  // ── VISTAS EXISTENTES ─────────────────────────────────────────────
+  } else if(view === "s4-data"){
+    document.getElementById("viewS4").style.display = "";
+    currentWorldsData = WORLDS;
+    renderAccountCreatedAt();
+    document.getElementById("breadcrumbUsername").textContent = ACCOUNT.username;
+    document.getElementById("acctUsername").textContent = ACCOUNT.username;
+    document.getElementById("acctEmail").textContent    = ACCOUNT.email;
+    // Para la vista "con mundos" por defecto se muestra el estado mixto
+    initSessionStates(WORLDS);
+    renderWorldsRows(WORLDS);
+
+  } else if(view === "s4-empty"){
+    document.getElementById("viewS4").style.display = "";
+    currentWorldsData = [];
+    renderAccountCreatedAt();
+    document.getElementById("breadcrumbUsername").textContent = ACCOUNT.username;
+    document.getElementById("acctUsername").textContent = ACCOUNT.username;
+    document.getElementById("acctEmail").textContent    = ACCOUNT.email;
+    renderWorldsRows([]);
+
+  } else if(view === "s4-loading"){
+    document.getElementById("viewS4Loading").style.display = "";
+
+  } else if(view === "s4-404"){
+    document.getElementById("viewS4404").style.display = "";
+
+  } else if(view === "s5-normal"){
+    showS4WithWorlds(WORLDS_MIXED);
+    // Abrir modal editar en estado normal
+    document.getElementById("editEmailError").classList.remove("show");
+    document.getElementById("editEmail").classList.remove("error");
+    document.getElementById("changePwLink").style.display = "";
+    document.getElementById("pwFields").style.display = "none";
+    document.getElementById("editSaveBtn").disabled = false;
+    openModal("editModal");
+
+  } else if(view === "s5-409"){
+    showS4WithWorlds(WORLDS_MIXED);
+    // Abrir modal con error 409
+    document.getElementById("changePwLink").style.display = "";
+    document.getElementById("pwFields").style.display = "none";
+    const emailErr = document.getElementById("editEmailError");
+    emailErr.textContent = t(curLang,"modal.edit.error409");
+    emailErr.classList.add("show");
+    document.getElementById("editEmail").classList.add("error");
+    document.getElementById("editSaveBtn").disabled = true;
+    openModal("editModal");
+
+  } else if(view === "s7-normal"){
+    showS4WithWorlds(WORLDS_ALL_IDLE);
+    renderDeleteAccountModal(false);
+    openModal("deleteAccountModal");
+
+  } else if(view === "s7-409"){
+    showS4WithWorlds(WORLDS_ALL_ACTIVE);
+    renderDeleteAccountModal(true);
+    openModal("deleteAccountModal");
+
+  } else if(view === "s8-normal"){
+    showS4WithWorlds(WORLDS_ALL_IDLE);
+    renderDeleteWorldModal(false);
+    openModal("deleteWorldModal");
+
+  } else if(view === "s8-409"){
+    // En s8-409 el primer mundo está activo (para que tenga sentido el error)
+    showS4WithWorlds(WORLDS_ALL_ACTIVE);
+    renderDeleteWorldModal(true);
+    openModal("deleteWorldModal");
+  }
+}
+
+document.getElementById("viewSelect").addEventListener("change", e => {
+  applyView(e.target.value);
+});
+
+/* ===================================================================
+   BREADCRUMB / BOTONES VOLVER
+   =================================================================== */
+// Breadcrumb "Cuentas" y botón 404 "Volver" → lista de cuentas en modo PREVIEW
+document.getElementById("backToCuentas").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  window.location = "cuentas.playground.html";
+});
+document.getElementById("notFoundBackBtn").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  window.location = "cuentas.playground.html";
+});
+
+/* ===================================================================
+   TOAST
+   =================================================================== */
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent = msg; toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
+/* ===================================================================
+   DRAG & DROP (imán 8px) — idéntico a los playgrounds hermanos
+   =================================================================== */
+const contentArea = document.getElementById("contentArea");
+const dragBlocks  = () => [...contentArea.querySelectorAll(".drag-block")];
+function snap(v){ return Math.round(v/8)*8; }
+let drag = null;
+
+contentArea.addEventListener("pointerdown", e => {
+  if(!document.body.classList.contains("editing")) return;
+  const el = e.target.closest(".drag-block"); if(!el) return;
+  e.preventDefault();
+  el.setPointerCapture(e.pointerId); el.classList.add("dragging");
+  drag = { el, startX:e.clientX, startY:e.clientY, origX:el.offsetLeft, origY:el.offsetTop };
+});
+contentArea.addEventListener("pointermove", e => {
+  if(!drag) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  const maxX = contentArea.clientWidth  - drag.el.offsetWidth;
+  const maxY = contentArea.scrollHeight - drag.el.offsetHeight;
+  drag.el.style.left = Math.max(0, Math.min(maxX, snap(drag.origX + dx))) + "px";
+  drag.el.style.top  = Math.max(0, Math.min(maxY, snap(drag.origY + dy))) + "px";
+});
+function endDrag(e){
+  if(!drag) return;
+  drag.el.classList.remove("dragging");
+  try{ drag.el.releasePointerCapture(e.pointerId); }catch(x){}
+  drag = null;
+}
+contentArea.addEventListener("pointerup", endDrag);
+contentArea.addEventListener("pointercancel", endDrag);
+
+/* ===================================================================
+   EDIT MODE
+   =================================================================== */
+const editBtn = document.getElementById("editBtn");
+const hintEl  = document.getElementById("hint");
+let editing   = false;
+
+editBtn.addEventListener("click", () => {
+  editing = !editing;
+  document.body.classList.toggle("editing", editing);
+  editBtn.setAttribute("aria-pressed", editing ? "true" : "false");
+  editBtn.textContent = editing ? "✓ Listo" : "✎ Editar";
+  hintEl.textContent  = editing ? t(curLang,"hint.edit") : t(curLang,"hint.view");
+
+  if(editing){
+    dragBlocks().forEach(b => {
+      const rect = b.getBoundingClientRect();
+      const pRect = contentArea.getBoundingClientRect();
+      b.style.position = "absolute";
+      b.style.left  = snap(rect.left - pRect.left + contentArea.scrollLeft) + "px";
+      b.style.top   = snap(rect.top  - pRect.top  + contentArea.scrollTop)  + "px";
+      b.style.width = b.offsetWidth + "px";
+    });
+    contentArea.style.position = "relative";
+    contentArea.style.height   = contentArea.scrollHeight + "px";
+  } else {
+    dragBlocks().forEach(b => { b.style.position=""; b.style.left=""; b.style.top=""; b.style.width=""; });
+    contentArea.style.position = "";
+    contentArea.style.height   = "";
+  }
+});
+
+/* ===================================================================
+   GUARDAR / RESTABLECER / EXPORTAR
+   =================================================================== */
+function currentLayout(){
+  const out = {};
+  dragBlocks().forEach(b => { if(b.style.left) out[b.dataset.dragId]={x:b.offsetLeft,y:b.offsetTop}; });
+  return out;
+}
+document.getElementById("saveBtn").addEventListener("click", () => {
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(currentLayout())); showToast("Layout guardado");
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  localStorage.removeItem(LAYOUT_KEY);
+  dragBlocks().forEach(b => { b.style.left=""; b.style.top=""; b.style.width=""; b.style.position=""; });
+  contentArea.style.position=""; contentArea.style.height="";
+  editing = false; document.body.classList.remove("editing");
+  editBtn.setAttribute("aria-pressed","false"); editBtn.textContent="✎ Editar";
+  hintEl.textContent = t(curLang,"hint.view");
+  showToast("Layout restablecido");
+});
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const data = { view: "cuenta-detalle", state: document.getElementById("viewSelect").value,
+    canvas:{w:contentArea.clientWidth,h:contentArea.clientHeight}, grid:8, blocks:currentLayout() };
+  const json = JSON.stringify(data, null, 2);
+  try{ await navigator.clipboard.writeText(json); showToast("Layout copiado al portapapeles"); }
+  catch(e){ showToast("Descargando layout…"); }
+  const blob = new Blob([json],{type:"application/json"});
+  const a = document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="cuenta-detalle.layout.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ===================================================================
+   INIT — arranca en la vista mixta de sesión para ver el affordance
+   =================================================================== */
+applyLang(curLang);
+applyView("s4-session-mixed");
+</script>
+</body>
+</html>

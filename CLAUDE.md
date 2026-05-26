@@ -56,9 +56,20 @@ El usuario debe confirmar explícitamente "OK, funciona" antes de que git-flow-a
 
 Para features con UI añadir entre el paso 2 y 3:
 ```
-2b. disenador-producto → Diseña pantallas en docs/design/
-2c. desarrollador-ux-ui → Implementa la UI según el diseño
+2b. disenador-producto    → Diseña pantallas en docs/design/
+2b-bis. MOCKUP EDITABLE    → ANTES de implementar UI, crear el playground editable
+                             frontend/mockups/<vista>.playground.html (drag & drop).
+                             *** GATE HUMANO ***: el usuario recompone los bloques,
+                             aprueba la composición y exporta el layout (JSON).
+2c. desarrollador-ux-ui    → Implementa la UI real según el diseño + el layout aprobado,
+                             reaplicando el responsive (§17 de DESIGN.md).
 ```
+
+> **Regla "mockup-first" (no negociable para UI):** ninguna vista/app se implementa en
+> código sin pasar antes por su HTML editable (`frontend/mockups/*.playground.html`),
+> que el usuario debe poder reorganizar arrastrando los componentes (botones, sliders,
+> pestañas, todo) y aprobar. El layout exportado es input directo de la implementación.
+> Ver `frontend/DESIGN.md` → "Workflow mockup-first" para el cómo.
 
 ### Reglas de delegación
 
@@ -67,6 +78,7 @@ Para features con UI añadir entre el paso 2 y 3:
 - **Cualquier endpoint nuevo o modificado** → `desarrollador-apis` de forma proactiva.
 - **Cualquier cambio en `adapters/browser/`, selectores o timings** → `guardian-antideteccion` inmediatamente (esto sí es siempre).
 - **`desarrollador-funcionalidades` solo entra con spec `ready-for-impl`** — si no hay spec, volver al `analista`.
+- **Ninguna UI se implementa sin mockup editable previo** — antes de tocar código de una vista/app, crear su `frontend/mockups/<vista>.playground.html` (drag & drop), que el usuario recompone y aprueba. El layout exportado alimenta a `desarrollador-ux-ui`.
 - **`git-flow-advisor` solo entra con OK explícito del usuario** — nunca commitear sin confirmación manual.
 - **Tarea con varios frentes** → primero `Plan`, luego ejecutar.
 - Los agentes arrancan en frío. Cada prompt debe ser **autocontenido**: objetivo, contexto, restricciones, criterios de aceptación.
@@ -462,10 +474,17 @@ Si una petición se hace sin esta cabecera, el backend responderá `400` — eso
 
 Impeccable lee `frontend/PRODUCT.md` y `frontend/DESIGN.md`. Actualizarlos si cambia la dirección de diseño.
 
-### Reglas de diseño (`frontend/DESIGN.md`)
-- Dark mode only (`#16171d` bg, `#c084fc` acento).
-- Sin glassmorphism, sin gradient text, sin pure black.
+### Reglas de diseño (`frontend/DESIGN.md` = fuente de verdad visual)
+- **Minimalismo estilo Apple / macOS.** Superficies neutras: gris plata (`#F5F5F7`) en claro, grafito (`#1D1D1F`) en oscuro.
+- **Modo claro + oscuro obligatorio** con toggle (sigue el sistema por defecto, override en `localStorage`). Tokens duales, ningún hex hardcodeado.
+- **Acento único: oro** (antiguo `#8A6418` en claro, champán `#CBB079` en oscuro), reservado a **enlaces + estados "activo"** — verificado WCAG AA. **NO en botones.** Nada de morado.
+- **Botones primarios monocromos invertidos** (grafito en claro, plata en oscuro), para no competir con el oro.
+- **Multi-idioma (25 idiomas, 3 RTL: ar/he/fa):** propiedades CSS lógicas, sin anchos fijos atados al texto, `Intl` para números/fechas, fuente del sistema multi-script. Selector por endónimo.
+- **Responsive mobile-first:** jerarquía P1/P2/P3 (ocultar P3, colapsar P2, nunca P1); móvil = monitorizar + acciones clave, desktop = gestión densa; tablas → tarjetas en móvil; targets ≥44px en táctil.
+- Tipografía del sistema (`-apple-system` / SF Pro), números con `tabular-nums`.
+- Sin glassmorphism, sin gradient text, sin negro/blanco puros, sin neón, sin dos acentos.
 - Tablas densas (herramienta interna, no landing page).
+- **Antes de tocar UI, leer `frontend/DESIGN.md` completo.**
 
 ---
 

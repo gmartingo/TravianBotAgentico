@@ -1,0 +1,202 @@
+/**
+ * Catálogo PL — Polski
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const pl = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Konta',
+  'nav.resources':    'Zasoby',
+  'nav.troops':       'Wojska',
+  'nav.construction': 'Budownictwo',
+  'nav.comingSoon':   'Wkrótce',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Zmień motyw',
+  'topbar.selectLanguage': 'Wybierz język',
+  'topbar.backToWorlds':   '← Światy',
+  'topbar.searchLanguage': 'Szukaj języka…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Konta',
+  'page.accounts.caption':      '{n} konto',
+  'page.accounts.caption.pl':   '{n} kont',
+  'page.accounts.newAccount':   'Nowe konto',
+  'page.accounts.empty.title':  'Brak kont',
+  'page.accounts.empty.desc':   'Dodaj pierwsze, aby zacząć używać bota.',
+  'page.accounts.col.email':    'E-mail',
+  'page.accounts.col.username': 'Nazwa użytkownika',
+  'page.accounts.col.worlds':   'Światy',
+  'page.accounts.col.created':  'Utworzono',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Edytuj konto',
+  'page.accounts.action.delete':'Usuń konto',
+  'page.accounts.loading':      'Ładowanie kont…',
+  'page.accounts.error':        'Nie udało się załadować kont.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Nowe konto',
+  'wizard.step':                 'Krok {current} z {total}',
+  'wizard.section.account':      'Dane konta',
+  'wizard.section.world':        'Pierwszy świat',
+  'wizard.field.email':          'E-mail',
+  'wizard.field.email.ph':       'gracz@przyklad.pl',
+  'wizard.field.username':       'Nazwa użytkownika',
+  'wizard.field.username.ph':    'MojeKonto',
+  'wizard.field.password':       'Hasło',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'URL serwera',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Plemię',
+  'wizard.field.tribe.ph':       'Wybierz plemię',
+  'wizard.btn.next':             'Dalej',
+  'wizard.btn.back':             'Wstecz',
+  'wizard.btn.create':           'Utwórz konto',
+  'wizard.btn.creating':         'Tworzenie…',
+  'wizard.btn.cancel':           'Anuluj',
+  'wizard.error.email.invalid':  'Podaj prawidłowy e-mail',
+  'wizard.error.email.taken':    'Ten e-mail jest już zarejestrowany',
+  'wizard.error.server.invalid': 'Podaj prawidłowy URL (http:// lub https://)',
+  'wizard.error.server.taken':   'Ten serwer już istnieje na tym koncie',
+  'wizard.error.required':       'To pole jest wymagane',
+  'wizard.error.tribe.required': 'Wybierz plemię',
+  'wizard.btn.showPassword':     'Pokaż hasło',
+  'wizard.btn.hidePassword':     'Ukryj hasło',
+  'wizard.toast.created':        'Konto utworzone',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Konta',
+  'page.account.createdAt':          'Utworzono: {date}',
+  'page.account.editBtn':            'Edytuj',
+  'page.account.deleteBtn':          'Usuń konto',
+  'page.account.worlds.title':       'Światy ({n})',
+  'page.account.worlds.add':         'Dodaj świat',
+  'page.account.worlds.empty':       'Brak światów na tym koncie.',
+  'page.account.col.server':         'Serwer',
+  'page.account.col.parsed':         'Serwer (czytelny)',
+  'page.account.col.tribe':          'Plemię',
+  'page.account.col.session':        'Sesja',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Usuń świat',
+  'page.account.notFound.title':     'Nie znaleziono konta',
+  'page.account.notFound.desc':      'Szukane konto nie istnieje lub zostało usunięte.',
+  'page.account.notFound.back':      'Wróć do kont',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Edytuj konto',
+  'modal.edit.changePassword':  'Zmień hasło',
+  'modal.edit.newPassword':     'Nowe hasło',
+  'modal.edit.confirmPassword': 'Potwierdź hasło',
+  'modal.edit.passwordMismatch':'Hasła nie są zgodne',
+  'modal.edit.saveBtn':         'Zapisz',
+  'modal.edit.savingBtn':       'Zapisywanie…',
+  'modal.edit.cancelBtn':       'Anuluj',
+  'modal.edit.closeBtn':        'Zamknij',
+  'modal.edit.savedToast':      'Zmiany zapisane',
+  'modal.edit.error409':        'Ten e-mail jest już używany przez inne konto.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Dodaj świat',
+  'modal.addWorld.addBtn':    'Dodaj',
+  'modal.addWorld.addingBtn': 'Dodawanie…',
+  'modal.addWorld.cancelBtn': 'Anuluj',
+  'modal.addWorld.toast':     'Świat dodany',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Usuń konto',
+  'modal.deleteAccount.body':    'Usunąć konto "{username}"?',
+  'modal.deleteAccount.warning': 'Tej czynności nie można cofnąć. Zostaną usunięte również wszystkie jego światy ({n} świat/y).',
+  'modal.deleteAccount.confirm': 'Usuń',
+  'modal.deleteAccount.cancel':  'Anuluj',
+  'modal.deleteAccount.toast':   'Konto usunięte',
+  'modal.deleteAccount.active':  'Nie można usunąć konta, gdy bot ma aktywną sesję. Najpierw zatrzymaj sesję.',
+  'modal.deleteAccount.close':   'Zamknij',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Usuń świat',
+  'modal.deleteWorld.body':    'Usunąć świat "{parsed}"?',
+  'modal.deleteWorld.warning': 'Tej czynności nie można cofnąć. Zostaną usunięte również wszystkie powiązane wioski.',
+  'modal.deleteWorld.confirm': 'Usuń',
+  'modal.deleteWorld.cancel':  'Anuluj',
+  'modal.deleteWorld.toast':   'Świat usunięty',
+  'modal.deleteWorld.active':  'Dla tego świata istnieje aktywna sesja. Najpierw zatrzymaj sesję.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Aktywny',
+  'world.status.panelLabel':      'Aktywna sesja',
+  'world.action.stop':            'Zatrzymaj',
+  'world.tab.config':             'Konfiguracja',
+  'world.tab.resources':          'Zasoby',
+  'world.tab.troops':             'Wojska',
+  'world.tab.construction':       'Budownictwo',
+  'world.tab.villages':           'Wioski',
+  'world.config.automationTitle': 'Automatyzacja',
+  'world.config.tasksTitle':      'Zadania bota',
+  'world.config.tasksDesc':       'Włącz lub wstrzymaj automatyczne zadania, które bot wykonuje w tym świecie.',
+  'world.config.task.buildQueue': 'Kolejka budowy',
+  'world.config.task.buildQueueDesc': 'Buduje budynki zgodnie z zaplanowaną kolejką',
+  'world.config.task.farmList':   'Lista farm',
+  'world.config.task.farmListDesc': 'Automatycznie wysyła ataki farmowe',
+  'world.config.task.troops':     'Szkolenie wojsk',
+  'world.config.task.troopsDesc': 'Utrzymuje kolejkę szkolenia aktywną',
+  'world.config.intervalsTitle':  'Interwały',
+  'world.config.intervalsDesc':   'Czas między sprawdzeniami bota. Wyższe wartości zmniejszają ryzyko wykrycia.',
+  'world.config.interval.check':  'Okresowe sprawdzenie',
+  'world.config.interval.farm':   'Między farmami',
+  'world.config.interval.jitter': 'Losowa wariacja',
+  'world.config.interval.min':    'min',
+  'world.config.comingSoonTitle': 'Wkrótce w tej przestrzeni',
+  'world.comingSoon.resourcesDesc':   'Monitorowanie drewna, gliny, żelaza i zboża w czasie rzeczywistym.',
+  'world.comingSoon.troopsDesc':      'Inwentarz jednostek, statystyki walki i kolejka szkolenia.',
+  'world.comingSoon.constructionDesc':'Kolejka budynków na wioskę, koszty i czasy.',
+  'world.comingSoon.villagesDesc':    'Mapa wiosek, współrzędne, nazwa i typ.',
+  'world.stop.toast':             'Bot zatrzymany. Powrót do szczegółów konta…',
+
+  // ── Sesión del mundo ─────────────────────────────────────
+  'world.session.start':    'Uruchom',
+  'world.session.stop':     'Zatrzymaj',
+  'world.session.retry':    'Ponów',
+  'world.session.cancel':   'Anuluj',
+  'world.session.enter':    'Wejdź',
+  'world.session.idle':     'Nieaktywny',
+  'world.session.connecting': 'Łączenie…',
+  'world.session.active':   'Aktywny',
+  'world.session.error':    'Błąd połączenia',
+  'world.session.stopping': 'Zatrzymywanie…',
+  'world.session.start.aria': 'Uruchom bota na {world}',
+  'world.session.stop.aria':  'Zatrzymaj bota na {world}',
+  'world.session.retry.aria': 'Ponów połączenie na {world}',
+  'world.session.enter.aria': 'Wejdź do przestrzeni {world}',
+  'world.session.disabled.delete':       'Zatrzymaj sesję przed usunięciem tego świata',
+  'world.session.disabled.editMenu':     'Nie można modyfikować świata z aktywną sesją',
+  'world.session.disabled.deleteAccount':'Zatrzymaj wszystkie aktywne sesje przed usunięciem tego konta',
+  'world.session.started.toast':  'Bot uruchomiony na {world}',
+  'world.session.stopped.toast':  'Bot zatrzymany na {world}',
+  'world.session.error.toast':    'Nie można połączyć z {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Błąd połączenia. Spróbuj ponownie.',
+  'error.retry':      'Ponów',
+  'error.loadFailed': 'Nie udało się załadować danych.',
+
+  // ── Versión ────────────────────────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders ──────────────────────────────────────
+  'placeholder.accounts.list':   'Lista kont — wkrótce',
+  'placeholder.account.detail':  'Szczegóły konta — wkrótce',
+  'placeholder.world.space':     'Przestrzeń świata — wkrótce',
+}
+
+export default pl

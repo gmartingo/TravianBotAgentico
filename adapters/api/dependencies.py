@@ -19,6 +19,7 @@ from fastapi import Header, HTTPException, Query, Request, status
 
 from core.i18n.languages import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from core.ports.game_data_port import GameDataPort
+from core.ports.overview_html_source_port import OverviewHtmlSourcePort
 from core.ports.translation_port import TranslationPort
 
 
@@ -128,6 +129,21 @@ def get_game_data_port(request: Request) -> GameDataPort:
     return request.app.state.game_data_port
 
 
+def get_html_source_port(request: Request) -> OverviewHtmlSourcePort:
+    """
+    Devuelve el singleton de OverviewHtmlSourcePort almacenado en app.state.
+
+    Se inicializa en el lifespan de la aplicación. La implementación concreta
+    depende de la variable de entorno OVERVIEW_SOURCE:
+      - 'fixture' (default) → FixtureOverviewAdapter (HTML desde disco)
+      - 'live'              → LiveOverviewAdapter    (navega Travian con Chrome)
+
+    Los handlers de los cuatro bloques (overview, resources, culture-points, troops)
+    inyectan este port como dependencia sin conocer la implementación activa.
+    """
+    return request.app.state.html_source_port
+
+
 def get_db_port(request: Request):
     """
     Devuelve el singleton de DbPort (AccountSQLiteAdapter) almacenado en app.state.
@@ -147,3 +163,23 @@ def get_fernet(request: Request):
     Si la clave no estaba configurada, la app no habría arrancado.
     """
     return request.app.state.fernet
+
+
+def get_world_runtime_port(request: Request):
+    """
+    Devuelve el singleton de WorldRuntimePort (SessionRegistry) almacenado en app.state.
+    Se inicializa en el lifespan de la aplicación.
+
+    Lanza HTTPException(503) si app.state no tiene 'world_runtime_port' o es None.
+    Esto simplifica los handlers: no necesitan comprobar None.
+
+    EC-11: puede ocurrir en arranque sin lifespan o en tests de API donde
+    app.state.world_runtime_port no ha sido configurado.
+    """
+    port = getattr(request.app.state, "world_runtime_port", None)
+    if port is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="SessionRegistry no disponible — el servidor puede estar iniciándose.",
+        )
+    return port

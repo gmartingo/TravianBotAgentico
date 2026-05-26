@@ -20,9 +20,16 @@ ERROR_HTTP_MAP: dict[str, int] = {
     "LOGIN_ERROR":                500,
     "BROWSER_ERROR":              500,
     "DATABASE_ERROR":             500,
+    # --- Excepciones del tronco de overview ---
+    # 503: la página de Travian no cargó en el timeout = servicio no disponible ahora.
+    "OVERVIEW_PAGE_NOT_LOADED":   503,
+    # 500: fixture no encontrado = error de configuración del entorno de test.
+    "OVERVIEW_FIXTURE_NOT_FOUND": 500,
     # --- Excepciones añadidas en la feature registro-cuentas-mundos ---
     "DUPLICATE_WORLD":          409,
     "ACTIVE_SESSION_CONFLICT":  409,
+    # --- Excepciones añadidas en la feature login-sesion-api ---
+    "LOGIN_FAILED":             401,
 }
 
 DEFAULT_ERROR_STATUS: int = 500

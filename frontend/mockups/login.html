@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<!--
+  MAQUETA DE DISEÑO — Login de ejemplo.
+  No es código de producción: es un HTML autocontenido para VER el sistema de
+  diseño (frontend/DESIGN.md) en vivo: paleta plata/grafito, modo claro/oscuro,
+  acento oro en enlaces + estados activos, botón primario monocromo, selector de
+  25 idiomas por endónimo con búsqueda, y RTL (ar/he/fa).
+  Ábrelo directamente en el navegador.
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravianBot · Login (maqueta)</title>
+<style>
+  /* ============================================================
+     TOKENS — copiados de frontend/DESIGN.md §15.1
+     ============================================================ */
+  :root {
+    /* neutros: claro */
+    --bg: #F5F5F7;
+    --surface: #FFFFFF;
+    --surface-2: #EFEFF2;
+    --border: #D2D2D7;
+    --border-strong: #C7C7CC;
+    --text: #1D1D1F;
+    --text-secondary: #6E6E73;
+    --text-tertiary: #8E8E93;
+    --text-disabled: #AEAEB2;
+
+    /* acento oro: claro (oro antiguo, AA) */
+    --accent: #8A6418;
+    --accent-text: #8A6418;
+    --accent-hover: #6F5012;
+    --accent-subtle: rgba(138,100,24,.14);
+
+    /* botón primario: monocromo invertido (claro) */
+    --btn-primary-bg: #1D1D1F;
+    --btn-primary-text: #FFFFFF;
+    --btn-primary-hover: #3A3A3C;
+
+    /* semánticos: claro */
+    --success: #248A3D;
+    --danger: #C9352C;
+    --info: #0A6FCC;
+
+    /* sombras: claro */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06);
+    --shadow-md: 0 2px 8px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,.12);
+
+    /* radios, fuentes, motion */
+    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-full: 9999px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+                 Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+    --ease: cubic-bezier(0.4, 0.0, 0.2, 1);
+    --dur-fast: 150ms; --dur-base: 220ms; --dur-slow: 300ms;
+  }
+
+  /* tokens oscuros (mismo bloque en media-query y en override manual) */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1D1D1F; --surface: #2C2C2E; --surface-2: #3A3A3C;
+      --border: #3A3A3C; --border-strong: #48484A;
+      --text: #F5F5F7; --text-secondary: #AEAEB2; --text-tertiary: #8E8E93; --text-disabled: #636366;
+      --accent: #CBB079; --accent-text: #CBB079; --accent-hover: #D8C089; --accent-subtle: rgba(203,176,121,.16);
+      --btn-primary-bg: #F5F5F7; --btn-primary-text: #1D1D1F; --btn-primary-hover: #E2E2E6;
+      --success: #34C759; --danger: #FF453A; --info: #0A84FF;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.5);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1D1D1F; --surface: #2C2C2E; --surface-2: #3A3A3C;
+    --border: #3A3A3C; --border-strong: #48484A;
+    --text: #F5F5F7; --text-secondary: #AEAEB2; --text-tertiary: #8E8E93; --text-disabled: #636366;
+    --accent: #CBB079; --accent-text: #CBB079; --accent-hover: #D8C089; --accent-subtle: rgba(203,176,121,.16);
+    --btn-primary-bg: #F5F5F7; --btn-primary-text: #1D1D1F; --btn-primary-hover: #E2E2E6;
+    --success: #34C759; --danger: #FF453A; --info: #0A84FF;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.5);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,.6);
+  }
+
+  /* ============================================================
+     BASE
+     ============================================================ */
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.4;
+    transition: background var(--dur-base) var(--ease), color var(--dur-base) var(--ease);
+  }
+  a { color: var(--accent-text); text-decoration: none; }
+  a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+  /* ============================================================
+     LAYOUT
+     ============================================================ */
+  .app { min-height: 100%; display: flex; flex-direction: column; }
+
+  /* barra superior: wordmark (start) + controles (end). Se espeja en RTL. */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px;
+    gap: 12px;
+  }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--btn-primary-bg); color: var(--btn-primary-text);
+    display: grid; place-items: center; font-weight: 700; font-size: 13px;
+    flex: 0 0 auto;
+  }
+  .controls { display: flex; align-items: center; gap: 8px; }
+
+  /* botones-icono (tema, etc.) */
+  .icon-btn {
+    appearance: none; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-secondary); width: 36px; height: 36px; border-radius: var(--radius-sm);
+    display: grid; place-items: center; cursor: pointer;
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* selector de idioma (botón + panel) */
+  .lang-wrap { position: relative; }
+  .lang-btn {
+    appearance: none; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); height: 36px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; cursor: pointer;
+    font-family: inherit; font-size: 14px;
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  }
+  .lang-btn:hover { background: var(--surface-2); }
+  .lang-btn svg { width: 16px; height: 16px; color: var(--text-secondary); }
+  .lang-btn .chev { transition: transform var(--dur-fast) var(--ease); }
+  .lang-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+  .lang-panel {
+    position: absolute; inset-inline-end: 0; top: calc(100% + 8px);
+    width: 300px; max-width: calc(100vw - 32px);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+    overflow: hidden; z-index: 50;
+    display: none;
+  }
+  .lang-panel.open { display: block; }
+  .lang-search-wrap { padding: 10px; border-bottom: 1px solid var(--border); }
+  .lang-search {
+    width: 100%; height: 34px; border: 1px solid var(--border-strong);
+    background: var(--surface-2); color: var(--text); border-radius: var(--radius-sm);
+    padding: 0 10px; font-family: inherit; font-size: 14px; outline: none;
+  }
+  .lang-search:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+  .lang-search::placeholder { color: var(--text-tertiary); }
+  .lang-list { max-height: 320px; overflow-y: auto; padding: 6px; }
+  .lang-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; padding: 9px 10px; border-radius: var(--radius-sm);
+    cursor: pointer; border: none; background: transparent; color: var(--text);
+    font-family: inherit; font-size: 14px; text-align: start;
+  }
+  .lang-item:hover { background: var(--surface-2); }
+  .lang-item .code { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; }
+  /* estado ACTIVO en oro */
+  .lang-item[aria-selected="true"] { background: var(--accent-subtle); color: var(--accent-text); font-weight: 600; }
+  .lang-item[aria-selected="true"] .code { color: var(--accent-text); }
+  .lang-item .check { width: 16px; height: 16px; color: var(--accent-text); visibility: hidden; }
+  .lang-item[aria-selected="true"] .check { visibility: visible; }
+  .lang-empty { padding: 16px; text-align: center; color: var(--text-tertiary); font-size: 13px; }
+
+  /* ============================================================
+     LOGIN CARD
+     ============================================================ */
+  main { flex: 1; display: grid; place-items: center; padding: 24px; }
+  .card {
+    width: 100%; max-width: 380px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+    padding: 32px;
+  }
+  .card h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+  .card .sub { margin: 0 0 24px; color: var(--text-secondary); font-size: 14px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-secondary); }
+  .field input[type="text"], .field input[type="password"] {
+    width: 100%; height: 40px; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text);
+    border-radius: var(--radius-sm); padding: 0 12px;
+    font-family: inherit; font-size: 16px; /* ≥16px: evita auto-zoom iOS (§17.7) */
+    outline: none;
+    transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  }
+  .field input::placeholder { color: var(--text-tertiary); }
+  /* foco en oro (§12) */
+  .field input:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 24px; gap: 12px; flex-wrap: wrap; }
+
+  /* checkbox custom: marca en oro cuando activo */
+  .check-lbl { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-secondary); font-size: 13px; user-select: none; }
+  .check-lbl input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .box {
+    width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--border-strong);
+    background: var(--surface); display: grid; place-items: center; flex: 0 0 auto;
+    transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  }
+  .box svg { width: 12px; height: 12px; color: var(--btn-primary-text); opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+  .check-lbl input:checked + .box { background: var(--accent); border-color: var(--accent); }
+  .check-lbl input:checked + .box svg { opacity: 1; color: #fff; }
+  .check-lbl input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .forgot { font-size: 13px; }
+
+  /* botón primario monocromo (§12) */
+  .btn-primary {
+    width: 100%; height: 42px; border: none; border-radius: var(--radius-sm);
+    background: var(--btn-primary-bg); color: var(--btn-primary-text);
+    font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+    transition: background var(--dur-fast) var(--ease);
+  }
+  .btn-primary:hover { background: var(--btn-primary-hover); }
+  .btn-primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .demo-note { margin-top: 20px; text-align: center; color: var(--text-tertiary); font-size: 11px; }
+
+  /* ============================================================
+     RESPONSIVE (§17) — mobile-first
+     ============================================================ */
+  @media (max-width: 480px) {
+    .topbar { padding: 12px 16px; }
+    .wordmark span.name { display: none; } /* P3: el nombre se oculta, queda el logo */
+    main { padding: 16px; }
+    .card { padding: 24px; border-radius: var(--radius-md); }
+  }
+  /* targets táctiles más grandes (§17.6) */
+  @media (pointer: coarse) {
+    .icon-btn, .lang-btn { height: 44px; }
+    .icon-btn { width: 44px; }
+    .lang-item { padding: 12px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== BARRA SUPERIOR ===== -->
+  <header class="topbar">
+    <div class="wordmark">
+      <div class="logo">TB</div>
+      <span class="name">TravianBot</span>
+    </div>
+
+    <div class="controls">
+      <!-- toggle de tema -->
+      <button class="icon-btn" id="themeBtn" title="Tema" aria-label="Cambiar tema"></button>
+
+      <!-- selector de idioma -->
+      <div class="lang-wrap">
+        <button class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="langBtnLabel">Español</span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-tertiary)"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <div class="lang-panel" id="langPanel" role="listbox" aria-label="Idioma">
+          <div class="lang-search-wrap">
+            <input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off" />
+          </div>
+          <div class="lang-list" id="langList"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== LOGIN ===== -->
+  <main>
+    <form class="card" onsubmit="return false">
+      <h1 data-i18n="title">Bienvenido de nuevo</h1>
+      <p class="sub" data-i18n="subtitle">Accede a tu panel de control</p>
+
+      <div class="field">
+        <label for="user" data-i18n="user">Usuario o email</label>
+        <input id="user" type="text" data-i18n-ph="userPh" placeholder="tu@email.com" />
+      </div>
+
+      <div class="field">
+        <label for="pass" data-i18n="pass">Contraseña</label>
+        <input id="pass" type="password" data-i18n-ph="passPh" placeholder="••••••••" />
+      </div>
+
+      <div class="row">
+        <label class="check-lbl">
+          <input type="checkbox" />
+          <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <span data-i18n="remember">Recordarme</span>
+        </label>
+        <a href="#" class="forgot" data-i18n="forgot">¿Olvidaste tu contraseña?</a>
+      </div>
+
+      <button class="btn-primary" type="submit" data-i18n="signin">Iniciar sesión</button>
+
+      <p class="demo-note" data-i18n="demoNote">Maqueta de diseño · no funcional</p>
+    </form>
+  </main>
+</div>
+
+<script>
+  /* ============================================================
+     25 idiomas soportados (códigos kirilloid) + endónimos
+     ============================================================ */
+  const LANGS = [
+    { code:"ar", name:"العربية" },     { code:"bg", name:"Български" },
+    { code:"cs", name:"Čeština" },      { code:"da", name:"Dansk" },
+    { code:"de", name:"Deutsch" },      { code:"el", name:"Ελληνικά" },
+    { code:"en", name:"English" },      { code:"es", name:"Español" },
+    { code:"fa", name:"فارسی" },        { code:"fr", name:"Français" },
+    { code:"he", name:"עברית" },        { code:"hu", name:"Magyar" },
+    { code:"it", name:"Italiano" },     { code:"ja", name:"日本語" },
+    { code:"lt", name:"Lietuvių" },     { code:"lv", name:"Latviešu" },
+    { code:"nl", name:"Nederlands" },   { code:"pl", name:"Polski" },
+    { code:"pt", name:"Português" },    { code:"rs", name:"Srpski" },
+    { code:"ru", name:"Русский" },      { code:"sl", name:"Slovenščina" },
+    { code:"sv", name:"Svenska" },      { code:"tr", name:"Türkçe" },
+    { code:"uk", name:"Українська" },
+  ];
+  const RTL = new Set(["ar", "he", "fa"]);
+
+  /* ============================================================
+     Traducciones de la maqueta (subset; el resto cae a 'en').
+     ============================================================ */
+  const I18N = {
+    es:{title:"Bienvenido de nuevo",subtitle:"Accede a tu panel de control",user:"Usuario o email",userPh:"tu@email.com",pass:"Contraseña",passPh:"••••••••",remember:"Recordarme",forgot:"¿Olvidaste tu contraseña?",signin:"Iniciar sesión",search:"Buscar idioma…",demoNote:"Maqueta de diseño · no funcional"},
+    en:{title:"Welcome back",subtitle:"Sign in to your dashboard",user:"Username or email",userPh:"you@email.com",pass:"Password",passPh:"••••••••",remember:"Remember me",forgot:"Forgot your password?",signin:"Sign in",search:"Search language…",demoNote:"Design mockup · non-functional"},
+    de:{title:"Willkommen zurück",subtitle:"Melde dich in deinem Dashboard an",user:"Benutzername oder E-Mail",userPh:"du@email.com",pass:"Passwort",passPh:"••••••••",remember:"Angemeldet bleiben",forgot:"Passwort vergessen?",signin:"Anmelden",search:"Sprache suchen…",demoNote:"Design-Mockup · nicht funktional"},
+    fr:{title:"Bon retour",subtitle:"Connectez-vous à votre tableau de bord",user:"Nom d’utilisateur ou e-mail",userPh:"vous@email.com",pass:"Mot de passe",passPh:"••••••••",remember:"Se souvenir de moi",forgot:"Mot de passe oublié ?",signin:"Se connecter",search:"Rechercher une langue…",demoNote:"Maquette de design · non fonctionnelle"},
+    it:{title:"Bentornato",subtitle:"Accedi al tuo pannello",user:"Nome utente o email",userPh:"tu@email.com",pass:"Password",passPh:"••••••••",remember:"Ricordami",forgot:"Password dimenticata?",signin:"Accedi",search:"Cerca lingua…",demoNote:"Mockup di design · non funzionale"},
+    pt:{title:"Bem-vindo de volta",subtitle:"Aceda ao seu painel",user:"Utilizador ou email",userPh:"voce@email.com",pass:"Palavra-passe",passPh:"••••••••",remember:"Lembrar-me",forgot:"Esqueceu a palavra-passe?",signin:"Entrar",search:"Procurar idioma…",demoNote:"Maquete de design · não funcional"},
+    nl:{title:"Welkom terug",subtitle:"Log in op je dashboard",user:"Gebruikersnaam of e-mail",userPh:"jij@email.com",pass:"Wachtwoord",passPh:"••••••••",remember:"Onthoud mij",forgot:"Wachtwoord vergeten?",signin:"Inloggen",search:"Taal zoeken…",demoNote:"Ontwerpmockup · niet functioneel"},
+    sv:{title:"Välkommen tillbaka",subtitle:"Logga in på din panel",user:"Användarnamn eller e-post",userPh:"du@email.com",pass:"Lösenord",passPh:"••••••••",remember:"Kom ihåg mig",forgot:"Glömt lösenordet?",signin:"Logga in",search:"Sök språk…",demoNote:"Designmockup · ej funktionell"},
+    da:{title:"Velkommen tilbage",subtitle:"Log ind på dit dashboard",user:"Brugernavn eller e-mail",userPh:"dig@email.com",pass:"Adgangskode",passPh:"••••••••",remember:"Husk mig",forgot:"Glemt adgangskode?",signin:"Log ind",search:"Søg sprog…",demoNote:"Design-mockup · ikke funktionel"},
+    pl:{title:"Witaj ponownie",subtitle:"Zaloguj się do panelu",user:"Nazwa użytkownika lub e-mail",userPh:"ty@email.com",pass:"Hasło",passPh:"••••••••",remember:"Zapamiętaj mnie",forgot:"Nie pamiętasz hasła?",signin:"Zaloguj się",search:"Szukaj języka…",demoNote:"Makieta projektu · niefunkcjonalna"},
+    cs:{title:"Vítejte zpět",subtitle:"Přihlaste se do panelu",user:"Uživatelské jméno nebo e-mail",userPh:"ty@email.com",pass:"Heslo",passPh:"••••••••",remember:"Zapamatovat si mě",forgot:"Zapomněli jste heslo?",signin:"Přihlásit se",search:"Hledat jazyk…",demoNote:"Designová maketa · nefunkční"},
+    ru:{title:"С возвращением",subtitle:"Войдите в панель управления",user:"Имя пользователя или эл. почта",userPh:"you@email.com",pass:"Пароль",passPh:"••••••••",remember:"Запомнить меня",forgot:"Забыли пароль?",signin:"Войти",search:"Поиск языка…",demoNote:"Дизайн-макет · не функционирует"},
+    uk:{title:"З поверненням",subtitle:"Увійдіть до панелі керування",user:"Ім’я користувача або емейл",userPh:"you@email.com",pass:"Пароль",passPh:"••••••••",remember:"Запам’ятати мене",forgot:"Забули пароль?",signin:"Увійти",search:"Пошук мови…",demoNote:"Дизайн-макет · нефункціональний"},
+    el:{title:"Καλώς ήρθατε ξανά",subtitle:"Συνδεθείτε στον πίνακά σας",user:"Όνομα χρήστη ή email",userPh:"you@email.com",pass:"Κωδικός πρόσβασης",passPh:"••••••••",remember:"Να με θυμάσαι",forgot:"Ξεχάσατε τον κωδικό σας;",signin:"Σύνδεση",search:"Αναζήτηση γλώσσας…",demoNote:"Πρότυπο σχεδίασης · μη λειτουργικό"},
+    tr:{title:"Tekrar hoş geldiniz",subtitle:"Kontrol panelinize giriş yapın",user:"Kullanıcı adı veya e-posta",userPh:"sen@email.com",pass:"Parola",passPh:"••••••••",remember:"Beni hatırla",forgot:"Parolanızı mı unuttunuz?",signin:"Giriş yap",search:"Dil ara…",demoNote:"Tasarım maketi · işlevsel değil"},
+    ja:{title:"おかえりなさい",subtitle:"ダッシュボードにログイン",user:"ユーザー名またはメール",userPh:"you@email.com",pass:"パスワード",passPh:"••••••••",remember:"ログイン状態を保持",forgot:"パスワードをお忘れですか？",signin:"ログイン",search:"言語を検索…",demoNote:"デザインモックアップ · 非機能"},
+    ar:{title:"مرحبًا بعودتك",subtitle:"سجّل الدخول إلى لوحة التحكم",user:"اسم المستخدم أو البريد الإلكتروني",userPh:"you@email.com",pass:"كلمة المرور",passPh:"••••••••",remember:"تذكرني",forgot:"هل نسيت كلمة المرور؟",signin:"تسجيل الدخول",search:"ابحث عن لغة…",demoNote:"نموذج تصميم · غير وظيفي"},
+    he:{title:"ברוך שובך",subtitle:"התחבר ללוח הבקרה שלך",user:"שם משתמש או אימייל",userPh:"you@email.com",pass:"סיסמה",passPh:"••••••••",remember:"זכור אותי",forgot:"שכחת את הסיסמה?",signin:"התחברות",search:"חיפוש שפה…",demoNote:"מוקאפ עיצוב · לא פונקציונלי"},
+    fa:{title:"خوش آمدید",subtitle:"به داشبورد خود وارد شوید",user:"نام کاربری یا ایمیل",userPh:"you@email.com",pass:"رمز عبور",passPh:"••••••••",remember:"مرا به خاطر بسپار",forgot:"رمز عبور خود را فراموش کرده‌اید؟",signin:"ورود",search:"جستجوی زبان…",demoNote:"ماکت طراحی · غیرعملکردی"},
+  };
+  const t = (lang, key) => (I18N[lang] && I18N[lang][key]) || I18N.en[key];
+
+  /* ============================================================
+     ICONOS de tema
+     ============================================================ */
+  const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+  const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+
+  const root = document.documentElement;
+  const THEME_KEY = "theme", LANG_KEY = "lang";
+
+  /* ---- TEMA ---- */
+  const themeBtn = document.getElementById("themeBtn");
+  function currentTheme(){ return root.dataset.theme === "dark" ? "dark" : "light"; }
+  function paintThemeIcon(){ themeBtn.innerHTML = currentTheme() === "dark" ? SUN : MOON; }
+  function initTheme(){
+    const stored = localStorage.getItem(THEME_KEY);
+    const theme = stored || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    root.dataset.theme = theme;
+    paintThemeIcon();
+  }
+  themeBtn.addEventListener("click", () => {
+    const next = currentTheme() === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    localStorage.setItem(THEME_KEY, next);
+    paintThemeIcon();
+  });
+
+  /* ---- IDIOMA ---- */
+  const langBtn = document.getElementById("langBtn");
+  const langBtnLabel = document.getElementById("langBtnLabel");
+  const langPanel = document.getElementById("langPanel");
+  const langList = document.getElementById("langList");
+  const langSearch = document.getElementById("langSearch");
+  let currentLang = localStorage.getItem(LANG_KEY) || "es";
+
+  function applyLang(code){
+    currentLang = code;
+    localStorage.setItem(LANG_KEY, code);
+    root.lang = code;
+    root.dir = RTL.has(code) ? "rtl" : "ltr";
+    // textos
+    document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(code, el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(code, el.dataset.i18nPh); });
+    langSearch.placeholder = t(code, "search");
+    const found = LANGS.find(l => l.code === code);
+    langBtnLabel.textContent = found ? found.name : code;
+    renderLangList(langSearch.value);
+  }
+
+  function renderLangList(filter){
+    const q = (filter || "").trim().toLowerCase();
+    const items = LANGS.filter(l => !q || l.name.toLowerCase().includes(q) || l.code.includes(q));
+    if (!items.length){ langList.innerHTML = '<div class="lang-empty">—</div>'; return; }
+    langList.innerHTML = items.map(l => `
+      <button class="lang-item" role="option" data-code="${l.code}" aria-selected="${l.code === currentLang}">
+        <span>${l.name}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span class="code">${l.code}</span>
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+      </button>`).join("");
+    langList.querySelectorAll(".lang-item").forEach(btn => {
+      btn.addEventListener("click", () => { applyLang(btn.dataset.code); closeLang(); });
+    });
+  }
+
+  function openLang(){
+    langPanel.classList.add("open");
+    langBtn.setAttribute("aria-expanded", "true");
+    langSearch.value = "";
+    renderLangList("");
+    setTimeout(() => langSearch.focus(), 0);
+  }
+  function closeLang(){
+    langPanel.classList.remove("open");
+    langBtn.setAttribute("aria-expanded", "false");
+  }
+  langBtn.addEventListener("click", () => {
+    langPanel.classList.contains("open") ? closeLang() : openLang();
+  });
+  langSearch.addEventListener("input", () => renderLangList(langSearch.value));
+  langSearch.addEventListener("keydown", e => { if (e.key === "Escape") { closeLang(); langBtn.focus(); } });
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".lang-wrap")) closeLang();
+  });
+
+  /* ---- INIT ---- */
+  initTheme();
+  applyLang(currentLang);
+</script>
+</body>
+</html>

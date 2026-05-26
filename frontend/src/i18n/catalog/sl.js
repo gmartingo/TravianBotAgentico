@@ -1,0 +1,202 @@
+/**
+ * Catálogo SL — Slovenščina
+ * [AUTO] Traducción automática — requiere revisión nativa.
+ */
+const sl = {
+  // ── App ────────────────────────────────────────────────
+  'app.name': 'TravianBot',
+
+  // ── Navegación (sidebar) ────────────────────────────────
+  'nav.accounts':     'Računi',
+  'nav.resources':    'Viri',
+  'nav.troops':       'Vojaki',
+  'nav.construction': 'Gradnja',
+  'nav.comingSoon':   'Kmalu',
+
+  // ── Topbar ─────────────────────────────────────────────
+  'topbar.toggleTheme':    'Preklopi temo',
+  'topbar.selectLanguage': 'Izberi jezik',
+  'topbar.backToWorlds':   '← Svetovi',
+  'topbar.searchLanguage': 'Iskanje jezika…',
+
+  // ── S2 — Lista de cuentas ───────────────────────────────
+  'page.accounts.title':        'Računi',
+  'page.accounts.caption':      '{n} račun',
+  'page.accounts.caption.pl':   '{n} računov',
+  'page.accounts.newAccount':   'Nov račun',
+  'page.accounts.empty.title':  'Še ni računov',
+  'page.accounts.empty.desc':   'Dodajte prvega, da začnete uporabljati bota.',
+  'page.accounts.col.email':    'E-pošta',
+  'page.accounts.col.username': 'Uporabniško ime',
+  'page.accounts.col.worlds':   'Svetovi',
+  'page.accounts.col.created':  'Ustvarjeno',
+  'page.accounts.col.actions':  '',
+  'page.accounts.action.edit':  'Uredi račun',
+  'page.accounts.action.delete':'Izbriši račun',
+  'page.accounts.loading':      'Nalaganje računov…',
+  'page.accounts.error':        'Računov ni bilo mogoče naložiti.',
+
+  // ── S3 — Wizard de alta ────────────────────────────────
+  'wizard.title':                'Nov račun',
+  'wizard.step':                 'Korak {current} od {total}',
+  'wizard.section.account':      'Podatki računa',
+  'wizard.section.world':        'Prvi svet',
+  'wizard.field.email':          'E-pošta',
+  'wizard.field.email.ph':       'igralec@primer.si',
+  'wizard.field.username':       'Uporabniško ime',
+  'wizard.field.username.ph':    'MojRačun',
+  'wizard.field.password':       'Geslo',
+  'wizard.field.password.ph':    '••••••••',
+  'wizard.field.server':         'URL strežnika',
+  'wizard.field.server.ph':      'https://ts1.x1.international.travian.com/',
+  'wizard.field.tribe':          'Pleme',
+  'wizard.field.tribe.ph':       'Izberi pleme',
+  'wizard.btn.next':             'Naprej',
+  'wizard.btn.back':             'Nazaj',
+  'wizard.btn.create':           'Ustvari račun',
+  'wizard.btn.creating':         'Ustvarjanje…',
+  'wizard.btn.cancel':           'Prekliči',
+  'wizard.error.email.invalid':  'Vnesite veljavno e-pošto',
+  'wizard.error.email.taken':    'Ta e-pošta je že registrirana',
+  'wizard.error.server.invalid': 'Vnesite veljavni URL (http:// ali https://)',
+  'wizard.error.server.taken':   'Ta strežnik že obstaja v tem računu',
+  'wizard.error.required':       'To polje je obvezno',
+  'wizard.error.tribe.required': 'Izberi pleme',
+  'wizard.btn.showPassword':     'Prikaži geslo',
+  'wizard.btn.hidePassword':     'Skrij geslo',
+  'wizard.toast.created':        'Račun ustvarjen',
+
+  // ── S4 — Detalle de cuenta ─────────────────────────────
+  'page.account.breadcrumb':         'Računi',
+  'page.account.createdAt':          'Ustvarjeno: {date}',
+  'page.account.editBtn':            'Uredi',
+  'page.account.deleteBtn':          'Izbriši račun',
+  'page.account.worlds.title':       'Svetovi ({n})',
+  'page.account.worlds.add':         'Dodaj svet',
+  'page.account.worlds.empty':       'V tem računu še ni svetov.',
+  'page.account.col.server':         'Strežnik',
+  'page.account.col.parsed':         'Strežnik (berljivo)',
+  'page.account.col.tribe':          'Pleme',
+  'page.account.col.session':        'Seja',
+  'page.account.col.actions':        '',
+  'page.account.action.deleteWorld': 'Izbriši svet',
+  'page.account.notFound.title':     'Račun ni bil najden',
+  'page.account.notFound.desc':      'Račun, ki ga iščete, ne obstaja ali je bil izbrisan.',
+  'page.account.notFound.back':      'Nazaj na račune',
+
+  // ── S5 — Modal editar cuenta ───────────────────────────
+  'modal.edit.title':           'Uredi račun',
+  'modal.edit.changePassword':  'Spremeni geslo',
+  'modal.edit.newPassword':     'Novo geslo',
+  'modal.edit.confirmPassword': 'Potrdi geslo',
+  'modal.edit.passwordMismatch':'Gesli se ne ujemata',
+  'modal.edit.saveBtn':         'Shrani',
+  'modal.edit.savingBtn':       'Shranjevanje…',
+  'modal.edit.cancelBtn':       'Prekliči',
+  'modal.edit.closeBtn':        'Zapri',
+  'modal.edit.savedToast':      'Spremembe shranjene',
+  'modal.edit.error409':        'Ta e-pošta je že v uporabi pri drugem računu.',
+
+  // ── S6 — Modal añadir mundo ────────────────────────────
+  'modal.addWorld.title':     'Dodaj svet',
+  'modal.addWorld.addBtn':    'Dodaj',
+  'modal.addWorld.addingBtn': 'Dodajanje…',
+  'modal.addWorld.cancelBtn': 'Prekliči',
+  'modal.addWorld.toast':     'Svet dodan',
+
+  // ── S7 — Borrar cuenta ─────────────────────────────────
+  'modal.deleteAccount.title':   'Izbriši račun',
+  'modal.deleteAccount.body':    'Izbrisati račun "{username}"?',
+  'modal.deleteAccount.warning': 'Tega dejanja ni mogoče razveljaviti. Izbrisani bodo tudi vsi njegovi svetovi ({n} svet/ov).',
+  'modal.deleteAccount.confirm': 'Izbriši',
+  'modal.deleteAccount.cancel':  'Prekliči',
+  'modal.deleteAccount.toast':   'Račun izbrisan',
+  'modal.deleteAccount.active':  'Tega računa ni mogoče izbrisati, ko ima bot aktivno sejo. Najprej ustavite sejo.',
+  'modal.deleteAccount.close':   'Zapri',
+
+  // ── S8 — Borrar mundo ──────────────────────────────────
+  'modal.deleteWorld.title':   'Izbriši svet',
+  'modal.deleteWorld.body':    'Izbrisati svet "{parsed}"?',
+  'modal.deleteWorld.warning': 'Tega dejanja ni mogoče razveljaviti. Izbrisane bodo tudi vse povezane vasi.',
+  'modal.deleteWorld.confirm': 'Izbriši',
+  'modal.deleteWorld.cancel':  'Prekliči',
+  'modal.deleteWorld.toast':   'Svet izbrisan',
+  'modal.deleteWorld.active':  'Za ta svet obstaja aktivna seja. Najprej ustavite sejo.',
+
+  // ── S9 — Espacio del mundo ─────────────────────────────
+  'world.status.active':          'Aktiven',
+  'world.status.panelLabel':      'Aktivna seja',
+  'world.action.stop':            'Ustavi',
+  'world.tab.config':             'Konfiguracija',
+  'world.tab.resources':          'Viri',
+  'world.tab.troops':             'Vojaki',
+  'world.tab.construction':       'Gradnja',
+  'world.tab.villages':           'Vasi',
+  'world.config.automationTitle': 'Avtomatizacija',
+  'world.config.tasksTitle':      'Naloge bota',
+  'world.config.tasksDesc':       'Omogočite ali zaustavite samodejne naloge, ki jih bot izvaja v tem svetu.',
+  'world.config.task.buildQueue': 'Vrsta gradnje',
+  'world.config.task.buildQueueDesc': 'Gradi stavbe po načrtovani vrsti',
+  'world.config.task.farmList':   'Seznam kmetij',
+  'world.config.task.farmListDesc': 'Samodejno pošilja napade na kmetije',
+  'world.config.task.troops':     'Urjenje enot',
+  'world.config.task.troopsDesc': 'Ohranja vrsto urjenja aktivno',
+  'world.config.intervalsTitle':  'Intervali',
+  'world.config.intervalsDesc':   'Čas med preverjanji bota. Višje vrednosti zmanjšujejo tveganje zaznave.',
+  'world.config.interval.check':  'Periodično preverjanje',
+  'world.config.interval.farm':   'Med kmetijami',
+  'world.config.interval.jitter': 'Naključna variacija',
+  'world.config.interval.min':    'min',
+  'world.config.comingSoonTitle': 'Kmalu v tem prostoru',
+  'world.comingSoon.resourcesDesc':   'Sledenje lesu, glini, železu in žitu v realnem času.',
+  'world.comingSoon.troopsDesc':      'Inventar enot, bojne statistike in vrsta urjenja.',
+  'world.comingSoon.constructionDesc':'Vrsta stavb po vasi, stroški in časi.',
+  'world.comingSoon.villagesDesc':    'Zemljevid vasi, koordinate, ime in vrsta.',
+  'world.stop.toast':             'Bot zaustavljen. Vračanje na podrobnosti računa…',
+
+  // ── Sesión del mundo ─────────────────────────────────────
+  'world.session.start':    'Zaženi',
+  'world.session.stop':     'Ustavi',
+  'world.session.retry':    'Poskusi znova',
+  'world.session.cancel':   'Prekliči',
+  'world.session.enter':    'Vstopi',
+  'world.session.idle':     'Nedejavno',
+  'world.session.connecting': 'Povezovanje…',
+  'world.session.active':   'Aktivno',
+  'world.session.error':    'Napaka povezave',
+  'world.session.stopping': 'Ustavljanje…',
+  'world.session.start.aria': 'Zaženi bota na {world}',
+  'world.session.stop.aria':  'Ustavi bota na {world}',
+  'world.session.retry.aria': 'Poskusi znova na {world}',
+  'world.session.enter.aria': 'Vstopi v prostor {world}',
+  'world.session.disabled.delete':       'Ustavite sejo pred brisanjem tega sveta',
+  'world.session.disabled.editMenu':     'Sveta z aktivno sejo ni mogoče urejati',
+  'world.session.disabled.deleteAccount':'Ustavite vse aktivne seje pred brisanjem tega računa',
+  'world.session.started.toast':  'Bot zagnan na {world}',
+  'world.session.stopped.toast':  'Bot zaustavljen na {world}',
+  'world.session.error.toast':    'Ni mogoče vzpostaviti povezave z {world}',
+
+  // ── Tribus ──────────────────────────────────────────────
+  'tribe.romans':    'Romans',
+  'tribe.teutons':   'Teutons',
+  'tribe.gauls':     'Gauls',
+  'tribe.egyptians': 'Egyptians',
+  'tribe.huns':      'Huns',
+  'tribe.spartans':  'Spartans',
+  'tribe.vikings':   'Vikings',
+
+  // ── Errores globales ───────────────────────────────────
+  'error.network':    'Napaka povezave. Poskusite znova.',
+  'error.retry':      'Poskusi znova',
+  'error.loadFailed': 'Podatkov ni bilo mogoče naložiti.',
+
+  // ── Versión ────────────────────────────────────────────
+  'app.version': 'v0.1.0',
+
+  // ── Placeholders ──────────────────────────────────────
+  'placeholder.accounts.list':   'Seznam računov — kmalu',
+  'placeholder.account.detail':  'Podrobnosti računa — kmalu',
+  'placeholder.world.space':     'Prostor sveta — kmalu',
+}
+
+export default sl

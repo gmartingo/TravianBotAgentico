@@ -1,0 +1,158 @@
+/* ============================================================
+   TOKENS DE DISEÑO — frontend/DESIGN.md §15.1
+   Fuente de verdad: todos los colores, radios, tipografía y
+   sombras del sistema. Ningún componente hardcodea un hex.
+   ============================================================ */
+
+/* ── TOKENS BASE (modo claro — "plata") ──────────────────── */
+:root {
+  /* Neutros */
+  --bg:            #F5F5F7;
+  --surface:       #FFFFFF;
+  --surface-2:     #EFEFF2;
+  --border:        #D2D2D7;
+  --border-strong: #C7C7CC;
+
+  /* Texto */
+  --text:           #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary:  #8E8E93;
+  --text-disabled:  #AEAEB2;
+
+  /* Acento oro (modo claro): oro antiguo AA sobre plata */
+  --accent:        #8A6418;
+  --accent-text:   #8A6418;
+  --accent-hover:  #6F5012;
+  --accent-subtle: rgba(138, 100, 24, 0.14);
+
+  /* Botón primario (monocromo invertido, claro) */
+  --btn-primary-bg:    #1D1D1F;
+  --btn-primary-text:  #FFFFFF;
+  --btn-primary-hover: #3A3A3C;
+
+  /* Semánticos */
+  --success: #248A3D;
+  --danger:  #C9352C;
+  --info:    #0A6FCC;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+  /* Radios — moderados (macOS), nunca exagerados */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-full: 9999px;
+
+  /* Tipografía del sistema (cero web fonts) */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+               Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Roboto Mono", monospace;
+
+  /* Motion */
+  --ease:     cubic-bezier(0.4, 0.0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 300ms;
+}
+
+/* ── TOKENS MODO OSCURO — "grafito" ──────────────────────── */
+/* Se aplica via prefers-color-scheme (salvo override manual)
+   y via [data-theme="dark"] para el toggle. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #1D1D1F;
+    --surface:       #2C2C2E;
+    --surface-2:     #3A3A3C;
+    --border:        #3A3A3C;
+    --border-strong: #48484A;
+
+    --text:           #F5F5F7;
+    --text-secondary: #AEAEB2;
+    --text-tertiary:  #8E8E93;
+    --text-disabled:  #636366;
+
+    /* Acento oro (modo oscuro): champán brillante */
+    --accent:        #CBB079;
+    --accent-text:   #CBB079;
+    --accent-hover:  #D8C089;
+    --accent-subtle: rgba(203, 176, 121, 0.16);
+
+    /* Botón primario (monocromo invertido, oscuro) */
+    --btn-primary-bg:    #F5F5F7;
+    --btn-primary-text:  #1D1D1F;
+    --btn-primary-hover: #E2E2E6;
+
+    --success: #34C759;
+    --danger:  #FF453A;
+    --info:    #0A84FF;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Override manual via toggle: data-theme="dark" en <html> */
+:root[data-theme="dark"] {
+  --bg:            #1D1D1F;
+  --surface:       #2C2C2E;
+  --surface-2:     #3A3A3C;
+  --border:        #3A3A3C;
+  --border-strong: #48484A;
+
+  --text:           #F5F5F7;
+  --text-secondary: #AEAEB2;
+  --text-tertiary:  #8E8E93;
+  --text-disabled:  #636366;
+
+  --accent:        #CBB079;
+  --accent-text:   #CBB079;
+  --accent-hover:  #D8C089;
+  --accent-subtle: rgba(203, 176, 121, 0.16);
+
+  --btn-primary-bg:    #F5F5F7;
+  --btn-primary-text:  #1D1D1F;
+  --btn-primary-hover: #E2E2E6;
+
+  --success: #34C759;
+  --danger:  #FF453A;
+  --info:    #0A84FF;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Override manual: data-theme="light" fuerza claro aunque el sistema esté en oscuro */
+:root[data-theme="light"] {
+  --bg:            #F5F5F7;
+  --surface:       #FFFFFF;
+  --surface-2:     #EFEFF2;
+  --border:        #D2D2D7;
+  --border-strong: #C7C7CC;
+
+  --text:           #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary:  #8E8E93;
+  --text-disabled:  #AEAEB2;
+
+  --accent:        #8A6418;
+  --accent-text:   #8A6418;
+  --accent-hover:  #6F5012;
+  --accent-subtle: rgba(138, 100, 24, 0.14);
+
+  --btn-primary-bg:    #1D1D1F;
+  --btn-primary-text:  #FFFFFF;
+  --btn-primary-hover: #3A3A3C;
+
+  --success: #248A3D;
+  --danger:  #C9352C;
+  --info:    #0A6FCC;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
