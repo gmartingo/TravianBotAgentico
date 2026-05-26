@@ -420,6 +420,11 @@ def _make_fake_element(text="", attrs=None):
     elem = MagicMock()
     # .text como property str
     type(elem).text = PropertyMock(return_value=text)
+    # .text_all como property str: en zendriver concatena el texto de TODOS los
+    # descendientes (el código lo usa para reconstruir "40.5800" cuando el decimal
+    # vive en un <small>). Estas fakes son hojas, así que text_all == text. Sin esto,
+    # td.text_all sería un MagicMock y float(MagicMock) daría 1.0 silenciosamente.
+    type(elem).text_all = PropertyMock(return_value=text)
     # .parent como property (None por defecto)
     type(elem).parent = PropertyMock(return_value=None)
     # .attrs como dict simulado
@@ -836,7 +841,19 @@ def _build_upg_table_page(header_cells, data_rows):
     # La tabla tiene cabecera + filas de datos
     all_rows = [header_row] + data_rows
     upg_table = MagicMock()
-    upg_table.query_selector_all = AsyncMock(return_value=all_rows)
+
+    # query_selector_all es SELECTOR-AWARE, igual que el DOM real / zendriver:
+    #   - "tr"     → todas las filas (cabecera + datos)
+    #   - "td.upg" → las 6 celdas de cabecera (el código las busca en TODA la tabla
+    #                porque los td.upg solo existen en la fila de cabecera)
+    # Un AsyncMock plano que ignora el selector devolvía las filas también para
+    # "td.upg", lo que rompía parse_upgrade_table (iteraba filas como si fueran celdas).
+    async def _table_query_selector_all(selector):
+        if selector == "td.upg":
+            return header_cells
+        return all_rows  # "tr"
+
+    upg_table.query_selector_all = _table_query_selector_all
     upg_table.query_selector = AsyncMock(return_value=None)
 
     # La página tiene query_selector("#upg_table") → upg_table
