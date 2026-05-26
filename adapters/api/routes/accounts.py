@@ -28,14 +28,16 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic import EmailStr
 
-from adapters.api.dependencies import get_db_port, get_fernet
+from adapters.api.dependencies import get_db_port, get_fernet, get_world_runtime_port
 from core.entities.tribe import Tribe
+from core.exceptions import AccountNotFoundError, LoginFailedError, WorldNotFoundError
 from core.ports.db_port import DbPort
 from core.use_cases.account_use_cases import (
     CreateAccountUseCase,
     DeleteAccountUseCase,
     UpdateAccountUseCase,
 )
+from core.use_cases.login_use_case import LoginUseCase, LogoutUseCase
 from core.use_cases.world_use_cases import AddWorldUseCase, DeleteWorldUseCase
 
 router = APIRouter(tags=["accounts"])
@@ -110,6 +112,12 @@ class AccountListResponse(BaseModel):
 
 class WorldListResponse(BaseModel):
     worlds: list[WorldResponse]
+
+
+class SessionStatusResponse(BaseModel):
+    active: bool
+    world_id: int
+    account_id: int
 
 
 # ---------------------------------------------------------------------------
@@ -349,3 +357,104 @@ async def delete_world(
     runtime_port = getattr(request.app.state, "world_runtime_port", None)
     use_case = DeleteWorldUseCase(db=db, runtime_port=runtime_port)
     await use_case.execute(account_id=account_id, world_id=world_id)
+
+
+# ---------------------------------------------------------------------------
+# Helper de validación de pertenencia — reutilizado por los 3 endpoints de sesión
+# ---------------------------------------------------------------------------
+
+async def _verify_world_belongs_to_account(
+    account_id: int,
+    world_id: int,
+    db,
+) -> None:
+    """
+    Verifica que account_id existe y que world_id pertenece a esa cuenta.
+
+    Lanza AccountNotFoundError si la cuenta no existe.
+    Lanza WorldNotFoundError si world_id no existe o no pertenece a account_id.
+
+    El 404 homogéneo para world_id ajeno es intencional (RN-04): no se revela
+    que el mundo existe en otra cuenta (consistente con EC-12 del spec
+    registro-cuentas-mundos).
+    """
+    account = await db.get_account(account_id)
+    if account is None:
+        raise AccountNotFoundError(account_id)
+    world_ids = {w.id for w in account.worlds}
+    if world_id not in world_ids:
+        raise WorldNotFoundError(world_id)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints de sesión
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/accounts/{account_id}/worlds/{world_id}/session",
+    status_code=status.HTTP_200_OK,
+    response_model=SessionStatusResponse,
+    summary="Abrir sesión (login)",
+    description=(
+        "Abre una sesión autenticada en Travian para la cuenta y mundo indicados. "
+        "Operación síncrona: puede tardar hasta 10 segundos (delays anti-detección). "
+        "Si ya existe una sesión activa, la cierra antes de abrir una nueva. "
+        "Devuelve 401 si el login falla (credenciales incorrectas o error de red)."
+    ),
+)
+async def session_login(
+    account_id: int,
+    world_id: int,
+    db=Depends(get_db_port),
+    registry=Depends(get_world_runtime_port),
+    fernet=Depends(get_fernet),
+) -> SessionStatusResponse:
+    await _verify_world_belongs_to_account(account_id, world_id, db)
+    use_case = LoginUseCase(registry=registry, db=db, fernet=fernet)
+    success = await use_case.execute(account_id, world_id)
+    if not success:
+        # Obtener username para el mensaje de error (la cuenta existe: ya la verificamos)
+        account = await db.get_account(account_id)
+        raise LoginFailedError(account.username if account else str(account_id))
+    return SessionStatusResponse(active=True, world_id=world_id, account_id=account_id)
+
+
+@router.delete(
+    "/accounts/{account_id}/worlds/{world_id}/session",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cerrar sesión (logout)",
+    description=(
+        "Cierra la sesión activa del bot para el mundo indicado. "
+        "Idempotente: devuelve 204 aunque no haya sesión activa."
+    ),
+)
+async def session_logout(
+    account_id: int,
+    world_id: int,
+    db=Depends(get_db_port),
+    registry=Depends(get_world_runtime_port),
+) -> None:
+    await _verify_world_belongs_to_account(account_id, world_id, db)
+    use_case = LogoutUseCase(registry=registry)
+    await use_case.execute(world_id)
+
+
+@router.get(
+    "/accounts/{account_id}/worlds/{world_id}/session",
+    status_code=status.HTTP_200_OK,
+    response_model=SessionStatusResponse,
+    summary="Estado de sesión",
+    description=(
+        "Devuelve si hay una sesión activa del bot para el mundo indicado. "
+        "No requiere sesión activa para funcionar."
+    ),
+)
+async def session_status(
+    account_id: int,
+    world_id: int,
+    db=Depends(get_db_port),
+    registry=Depends(get_world_runtime_port),
+) -> SessionStatusResponse:
+    await _verify_world_belongs_to_account(account_id, world_id, db)
+    active = registry.is_active(world_id)
+    return SessionStatusResponse(active=active, world_id=world_id, account_id=account_id)

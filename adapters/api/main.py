@@ -22,6 +22,13 @@ from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
 from adapters.api.routes.accounts import router as accounts_router
 from adapters.api.routes.catalog import router as catalog_router
 from adapters.api.routes.game_data import router as game_data_router
+from adapters.api.routes.game_culture_points import router as game_culture_points_router
+from adapters.api.routes.game_overview import router as game_overview_router
+from adapters.api.routes.game_resources import router as game_resources_router
+from adapters.api.routes.game_troops import router as game_troops_router
+from adapters.browser.fixture_overview_adapter import FixtureOverviewAdapter
+from adapters.browser.live_overview_adapter import LiveOverviewAdapter
+from adapters.browser.session_registry import SessionRegistry
 from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
 from adapters.db.database import get_connection
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
@@ -42,7 +49,7 @@ load_dotenv()
 
 # Campos sensibles en los vars de frame (nombre de variable contiene alguna de estas palabras)
 _SENSITIVE_FIELD_PATTERNS = re.compile(
-    r"(password|token|api_key|authorization)",
+    r"(password|token|api_key|authorization|cipher|secret)",
     re.IGNORECASE,
 )
 
@@ -111,10 +118,8 @@ async def lifespan(application: FastAPI):
     Inicializa los singletons de puertos al arrancar la aplicación:
       - translation_port (JsonTranslationAdapter) — catálogo de textos localizados
       - game_data_port   (GameDataSQLiteAdapter)  — stats de tropas e iconos
-      - db_port          (AccountSQLiteAdapter)   — cuentas, mundos y aldeas
-      - fernet           (Fernet)                 — cifrado de contraseñas
 
-    Todos quedan disponibles en app.state para todos los handlers y dependencias.
+    Ambos quedan disponibles en app.state para todos los handlers y dependencias.
     """
     # --- Clave Fernet — FALLA al arrancar si TRAVIAN_BOT_SECRET_KEY no está ---
     fernet = load_fernet_key()
@@ -144,6 +149,46 @@ async def lifespan(application: FastAPI):
     account_adapter = AccountSQLiteAdapter(conn)
     await account_adapter.ensure_tables()
     application.state.db_port = account_adapter
+
+    # OverviewHtmlSourcePort — selección por variable de entorno OVERVIEW_SOURCE
+    # 'fixture' (default): devuelve HTML desde tests/fixtures/overview/ (sin Chrome)
+    # 'live':              navega Travian con Chrome autenticado
+    _overview_source = os.environ.get("OVERVIEW_SOURCE", "fixture").lower()
+    if _overview_source == "live":
+        # get_browser y get_world_server se cablearán cuando exista SessionRegistry.
+        # Por ahora lambdas que devuelven None/""  → SessionNotActiveError controlado.
+        html_source_port = LiveOverviewAdapter(
+            get_browser=lambda wid: None,
+            get_world_server=lambda wid: "",
+        )
+    else:
+        # "fixture" — default; usa HTML capturado manualmente en tests/fixtures/overview/
+        _fixtures_dir = (
+            Path(__file__).parent.parent.parent / "tests" / "fixtures" / "overview"
+        )
+        html_source_port = FixtureOverviewAdapter(fixtures_dir=_fixtures_dir)
+
+    application.state.html_source_port = html_source_port
+
+    # SessionRegistry — implementa WorldRuntimePort + callables para LiveOverviewAdapter.
+    # Se instancia DESPUÉS de html_source_port porque set_live_adapter necesita la
+    # referencia al adaptador ya construido (evita dependencia circular en constructores).
+    session_registry = SessionRegistry()
+    application.state.world_runtime_port = session_registry
+
+    # Cablear SessionRegistry con LiveOverviewAdapter (solo en modo 'live').
+    # Reemplaza las lambdas stub que devolvían None/"" por métodos reales.
+    if _overview_source == "live":
+        # html_source_port ya fue asignado arriba como LiveOverviewAdapter.
+        # Sustituir los callables stub por los métodos reales del registry.
+        html_source_port.set_callables(
+            get_browser=session_registry.get_browser,
+            get_world_server=session_registry.get_world_server,
+        )
+        # Inyectar referencia inversa para invalidación de caché en login/logout.
+        session_registry.set_live_adapter(html_source_port)
+    # En modo 'fixture', session_registry no necesita referencia a html_source_port
+    # (FixtureOverviewAdapter no tiene caché que invalidar).
 
     yield
 
@@ -294,6 +339,10 @@ app.mount(
 app.include_router(accounts_router)
 app.include_router(catalog_router)
 app.include_router(game_data_router)
+app.include_router(game_overview_router)
+app.include_router(game_resources_router)
+app.include_router(game_culture_points_router)
+app.include_router(game_troops_router)
 
 
 @app.get("/health")

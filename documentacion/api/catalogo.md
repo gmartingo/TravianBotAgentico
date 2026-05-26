@@ -234,6 +234,7 @@ Cualquier excepción de dominio (`TravianBotError`) que no sea capturada por un 
 | `WORLD_NOT_FOUND` | 404 | `WorldNotFoundError` |
 | `SESSION_NOT_ACTIVE` | 409 | `SessionNotActiveError` |
 | `INVALID_CREDENTIALS` | 401 | `InvalidCredentialsError` |
+| `LOGIN_FAILED` | 401 | `LoginFailedError` — login fallido (credenciales, red, clave Fernet rotada). No distingue causa (RN-13 del spec de sesión). Ver [`api/sesion.md`](sesion.md). |
 | `VILLAGE_NOT_FOUND` | 404 | `VillageNotFoundError` |
 | `FARM_LIST_NOT_FOUND` | 404 | `FarmListNotFoundError` |
 | `TROOP_NOT_FOUND` | 404 | `TroopNotFoundError` |
@@ -322,4 +323,4 @@ Resumen para API:
 
 ---
 
-🔖 Última revisión: 2026-05-24
+🔖 Última revisión: 2026-05-26

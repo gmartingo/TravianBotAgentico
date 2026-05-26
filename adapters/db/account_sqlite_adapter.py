@@ -342,3 +342,18 @@ class AccountSQLiteAdapter(DbPort):
         """Elimina un mundo. FK ON DELETE CASCADE borra villages en cascada."""
         await self._conn.execute("DELETE FROM worlds WHERE id = ?", (world_id,))
         await self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # Operaciones especiales de credenciales — uso exclusivo de LoginUseCase
+    # ------------------------------------------------------------------
+
+    async def get_account_password_cipher(self, account_id: int) -> Optional[bytes]:
+        """Devuelve el BLOB Fernet de la contraseña, o None si la cuenta no existe."""
+        cursor = await self._conn.execute(
+            "SELECT password FROM accounts WHERE id = ?",
+            (account_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return bytes(row["password"])

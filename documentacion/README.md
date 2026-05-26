@@ -22,6 +22,7 @@
 | Documento | Módulo/Feature |
 |---|---|
 | [`backend/i18n.md`](backend/i18n.md) | Internacionalización: `core/i18n/`, `core/ports/translation_port.py`, `adapters/translations/`, `adapters/api/main.py` (exception handler, lifespan, middlewares) |
+| [`backend/sesion.md`](backend/sesion.md) | Sesión del bot: `SessionRegistry`, `LoginUseCase`, `LogoutUseCase`, endpoints de sesión, cableado en `lifespan`, seguridad de credenciales |
 
 ### Referencia de funciones
 
@@ -29,6 +30,7 @@
 |---|---|
 | [`backend/referencia-funciones/translation-port.md`](backend/referencia-funciones/translation-port.md) | Métodos del puerto `TranslationPort` y su implementación `JsonTranslationAdapter` |
 | [`backend/referencia-funciones/api-i18n-helpers.md`](backend/referencia-funciones/api-i18n-helpers.md) | Helpers del exception handler y dependencias de la API (`_mask_frame_locals`, `_build_trace`, `_extract_lang`, `get_language`, `get_translation_port`) |
+| [`backend/referencia-funciones/sesion.md`](backend/referencia-funciones/sesion.md) | Referencia rápida de `SessionRegistry`, `LoginUseCase`, `LogoutUseCase`, `get_account_password_cipher`, `get_world_runtime_port` y `LoginFailedError` |
 
 ---
 
@@ -37,6 +39,7 @@
 | Documento | Feature |
 |---|---|
 | [`funcionalidades/i18n-backend.md`](funcionalidades/i18n-backend.md) | Internacionalización del backend: edificios, tropas y mensajes de error |
+| [`funcionalidades/sesion.md`](funcionalidades/sesion.md) | Sesión del bot: login/logout/estado, seguridad de credenciales, nota de operación sobre `TRAVIAN_BOT_SECRET_KEY` |
 
 ---
 
@@ -45,6 +48,7 @@
 | Documento | Contenido |
 |---|---|
 | [`api/catalogo.md`](api/catalogo.md) | `GET /catalog/buildings`, `GET /catalog/troops/{tribe}`, exception handler global con traducciones |
+| [`api/sesion.md`](api/sesion.md) | `POST`, `DELETE`, `GET /accounts/{id}/worlds/{id}/session` — login, logout y estado de sesión del bot |
 
 ---
 
@@ -63,4 +67,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-05-24
+🔖 Última revisión: 2026-05-26

@@ -1,0 +1,128 @@
+/* ============================================================
+   ESTILOS GLOBALES — entry point CSS
+   Importa Tailwind v4 y los tokens. El @theme inline cablea
+   las CSS vars en las utilidades de Tailwind para que el
+   cambio de tema en runtime funcione solo.
+   ============================================================ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* ── Cablear tokens en Tailwind v4 (@theme inline) ─────────
+   @theme inline hace que las utilidades generadas referencien
+   la variable (var(--bg)) en vez de copiar su valor hex.
+   Así bg-bg, text-text, etc. responden al cambio de tema. */
+@theme inline {
+  /* Colores */
+  --color-bg:              var(--bg);
+  --color-surface:         var(--surface);
+  --color-surface-2:       var(--surface-2);
+  --color-border:          var(--border);
+  --color-border-strong:   var(--border-strong);
+
+  --color-text:            var(--text);
+  --color-text-secondary:  var(--text-secondary);
+  --color-text-tertiary:   var(--text-tertiary);
+  --color-text-disabled:   var(--text-disabled);
+
+  --color-accent:          var(--accent);
+  --color-accent-text:     var(--accent-text);
+  --color-accent-hover:    var(--accent-hover);
+  --color-accent-subtle:   var(--accent-subtle);
+
+  --color-btn-primary:     var(--btn-primary-bg);
+  --color-btn-primary-text: var(--btn-primary-text);
+  --color-btn-primary-hover: var(--btn-primary-hover);
+
+  --color-success:         var(--success);
+  --color-danger:          var(--danger);
+  --color-info:            var(--info);
+
+  /* Radios */
+  --radius-sm:   var(--radius-sm);
+  --radius-md:   var(--radius-md);
+  --radius-lg:   var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  /* Fuentes */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* ── Reset y base ───────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.4;
+  /* Transición suave al cambiar de tema */
+  transition:
+    background-color var(--dur-base) var(--ease),
+    color var(--dur-base) var(--ease);
+}
+
+/* ── Accesibilidad: foco visible siempre ────────────────── */
+/* Nunca outline:none sin reemplazo (DESIGN.md §12) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Eliminar el outline por defecto solo para click (no teclado) */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Scrollbar mínima (WebKit) ───────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+/* ── Links ───────────────────────────────────────────────── */
+a {
+  color: var(--accent-text);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* ── Motion reducido (DESIGN.md §10) ─────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Animación skeleton pulse ────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 1; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}

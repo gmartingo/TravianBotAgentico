@@ -96,5 +96,26 @@
     "de": "",
     "fr": "",
     "ru": ""
+  },
+  "OVERVIEW_PAGE_NOT_LOADED": {
+    "es": "La página '{page}' de Travian no cargó a tiempo (world_id={world_id}). Inténtalo de nuevo.",
+    "en": "Travian page '{page}' did not load in time (world_id={world_id}). Please try again.",
+    "de": "Die Travian-Seite '{page}' hat nicht rechtzeitig geladen (world_id={world_id}). Bitte erneut versuchen.",
+    "fr": "La page Travian '{page}' n'a pas chargé à temps (world_id={world_id}). Réessayez.",
+    "ru": "Страница Travian '{page}' не загрузилась вовремя (world_id={world_id}). Попробуйте ещё раз."
+  },
+  "OVERVIEW_FIXTURE_NOT_FOUND": {
+    "es": "Fixture no encontrado para la página '{page}'. Comprueba que existe el fichero '{page}.html' en el directorio de fixtures.",
+    "en": "Fixture not found for page '{page}'. Make sure '{page}.html' exists in the fixtures directory.",
+    "de": "Fixture für Seite '{page}' nicht gefunden. Prüfe, ob '{page}.html' im Fixtures-Verzeichnis vorhanden ist.",
+    "fr": "Fixture introuvable pour la page '{page}'. Vérifiez que le fichier '{page}.html' existe dans le répertoire des fixtures.",
+    "ru": "Fixture для страницы '{page}' не найден. Убедитесь, что файл '{page}.html' существует в директории fixtures."
+  },
+  "LOGIN_FAILED": {
+    "es": "Login fallido para '{username}'. Verifica las credenciales o el estado del servidor.",
+    "en": "Login failed for '{username}'. Check your credentials or server status.",
+    "de": "",
+    "fr": "",
+    "ru": ""
   }
 }

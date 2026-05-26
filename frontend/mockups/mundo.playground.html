@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — S9 Espacio del mundo (pantalla completa, SIN sidebar de gestión).
+  HTML autocontenido, desacoplado del backend.
+  Abrir directamente en el navegador — sin build, sin servidor.
+
+  Pantalla: Espacio del mundo.
+  El operador llega aquí tras pulsar "Arrancar" en un mundo y recibir el 200 (login OK).
+  Ocupa toda la pantalla — sin sidebar de gestión. Solo la topbar mínima + botón "Mundos".
+  Las futuras secciones (Recursos, Tropas…) son pestañas deshabilitadas (próximamente).
+
+  Toolbar — selector "Vista":
+    Mundo activo (normal)      — Espacio del mundo con el mundo ts1 activo
+    Mundo activo — Resumen     — Pestaña "Resumen/Configuración" activa
+    Pestañas próximamente      — Todas las pestañas deshabilitadas visibles
+
+  Cablear navegación (modo PREVIEW, guard "editing"):
+    "← Mundos"  → cuenta-detalle.playground.html
+    "Parar"     → cuenta-detalle.playground.html (mundo queda idle)
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravianBot · Espacio del mundo (playground)</title>
+<style>
+/* ===== TOKENS — idénticos a los playgrounds hermanos ===== */
+:root {
+  --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93;
+  --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012;
+  --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#FFFFFF; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+    --border:#3A3A3C; --border-strong:#48484A;
+    --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+    --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+    --accent-subtle:rgba(203,176,121,.16);
+    --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+    --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089;
+  --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET / BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans); background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.4;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+  display:flex; flex-direction:column;
+}
+a{color:var(--accent-text);text-decoration:none;}
+a:hover{color:var(--accent-hover);text-decoration:underline;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ===== TOOLBAR — idéntica a los playgrounds hermanos ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:100;
+}
+.toolbar .grow{flex:1;min-width:0;}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-inline-end:4px;white-space:nowrap;}
+.logo{width:26px;height:26px;border-radius:7px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+      display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0;}
+.tb-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;padding:0 12px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;display:flex;align-items:center;gap:6px;
+  transition:background var(--dur-fast) var(--ease);white-space:nowrap;
+}
+.tb-btn:hover{background:var(--surface-2);}
+.tb-btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.tb-btn.primary:hover{background:var(--btn-primary-hover);}
+.tb-btn.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--accent-subtle);}
+.icon-btn{
+  appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;flex-shrink:0;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);}
+.hint{color:var(--text-tertiary);font-size:12px;white-space:nowrap;}
+.state-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.state-select{
+  height:32px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  border-radius:var(--radius-sm);padding:0 8px;font-family:inherit;font-size:13px;cursor:pointer;
+}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== LANG PICKER — idéntico a los hermanos ===== */
+.lang-wrap{position:relative;}
+.lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;padding:0 12px;
+  cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;
+}
+.lang-btn:hover{background:var(--surface-2);}
+.lang-btn svg{width:15px;height:15px;color:var(--text-secondary);}
+.lang-panel{
+  position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:280px;max-width:calc(100vw - 32px);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;z-index:200;display:none;
+}
+.lang-panel.open{display:block;}
+.lang-search-wrap{padding:10px;border-bottom:1px solid var(--border);}
+.lang-search{
+  width:100%;height:32px;border:1px solid var(--border-strong);background:var(--surface-2);
+  color:var(--text);border-radius:var(--radius-sm);padding:0 10px;
+  font-family:inherit;font-size:13px;outline:none;
+}
+.lang-search:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.lang-list{max-height:280px;overflow-y:auto;padding:6px;}
+.lang-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:13px;text-align:start;
+}
+.lang-item:hover{background:var(--surface-2);}
+.lang-item .code{color:var(--text-tertiary);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;}
+.lang-item[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent-text);font-weight:600;}
+.lang-item[aria-selected="true"] .code{color:var(--accent-text);}
+
+/* ===== APP TOPBAR — topbar mínima del Espacio del mundo (sin sidebar) ===== */
+.app-topbar{
+  display:flex;align-items:center;gap:12px;padding:0 20px;height:52px;
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.app-brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;}
+.app-logo{
+  width:28px;height:28px;border-radius:7px;background:var(--btn-primary-bg);
+  color:var(--btn-primary-text);display:grid;place-items:center;font-weight:700;font-size:12px;
+}
+.app-topbar-grow{flex:1;}
+.app-theme-btn{
+  appearance:none;border:1px solid var(--border);background:transparent;color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;cursor:pointer;
+}
+.app-theme-btn:hover{background:var(--surface-2);color:var(--text);}
+.app-theme-btn svg{width:16px;height:16px;}
+.app-lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:30px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;padding:0 10px;
+  cursor:pointer;font-family:inherit;font-size:13px;
+}
+.app-lang-btn:hover{background:var(--surface-2);}
+.app-lang-btn svg{width:14px;height:14px;color:var(--text-secondary);}
+
+/* Botón "← Mundos" — discreto, en la topbar, extremo start */
+.btn-back-worlds{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  height:32px;padding:0 10px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;display:flex;align-items:center;gap:6px;
+  transition:color var(--dur-fast) var(--ease);white-space:nowrap;
+}
+.btn-back-worlds:hover:not(:disabled){color:var(--accent-hover);}
+.btn-back-worlds svg{width:14px;height:14px;flex-shrink:0;}
+.topbar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== CONTENT AREA ===== */
+.world-content{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;}
+
+/* ===== DRAG & DROP ===== */
+body.editing .canvas-area{
+  background-image:
+    linear-gradient(to right,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px),
+    linear-gradient(to bottom,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px);
+  background-size:8px 8px;
+}
+.drag-block{position:relative;}
+body.editing .drag-block{outline:1px dashed transparent;border-radius:4px;cursor:grab;transition:outline-color var(--dur-fast);}
+body.editing .drag-block:hover{outline-color:var(--accent);}
+body.editing .drag-block.dragging{cursor:grabbing;outline:2px solid var(--accent);box-shadow:var(--shadow-md);z-index:10;}
+
+/* ===== WORLD HEADER BAR — cabecera del mundo ===== */
+.world-header-bar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:20px 32px 0;flex-shrink:0;
+}
+.world-header-top{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  margin-bottom:16px;
+}
+.world-meta{}
+.world-title{
+  display:flex;align-items:center;gap:10px;margin-bottom:4px;
+}
+.world-name{
+  font-size:24px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;
+  font-family:var(--font-mono);color:var(--accent-text);
+}
+/* Badge de estado Activo — verde con icono relleno */
+.world-status-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:500;white-space:nowrap;
+  color:var(--success);
+}
+.world-status-badge .badge-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;
+}
+.world-subtitle{
+  font-size:13px;color:var(--text-secondary);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
+.world-tribe{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:12px;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-full);padding:2px 8px;
+}
+.world-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:4px;}
+
+/* Botón Parar — destructivo pequeño */
+.btn-stop{
+  appearance:none;border:1px solid var(--danger);background:transparent;color:var(--danger);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-stop:hover:not(:disabled){background:rgba(201,53,44,.06);}
+[data-theme="dark"] .btn-stop:hover:not(:disabled){background:rgba(255,69,58,.10);}
+.btn-stop:disabled{opacity:.45;cursor:not-allowed;}
+
+/* ===== PESTAÑAS DE NAVEGACIÓN INTERNA DEL MUNDO ===== */
+.world-tabs{
+  display:flex;align-items:flex-end;gap:0;margin-top:4px;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.world-tabs::-webkit-scrollbar{display:none;}
+.world-tab{
+  appearance:none;border:none;background:transparent;
+  font-family:inherit;font-size:13px;font-weight:400;
+  color:var(--text-secondary);cursor:pointer;
+  padding:10px 16px 9px;white-space:nowrap;
+  border-bottom:2px solid transparent;
+  transition:color var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease);
+  display:flex;align-items:center;gap:6px;
+  position:relative;top:1px; /* se asienta en el borde del contenedor */
+}
+.world-tab:hover:not([disabled]){color:var(--text);}
+.world-tab.active{
+  color:var(--text);font-weight:500;
+  border-bottom-color:var(--accent);
+}
+.world-tab[disabled]{
+  color:var(--text-disabled);cursor:not-allowed;
+}
+.world-tab .tab-soon{
+  font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);
+  text-transform:uppercase;letter-spacing:.04em;
+}
+
+/* ===== CONTENIDO DE LA PESTAÑA ACTIVA ===== */
+.tab-content{
+  flex:1;padding:28px 32px;overflow-y:auto;
+}
+
+/* ===== SECCIÓN DE CONFIGURACIÓN (pestaña Resumen/Config) ===== */
+.config-section{margin-bottom:32px;}
+.config-section-title{
+  font-size:17px;font-weight:600;letter-spacing:-.01em;
+  margin-bottom:16px;
+}
+.config-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:16px;
+}
+@media (max-width:767px){
+  .config-grid{grid-template-columns:1fr;}
+}
+.config-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:16px 20px;
+}
+.config-card-header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:12px;
+}
+.config-card-title{font-size:14px;font-weight:500;}
+.config-card-desc{font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:12px;}
+
+/* Toggle switch (placeholder de UI) */
+.toggle-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-label{font-size:13px;}
+.toggle-label-desc{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.toggle-switch{
+  /* diseño visual del toggle — placeholder estático */
+  width:36px;height:20px;border-radius:var(--radius-full);
+  background:var(--surface-2);border:1px solid var(--border-strong);
+  position:relative;cursor:pointer;flex-shrink:0;
+  transition:background var(--dur-base) var(--ease);
+}
+.toggle-switch.on{background:var(--success);border-color:var(--success);}
+.toggle-switch::after{
+  content:'';position:absolute;top:2px;inset-inline-start:2px;
+  width:14px;height:14px;border-radius:50%;background:#fff;
+  transition:inset-inline-start var(--dur-base) var(--ease);
+}
+.toggle-switch.on::after{inset-inline-start:18px;}
+
+/* Input de intervalo (placeholder estático) */
+.interval-row{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.interval-row:last-child{border-bottom:none;}
+.interval-label{font-size:13px;flex:1;}
+.interval-input{
+  width:72px;height:30px;border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text);border-radius:var(--radius-sm);
+  padding:0 8px;font-family:var(--font-mono);font-size:13px;text-align:end;
+  outline:none;transition:border-color var(--dur-fast) var(--ease);
+}
+.interval-input:focus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.interval-unit{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+
+/* ===== PLACEHOLDER INFORMATIVO (estado del mundo) ===== */
+.world-status-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:16px 20px;
+  display:flex;align-items:center;gap:14px;
+  margin-bottom:24px;
+}
+.world-status-icon{
+  width:40px;height:40px;border-radius:var(--radius-full);
+  background:rgba(36,138,61,.12);
+  display:grid;place-items:center;flex-shrink:0;
+}
+[data-theme="dark"] .world-status-icon{background:rgba(52,199,89,.15);}
+.world-status-icon svg{width:20px;height:20px;color:var(--success);}
+.world-status-text{}
+.world-status-label{font-size:14px;font-weight:500;color:var(--success);}
+.world-status-meta{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+
+/* ===== SPINNER ===== */
+.spinner{
+  width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;display:inline-block;animation:spin .6s linear infinite;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ===== TOAST ===== */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);padding:10px 16px;
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);font-size:13px;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  z-index:500;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width:767px){
+  .app-topbar{padding:0 12px;}
+  .world-header-bar{padding:16px 16px 0;}
+  .tab-content{padding:16px;}
+  .world-header-top{flex-direction:column;gap:10px;}
+  .world-actions{width:100%;}
+  .btn-stop{flex:1;justify-content:center;}
+}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important;}}
+</style>
+</head>
+<body>
+
+<!-- ==================== PLAYGROUND TOOLBAR ==================== -->
+<div class="toolbar">
+  <div class="brand">
+    <div class="logo">TB</div>
+    <span>Playground · Espacio del mundo</span>
+  </div>
+
+  <span class="state-label" data-i18n="toolbar.viewLabel">Vista:</span>
+  <select class="state-select" id="viewSelect">
+    <option value="mundo-activo" data-i18n="toolbar.view.mundoActivo">Mundo activo (ts1)</option>
+    <option value="mundo-activo-2" data-i18n="toolbar.view.mundoActivo2">Mundo activo (ts3, alemán)</option>
+  </select>
+
+  <div class="sep"></div>
+
+  <button class="tb-btn toggle" id="editBtn" aria-pressed="false">&#9998; Editar</button>
+  <button class="tb-btn" id="saveBtn" data-i18n="toolbar.save">Guardar</button>
+  <button class="tb-btn" id="resetBtn" data-i18n="toolbar.reset">Restablecer</button>
+  <button class="tb-btn primary" id="exportBtn" data-i18n="toolbar.export">Exportar JSON</button>
+
+  <span class="hint" id="hint"></span>
+  <span class="grow"></span>
+
+  <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema"></button>
+
+  <div class="lang-wrap">
+    <button class="lang-btn" id="langBtn" aria-haspopup="listbox" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="langBtnLabel">Español</span>
+    </button>
+    <div class="lang-panel" id="langPanel" role="listbox" aria-label="Idioma">
+      <div class="lang-search-wrap">
+        <input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off" />
+      </div>
+      <div class="lang-list" id="langList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APP TOPBAR — mínima, sin sidebar ==================== -->
+<div class="app-topbar">
+  <!-- Botón "← Mundos" discreto — extremo start -->
+  <button class="btn-back-worlds" id="backToWorldsBtn" type="button" aria-label="Volver a mis mundos">
+    <svg id="backArrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+    <span data-i18n="topbar.backToWorlds">Mundos</span>
+  </button>
+
+  <div class="topbar-sep"></div>
+
+  <div class="app-brand">
+    <div class="app-logo">TB</div>
+    <span>TravianBot</span>
+  </div>
+
+  <div class="app-topbar-grow"></div>
+
+  <button class="app-theme-btn" id="appThemeBtn" aria-label="Cambiar tema">
+    <svg id="appThemeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+  <div class="lang-wrap" style="position:relative;">
+    <button class="app-lang-btn" id="appLangBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="appLangLabel">Español</span>
+    </button>
+  </div>
+</div>
+
+<!-- ==================== ESPACIO DEL MUNDO ==================== -->
+<div class="world-content">
+
+  <!-- CABECERA DEL MUNDO + PESTAÑAS (bloque arrastrable) -->
+  <div class="drag-block" data-drag-id="worldHeader">
+    <div class="world-header-bar">
+
+      <div class="world-header-top">
+        <!-- Identidad del mundo -->
+        <div class="world-meta">
+          <div class="world-title">
+            <span class="world-name" id="worldNameDisplay">ts1 · x1 · international</span>
+            <span class="world-status-badge" role="status" aria-label="Estado: Activo">
+              <span class="badge-dot" aria-hidden="true"></span>
+              <span data-i18n="world.status.active">Activo</span>
+            </span>
+          </div>
+          <div class="world-subtitle">
+            <span class="world-tribe" id="worldTribeDisplay">
+              <!-- icono tribu placeholder -->
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span id="worldTribeLabel">Romans</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Acciones del mundo -->
+        <div class="world-actions">
+          <button class="btn-stop" id="stopWorldBtn" type="button"
+                  aria-label="Parar el bot en este mundo">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+            <span data-i18n="world.action.stop">Parar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- NAVEGACIÓN INTERNA — pestañas -->
+      <nav class="world-tabs" aria-label="Secciones del mundo" role="tablist">
+        <button class="world-tab active" role="tab" aria-selected="true" id="tab-config" data-tab="config">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+          </svg>
+          <span data-i18n="world.tab.config">Configuración</span>
+        </button>
+        <button class="world-tab" role="tab" aria-selected="false" disabled
+                id="tab-resources" data-tab="resources"
+                title="Próximamente">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="7" width="6" height="13" rx="1"/>
+            <rect x="9" y="3" width="6" height="17" rx="1"/>
+            <rect x="16" y="10" width="6" height="10" rx="1"/>
+          </svg>
+          <span data-i18n="world.tab.resources">Recursos</span>
+          <span class="tab-soon" data-i18n="nav.comingSoon">Pronto</span>
+        </button>
+        <button class="world-tab" role="tab" aria-selected="false" disabled
+                id="tab-troops" data-tab="troops"
+                title="Próximamente">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+          <span data-i18n="world.tab.troops">Tropas</span>
+          <span class="tab-soon" data-i18n="nav.comingSoon">Pronto</span>
+        </button>
+        <button class="world-tab" role="tab" aria-selected="false" disabled
+                id="tab-construction" data-tab="construction"
+                title="Próximamente">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span data-i18n="world.tab.construction">Construcción</span>
+          <span class="tab-soon" data-i18n="nav.comingSoon">Pronto</span>
+        </button>
+        <button class="world-tab" role="tab" aria-selected="false" disabled
+                id="tab-villages" data-tab="villages"
+                title="Próximamente">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span data-i18n="world.tab.villages">Aldeas</span>
+          <span class="tab-soon" data-i18n="nav.comingSoon">Pronto</span>
+        </button>
+      </nav>
+
+    </div>
+  </div><!-- /worldHeader drag-block -->
+
+  <!-- CONTENIDO DE PESTAÑA ACTIVA (canvas arrastrable) -->
+  <div class="tab-content canvas-area" id="tabContentArea">
+
+    <!-- ── PANEL DE ESTADO DEL MUNDO ── -->
+    <div class="drag-block" data-drag-id="statusPanel">
+      <div class="world-status-panel" role="status">
+        <div class="world-status-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        </div>
+        <div class="world-status-text">
+          <div class="world-status-label" data-i18n="world.status.panelLabel">Sesión activa</div>
+          <div class="world-status-meta" id="worldStatusMeta">Bot en ejecución · ts1.x1.international.travian.com</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN: AUTOMATIZACIÓN ── -->
+    <div class="drag-block" data-drag-id="sectionAutomation">
+      <div class="config-section">
+        <div class="config-section-title" data-i18n="world.config.automationTitle">Automatización</div>
+        <div class="config-grid">
+
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.config.tasksTitle">Tareas del bot</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.config.tasksDesc">
+              Activa o pausa las tareas automáticas que el bot ejecuta en este mundo.
+            </p>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label" data-i18n="world.config.task.buildQueue">Cola de construcción</div>
+                <div class="toggle-label-desc" data-i18n="world.config.task.buildQueueDesc">Construye edificios según la cola planificada</div>
+              </div>
+              <div class="toggle-switch on" role="switch" aria-checked="true" tabindex="0" title="Activado"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label" data-i18n="world.config.task.farmList">Lista de granjas</div>
+                <div class="toggle-label-desc" data-i18n="world.config.task.farmListDesc">Envía ataques de granjeo automáticamente</div>
+              </div>
+              <div class="toggle-switch" role="switch" aria-checked="false" tabindex="0" title="Desactivado"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label" data-i18n="world.config.task.troops">Entrenamiento de tropas</div>
+                <div class="toggle-label-desc" data-i18n="world.config.task.troopsDesc">Mantiene la cola de entrenamiento activa</div>
+              </div>
+              <div class="toggle-switch" role="switch" aria-checked="false" tabindex="0" title="Desactivado"></div>
+            </div>
+          </div>
+
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.config.intervalsTitle">Intervalos</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.config.intervalsDesc">
+              Tiempo entre comprobaciones del bot. Valores más altos reducen el riesgo de detección.
+            </p>
+            <div class="interval-row">
+              <span class="interval-label" data-i18n="world.config.interval.check">Comprobación periódica</span>
+              <input class="interval-input" type="number" value="5" min="1" max="60" aria-label="Minutos entre comprobaciones" />
+              <span class="interval-unit" data-i18n="world.config.interval.min">min</span>
+            </div>
+            <div class="interval-row">
+              <span class="interval-label" data-i18n="world.config.interval.farm">Entre granjas</span>
+              <input class="interval-input" type="number" value="30" min="5" max="120" aria-label="Minutos entre granjas" />
+              <span class="interval-unit" data-i18n="world.config.interval.min">min</span>
+            </div>
+            <div class="interval-row">
+              <span class="interval-label" data-i18n="world.config.interval.jitter">Variación aleatoria</span>
+              <input class="interval-input" type="number" value="20" min="0" max="50" aria-label="Porcentaje de variación aleatoria" />
+              <span class="interval-unit">%</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /sectionAutomation -->
+
+    <!-- ── SECCIÓN: PRÓXIMAMENTE (placeholder informativo) ── -->
+    <div class="drag-block" data-drag-id="sectionComingSoon">
+      <div class="config-section">
+        <div class="config-section-title" data-i18n="world.config.comingSoonTitle">Próximamente en este espacio</div>
+        <div class="config-grid">
+
+          <div class="config-card" style="opacity:.6;">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.tab.resources">Recursos</span>
+              <span style="font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;" data-i18n="nav.comingSoon">Pronto</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.comingSoon.resourcesDesc">
+              Monitorización en tiempo real de madera, barro, hierro y cereal de todas las aldeas.
+            </p>
+          </div>
+
+          <div class="config-card" style="opacity:.6;">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.tab.troops">Tropas</span>
+              <span style="font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;" data-i18n="nav.comingSoon">Pronto</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.comingSoon.troopsDesc">
+              Inventario de unidades, estadísticas de combate y gestión de la cola de entrenamiento.
+            </p>
+          </div>
+
+          <div class="config-card" style="opacity:.6;">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.tab.construction">Construcción</span>
+              <span style="font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;" data-i18n="nav.comingSoon">Pronto</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.comingSoon.constructionDesc">
+              Cola de edificios por aldea, costes en recursos y tiempos estimados de construcción.
+            </p>
+          </div>
+
+          <div class="config-card" style="opacity:.6;">
+            <div class="config-card-header">
+              <span class="config-card-title" data-i18n="world.tab.villages">Aldeas</span>
+              <span style="font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;" data-i18n="nav.comingSoon">Pronto</span>
+            </div>
+            <p class="config-card-desc" data-i18n="world.comingSoon.villagesDesc">
+              Mapa de aldeas, coordenadas, nombre y tipo (capital / aldea / oasis).
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div><!-- /sectionComingSoon -->
+
+  </div><!-- /tabContentArea -->
+
+</div><!-- /world-content -->
+
+<!-- Toast -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ===================================================================
+   DATOS DE EJEMPLO — dos mundos posibles para el selector de vista
+   =================================================================== */
+const WORLDS_EXAMPLE = {
+  "mundo-activo": {
+    url: "https://ts1.x1.international.travian.com/",
+    tribe: "romans",
+    session: "active"
+  },
+  "mundo-activo-2": {
+    url: "https://ts3.x3.europe.travian.com/",
+    tribe: "teutons",
+    session: "active"
+  }
+};
+
+/* ===================================================================
+   IDIOMAS Y I18N — idénticos a los playgrounds hermanos
+   =================================================================== */
+const LANGS=[
+  {code:"ar",name:"العربية"},{code:"bg",name:"Български"},{code:"cs",name:"Čeština"},
+  {code:"da",name:"Dansk"},{code:"de",name:"Deutsch"},{code:"el",name:"Ελληνικά"},
+  {code:"en",name:"English"},{code:"es",name:"Español"},{code:"fa",name:"فارسی"},
+  {code:"fr",name:"Français"},{code:"he",name:"עברית"},{code:"hu",name:"Magyar"},
+  {code:"it",name:"Italiano"},{code:"ja",name:"日本語"},{code:"lt",name:"Lietuvių"},
+  {code:"lv",name:"Latviešu"},{code:"nl",name:"Nederlands"},{code:"pl",name:"Polski"},
+  {code:"pt",name:"Português"},{code:"rs",name:"Srpski"},{code:"ru",name:"Русский"},
+  {code:"sl",name:"Slovenščina"},{code:"sv",name:"Svenska"},{code:"tr",name:"Türkçe"},
+  {code:"uk",name:"Українська"},
+];
+const RTL = new Set(["ar","he","fa"]);
+
+const I18N = {
+  es:{
+    "toolbar.viewLabel":"Vista:",
+    "toolbar.view.mundoActivo":"Mundo activo (ts1)",
+    "toolbar.view.mundoActivo2":"Mundo activo (ts3)",
+    "toolbar.save":"Guardar",
+    "toolbar.reset":"Restablecer",
+    "toolbar.export":"Exportar JSON",
+    "nav.comingSoon":"Pronto",
+    "tooltip.comingSoon":"Próximamente",
+    "topbar.backToWorlds":"Mundos",
+    "world.status.active":"Activo",
+    "world.status.panelLabel":"Sesión activa",
+    "world.action.stop":"Parar",
+    "world.tab.config":"Configuración",
+    "world.tab.resources":"Recursos",
+    "world.tab.troops":"Tropas",
+    "world.tab.construction":"Construcción",
+    "world.tab.villages":"Aldeas",
+    "world.config.automationTitle":"Automatización",
+    "world.config.tasksTitle":"Tareas del bot",
+    "world.config.tasksDesc":"Activa o pausa las tareas automáticas que el bot ejecuta en este mundo.",
+    "world.config.task.buildQueue":"Cola de construcción",
+    "world.config.task.buildQueueDesc":"Construye edificios según la cola planificada",
+    "world.config.task.farmList":"Lista de granjas",
+    "world.config.task.farmListDesc":"Envía ataques de granjeo automáticamente",
+    "world.config.task.troops":"Entrenamiento de tropas",
+    "world.config.task.troopsDesc":"Mantiene la cola de entrenamiento activa",
+    "world.config.intervalsTitle":"Intervalos",
+    "world.config.intervalsDesc":"Tiempo entre comprobaciones del bot. Valores más altos reducen el riesgo de detección.",
+    "world.config.interval.check":"Comprobación periódica",
+    "world.config.interval.farm":"Entre granjas",
+    "world.config.interval.jitter":"Variación aleatoria",
+    "world.config.interval.min":"min",
+    "world.config.comingSoonTitle":"Próximamente en este espacio",
+    "world.comingSoon.resourcesDesc":"Monitorización en tiempo real de madera, barro, hierro y cereal de todas las aldeas.",
+    "world.comingSoon.troopsDesc":"Inventario de unidades, estadísticas de combate y gestión de la cola de entrenamiento.",
+    "world.comingSoon.constructionDesc":"Cola de edificios por aldea, costes en recursos y tiempos estimados de construcción.",
+    "world.comingSoon.villagesDesc":"Mapa de aldeas, coordenadas, nombre y tipo (capital / aldea / oasis).",
+    "world.stop.toast":"Bot detenido. Volviendo al detalle de la cuenta…",
+    "tribe.romans":"Romans","tribe.teutons":"Teutons","tribe.gauls":"Gauls",
+    "tribe.egyptians":"Egyptians","tribe.huns":"Huns","tribe.spartans":"Spartans",
+    "tribe.vikings":"Vikings",
+    "search":"Buscar idioma…",
+    "hint.edit":"Arrastra cualquier bloque (imán de 8px). Pulsa «Listo» al terminar.",
+    "hint.view":"Pulsa «Editar» para arrastrar los bloques.",
+  },
+  en:{
+    "toolbar.viewLabel":"View:",
+    "toolbar.view.mundoActivo":"Active world (ts1)",
+    "toolbar.view.mundoActivo2":"Active world (ts3)",
+    "toolbar.save":"Save",
+    "toolbar.reset":"Reset",
+    "toolbar.export":"Export JSON",
+    "nav.comingSoon":"Soon",
+    "tooltip.comingSoon":"Coming soon",
+    "topbar.backToWorlds":"Worlds",
+    "world.status.active":"Active",
+    "world.status.panelLabel":"Active session",
+    "world.action.stop":"Stop",
+    "world.tab.config":"Configuration",
+    "world.tab.resources":"Resources",
+    "world.tab.troops":"Troops",
+    "world.tab.construction":"Construction",
+    "world.tab.villages":"Villages",
+    "world.config.automationTitle":"Automation",
+    "world.config.tasksTitle":"Bot tasks",
+    "world.config.tasksDesc":"Enable or pause the automated tasks the bot runs in this world.",
+    "world.config.task.buildQueue":"Build queue",
+    "world.config.task.buildQueueDesc":"Builds according to the planned queue",
+    "world.config.task.farmList":"Farm list",
+    "world.config.task.farmListDesc":"Sends farm attacks automatically",
+    "world.config.task.troops":"Troop training",
+    "world.config.task.troopsDesc":"Keeps the training queue active",
+    "world.config.intervalsTitle":"Intervals",
+    "world.config.intervalsDesc":"Time between bot checks. Higher values reduce detection risk.",
+    "world.config.interval.check":"Periodic check",
+    "world.config.interval.farm":"Between farms",
+    "world.config.interval.jitter":"Random jitter",
+    "world.config.interval.min":"min",
+    "world.config.comingSoonTitle":"Coming soon in this space",
+    "world.comingSoon.resourcesDesc":"Real-time monitoring of wood, clay, iron and crop across all villages.",
+    "world.comingSoon.troopsDesc":"Unit inventory, combat stats and training queue management.",
+    "world.comingSoon.constructionDesc":"Build queue per village, resource costs and estimated construction times.",
+    "world.comingSoon.villagesDesc":"Village map, coordinates, name and type (capital / village / oasis).",
+    "world.stop.toast":"Bot stopped. Returning to account detail…",
+    "tribe.romans":"Romans","tribe.teutons":"Teutons","tribe.gauls":"Gauls",
+    "tribe.egyptians":"Egyptians","tribe.huns":"Huns","tribe.spartans":"Spartans",
+    "tribe.vikings":"Vikings",
+    "search":"Search language…",
+    "hint.edit":"Drag any block (8px snap). Click «Done» when finished.",
+    "hint.view":"Click «Edit» to drag the blocks.",
+  },
+  ar:{
+    "toolbar.viewLabel":"العرض:",
+    "toolbar.view.mundoActivo":"عالم نشط (ts1)",
+    "toolbar.view.mundoActivo2":"عالم نشط (ts3)",
+    "toolbar.save":"حفظ",
+    "toolbar.reset":"إعادة تعيين",
+    "toolbar.export":"تصدير JSON",
+    "nav.comingSoon":"قريباً",
+    "tooltip.comingSoon":"قريباً",
+    "topbar.backToWorlds":"العوالم",
+    "world.status.active":"نشط",
+    "world.status.panelLabel":"الجلسة نشطة",
+    "world.action.stop":"إيقاف",
+    "world.tab.config":"الإعدادات",
+    "world.tab.resources":"الموارد",
+    "world.tab.troops":"الجنود",
+    "world.tab.construction":"البناء",
+    "world.tab.villages":"القرى",
+    "world.config.automationTitle":"الأتمتة",
+    "world.config.tasksTitle":"مهام البوت",
+    "world.config.tasksDesc":"قم بتفعيل أو إيقاف المهام التلقائية للبوت في هذا العالم.",
+    "world.config.task.buildQueue":"قائمة البناء",
+    "world.config.task.buildQueueDesc":"يبني وفقاً للقائمة المخططة",
+    "world.config.task.farmList":"قائمة المزارع",
+    "world.config.task.farmListDesc":"يرسل هجمات المزرعة تلقائياً",
+    "world.config.task.troops":"تدريب الجنود",
+    "world.config.task.troopsDesc":"يحافظ على نشاط قائمة التدريب",
+    "world.config.intervalsTitle":"الفترات الزمنية",
+    "world.config.intervalsDesc":"الوقت بين فحوصات البوت. القيم الأعلى تقلل خطر الاكتشاف.",
+    "world.config.interval.check":"الفحص الدوري",
+    "world.config.interval.farm":"بين المزارع",
+    "world.config.interval.jitter":"عشوائية إضافية",
+    "world.config.interval.min":"دقيقة",
+    "world.config.comingSoonTitle":"قريباً في هذا الفضاء",
+    "world.comingSoon.resourcesDesc":"مراقبة فورية للخشب والطين والحديد والحبوب في جميع القرى.",
+    "world.comingSoon.troopsDesc":"جرد الوحدات وإحصاءات القتال وإدارة قائمة التدريب.",
+    "world.comingSoon.constructionDesc":"قائمة البناء لكل قرية وتكاليف الموارد والأوقات المقدرة.",
+    "world.comingSoon.villagesDesc":"خريطة القرى والإحداثيات والاسم والنوع.",
+    "world.stop.toast":"تم إيقاف البوت. العودة إلى تفاصيل الحساب…",
+    "tribe.romans":"الرومان","tribe.teutons":"التيوتون","tribe.gauls":"الغاليين",
+    "tribe.egyptians":"المصريين","tribe.huns":"الهون","tribe.spartans":"الإسبارطيين",
+    "tribe.vikings":"الفايكنغ",
+    "search":"ابحث عن لغة…",
+    "hint.edit":"اسحب أي كتلة. اضغط «تم» عند الانتهاء.",
+    "hint.view":"اضغط «تعديل» لسحب الكتل.",
+  },
+  de:{
+    "toolbar.viewLabel":"Ansicht:",
+    "toolbar.view.mundoActivo":"Aktive Welt (ts1)",
+    "toolbar.view.mundoActivo2":"Aktive Welt (ts3)",
+    "toolbar.save":"Speichern",
+    "toolbar.reset":"Zurücksetzen",
+    "toolbar.export":"JSON exportieren",
+    "nav.comingSoon":"Bald",
+    "tooltip.comingSoon":"Demnächst",
+    "topbar.backToWorlds":"Welten",
+    "world.status.active":"Aktiv",
+    "world.status.panelLabel":"Aktive Sitzung",
+    "world.action.stop":"Stoppen",
+    "world.tab.config":"Konfiguration",
+    "world.tab.resources":"Ressourcen",
+    "world.tab.troops":"Truppen",
+    "world.tab.construction":"Bau",
+    "world.tab.villages":"Dörfer",
+    "world.config.automationTitle":"Automatisierung",
+    "world.config.tasksTitle":"Bot-Aufgaben",
+    "world.config.tasksDesc":"Automatische Bot-Aufgaben in dieser Welt aktivieren oder pausieren.",
+    "world.config.task.buildQueue":"Bau-Warteschlange",
+    "world.config.task.buildQueueDesc":"Baut gemäß der geplanten Warteschlange",
+    "world.config.task.farmList":"Farm-Liste",
+    "world.config.task.farmListDesc":"Sendet automatisch Farm-Angriffe",
+    "world.config.task.troops":"Truppentraining",
+    "world.config.task.troopsDesc":"Hält die Trainings-Warteschlange aktiv",
+    "world.config.intervalsTitle":"Intervalle",
+    "world.config.intervalsDesc":"Zeit zwischen Bot-Prüfungen. Höhere Werte reduzieren Entdeckungsrisiko.",
+    "world.config.interval.check":"Periodische Prüfung",
+    "world.config.interval.farm":"Zwischen Farms",
+    "world.config.interval.jitter":"Zufallsvariation",
+    "world.config.interval.min":"Min",
+    "world.config.comingSoonTitle":"Demnächst in diesem Bereich",
+    "world.comingSoon.resourcesDesc":"Echtzeit-Überwachung von Holz, Lehm, Eisen und Getreide aller Dörfer.",
+    "world.comingSoon.troopsDesc":"Einheitenbestand, Kampfstatistiken und Trainingswarteschlange.",
+    "world.comingSoon.constructionDesc":"Bau-Warteschlange pro Dorf, Ressourcenkosten und Bauzeiten.",
+    "world.comingSoon.villagesDesc":"Dorfkarte, Koordinaten, Name und Typ (Hauptstadt / Dorf / Oase).",
+    "world.stop.toast":"Bot gestoppt. Zurück zur Kontoanzeige…",
+    "tribe.romans":"Römer","tribe.teutons":"Germanen","tribe.gauls":"Gallier",
+    "tribe.egyptians":"Ägypter","tribe.huns":"Hunnen","tribe.spartans":"Spartaner",
+    "tribe.vikings":"Wikinger",
+    "search":"Sprache suchen…",
+    "hint.edit":"Blöcke ziehen (8px-Raster). «Fertig» drücken.",
+    "hint.view":"«Bearbeiten» klicken zum Verschieben.",
+  },
+};
+
+const t = (l, k) => {
+  const dict = I18N[l] || I18N.en;
+  return (dict[k] !== undefined ? dict[k] : (I18N.en[k] !== undefined ? I18N.en[k] : k));
+};
+
+/* ===================================================================
+   PARSEO DE URL DE SERVIDOR — idéntico a los hermanos
+   =================================================================== */
+function parseServer(url){
+  try{
+    const h = new URL(url).hostname;
+    const parts = h.split(".");
+    const server = parts[0];
+    const speed  = parts.find(p => /^x\d+$/.test(p)) || null;
+    const region = parts.find((p,i) => i > 0 && !/^x\d+$/.test(p) && p !== "travian" && p !== "com" && p !== "net") || null;
+    if(!server) return null;
+    return [server, speed, region].filter(Boolean).join(" · ");
+  }catch(e){ return null; }
+}
+
+/* ===================================================================
+   TEMA — idéntico a los hermanos
+   =================================================================== */
+const SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+const root = document.documentElement;
+const THEME_KEY = "theme", LANG_KEY = "lang", LAYOUT_KEY = "mundoPlaygroundLayout";
+
+function curTheme(){ return root.dataset.theme === "dark" ? "dark" : "light"; }
+function paintTheme(){
+  const isDark = curTheme() === "dark";
+  document.getElementById("themeBtn").innerHTML = isDark ? SUN : MOON;
+  const icon = document.getElementById("appThemeIcon");
+  icon.innerHTML = isDark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'
+    : '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>';
+  icon.setAttribute("viewBox","0 0 24 24");
+}
+(function(){
+  const s = localStorage.getItem(THEME_KEY);
+  root.dataset.theme = s || (matchMedia("(prefers-color-scheme:dark)").matches ? "dark" : "light");
+  paintTheme();
+})();
+function toggleTheme(){
+  const n = curTheme() === "dark" ? "light" : "dark";
+  root.dataset.theme = n; localStorage.setItem(THEME_KEY, n); paintTheme();
+}
+document.getElementById("themeBtn").addEventListener("click", toggleTheme);
+document.getElementById("appThemeBtn").addEventListener("click", toggleTheme);
+
+/* ===================================================================
+   IDIOMA — idéntico a los hermanos
+   =================================================================== */
+let curLang = localStorage.getItem(LANG_KEY) || "es";
+const langBtn      = document.getElementById("langBtn");
+const langBtnLabel = document.getElementById("langBtnLabel");
+const langPanel    = document.getElementById("langPanel");
+const langList     = document.getElementById("langList");
+const langSearch   = document.getElementById("langSearch");
+const appLangLabel = document.getElementById("appLangLabel");
+
+function applyLang(code){
+  curLang = code; localStorage.setItem(LANG_KEY, code);
+  root.lang = code; root.dir = RTL.has(code) ? "rtl" : "ltr";
+
+  // Espejar flecha de volver en RTL
+  const isRTL = RTL.has(code);
+  const arrow = document.getElementById("backArrow");
+  if(arrow) arrow.innerHTML = isRTL
+    ? '<polyline points="9 18 15 12 9 6"/>'
+    : '<polyline points="15 18 9 12 15 6"/>';
+
+  const f = LANGS.find(l => l.code === code);
+  const name = f ? f.name : code;
+  langBtnLabel.textContent = name;
+  appLangLabel.textContent = name;
+  langSearch.placeholder = t(code, "search");
+
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const k = el.dataset.i18n;
+    if(k && el.tagName !== "OPTION") el.textContent = t(code, k);
+  });
+  document.querySelectorAll("option[data-i18n]").forEach(el => {
+    el.textContent = t(code, el.dataset.i18n);
+  });
+  document.getElementById("hint").textContent = document.body.classList.contains("editing")
+    ? t(code,"hint.edit") : t(code,"hint.view");
+  document.querySelectorAll("[data-soon]").forEach(el => {
+    el.title = t(code,"tooltip.comingSoon");
+  });
+
+  renderLangList(langSearch.value);
+}
+
+function renderLangList(filter){
+  const q = (filter||"").trim().toLowerCase();
+  const items = LANGS.filter(l => !q || l.name.toLowerCase().includes(q) || l.code.includes(q));
+  langList.innerHTML = items.map(l =>
+    `<button class="lang-item" role="option" data-code="${l.code}" aria-selected="${l.code===curLang}">
+      <span>${l.name}</span><span class="code">${l.code}</span>
+    </button>`
+  ).join("");
+  langList.querySelectorAll(".lang-item").forEach(b => b.addEventListener("click", () => {
+    applyLang(b.dataset.code);
+    langPanel.classList.remove("open"); langBtn.setAttribute("aria-expanded","false");
+  }));
+}
+langBtn.addEventListener("click", () => {
+  const open = langPanel.classList.toggle("open");
+  langBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if(open){ langSearch.value=""; renderLangList(""); setTimeout(()=>langSearch.focus(),0); }
+});
+langSearch.addEventListener("input", () => renderLangList(langSearch.value));
+document.addEventListener("click", e => {
+  if(!e.target.closest(".lang-wrap")){ langPanel.classList.remove("open"); langBtn.setAttribute("aria-expanded","false"); }
+});
+
+/* ===================================================================
+   RENDER DEL MUNDO ACTIVO
+   =================================================================== */
+function renderWorld(worldKey){
+  const w = WORLDS_EXAMPLE[worldKey] || WORLDS_EXAMPLE["mundo-activo"];
+  const parsed = parseServer(w.url) || w.url;
+  const tribeKey = "tribe." + w.tribe;
+
+  document.getElementById("worldNameDisplay").textContent = parsed;
+  document.getElementById("worldTribeLabel").textContent  = t(curLang, tribeKey);
+  document.getElementById("worldStatusMeta").textContent  =
+    "Bot en ejecución · " + (new URL(w.url).hostname);
+}
+
+/* ===================================================================
+   VISTA SWITCHER
+   =================================================================== */
+function applyView(view){
+  renderWorld(view);
+}
+document.getElementById("viewSelect").addEventListener("change", e => {
+  applyView(e.target.value);
+});
+
+/* ===================================================================
+   NAVEGACIÓN (modo PREVIEW) — con guard de modo edición
+   =================================================================== */
+// "← Mundos" → cuenta-detalle.playground.html
+document.getElementById("backToWorldsBtn").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  window.location = "cuenta-detalle.playground.html";
+});
+
+// "Parar" → toast + volver al detalle con el mundo en idle
+document.getElementById("stopWorldBtn").addEventListener("click", () => {
+  if(document.body.classList.contains("editing")) return;
+  showToast(t(curLang, "world.stop.toast"));
+  setTimeout(() => {
+    window.location = "cuenta-detalle.playground.html";
+  }, 1200);
+});
+
+/* ===================================================================
+   TOAST — idéntico a los hermanos
+   =================================================================== */
+const toastEl = document.getElementById("toast");
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent = msg; toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+}
+
+/* ===================================================================
+   DRAG & DROP (imán 8px) — idéntico a los hermanos
+   =================================================================== */
+const contentArea = document.getElementById("tabContentArea");
+const dragBlocks  = () => [...contentArea.querySelectorAll(".drag-block")];
+function snap(v){ return Math.round(v/8)*8; }
+let drag = null;
+
+contentArea.addEventListener("pointerdown", e => {
+  if(!document.body.classList.contains("editing")) return;
+  const el = e.target.closest(".drag-block"); if(!el) return;
+  e.preventDefault();
+  el.setPointerCapture(e.pointerId); el.classList.add("dragging");
+  drag = { el, startX:e.clientX, startY:e.clientY, origX:el.offsetLeft, origY:el.offsetTop };
+});
+contentArea.addEventListener("pointermove", e => {
+  if(!drag) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  const maxX = contentArea.clientWidth  - drag.el.offsetWidth;
+  const maxY = contentArea.scrollHeight - drag.el.offsetHeight;
+  drag.el.style.left = Math.max(0, Math.min(maxX, snap(drag.origX + dx))) + "px";
+  drag.el.style.top  = Math.max(0, Math.min(maxY, snap(drag.origY + dy))) + "px";
+});
+function endDrag(e){
+  if(!drag) return;
+  drag.el.classList.remove("dragging");
+  try{ drag.el.releasePointerCapture(e.pointerId); }catch(x){}
+  drag = null;
+}
+contentArea.addEventListener("pointerup", endDrag);
+contentArea.addEventListener("pointercancel", endDrag);
+
+/* ===================================================================
+   EDIT MODE — idéntico a los hermanos
+   =================================================================== */
+const editBtn = document.getElementById("editBtn");
+const hintEl  = document.getElementById("hint");
+let editing   = false;
+
+editBtn.addEventListener("click", () => {
+  editing = !editing;
+  document.body.classList.toggle("editing", editing);
+  editBtn.setAttribute("aria-pressed", editing ? "true" : "false");
+  editBtn.textContent = editing ? "✓ Listo" : "✎ Editar";
+  hintEl.textContent  = editing ? t(curLang,"hint.edit") : t(curLang,"hint.view");
+
+  if(editing){
+    dragBlocks().forEach(b => {
+      const rect = b.getBoundingClientRect();
+      const pRect = contentArea.getBoundingClientRect();
+      b.style.position = "absolute";
+      b.style.left  = snap(rect.left - pRect.left + contentArea.scrollLeft) + "px";
+      b.style.top   = snap(rect.top  - pRect.top  + contentArea.scrollTop)  + "px";
+      b.style.width = b.offsetWidth + "px";
+    });
+    contentArea.style.position = "relative";
+    contentArea.style.height   = contentArea.scrollHeight + "px";
+  } else {
+    dragBlocks().forEach(b => { b.style.position=""; b.style.left=""; b.style.top=""; b.style.width=""; });
+    contentArea.style.position = "";
+    contentArea.style.height   = "";
+  }
+});
+
+/* ===================================================================
+   GUARDAR / RESTABLECER / EXPORTAR — idéntico a los hermanos
+   =================================================================== */
+function currentLayout(){
+  const out = {};
+  dragBlocks().forEach(b => { if(b.style.left) out[b.dataset.dragId]={x:b.offsetLeft,y:b.offsetTop}; });
+  return out;
+}
+document.getElementById("saveBtn").addEventListener("click", () => {
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify(currentLayout())); showToast("Layout guardado");
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  localStorage.removeItem(LAYOUT_KEY);
+  dragBlocks().forEach(b => { b.style.left=""; b.style.top=""; b.style.width=""; b.style.position=""; });
+  contentArea.style.position=""; contentArea.style.height="";
+  editing = false; document.body.classList.remove("editing");
+  editBtn.setAttribute("aria-pressed","false"); editBtn.textContent="✎ Editar";
+  hintEl.textContent = t(curLang,"hint.view");
+  showToast("Layout restablecido");
+});
+document.getElementById("exportBtn").addEventListener("click", async () => {
+  const data = { view: "mundo", state: document.getElementById("viewSelect").value,
+    canvas:{w:contentArea.clientWidth,h:contentArea.clientHeight}, grid:8, blocks:currentLayout() };
+  const json = JSON.stringify(data, null, 2);
+  try{ await navigator.clipboard.writeText(json); showToast("Layout copiado al portapapeles"); }
+  catch(e){ showToast("Descargando layout…"); }
+  const blob = new Blob([json],{type:"application/json"});
+  const a = document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="mundo.layout.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ===================================================================
+   INIT
+   =================================================================== */
+applyLang(curLang);
+applyView("mundo-activo");
+</script>
+</body>
+</html>

@@ -24,6 +24,8 @@ build/
 
 # Bases de datos locales
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -71,3 +73,7 @@ htmlcov/
 
 # graphify — grafo de conocimiento generado (salida + caché, no versionar)
 graphify-out/
+.graphifyignore
+
+# Metadatos de Obsidian (cliente local de documentación)
+docs/.obsidian/

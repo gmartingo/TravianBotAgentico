@@ -14,6 +14,9 @@ aiosqlite>=0.20.0
 # Procesamiento de imágenes (iconos del scraper kirilloid)
 pillow>=10.0.0
 
+# Parseo HTML (parsers de overview de Travian)
+beautifulsoup4>=4.12
+
 # Cifrado de contraseñas (Fernet — AES-128-CBC + HMAC-SHA256)
 cryptography>=42.0.0
 
