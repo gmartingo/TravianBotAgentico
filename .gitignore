@@ -9,9 +9,6 @@ profiles/
 # Perfil del scraper kirilloid (separado de perfiles de juego)
 profiles/scraper_kirilloid/
 
-# Iconos PNG generados por el scraper (recursos de juego, no código)
-assets/icons/*.png
-
 # Python cache
 __pycache__/
 *.py[cod]
