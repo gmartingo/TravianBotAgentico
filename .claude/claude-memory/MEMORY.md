@@ -2,7 +2,7 @@
 
 - [guardian-agent-not-invocable](guardian-agent-not-invocable.md) — guardian-antideteccion no es invocable como subagent_type; usar general-purpose con su .md
 - [autonomous-git-execution](autonomous-git-execution.md) — el usuario autoriza ejecutar git autónomamente; el push necesita auth que él debe configurar
-- [deferred-game-data-layer](deferred-game-data-layer.md) — datos de juego (niveles/costes/stats) aplazados a feature futura con scraper de kirilloid; i18n solo traduce
+- [deferred-game-data-layer](deferred-game-data-layer.md) — datos de juego (tropas+edificios) YA scrapeados de kirilloid y versionados como seed JSON con autocarga por-tabla; travian_bot.db sigue gitignored (secretos)
 - [kirilloid-scraper-gotchas](kirilloid-scraper-gotchas.md) — gotchas zendriver (find vs select, properties, screenshot_b64) + kirilloid SPA hash + numeración global de iconos
 - [third-party-scraper-no-antidetection](third-party-scraper-no-antidetection.md) — scrapers de terceros (kirilloid) NO necesitan guardian anti-detección; solo proteger driver.py + perfil separado
 - [travian-lectura-overview-endpoints](travian-lectura-overview-endpoints.md) — feature endpoints lectura Travian (overview/resources/culture/troops): live+TTL, parsers desacoplados con HTML real, 4 equipos paralelos, palantir+coordinador globales
