@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND — Farm Drawer Slots V7 (rediseño)
+  Spec: docs/design/farm-lists-slot-improvements.md
+
+  Mejoras:
+    0. Sort por columna (▲▼ en cabeceras)
+    A. Iconos de tropas (primera columna)
+    B. Dropdown ⋯ por fila
+    C. Botín acumulado (columna)
+    D. Link ↗ Ver reporte en celda Botín
+
+  Mobile < 480px: oculta Dist + Botín acum (Acum.) — NO scroll horizontal
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Farm Slots V7</title>
+<style>
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-subtle:rgba(138,100,24,.14);
+  --btn-bg:#1D1D1F;--btn-text:#FFFFFF;
+  --success:#248A3D;--success-bg:rgba(36,138,61,.12);
+  --danger:#C9352C;--danger-bg:rgba(201,53,44,.10);
+  --warning:#7C5300;--warning-bg:rgba(138,100,24,.14);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;
+}
+[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-subtle:rgba(203,176,121,.16);
+  --btn-bg:#F5F5F7;--btn-text:#1D1D1F;
+  --success:#34C759;--success-bg:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-bg:rgba(255,69,58,.12);
+  --warning:#CBB079;--warning-bg:rgba(203,176,121,.16);
+  --shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+}
+
+/* ===== TOOLBAR ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:5px 12px;border-bottom:2px solid var(--accent-subtle);
+  background:var(--surface-2);flex-shrink:0;z-index:100;
+}
+.tb-label{font-size:11px;font-weight:700;color:var(--accent-text);
+  text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;}
+.tb-sep{width:1px;height:16px;background:var(--border);flex-shrink:0;}
+.tb-btn{
+  appearance:none;border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--text);
+  height:26px;padding:0 10px;border-radius:var(--radius-sm);
+  cursor:pointer;font:inherit;font-size:11px;
+  display:flex;align-items:center;gap:4px;white-space:nowrap;
+  transition:background var(--dur-fast);
+}
+.tb-btn:hover{background:var(--surface-2);}
+.tb-btn.on{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent-text);}
+.tb-select{
+  appearance:none;border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--text);
+  height:26px;padding:0 24px 0 8px;border-radius:var(--radius-sm);
+  cursor:pointer;font:inherit;font-size:11px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238E8E93'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center;
+}
+
+/* ===== CANVAS ===== */
+.canvas{
+  flex:1;overflow:auto;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:28px 20px;gap:28px;flex-wrap:wrap;
+}
+
+/* ===== DRAWER SHELL ===== */
+.drawer{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;
+  /* SIN overflow:hidden — permite que el dropdown salga fuera */
+  width:var(--drawer-w, 560px);
+  max-width:100%;
+  flex-shrink:0;
+}
+/* radius solo en header y último hijo para no necesitar overflow:hidden en drawer */
+.dr-header{ border-radius:var(--radius-md) var(--radius-md) 0 0; }
+.dr-body:last-child{ border-radius:0 0 var(--radius-md) var(--radius-md); }
+
+/* header */
+.dr-header{
+  padding:14px 16px 0;
+  border-bottom:1px solid var(--border);
+}
+.dr-title{font-size:15px;font-weight:600;margin-bottom:1px;}
+.dr-sub{font-size:12px;color:var(--text-secondary);margin-bottom:10px;}
+.dr-tabs{display:flex;gap:0;}
+.dr-tab{
+  padding:6px 14px;font-size:12px;font-weight:500;
+  border:none;background:none;color:var(--text-secondary);cursor:pointer;
+  border-bottom:2px solid transparent;
+  transition:color var(--dur-fast),border-color var(--dur-fast);
+  font-family:inherit;
+}
+.dr-tab.on{color:var(--accent-text);border-bottom-color:var(--accent);}
+
+/* body */
+.dr-body{padding:14px 16px;overflow-y:auto;max-height:540px;}
+
+/* stat chips */
+.chips{display:flex;gap:6px;margin-bottom:14px;}
+.chip{
+  flex:1;background:var(--surface-2);
+  border-radius:var(--radius-sm);padding:7px 10px;
+}
+.chip-val{
+  display:block;font-family:var(--font-mono);
+  font-size:15px;font-weight:600;letter-spacing:-.3px;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.chip-lbl{
+  display:block;font-size:10px;color:var(--text-tertiary);
+  text-transform:uppercase;letter-spacing:.04em;margin-top:2px;
+}
+
+/* ===== TABLA DE SLOTS ===== */
+.slot-table{width:100%;border-collapse:collapse;font-size:12px;}
+
+.slot-table th{
+  font-size:11px;color:var(--text-secondary);text-transform:uppercase;
+  letter-spacing:.04em;font-weight:500;
+  padding:6px 8px;border-bottom:1px solid var(--border);
+  text-align:start;white-space:nowrap;
+  background:var(--surface);
+  position:sticky;top:0;z-index:2;
+}
+.slot-table th.sortable{
+  cursor:pointer;user-select:none;
+}
+.slot-table th.sortable:hover{color:var(--text);}
+.slot-table th.sort-on{color:var(--accent-text);}
+.si{font-size:9px;color:var(--text-tertiary);margin-left:2px;vertical-align:middle;}
+.si.on{color:var(--accent-text);}
+
+.slot-table td{
+  padding:8px 8px;border-bottom:1px solid var(--border);
+  vertical-align:middle;
+}
+.slot-table tr:last-child>td{border-bottom:none;}
+tr.slot-row:hover td{background:var(--surface-2);cursor:pointer;}
+tr.slot-row.expanded td{border-bottom:none;}
+
+/* col tropas */
+.c-troops{width:1%;white-space:nowrap;padding-left:8px;padding-right:4px;}
+.ticons{display:flex;gap:3px;align-items:center;}
+.ticon{
+  width:18px;height:18px;border-radius:3px;
+  background:var(--surface-2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-family:var(--font-mono);color:var(--text-tertiary);
+  flex-shrink:0;overflow:hidden;
+}
+.ticon img{width:18px;height:18px;object-fit:contain;}
+
+/* col nombre */
+.c-name{
+  font-size:13px;color:var(--text);
+  max-width:140px;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;
+}
+
+/* col dist, acum */
+.c-dist,.c-acum{
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  font-size:12px;color:var(--text-secondary);
+  text-align:end;width:46px;
+}
+
+/* col botín */
+.c-bounty{text-align:end;width:78px;}
+.b-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.b-val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;}
+.b-link{
+  font-size:10px;color:var(--accent-text);text-decoration:none;
+  display:flex;align-items:center;gap:2px;line-height:1.2;
+}
+.b-link:hover{text-decoration:underline;}
+.b-dash{font-size:10px;color:var(--text-tertiary);}
+
+/* col estado */
+.c-state{white-space:nowrap;}
+.badge{
+  display:inline-flex;align-items:center;
+  padding:1px 7px;border-radius:var(--radius-full);
+  font-size:11px;font-weight:500;white-space:nowrap;
+}
+.b-active{background:var(--success-bg);color:var(--success);}
+.b-probe{background:var(--warning-bg);color:var(--warning);}
+.b-bot{background:var(--danger-bg);color:var(--danger);}
+.b-manual{background:var(--surface-2);color:var(--text-secondary);}
+
+/* col acciones ⋯ */
+.c-act{width:36px;padding:4px 6px;}
+.act-btn{
+  width:28px;height:28px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:var(--text-tertiary);
+  font-family:var(--font-mono);letter-spacing:-.5px;
+  transition:background var(--dur-fast),color var(--dur-fast);
+  position:relative;
+}
+.act-btn:hover{background:var(--surface-2);color:var(--text);}
+.act-btn.open-state{background:var(--surface-2);color:var(--text);}
+
+/* dropdown */
+.ddrop{
+  position:absolute;
+  /* abre hacia la izquierda */
+  inset-inline-end:0;
+  top:calc(100% + 4px);
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);
+  z-index:500;min-width:220px;
+  overflow:hidden;display:none;
+  /* fuerza que sea visible fuera del overflow de la tabla */
+}
+.ddrop.open{display:block;}
+.dd-item{
+  display:flex;flex-direction:column;align-items:flex-start;
+  padding:9px 14px;font-size:13px;cursor:pointer;
+  color:var(--text);border:none;background:transparent;
+  width:100%;text-align:start;font-family:inherit;
+  transition:background var(--dur-fast);gap:1px;
+}
+.dd-item:hover{background:var(--surface-2);}
+.dd-item .dd-desc{font-size:11px;color:var(--text-tertiary);font-weight:400;}
+.dd-sep{height:1px;background:var(--border);margin:2px 0;}
+.dd-head{
+  padding:5px 14px 2px;
+  font-size:10px;font-weight:700;color:var(--text-tertiary);
+  text-transform:uppercase;letter-spacing:.06em;pointer-events:none;
+}
+.dd-sub{
+  display:flex;flex-direction:column;align-items:flex-start;
+  padding:7px 14px 7px 24px;font-size:12px;cursor:pointer;
+  color:var(--text-secondary);border:none;background:transparent;
+  width:100%;text-align:start;font-family:inherit;gap:1px;
+  transition:background var(--dur-fast);
+}
+.dd-sub:hover{background:var(--surface-2);color:var(--text);}
+
+/* accordion */
+tr.acc-row td{background:var(--surface-2);}
+.acc-body{
+  background:var(--surface-2);border-radius:var(--radius-sm);
+  padding:11px 13px;margin:2px 0 6px;
+}
+.acc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;}
+.acc-item .al{font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:1px;}
+.acc-item .av{font-size:13px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+.acc-btns{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+.acc-btn{
+  height:30px;padding:0 10px;
+  border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--text);border-radius:var(--radius-sm);
+  cursor:pointer;font:inherit;font-size:12px;
+  transition:background var(--dur-fast);
+}
+.acc-btn:hover{background:var(--surface-2);}
+
+/* mobile overrides */
+body.mobile .drawer{--drawer-w:375px;}
+body.mobile .c-dist,.body.mobile th.th-dist,
+body.mobile .c-acum,body.mobile th.th-acum{display:none;}
+
+/* nota de vista */
+.view-note{
+  font-size:11px;color:var(--text-tertiary);text-align:center;
+  margin-top:10px;max-width:490px;
+}
+
+/* toast */
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--btn-bg);color:var(--btn-text);
+  padding:9px 16px;border-radius:var(--radius-md);
+  font-size:13px;box-shadow:var(--shadow-lg);
+  opacity:0;transform:translateY(6px);pointer-events:none;z-index:999;
+  transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:none;}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR ===== -->
+<div class="toolbar">
+  <span class="tb-label">Farm Slots V7</span>
+  <div class="tb-sep"></div>
+  <label class="tb-label" for="viewSel">Vista:</label>
+  <select class="tb-select" id="viewSel" onchange="switchView(this.value)">
+    <option value="normal">Desktop — tabla completa</option>
+    <option value="sorted">Desktop — ordenada por Botín ▼</option>
+    <option value="dropdown">Desktop — dropdown ⋯ abierto (sonda)</option>
+    <option value="fallback">Desktop — fallbacks (sin tropas, sin reporte)</option>
+    <option value="accordion">Desktop — accordion expandido</option>
+    <option value="mobile">Mobile 375px — columnas reducidas</option>
+  </select>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="themeBtn" onclick="toggleTheme()">🌙 Oscuro</button>
+  <div class="tb-sep"></div>
+  <label class="tb-label" for="tribeSel">Tribu:</label>
+  <select class="tb-select" id="tribeSel" onchange="changeTribe(this.value)">
+    <option value="romans">Romanos</option>
+    <option value="gauls">Galos</option>
+    <option value="teutons">Teutones</option>
+  </select>
+  <span id="iconStatus" style="font-size:11px;color:var(--text-tertiary);"></span>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="editBtn" onclick="toggleEdit()">✏️ Editar columnas</button>
+  <button class="tb-btn" onclick="exportLayout()">⬇ Exportar JSON</button>
+</div>
+
+<!-- ===== CANVAS ===== -->
+<div class="canvas" id="canvas">
+
+  <!-- NORMAL -->
+  <div id="vNormal" class="vwrap">
+    <div class="drawer">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Sur · Bandidos del Este</div>
+        <div class="dr-sub">Lista de farm · 6 slots activos de 8 · ⬡ Scheduler "Raid nocturno"</div>
+        <div class="dr-tabs">
+          <button class="dr-tab on">Slots</button>
+          <button class="dr-tab">Stats</button>
+          <button class="dr-tab">Historial</button>
+        </div>
+      </div>
+      <div class="dr-body">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">6/8</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">520</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">74.350</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table" id="tbl-normal">
+          <thead><tr id="thead-normal"></tr></thead>
+          <tbody id="tbody-normal"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">Haz clic en una cabecera para ordenar · Activa «Editar columnas» para reordenar con drag &amp; drop</div>
+  </div>
+
+  <!-- SORTED -->
+  <div id="vSorted" class="vwrap" style="display:none">
+    <div class="drawer">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Sur · Bandidos del Este</div>
+        <div class="dr-sub">Lista de farm · ordenada por Botín último ▼</div>
+        <div class="dr-tabs"><button class="dr-tab on">Slots</button><button class="dr-tab">Stats</button><button class="dr-tab">Historial</button></div>
+      </div>
+      <div class="dr-body">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">6/8</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">520</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">74.350</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table">
+          <thead><tr id="thead-sorted"></tr></thead>
+          <tbody id="tbody-sorted"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">Columna activa en oro · ▼ = descendente · clic de nuevo → ascendente · tercero → resetear</div>
+  </div>
+
+  <!-- DROPDOWN -->
+  <div id="vDropdown" class="vwrap" style="display:none">
+    <div class="drawer">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Sur · Bandidos del Este</div>
+        <div class="dr-sub">Slot con sonda activa — dropdown ⋯ abierto</div>
+        <div class="dr-tabs"><button class="dr-tab on">Slots</button><button class="dr-tab">Stats</button><button class="dr-tab">Historial</button></div>
+      </div>
+      <div class="dr-body" style="overflow:visible;">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">6/8</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">520</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">74.350</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table" style="overflow:visible;">
+          <thead>
+            <tr>
+              <th class="c-troops" aria-label="Tropas"></th>
+              <th class="sortable">Nombre <span class="si">⇅</span></th>
+              <th class="sortable th-dist" style="text-align:end;">Dist <span class="si">⇅</span></th>
+              <th class="sortable th-acum" style="text-align:end;">Acum. <span class="si">⇅</span></th>
+              <th class="sortable" style="text-align:end;">Botín último <span class="si">⇅</span></th>
+              <th class="sortable">Estado <span class="si">⇅</span></th>
+              <th class="c-act" aria-label="Acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" data-qty="3" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+                <div class="ticon ticons-live" data-ord="2" data-qty="1" style="background:#E0E8E8;border-color:#BCCECE;color:#4A7070;">T2</div>
+              </div></td>
+              <td class="c-name">Granja del Norte</td>
+              <td class="c-dist">8.2</td>
+              <td class="c-acum">18.450</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">620</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-active">Activo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+            <!-- fila con sonda + dropdown abierto -->
+            <tr class="slot-row" style="background:var(--warning-bg)">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+                <div class="ticon ticons-live" data-ord="2" style="background:#E0E8E8;border-color:#BCCECE;color:#4A7070;">T2</div>
+                <div class="ticon ticons-live" data-ord="4" style="background:#E8E8DC;border-color:#CECEBA;color:#605E40;">T4</div>
+              </div></td>
+              <td class="c-name">Nido de Lobos</td>
+              <td class="c-dist">14.7</td>
+              <td class="c-acum">7.200</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">380</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-probe">Sonda · 1:22</span></td>
+              <td class="c-act" style="overflow:visible;position:relative;">
+                <button class="act-btn open-state">···</button>
+                <!-- DROPDOWN ABIERTO -->
+                <div class="ddrop open">
+                  <div class="dd-head">Cancelar sonda</div>
+                  <button class="dd-sub">
+                    <span>Desactivar indefinidamente</span>
+                    <span class="dd-desc">La vaca no se atacará más</span>
+                  </button>
+                  <button class="dd-sub">
+                    <span>Enviar ahora</span>
+                    <span class="dd-desc">Cancela el cooldown y ataca inmediatamente</span>
+                  </button>
+                  <div class="dd-sep"></div>
+                  <button class="dd-item">Desactivar</button>
+                </div>
+              </td>
+            </tr>
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+              </div></td>
+              <td class="c-name">Campamento Rojo</td>
+              <td class="c-dist">21.0</td>
+              <td class="c-acum">3.100</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">180</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-active">Activo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">El dropdown abre hacia la izquierda · min-width 220px · acciones según estado del slot</div>
+  </div>
+
+  <!-- FALLBACK -->
+  <div id="vFallback" class="vwrap" style="display:none">
+    <div class="drawer">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Norte · Exploradores</div>
+        <div class="dr-sub">Casos edge: sin tropas, iconos no cargados, sin reporte</div>
+        <div class="dr-tabs"><button class="dr-tab on">Slots</button><button class="dr-tab">Stats</button><button class="dr-tab">Historial</button></div>
+      </div>
+      <div class="dr-body">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">2/3</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">—</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">—</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table">
+          <thead>
+            <tr>
+              <th class="c-troops" aria-label="Tropas"></th>
+              <th class="sortable">Nombre <span class="si">⇅</span></th>
+              <th class="sortable th-dist" style="text-align:end;">Dist <span class="si">⇅</span></th>
+              <th class="sortable th-acum" style="text-align:end;">Acum. <span class="si">⇅</span></th>
+              <th class="sortable" style="text-align:end;">Botín último <span class="si">⇅</span></th>
+              <th class="sortable">Estado <span class="si">⇅</span></th>
+              <th class="c-act" aria-label="Acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- sin tropas asignadas -->
+            <tr class="slot-row">
+              <td class="c-troops"><!-- celda vacía --></td>
+              <td class="c-name" style="color:var(--text-secondary);">Aldea sin tropas</td>
+              <td class="c-dist">5.1</td>
+              <td class="c-acum" style="color:var(--text-tertiary);">—</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val" style="color:var(--text-tertiary);">—</span>
+                <span class="b-dash">—</span>
+              </div></td>
+              <td class="c-state"><span class="badge b-manual">Inactivo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+            <!-- iconos no cargados → fallback texto TN -->
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <span style="font-size:9px;color:var(--text-tertiary);font-family:var(--font-mono);background:var(--surface-2);padding:2px 4px;border-radius:3px;">T1</span>
+                <span style="font-size:9px;color:var(--text-tertiary);font-family:var(--font-mono);background:var(--surface-2);padding:2px 4px;border-radius:3px;">T4</span>
+              </div></td>
+              <td class="c-name">Bosque de Pinos</td>
+              <td class="c-dist">18.3</td>
+              <td class="c-acum">900</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">60</span>
+                <span class="b-dash">—</span>
+              </div></td>
+              <td class="c-state"><span class="badge b-bot">Desact. bot</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+            <!-- normal para comparar -->
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+                <div class="ticon ticons-live" data-ord="2" style="background:#E0E8E8;border-color:#BCCECE;color:#4A7070;">T2</div>
+              </div></td>
+              <td class="c-name">Referencia normal</td>
+              <td class="c-dist">9.8</td>
+              <td class="c-acum">11.900</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">490</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-active">Activo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">Sin tropas → celda vacía · Sin icono PNG → texto T1/T4 · Sin reporte → —</div>
+  </div>
+
+  <!-- ACCORDION -->
+  <div id="vAccordion" class="vwrap" style="display:none">
+    <div class="drawer">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Sur · Bandidos del Este</div>
+        <div class="dr-sub">Slot expandido (accordion) — detalle completo</div>
+        <div class="dr-tabs"><button class="dr-tab on">Slots</button><button class="dr-tab">Stats</button><button class="dr-tab">Historial</button></div>
+      </div>
+      <div class="dr-body">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">6/8</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">520</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">74.350</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table">
+          <thead>
+            <tr>
+              <th class="c-troops" aria-label="Tropas"></th>
+              <th class="sortable">Nombre <span class="si">⇅</span></th>
+              <th class="sortable th-dist" style="text-align:end;">Dist <span class="si">⇅</span></th>
+              <th class="sortable th-acum" style="text-align:end;">Acum. <span class="si">⇅</span></th>
+              <th class="sortable" style="text-align:end;">Botín último <span class="si">⇅</span></th>
+              <th class="sortable">Estado <span class="si">⇅</span></th>
+              <th class="c-act" aria-label="Acciones"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+                <div class="ticon ticons-live" data-ord="2" style="background:#E0E8E8;border-color:#BCCECE;color:#4A7070;">T2</div>
+              </div></td>
+              <td class="c-name">Granja del Norte</td>
+              <td class="c-dist">8.2</td>
+              <td class="c-acum">18.450</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">620</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-active">Activo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+            <!-- ACCORDION EXPANDIDO -->
+            <tr class="slot-row expanded">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+                <div class="ticon ticons-live" data-ord="2" style="background:#E0E8E8;border-color:#BCCECE;color:#4A7070;">T2</div>
+                <div class="ticon ticons-live" data-ord="4" style="background:#E8E8DC;border-color:#CECEBA;color:#605E40;">T4</div>
+              </div></td>
+              <td class="c-name" style="font-weight:500;">Nido de Lobos</td>
+              <td class="c-dist">14.7</td>
+              <td class="c-acum">7.200</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">380</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-probe">Sonda · 1:22</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+            <tr class="acc-row">
+              <td colspan="7" style="padding:0 4px 8px;">
+                <div class="acc-body">
+                  <div style="margin-bottom:8px;display:flex;align-items:baseline;gap:8px;">
+                    <span style="font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--accent-text);">1:22:07</span>
+                    <span style="font-size:12px;color:var(--text-secondary);">hasta que se libere la sonda</span>
+                  </div>
+                  <div class="acc-grid">
+                    <div class="acc-item"><div class="al">Último raid</div><div class="av">Sin pérdidas · hace 3 min</div></div>
+                    <div class="acc-item"><div class="al">Botín promedio</div><div class="av">395</div></div>
+                    <div class="acc-item"><div class="al">Botín total</div><div class="av">7.200</div></div>
+                    <div class="acc-item"><div class="al">Último informe</div>
+                      <div class="av" style="font-size:12px;">
+                        <a href="#" onclick="return false" style="color:var(--accent-text);text-decoration:none;font-size:12px;">↗ Ver reporte</a>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="acc-btns">
+                    <button class="acc-btn">Cancelar sonda</button>
+                    <button class="acc-btn">Desactivar</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr class="slot-row">
+              <td class="c-troops"><div class="ticons">
+                <div class="ticon ticons-live" data-ord="1" style="background:#EDE8DF;border-color:#D6CCBA;color:#7A6B52;">T1</div>
+              </div></td>
+              <td class="c-name">Campamento Rojo</td>
+              <td class="c-dist">21.0</td>
+              <td class="c-acum">3.100</td>
+              <td class="c-bounty"><div class="b-wrap">
+                <span class="b-val">180</span>
+                <a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>
+              </div></td>
+              <td class="c-state"><span class="badge b-active">Activo</span></td>
+              <td class="c-act"><button class="act-btn">···</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">Fila expandida muestra detalle completo · colSpan = 7 · accordion coexiste con el botón ⋯</div>
+  </div>
+
+  <!-- MOBILE -->
+  <div id="vMobile" class="vwrap" style="display:none">
+    <div class="drawer" style="--drawer-w:375px;">
+      <div class="dr-header">
+        <div class="dr-title">Aldea Sur · Bandidos del Este</div>
+        <div class="dr-sub">Mobile 375px · Dist y Botín acum. ocultos</div>
+        <div class="dr-tabs"><button class="dr-tab on">Slots</button><button class="dr-tab">Stats</button><button class="dr-tab">Historial</button></div>
+      </div>
+      <div class="dr-body">
+        <div class="chips">
+          <div class="chip"><span class="chip-val">6/8</span><span class="chip-lbl">Slots activos</span></div>
+          <div class="chip"><span class="chip-val">520</span><span class="chip-lbl">Rec/envío</span></div>
+          <div class="chip"><span class="chip-val">74K</span><span class="chip-lbl">Total acum.</span></div>
+        </div>
+        <table class="slot-table">
+          <thead>
+            <tr>
+              <th class="c-troops" aria-label="Tropas"></th>
+              <th class="sortable">Nombre <span class="si">⇅</span></th>
+              <!-- Dist y Acum. OCULTOS en mobile -->
+              <th class="sortable" style="text-align:end;">Botín último <span class="si">⇅</span></th>
+              <th class="sortable">Estado <span class="si">⇅</span></th>
+              <th class="c-act" aria-label="Acciones"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-mobile"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="view-note">Mobile 375px · 5 columnas: Tropas · Nombre · Botín último · Estado · ⋯ · Sin scroll horizontal</div>
+  </div>
+
+</div><!-- /canvas -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000';
+
+// ===== DATOS — troops usa ordinales reales (t1→1, t4→4, etc.) =====
+const SLOTS = [
+  { id:1, name:'Granja del Norte',   dist:8.2,  acum:18450, bounty:620,  report:true,  state:'active',  troops:{1:3, 2:1} },
+  { id:2, name:'Nido de Lobos',      dist:14.7, acum:7200,  bounty:380,  report:true,  state:'probe',   troops:{1:2, 3:1, 4:1} },
+  { id:3, name:'Campamento Rojo',    dist:21.0, acum:3100,  bounty:180,  report:true,  state:'active',  troops:{1:5} },
+  { id:4, name:'Aldea del Río',      dist:5.5,  acum:31200, bounty:850,  report:true,  state:'active',  troops:{1:2, 2:2} },
+  { id:5, name:'Bosque de Pinos',    dist:18.3, acum:900,   bounty:60,   report:false, state:'disabled',troops:{1:1} },
+  { id:6, name:'Colinas del Viento', dist:33.1, acum:0,     bounty:0,    report:true,  state:'active',  troops:{} },
+];
+
+let currentTribe = 'romans';
+
+// ===== CARGA DE ICONOS =====
+// Usamos <img src> directo — no fetch, sin CORS, el navegador carga cross-origin imgs sin restricción
+function iconUrl(tribe, ordinal) {
+  return `${API}/static/icons/${tribe}_${ordinal}.png`;
+}
+
+function changeTribe(tribe) {
+  currentTribe = tribe;
+  // actualizar status
+  const statusEl = document.getElementById('iconStatus');
+  statusEl.textContent = `Tribu: ${tribe}`;
+  statusEl.style.color = 'var(--text-tertiary)';
+  renderAll();
+}
+
+function initIcons() {
+  const statusEl = document.getElementById('iconStatus');
+  statusEl.textContent = `Tribu: ${currentTribe}`;
+  renderAll();
+}
+
+// ===== HELPERS =====
+function fmtNum(n) {
+  if (!n) return '—';
+  return new Intl.NumberFormat('es').format(n);
+}
+
+function troopIconsHtml(troops, tribe) {
+  if (!troops || !Object.keys(troops).length) return '';
+  const items = Object.entries(troops)
+    .filter(([,qty]) => qty > 0)
+    .sort(([a],[b]) => Number(a)-Number(b));
+  if (!items.length) return '';
+  const icons = items.map(([ord, qty]) => {
+    const src = iconUrl(tribe, ord);
+    // badge de cantidad solo si > 1
+    const qtyBadge = qty > 1
+      ? `<span style="position:absolute;bottom:-2px;right:-2px;
+           font-size:8px;font-family:var(--font-mono);
+           background:var(--surface);border:1px solid var(--border);
+           border-radius:2px;padding:0 2px;color:var(--text-secondary);line-height:1.3;
+           pointer-events:none;">${qty}</span>`
+      : '';
+    return `<div class="ticon" title="T${ord}${qty>1?' ×'+qty:''}" style="position:relative;border:1px solid var(--border);background:transparent;">
+      <img src="${src}" alt="T${ord}" width="18" height="18"
+           style="display:block;object-fit:contain;"
+           onerror="this.parentElement.style.background='var(--surface-2)';this.style.display='none';this.parentElement.insertAdjacentText('beforeend','T${ord}');">
+      ${qtyBadge}
+    </div>`;
+  }).join('');
+  return `<div class="ticons">${icons}</div>`;
+}
+
+function badge(state) {
+  if (state==='active')   return '<span class="badge b-active">Activo</span>';
+  if (state==='probe')    return '<span class="badge b-probe">Sonda · 1:22</span>';
+  if (state==='disabled') return '<span class="badge b-bot">Desact. bot</span>';
+  return '<span class="badge b-manual">Inactivo</span>';
+}
+
+function bountyCell(b, rep) {
+  const val = b ? fmtNum(b) : '—';
+  const link = rep
+    ? `<a href="#" class="b-link" onclick="return false">↗ Ver reporte</a>`
+    : `<span class="b-dash">—</span>`;
+  return `<div class="b-wrap"><span class="b-val">${val}</span>${link}</div>`;
+}
+
+function slotRow(s, mobile=false) {
+  const midsep = mobile ? '' :
+    `<td class="c-dist">${s.dist}</td><td class="c-acum">${fmtNum(s.acum)}</td>`;
+  return `<tr class="slot-row">
+    <td class="c-troops">${troopIconsHtml(s.troops, currentTribe)}</td>
+    <td class="c-name">${s.name}</td>
+    ${midsep}
+    <td class="c-bounty">${bountyCell(s.bounty, s.report)}</td>
+    <td class="c-state">${badge(s.state)}</td>
+    <td class="c-act"><button class="act-btn">···</button></td>
+  </tr>`;
+}
+
+// ===== CABECERA SORTABLE =====
+function buildHead(el, sk, sd) {
+  const cols = [
+    { key:null,     label:'',             cls:'c-troops', extra:'aria-label="Tropas"' },
+    { key:'name',   label:'Nombre',       cls:'sortable' },
+    { key:'dist',   label:'Dist',         cls:'sortable th-dist', extra:'style="text-align:end;"' },
+    { key:'acum',   label:'Acum.',        cls:'sortable th-acum', extra:'style="text-align:end;"' },
+    { key:'bounty', label:'Botín último', cls:'sortable', extra:'style="text-align:end;"' },
+    { key:'state',  label:'Estado',       cls:'sortable' },
+    { key:null,     label:'',             cls:'c-act',   extra:'aria-label="Acciones"' },
+  ];
+  el.innerHTML = cols.map(c => {
+    if (!c.key) return `<th class="${c.cls}" ${c.extra||''}>${c.label}</th>`;
+    const on = sk === c.key;
+    const icon = on ? (sd==='asc'?'▲':'▼') : '⇅';
+    return `<th class="${c.cls}${on?' sort-on':''}" ${c.extra||''}
+      onclick="sortTable('${c.key}')">${c.label} <span class="si${on?' on':''}">${icon}</span></th>`;
+  }).join('');
+}
+
+// ===== SORT =====
+let sortKey=null, sortDir='asc';
+function sortTable(key) {
+  if (sortKey !== key) { sortKey=key; sortDir='asc'; }
+  else if (sortDir==='asc') { sortDir='desc'; }
+  else { sortKey=null; sortDir='asc'; }
+  renderNormal();
+}
+
+function sortedSlots() {
+  if (!sortKey) return [...SLOTS];
+  return [...SLOTS].sort((a,b)=>{
+    let va=a[sortKey]??'', vb=b[sortKey]??'';
+    if(typeof va==='string') va=va.toLowerCase();
+    if(typeof vb==='string') vb=vb.toLowerCase();
+    if(va<vb) return sortDir==='asc'?-1:1;
+    if(va>vb) return sortDir==='asc'?1:-1;
+    return 0;
+  });
+}
+
+// ===== RENDERS =====
+function renderNormal() {
+  buildHead(document.getElementById('thead-normal'), sortKey, sortDir);
+  document.getElementById('tbody-normal').innerHTML = sortedSlots().map(s=>slotRow(s)).join('');
+}
+
+function renderSorted() {
+  // vista fija: ordenada por bounty desc
+  const h = document.getElementById('thead-sorted');
+  const cols = [
+    { key:null,     cls:'c-troops', label:'',             extra:'aria-label="Tropas"' },
+    { key:'name',   cls:'sortable', label:'Nombre' },
+    { key:'dist',   cls:'sortable th-dist', label:'Dist', extra:'style="text-align:end;"' },
+    { key:'acum',   cls:'sortable th-acum', label:'Acum.',extra:'style="text-align:end;"' },
+    { key:'bounty', cls:'sortable sort-on', label:'Botín último', extra:'style="text-align:end;"' },
+    { key:'state',  cls:'sortable', label:'Estado' },
+    { key:null,     cls:'c-act',    label:'',             extra:'aria-label="Acciones"' },
+  ];
+  h.innerHTML = cols.map(c => {
+    if (!c.key) return `<th class="${c.cls}" ${c.extra||''}>${c.label}</th>`;
+    const on = c.key==='bounty';
+    return `<th class="${c.cls}" ${c.extra||''}>${c.label} <span class="si${on?' on':''}">${on?'▼':'⇅'}</span></th>`;
+  }).join('');
+  const sorted = [...SLOTS].sort((a,b)=>b.bounty-a.bounty);
+  document.getElementById('tbody-sorted').innerHTML = sorted.map(s=>slotRow(s)).join('');
+}
+
+function renderMobile() {
+  document.getElementById('tbody-mobile').innerHTML = SLOTS.map(s=>slotRow(s,true)).join('');
+}
+
+function renderAll() {
+  renderNormal();
+  renderSorted();
+  renderMobile();
+  // regenerar también las vistas inline que tienen filas hardcodeadas
+  // (dropdown/fallback/accordion usan HTML estático con iconos actualizados al recargar la vista)
+  updateStaticViews();
+}
+
+function updateStaticViews() {
+  document.querySelectorAll('.ticons-live').forEach(el => {
+    const ord = parseInt(el.dataset.ord);
+    const qty = parseInt(el.dataset.qty || 1);
+    const src = iconUrl(currentTribe, ord);
+    el.style.background = 'transparent';
+    el.style.border = '1px solid var(--border)';
+    el.style.removeProperty('color');
+    el.title = `T${ord}${qty > 1 ? ' ×'+qty : ''}`;
+    el.innerHTML = `<img src="${src}" alt="T${ord}" width="18" height="18"
+      style="display:block;object-fit:contain;"
+      onerror="this.parentElement.style.background='var(--surface-2)';this.style.display='none';this.parentElement.textContent='T${ord}';">`;
+  });
+}
+
+// ===== VISTAS =====
+const VIEWS = {
+  normal:'vNormal', sorted:'vSorted', dropdown:'vDropdown',
+  fallback:'vFallback', accordion:'vAccordion', mobile:'vMobile'
+};
+function switchView(v) {
+  Object.values(VIEWS).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (id === VIEWS[v]) ? '' : 'none';
+  });
+}
+
+// ===== TEMA =====
+let dark = false;
+function toggleTheme() {
+  dark = !dark;
+  document.documentElement.setAttribute('data-theme', dark?'dark':'');
+  document.getElementById('themeBtn').textContent = dark ? '☀️ Claro' : '🌙 Oscuro';
+}
+
+// ===== EDITAR COLUMNAS (drag & drop) =====
+let editMode = false, dragSrc = null;
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('editBtn');
+  btn.classList.toggle('on', editMode);
+  btn.textContent = editMode ? '✅ Salir de edición' : '✏️ Editar columnas';
+  document.querySelectorAll('.slot-table th').forEach(th => {
+    if (editMode) {
+      th.setAttribute('draggable','true');
+      th.addEventListener('dragstart', e => { dragSrc=th; e.dataTransfer.effectAllowed='move'; });
+      th.addEventListener('dragover', e => { e.preventDefault(); th.style.outline='2px dashed var(--accent)'; });
+      th.addEventListener('dragleave', () => { th.style.outline=''; });
+      th.addEventListener('dragend', () => { document.querySelectorAll('.slot-table th').forEach(h=>h.style.outline=''); });
+      th.addEventListener('drop', e => {
+        e.stopPropagation(); th.style.outline='';
+        if (dragSrc===th) return;
+        const tbl = th.closest('table');
+        const ths = [...tbl.querySelectorAll('thead tr th')];
+        const si = ths.indexOf(dragSrc), di = ths.indexOf(th);
+        if (si<0||di<0) return;
+        [...tbl.querySelectorAll('tr')].forEach(row => {
+          const cells=[...row.children];
+          if (!cells[si]||!cells[di]) return;
+          si<di ? row.insertBefore(cells[si],cells[di].nextSibling) : row.insertBefore(cells[si],cells[di]);
+        });
+      });
+    } else {
+      th.removeAttribute('draggable');
+    }
+  });
+}
+
+// ===== EXPORT =====
+function exportLayout() {
+  const tbl = document.getElementById('tbl-normal');
+  const cols = [...tbl.querySelectorAll('thead th')].map(th=>
+    th.dataset.key || th.getAttribute('aria-label') || th.textContent.trim().replace(/[▲▼⇅]/g,'').trim()
+  );
+  const layout = { version:'v7', tribe:currentTribe, columns:cols, timestamp:new Date().toISOString() };
+  const json = JSON.stringify(layout,null,2);
+  navigator.clipboard.writeText(json).catch(()=>{});
+  toast('✅ Layout copiado al portapapeles');
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2400);
+}
+
+// ===== INIT =====
+initIcons();
+</script>
+</body>
+</html>
