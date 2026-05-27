@@ -6,7 +6,7 @@ metadata:
 ---
 
 # Mapa de capacidades — TravianBot
-Última recarga: 2026-05-26 (ronda 2 — añade sección frontend React completa).
+Última recarga: 2026-05-26 (ronda 4 — añade fuente de datos de villages: upsert via ReadFarmListsUseCase como side effect de POST /farm/worlds/{wid}/farm-lists/read).
 graphify 0.8.16 — grafo base de be2e449 (2668 nodos, 5752 aristas). Sección frontend añadida por lectura directa (graphify no cubre frontend/src aún).
 
 CAMBIOS vs recarga anterior:
@@ -452,6 +452,151 @@ Todos los modales del proyecto siguen este contrato:
 Para implementar un nuevo modal: importar `useFocusTrap`, `Spinner` y `showToast` de uiUtils, no duplicarlos.
 
 ---
+
+## 4 BLOQUES OVERVIEW — implementados (ronda 3)
+
+Rutas activas en `adapters/api/routes/`:
+- `game_overview.py` → `GET /game/overview/{world_id}` — OverviewUseCase + OverviewParser + VillageMapUseCase
+- `game_resources.py` → `GET /game/resources/{world_id}` — ResourcesUseCase + ResourcesParser
+- `game_culture_points.py` → `GET /game/culture-points/{world_id}` — CulturePointsUseCase + CulturePointsParser
+- `game_troops.py` → `GET /game/troops/{world_id}` — TroopsUseCase + TroopsParser
+
+DTOs en `core/dtos/`: `overview_dto.py`, `resources_dto.py`, `culture_points_dto.py`, `troops_dto.py` (todos frozen=True).
+Parsers en `adapters/browser/parsers/`: `overview_parser.py`, `resources_parser.py`, `culture_points_parser.py`, `troops_parser.py`, `_common.py` (helpers compartidos).
+Dependencia compartida por los 4: `get_html_source_port` en `dependencies.py` → `OverviewHtmlSourcePort`.
+
+`core/scheduling/__init__.py` — existe y el paquete tiene contenido: `task_queue.py` (TaskQueue) y `world_agent.py` (WorldAgent farm-only). IMPLEMENTADOS en rama develop (feature farm-lists, 2026-05-26).
+
+## CAPA FARM LISTS — implementada (rama develop, actualizado 2026-05-27)
+
+### Cambios post-implementación (auditados 2026-05-27, SIN consulta previa a palantir)
+
+#### Cambio 1 — Aliases en `_serialize_send_event` (farm.py líneas 204-207)
+Tres campos alias añadidos al dict de retorno sin borrar originales:
+- `sent_at` = alias de `timestamp`
+- `slots_sent` = alias de `being_raided_current`
+- `deactivated_slots` = alias de `bot_disabled_slots`
+
+VEREDICTO palantir: lógica de presentación introducida directamente en el serializador de la capa API.
+No hay patrón previo de aliases en ningún otro serializador del proyecto. El problema no es la funcionalidad
+sino la técnica: los nombres canónicos del dominio (being_raided_current, bot_disabled_slots) son correctos;
+los aliases son conveniencia del frontend. DEUDA: si el frontend cambia sus expectativas,
+habrá que tocar la capa API — esto acopla API al vocabulario de un cliente específico.
+
+#### Cambio 2 — Campos agregados en `_serialize_farm_list` (farm.py líneas 165-182)
+`total_bounty` (suma) y `avg_bounty_per_send` (promedio de activos) calculados en el serializador.
+`last_send_time` siempre `None` (placeholder explícito pendiente de implementación real).
+
+VEREDICTO palantir: los cálculos pertenecen a la capa de presentación/aplicación, no al core.
+No hay use case de agregados en core/use_cases/farm_lists.py — la lógica se ha colocado
+en el serializador de la capa API, lo que es coherente con el nivel de complejidad actual.
+`total_bounty` y `average_raid_bounty` YA EXISTEN en FarmSlot (entidad de dominio) como campos nativos
+calculados por el adaptador de BD. Los agregados de farm list son sumas/promedios de esos campos —
+cálculo trivial no merecedor de un use case propio.
+
+#### Cambio 3 — Endpoint toggle scheduler (farm.py líneas 361-380)
+`POST /farm/worlds/{world_id}/schedulers/{scheduler_id}/toggle` — nuevo endpoint.
+Patrón: get → flip is_enabled → update_scheduler → serializa → 200.
+No hay use case en core/ — la lógica (get + flip + save) ocurre directamente en el handler.
+
+VEREDICTO palantir: patrón coherente con el resto del router de farm (otros endpoints simples
+también operan directo sobre db sin use case). PUT /worlds/{wid}/schedulers/{sid} ya hacía
+get + mutación + update_scheduler, así que el toggle es una variante simplificada del mismo patrón.
+
+#### Cambio 4 — Filtro scheduler_id en slot-events (farm.py líneas 709-734)
+Nuevo param opcional `scheduler_id` en `GET /farm/worlds/{world_id}/slot-events`.
+Implementación: fetch all (page_size=100_000) + filter en Python + paginación manual.
+
+VEREDICTO palantir: DIVERGENCIA CRÍTICA respecto al patrón ya establecido.
+`get_farm_list_send_history` (adaptador de BD, línea 971-1005) ya tiene `scheduler_id`
+como filtro nativo en SQL con paginación real. `get_slot_events` (línea 740-770) NO tiene
+ese parámetro en el puerto ni en el adaptador — por eso el handler lo filtra en Python.
+El puerto FarmListDbPort.get_slot_events tampoco tiene scheduler_id en su firma abstracta.
+Esto es asimetría entre los dos endpoints de historial y rompe el patrón de la BD.
+FIX RECOMENDADO: añadir `scheduler_id: int | None = None` a FarmListDbPort.get_slot_events,
+implementarlo en FarmListSQLiteAdapter.get_slot_events (igual que get_farm_list_send_history),
+y eliminar el fetch-all + filter en Python del handler.
+
+
+### Backend implementado
+- `core/entities/farm_list.py` — FarmSlot, FarmList, BotSlotStatus, SlotEvent
+- `core/entities/farm_scheduler.py` — FarmScheduler (id, world_id, name, interval_min_ms, interval_max_ms, is_enabled, last_run, next_run, execution_count, farm_list_ids)
+- `core/entities/farm_list_send_event.py` — FarmListSendEvent (id, farm_list_id, farm_list_name, world_id, timestamp, status, being_raided_current/total, triggered_by, scheduler_id, bot_disabled_slots, loot_*)
+- `core/entities/farm_list_send_result.py` — FarmListSendResult (farm_list_id, status, being_raided_current/total)
+- `core/entities/task.py` — TaskType, Task
+- `core/ports/farm_list_browser_port.py` — FarmListBrowserPort (ABC)
+- `core/ports/farm_list_db_port.py` — FarmListDbPort (ABC)
+- `core/scheduling/task_queue.py` — TaskQueue
+- `core/scheduling/world_agent.py` — WorldAgent (seed_from_schedulers, run, _execute, _reschedule_farm, run_now, request_stop, status)
+- `core/use_cases/farm_lists.py` — todos los use cases: GetFarmListsUseCase, ReadFarmListsUseCase, SendFarmListUseCase, ActivateSlotInTravianUseCase, DeactivateSlotInTravianUseCase, DisableSlotByBotUseCase, EnableSlotByBotUseCase, CancelProbeUseCase, SendSchedulerGroupUseCase, ProcessFarmListUseCase
+- `adapters/db/farm_list_sqlite_adapter.py` — FarmListSQLiteAdapter
+- `adapters/browser/farm_lists.py` — lector DOM
+- `adapters/browser/farm_list_sender.py` — envío JS
+- `adapters/browser/live_farm_list_adapter.py` — LiveFarmListAdapter (mismo patrón que LiveOverviewAdapter)
+- `adapters/browser/url_utils.py` — helper build_url
+- `adapters/api/routes/farm.py` — router /farm (21 endpoints)
+- `tests/unit/test_farm_lists.py` — 32 tests (todos pasan)
+
+### Endpoints /farm (prefijo sin /api)
+8.1 Schedulers: GET/POST /worlds/{wid}/schedulers, PUT/DELETE /worlds/{wid}/schedulers/{sid}, PUT /worlds/{wid}/schedulers/{sid}/farm-lists, **POST /worlds/{wid}/schedulers/{sid}/toggle** (NUEVO 2026-05-27)
+8.2 Farm Lists: GET /worlds/{wid}/farm-lists, POST /worlds/{wid}/farm-lists/read
+8.3 Slots: POST /slots/{sid}/activate|deactivate|bot-disable|bot-enable|cancel-probe
+8.4 Envío: POST /farm-lists/{id}/send
+8.5 Historial: GET /worlds/{wid}/history, GET /worlds/{wid}/slot-events (paginados; slot-events acepta ?scheduler_id con filtrado Python post-query — pendiente mover filtro a SQL)
+8.6 Agente: POST /worlds/{wid}/agent/start|stop, GET /worlds/{wid}/agent/status, POST /worlds/{wid}/schedulers/{sid}/run-now
+
+### Asimetría de filtros en historial (DEUDA TÉCNICA — registrada 2026-05-27)
+- `get_farm_list_send_history` tiene filtro nativo SQL por `scheduler_id` (adaptador + puerto)
+- `get_slot_events` NO tiene filtro por `scheduler_id` en el puerto ni en el adaptador
+- El handler de slot-events lo compensa con fetch-all (page_size=100_000) + filter en Python
+- FIX PENDIENTE: añadir `scheduler_id` a FarmListDbPort.get_slot_events y FarmListSQLiteAdapter.get_slot_events
+
+### Sin Accept-Language: datos de juego, no catálogo i18n
+
+### Fuente de datos de villages — upsert como side effect de ReadFarmLists
+
+La tabla `villages` (campos: id, world_id, data_id, name, x=0, y=0) recibe su primera carga desde la página de farm lists (`/build.php?gid=16&tt=99`). El flujo es:
+
+1. `adapters/browser/farm_lists.py` — `_JS_GET_FARM_LIST_ENTRIES` (línea 143) lee `span.name[data-did]` del nav sidebar del DOM de Travian y extrae `{villageName, villageDid}` por cada lista. `villageDid` = `data_id` de la aldea en la BD.
+2. `core/use_cases/farm_lists.py` — `ReadFarmListsUseCase.execute()` (línea 124): para cada FarmList cuya aldea no esté ya en BD y tenga `village_data_id > 0`, llama `db.upsert_village(world_id, fl.village_data_id, fl.village_name)`. Si `village_data_id == 0` (el nav no expuso el did), la lista se omite con warning.
+3. `core/ports/farm_list_db_port.py` — `FarmListDbPort.upsert_village` (línea 70) — contrato ABC.
+4. `adapters/db/farm_list_sqlite_adapter.py` — `FarmListSQLiteAdapter.upsert_village` (línea 588): `INSERT INTO villages (world_id, data_id, name, x, y) VALUES (?, ?, ?, 0, 0) ON CONFLICT(world_id, data_id) DO UPDATE SET name = excluded.name`.
+
+**Implicaciones para features futuras:**
+- `x=0, y=0` son placeholders intencionales. La plaza de reuniones no expone coordenadas. La feature VillageMap (lectura de overview) es la prevista para actualizarlos.
+- Cualquier feature que necesite `villages` populada puede disparar `POST /farm/worlds/{world_id}/farm-lists/read` como paso previo — esto hace el upsert automáticamente.
+- NO duplicar la lógica de upsert de aldeas. El punto de entrada único es `FarmListDbPort.upsert_village` vía `ReadFarmListsUseCase`.
+- `get_villages_by_world(world_id)` (en FarmListDbPort/FarmListSQLiteAdapter) es la consulta de lectura correspondiente.
+
+### Frontend: PARCIALMENTE IMPLEMENTADO (actualizado 2026-05-27)
+
+Los siguientes componentes de farm lists YA EXISTEN en `frontend/src/`:
+
+| Componente | Ruta | Contenido |
+|---|---|---|
+| `FarmListsTab` | `frontend/src/components/world/FarmListsTab.jsx` | Tabla principal de farm lists agrupadas por aldea. Columnas: nombre, slots (activo/total), scheduler, último envío, rec/env. |
+| `FarmListDrawer` | `frontend/src/components/world/FarmListDrawer.jsx` | Drawer lateral 480px con 3 pestañas: Slots, Stats, Historial. Por slot: nombre, distancia, botín último raid, estado (badge). SlotDetail expandible con avg_bounty, total_bounty, acciones activate/deactivate/cancel-probe. |
+| `SchedulerDashboard` | `frontend/src/components/world/SchedulerDashboard.jsx` | Panel de schedulers |
+| `SchedulerSubPanel` | `frontend/src/components/world/SchedulerSubPanel.jsx` | Sub-panel de scheduler |
+| `AgentBottomBar` | `frontend/src/components/world/AgentBottomBar.jsx` | Barra inferior del agente |
+| `AgentsTab` | `frontend/src/components/world/AgentsTab.jsx` | Pestaña de agentes |
+| `Countdown` | `frontend/src/components/world/Countdown.jsx` | Countdown para cooldown de sondas |
+| `WorldSpacePage` | `frontend/src/pages/WorldSpacePage.jsx` | Página del mundo con 4 pestañas (sidebar): overview, agentes, farm lists, calculadora |
+
+`WorldSpacePage` ya tiene las 4 pestañas sidebar implementadas con iconos SVG.
+`api` client ya tiene todos los métodos farm (getFarmLists, readFarmLists, activateSlot, deactivateSlot, cancelProbe, sendFarmList, getFarmListHistory, getAgentStatus, etc.).
+
+#### Lo que NO existe en el frontend para las 5 capacidades pedidas:
+
+1. **Ordenación por columna**: NO. La tabla en FarmListsTab no tiene ningún mecanismo de sort. Las columnas son cabeceras `<th>` estáticas sin onClick.
+
+2. **Botín acumulado por slot en la tabla principal**: PARCIAL. `total_bounty` ya existe en `FarmSlot` (entidad + BD + API). En FarmListsTab se muestra `avg_bounty_per_send` a nivel de farm list (no por slot). En el drawer (SlotDetail) sí se muestra `total_bounty` y `average_raid_bounty` por slot. En la tabla principal de FarmListsTab NO se muestra `total_bounty` por slot (solo el promedio agregado de la lista).
+
+3. **Iconos de tropas**: NO hay ningún componente ni helper. `troops` ya viene en el payload del slot (dict `{t1:2, t4:1, ...}`) tanto en la entidad como en la API. Pero el frontend no los renderiza en ningún sitio. Los iconos PNG de tropas en `assets/icons/` están VACÍOS (solo `.gitkeep`): el scraper de kirilloid genera `unit_*.png` pero NO se han descargado aún.
+
+4. **Dropdown de acciones por slot en la tabla principal**: PARCIAL. Las acciones (activate, deactivate, cancel-probe) YA EXISTEN implementadas en `SlotDetail` dentro del drawer (accordion expandible por slot). NO hay dropdown de acciones en la fila de slot de la tabla principal del drawer — hay que expandir el accordion. No hay ningún menú contextual inline en la tabla de FarmListsTab (nivel de lista).
+
+5. **Último reporte con link**: PARCIAL. `last_raid_report_id` ya llega en el payload del slot. En el SlotDetail del drawer se muestra `last_raid_state` + tiempo relativo, PERO no hay link clickable a Travian. El campo `last_raid_report_id` contiene el ID del reporte (ej: `12345/678`) que hay que transformar a `<world_url>report?id=<id_con_%7C>&s=1`. La `world_url` se puede obtener desde `World.server` (disponible en la sesión) — pero NO se pasa como prop al drawer actualmente.
 
 ## CAPACIDADES REUTILIZABLES MARCADAS
 

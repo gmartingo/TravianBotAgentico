@@ -7,3 +7,4 @@
 - [project-overview-blocks](project_overview_blocks.md) — Bloques overview/resources/culture-points/troops: decisiones, hallazgos del fixture, selectores clave
 - [project-accounts-worlds](project_accounts_worlds.md) — Diseño registro cuentas/mundos: email-unicidad, Fernet, PlayableTribe, cascada FK, WorldRuntimePort degradación segura
 - [project-login-sesion-api](project_login_sesion_api.md) — SessionRegistry, cableado LiveOverviewAdapter con set_callables, 3 endpoints session, LoginFailedError
+- [project-farm-lists](project_farm_lists.md) — Entidades, puertos, scheduling, browser adapter y BD de farm lists automáticas; reglas clave de anti-detección y backoff

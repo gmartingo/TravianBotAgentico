@@ -15,3 +15,4 @@
 - [tailwind-v4-reset-must-be-layered](tailwind-v4-reset-must-be-layered.md) — el reset CSS global debe ir en @layer base o anula todo el espaciado de Tailwind v4 (UI "amontonada"); cómo verificar UI con captura headless de Chrome
 - [ui-testing-puppeteer-core](ui-testing-puppeteer-core.md) — frontend/scripts/uishot.mjs (puppeteer-core + Chrome del sistema) para testear interacciones del front y verificar con captura ANTES de enseñar al usuario; solo localhost, nunca Travian
 - [branch-hygiene-one-feature-per-branch](branch-hygiene-one-feature-per-branch.md) — una feature = una rama bien nombrada; git-flow-advisor debe avisar si el contenido no encaja con la rama activa (pasó: kirilloid-buildings acabó de cajón de sastre)
+- [feedback-palantir-always-first](feedback-palantir-always-first.md) — palantir SIEMPRE primero, sin excepción, aunque la tarea llegue completamente especificada
