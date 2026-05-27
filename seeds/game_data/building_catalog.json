@@ -1,0 +1,402 @@
+[
+  {
+    "server_version": "1.45",
+    "gid": 1,
+    "alias": "woodcutter",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_1_woodcutter"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 2,
+    "alias": "clay_pit",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_2_clay_pit"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 3,
+    "alias": "iron_mine",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_3_iron_mine"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 4,
+    "alias": "cropland",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_4_cropland"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 5,
+    "alias": "sawmill",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_5_sawmill"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 6,
+    "alias": "brickyard",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_6_brickyard"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 7,
+    "alias": "iron_foundry",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_7_iron_foundry"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 8,
+    "alias": "grain_mill",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_8_grain_mill"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 9,
+    "alias": "bakery",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_9_bakery"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 10,
+    "alias": "warehouse",
+    "category": "resources",
+    "description": "Limits maximum amount of resources available in village.",
+    "icon_id": "building_10_warehouse"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 11,
+    "alias": "granary",
+    "category": "resources",
+    "description": "Limits maximum amount of crop available in village.",
+    "icon_id": "building_11_granary"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 12,
+    "alias": "blacksmith",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_12_blacksmith"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 13,
+    "alias": "rally_point",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_13_smithy"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 14,
+    "alias": "academy",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_14_tournament_square"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 15,
+    "alias": "barracks",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_15_main_building"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 16,
+    "alias": "stable",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_16_rally_point"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 17,
+    "alias": "workshop",
+    "category": "infrastructure",
+    "description": "Could be used as extra stockyard (but not a cranny!), by placing sell offer.",
+    "icon_id": "building_17_marketplace"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 18,
+    "alias": "palace",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_18_embassy"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 19,
+    "alias": "treasury",
+    "category": "military",
+    "description": "Once troops queued for training, their training time won't be changed disregarding of further changes in barracks level, effect from artifacts or items(T4).",
+    "icon_id": "building_19_barracks"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 20,
+    "alias": "trade_office",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_20_stable"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 21,
+    "alias": "great_market",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_21_workshop"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 22,
+    "alias": "embassy",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_22_academy"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 23,
+    "alias": "hero_mansion",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_23_cranny"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 24,
+    "alias": "monument",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_24_town_hall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 25,
+    "alias": "great_granary",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_25_residence"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 26,
+    "alias": "great_warehouse",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_26_palace"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 27,
+    "alias": "world_wonder",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_27_treasury"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 28,
+    "alias": "city_wall",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_28_trade_office"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 29,
+    "alias": "earth_wall",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_29_great_barracks"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 30,
+    "alias": "palisade",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_30_great_stable"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 31,
+    "alias": "stonemasons_lodge",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_31_city_wall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 32,
+    "alias": "residence",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_32_earth_wall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 33,
+    "alias": "mansion",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_33_palisade"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 34,
+    "alias": "roman_smithy",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_34_stonemason"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 35,
+    "alias": "teuton_smithy",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_35_brewery"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 36,
+    "alias": "gaul_smithy",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_36_trapper"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 37,
+    "alias": "egypt_smithy",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_37_heros_mansion"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 38,
+    "alias": "hun_smithy",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_38_great_warehouse"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 39,
+    "alias": "great_barracks",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_39_great_granary"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 40,
+    "alias": "great_stable",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_40_wonder_of_the_world"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 41,
+    "alias": "building_41",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_41_horse_drinking_trough"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 42,
+    "alias": "building_42",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_42_stone_wall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 43,
+    "alias": "building_43",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_43_makeshift_wall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 44,
+    "alias": "building_44",
+    "category": "infrastructure",
+    "description": "",
+    "icon_id": "building_44_command_center"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 45,
+    "alias": "building_45",
+    "category": "resources",
+    "description": "",
+    "icon_id": "building_45_waterworks"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 46,
+    "alias": "building_46",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_46_hospital"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 47,
+    "alias": "building_47",
+    "category": "military",
+    "description": "",
+    "icon_id": "building_47_defensive_wall"
+  },
+  {
+    "server_version": "1.45",
+    "gid": 48,
+    "alias": "building_48",
+    "category": "military",
+    "description": "",
+    "icon_id": null
+  },
+  {
+    "server_version": "1.45",
+    "gid": 49,
+    "alias": "building_49",
+    "category": "military",
+    "description": "",
+    "icon_id": null
+  },
+  {
+    "server_version": "1.45",
+    "gid": 50,
+    "alias": "building_50",
+    "category": "military",
+    "description": "",
+    "icon_id": null
+  }
+]

@@ -364,3 +364,126 @@ def test_t16_count_troop_stats_after_upsert():
         assert count == 1, f"Después de 1 upsert debería devolver 1; devolvió {count}"
     finally:
         asyncio.run(conn.close())
+
+
+# ---------------------------------------------------------------------------
+# count_rows() — gate por-tabla para edificios (añadido 2026-05-27)
+# ---------------------------------------------------------------------------
+
+
+def _building_catalog_row() -> dict:
+    return {
+        "server_version": "1.45",
+        "gid": 1,
+        "alias": "woodcutter",
+        "category": "resources",
+        "description": "Produces wood",
+        "icon_id": "building_1",
+    }
+
+
+def _building_stats_row() -> dict:
+    return {
+        "server_version": "1.45",
+        "gid": 1,
+        "level": 1,
+        "cost_wood": 40,
+        "cost_clay": 50,
+        "cost_iron": 30,
+        "cost_crop": 10,
+        "cost_sum": 130,
+        "upkeep": 2,
+        "culture_points": 1,
+        "build_time_s": 360,
+        "effect_value": 2,
+        "effect_label": "Production",
+    }
+
+
+def test_count_rows_troop_stats_empty():
+    """count_rows('troop_stats') en BD vacía → 0."""
+    adapter, conn = _make_adapter()
+    try:
+        count = asyncio.run(adapter.count_rows("troop_stats"))
+        assert count == 0, f"Esperado 0; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_troop_stats_after_upsert():
+    """count_rows('troop_stats') tras insertar 1 fila → 1."""
+    adapter, conn = _make_adapter()
+    try:
+        asyncio.run(adapter.upsert_troop_stats(_stats_romans_1()))
+        count = asyncio.run(adapter.count_rows("troop_stats"))
+        assert count == 1, f"Esperado 1; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_building_catalog_empty():
+    """count_rows('building_catalog') en BD vacía → 0."""
+    adapter, conn = _make_adapter()
+    try:
+        count = asyncio.run(adapter.count_rows("building_catalog"))
+        assert count == 0, f"Esperado 0; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_building_catalog_after_upsert():
+    """count_rows('building_catalog') tras insertar 1 fila → 1."""
+    adapter, conn = _make_adapter()
+    try:
+        asyncio.run(adapter.upsert_building_catalog(_building_catalog_row()))
+        count = asyncio.run(adapter.count_rows("building_catalog"))
+        assert count == 1, f"Esperado 1; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_building_stats_empty():
+    """count_rows('building_stats') en BD vacía → 0."""
+    adapter, conn = _make_adapter()
+    try:
+        count = asyncio.run(adapter.count_rows("building_stats"))
+        assert count == 0, f"Esperado 0; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_building_stats_after_upsert():
+    """count_rows('building_stats') tras insertar 1 fila → 1."""
+    adapter, conn = _make_adapter()
+    try:
+        asyncio.run(adapter.upsert_building_stats(_building_stats_row()))
+        count = asyncio.run(adapter.count_rows("building_stats"))
+        assert count == 1, f"Esperado 1; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_invalid_table_raises_value_error():
+    """count_rows con tabla no permitida → ValueError (seguridad: no expone accounts/worlds)."""
+    adapter, conn = _make_adapter()
+    try:
+        try:
+            asyncio.run(adapter.count_rows("accounts"))
+            assert False, "Debería haber lanzado ValueError"
+        except ValueError as exc:
+            assert "accounts" in str(exc), f"Mensaje de error incorrecto: {exc}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_count_rows_worlds_raises_value_error():
+    """count_rows('worlds') → ValueError (worlds es dato sensible, no de juego)."""
+    adapter, conn = _make_adapter()
+    try:
+        try:
+            asyncio.run(adapter.count_rows("worlds"))
+            assert False, "Debería haber lanzado ValueError"
+        except ValueError as exc:
+            assert "worlds" in str(exc), f"Mensaje de error incorrecto: {exc}"
+    finally:
+        asyncio.run(conn.close())

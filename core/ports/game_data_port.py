@@ -186,7 +186,8 @@ class GameDataPort(ABC):
         """
 
     # ------------------------------------------------------------------
-    # Gate de seed — método añadido para la feature seed-datos-juego-tropas
+    # Gate de seed — métodos añadidos para la feature seed-datos-juego-tropas
+    # (extendidos para edificios el 2026-05-27)
     # ------------------------------------------------------------------
 
     @abstractmethod
@@ -194,5 +195,23 @@ class GameDataPort(ABC):
         """
         Devuelve el número de filas en troop_stats.
         0 indica que la tabla está vacía y el seed debe cargarse.
-        Usado por seed_loader.load_if_empty() como gate de arranque.
+        Usado por seed_loader.load_if_empty() como gate de arranque (legacy).
+        Mantenido por retrocompatibilidad; el gate actual usa count_rows().
+        """
+
+    @abstractmethod
+    async def count_rows(self, table_name: str) -> int:
+        """
+        Devuelve el número de filas en la tabla indicada.
+        0 indica que la tabla está vacía y su seed debe cargarse.
+
+        Tablas permitidas: troop_stats, troop_upgrades, icon_metadata,
+        building_catalog, building_stats.
+
+        Usado por seed_loader.load_if_empty() para la decisión por-tabla:
+        cada tabla se carga de forma independiente si está vacía, sin
+        pisar datos existentes en otras tablas.
+
+        Raises:
+            ValueError: si table_name no está en las tablas permitidas.
         """

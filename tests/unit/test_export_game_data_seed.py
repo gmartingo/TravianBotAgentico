@@ -2,11 +2,15 @@
 Tests unitarios de scripts/export_game_data_seed.py.
 
 Cubre:
-  T-10  Export con datos produce los 3 ficheros JSON con el número correcto de objetos
+  T-10  Export con datos produce los 3 ficheros JSON (tropas) con conteos correctos
   T-11  Export sin scraped_at en ningún objeto JSON
   T-12  Orden determinista de filas en troop_stats (por server_version, tribe, ordinal)
   T-13  Tabla vacía → su fichero JSON no se crea
   T-14  Atomicidad: si write_text falla, no quedan ficheros .tmp en disco
+  T-B5  Export produce los 2 ficheros JSON de edificios con conteos correctos
+  T-B6  Orden determinista en building_stats (por server_version, gid, level)
+  T-B7  building_catalog vacío → building_catalog.json no se crea
+  T-B8  Ningún objeto exportado de edificios contiene scraped_at
 
 Estrategia:
   - BD :memory: con datos inline, tmp_path para el directorio de salida.
@@ -104,9 +108,76 @@ _ICON_ROWS = [
     }
 ]
 
+_BUILDING_CATALOG_ROWS = [
+    {
+        "server_version": "1.45",
+        "gid": 1,
+        "alias": "woodcutter",
+        "category": "resources",
+        "description": "Produces wood",
+        "icon_id": "building_1",
+    },
+    {
+        "server_version": "1.45",
+        "gid": 2,
+        "alias": "clay_pit",
+        "category": "resources",
+        "description": "Produces clay",
+        "icon_id": "building_2",
+    },
+]
+
+_BUILDING_STATS_ROWS = [
+    {
+        "server_version": "1.45",
+        "gid": 1,
+        "level": 1,
+        "cost_wood": 40,
+        "cost_clay": 50,
+        "cost_iron": 30,
+        "cost_crop": 10,
+        "cost_sum": 130,
+        "upkeep": 2,
+        "culture_points": 1,
+        "build_time_s": 360,
+        "effect_value": 2,
+        "effect_label": "Production",
+    },
+    {
+        "server_version": "1.45",
+        "gid": 1,
+        "level": 2,
+        "cost_wood": 65,
+        "cost_clay": 80,
+        "cost_iron": 45,
+        "cost_crop": 15,
+        "cost_sum": 205,
+        "upkeep": 2,
+        "culture_points": 2,
+        "build_time_s": 720,
+        "effect_value": 3,
+        "effect_label": "Production",
+    },
+    {
+        "server_version": "1.45",
+        "gid": 2,
+        "level": 1,
+        "cost_wood": 50,
+        "cost_clay": 40,
+        "cost_iron": 30,
+        "cost_crop": 10,
+        "cost_sum": 130,
+        "upkeep": 2,
+        "culture_points": 1,
+        "build_time_s": 360,
+        "effect_value": 2,
+        "effect_label": "Production",
+    },
+]
+
 
 async def _make_populated_adapter():
-    """BD :memory: con las 3 tablas con datos de prueba. Devuelve (adapter, conn)."""
+    """BD :memory: con las 5 tablas con datos de prueba. Devuelve (adapter, conn)."""
     conn = await aiosqlite.connect(":memory:")
     conn.row_factory = aiosqlite.Row
     adapter = GameDataSQLiteAdapter(conn)
@@ -117,6 +188,10 @@ async def _make_populated_adapter():
         await adapter.upsert_troop_upgrade(row)
     for row in _ICON_ROWS:
         await adapter.upsert_icon_metadata(row)
+    for row in _BUILDING_CATALOG_ROWS:
+        await adapter.upsert_building_catalog(row)
+    for row in _BUILDING_STATS_ROWS:
+        await adapter.upsert_building_stats(row)
     return adapter, conn
 
 
@@ -308,3 +383,117 @@ def test_t14_atomicity_no_tmp_on_failure(tmp_path):
     assert tmp_files == [], (
         f"No deberían quedar ficheros .tmp tras el fallo: {tmp_files}"
     )
+
+
+# ---------------------------------------------------------------------------
+# T-B5: Export produce los 2 ficheros JSON de edificios con conteos correctos
+# ---------------------------------------------------------------------------
+
+
+def test_tb5_export_produces_building_json_files(tmp_path):
+    """
+    T-B5: con 2 edificios en building_catalog y 3 filas en building_stats,
+    el export produce building_catalog.json (2 obj) y building_stats.json (3 obj).
+    """
+    async def _run():
+        adapter, conn = await _make_populated_adapter()
+        try:
+            await _run_export(conn, tmp_path)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+    catalog_data = json.loads((tmp_path / "building_catalog.json").read_text())
+    stats_data = json.loads((tmp_path / "building_stats.json").read_text())
+
+    assert len(catalog_data) == 2, (
+        f"Esperado 2 objetos en building_catalog; obtenido {len(catalog_data)}"
+    )
+    assert len(stats_data) == 3, (
+        f"Esperado 3 objetos en building_stats; obtenido {len(stats_data)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T-B6: Orden determinista en building_stats (server_version, gid, level)
+# ---------------------------------------------------------------------------
+
+
+def test_tb6_deterministic_order_building_stats(tmp_path):
+    """
+    T-B6: las filas de building_stats.json están ordenadas por (server_version, gid, level).
+    Con gid=1 nivel 1 y 2, y gid=2 nivel 1, el orden esperado es (1,1), (1,2), (2,1).
+    """
+    async def _run():
+        adapter, conn = await _make_populated_adapter()
+        try:
+            await _run_export(conn, tmp_path)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+    data = json.loads((tmp_path / "building_stats.json").read_text())
+    assert len(data) == 3
+    assert (data[0]["gid"], data[0]["level"]) == (1, 1), f"Primera fila: {data[0]}"
+    assert (data[1]["gid"], data[1]["level"]) == (1, 2), f"Segunda fila: {data[1]}"
+    assert (data[2]["gid"], data[2]["level"]) == (2, 1), f"Tercera fila: {data[2]}"
+
+
+# ---------------------------------------------------------------------------
+# T-B7: building_catalog vacío → building_catalog.json no se crea
+# ---------------------------------------------------------------------------
+
+
+def test_tb7_empty_building_catalog_not_exported(tmp_path):
+    """
+    T-B7: si building_catalog está vacío en la BD, building_catalog.json no se crea.
+    """
+    async def _run():
+        conn = await aiosqlite.connect(":memory:")
+        conn.row_factory = aiosqlite.Row
+        adapter = GameDataSQLiteAdapter(conn)
+        await adapter.ensure_tables()
+        # Solo insertar tropas; building_catalog y building_stats quedan vacíos
+        await adapter.upsert_troop_stats(_STATS_ROWS[0])
+        try:
+            await _run_export(conn, tmp_path)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+    assert (tmp_path / "troop_stats.json").exists(), "troop_stats.json debería existir"
+    assert not (tmp_path / "building_catalog.json").exists(), (
+        "building_catalog.json NO debería existir (tabla vacía)"
+    )
+    assert not (tmp_path / "building_stats.json").exists(), (
+        "building_stats.json NO debería existir (tabla vacía)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T-B8: Ningún objeto exportado de edificios contiene scraped_at
+# ---------------------------------------------------------------------------
+
+
+def test_tb8_export_buildings_no_scraped_at(tmp_path):
+    """
+    T-B8: ningún objeto en building_catalog.json ni building_stats.json tiene scraped_at.
+    """
+    async def _run():
+        adapter, conn = await _make_populated_adapter()
+        try:
+            await _run_export(conn, tmp_path)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+    for fname in ["building_catalog.json", "building_stats.json"]:
+        data = json.loads((tmp_path / fname).read_text())
+        for obj in data:
+            assert "scraped_at" not in obj, (
+                f"'{fname}' contiene scraped_at en al menos un objeto: {obj}"
+            )

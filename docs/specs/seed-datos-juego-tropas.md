@@ -1,20 +1,21 @@
 ---
 id: seed-datos-juego-tropas
-titulo: Seed de datos de juego — tablas de tropas e iconos
+titulo: Seed de datos de juego — tropas, iconos y edificios
 estado: implemented
 fecha: 2026-05-27
 autor: analista
 apis_validadas_por_desarrollador_apis: n-a
 ---
 
-# Seed de datos de juego — tablas de tropas e iconos
+# Seed de datos de juego — tropas, iconos y edificios
 
 ## 1. Objetivo de negocio
 
-Versionar en git los datos de juego scrapeados de kirilloid (tropas e iconos) de modo que
-cualquier clon fresco del repositorio —Raspberry Pi, VM Windows, Mac nuevo— tenga las tablas
-`troop_stats`, `troop_upgrades` e `icon_metadata` pobladas al primer arranque, **sin
-necesidad de ejecutar el scraper ni tener Chrome instalado**.
+Versionar en git los datos de juego scrapeados de kirilloid (tropas, iconos y edificios) de
+modo que cualquier clon fresco del repositorio —Raspberry Pi, VM Windows, Mac nuevo— tenga
+las tablas `troop_stats`, `troop_upgrades`, `icon_metadata`, `building_catalog` y
+`building_stats` pobladas al primer arranque, **sin necesidad de ejecutar el scraper ni tener
+Chrome instalado**.
 
 La BD (`travian_bot.db`) está en `.gitignore` (regla `*.db`). Los datos de juego deben vivir
 en ficheros JSON versionados que se cargan automáticamente en el `lifespan` de FastAPI
@@ -36,22 +37,20 @@ versionados, sin información sensible.
 ### Dentro de alcance
 
 - Exportar a JSON y versionar: `troop_stats` (90 filas), `troop_upgrades` (1780 filas),
-  `icon_metadata` (93 filas).
+  `icon_metadata` (140 filas), `building_catalog` (50 filas), `building_stats` (1003 filas).
 - Script de exportación `scripts/export_game_data_seed.py` que lee la BD del dev y escribe
   los ficheros JSON en `seeds/game_data/`.
 - Lógica de carga automática en el `lifespan` de `adapters/api/main.py`.
-- Nuevo método `count_troop_stats()` en `GameDataSQLiteAdapter` y `GameDataPort` como gate
-  de "¿están vacías las tablas de tropas?".
-- Tests que cubren: export, carga sobre BD vacía, idempotencia, aislamiento de
-  `accounts`/`worlds`.
-- Forward-compatibility: el mecanismo de carga debe poder extenderse a
-  `building_catalog`/`building_stats` en el futuro añadiendo sus ficheros JSON al directorio
-  `seeds/game_data/` sin reescribir el loader.
+- Método `count_troop_stats()` en `GameDataSQLiteAdapter` y `GameDataPort` (mantenido por
+  retrocompatibilidad) y nuevo método `count_rows(table_name)` para gate por-tabla.
+- Tests que cubren: export (tropas + edificios), carga sobre BD vacía, idempotencia,
+  estado parcial (tropas llenas + edificios vacíos), aislamiento de `accounts`/`worlds`.
+- **Extensión 2026-05-27:** el alcance original era solo tropas e iconos. El usuario
+  completó el scraper de kirilloid-edificios y decidió incluir `building_catalog` y
+  `building_stats` en el seed, aprovechando la forward-compatibility ya diseñada.
 
 ### Fuera de alcance
 
-- Tablas `building_catalog` y `building_stats` (vacías en la BD del dev; se añadirán cuando
-  se corra el scraper de edificios).
 - Tablas `accounts` y `worlds` — nunca se tocan, exportan ni leen en este flujo.
 - Versionado multi-versión del juego (no hay T4.5 vs T4.6 en el seed; es estático único con
   `server_version = "1.45"`).
@@ -60,8 +59,10 @@ versionados, sin información sensible.
 
 ## 4. Reglas de negocio
 
-1. **Carga solo si vacío:** el seed se carga únicamente si `troop_stats` no tiene filas.
-   Si ya hay datos (dev que re-arranca, o entorno que ya cargó el seed) no se hace nada.
+1. **Carga por-tabla:** el seed de cada tabla se carga únicamente si ESA tabla no tiene
+   filas. Cada tabla decide de forma independiente. Esto permite estados parciales: si
+   `troop_stats` ya tiene datos pero `building_catalog` está vacía, se cargan solo los
+   edificios, sin tocar las tropas.
 2. **El seed nunca pisa datos reales:** los upserts son `INSERT OR REPLACE` (idempotentes),
    pero como la carga está gateada por "¿está vacío?", en la práctica nunca sobrescribe
    datos que un scraper real haya generado después.
@@ -87,21 +88,22 @@ versionados, sin información sensible.
 ```
 1. lifespan() llama a game_data_adapter.ensure_tables()
 2. lifespan() llama a seed_loader.load_if_empty(game_data_adapter)
-3. seed_loader.load_if_empty() llama a game_data_adapter.count_troop_stats()
-4. count = 0 → seed_loader itera ficheros en seeds/game_data/
-5. Por cada fichero encontrado (ej. troop_stats.json):
-   a. Lee la lista de objetos
-   b. Llama al upsert correspondiente por cada objeto
-6. Al terminar, troop_stats tiene 90 filas, troop_upgrades 1780, icon_metadata 93
-7. lifespan() continúa: app.state.game_data_port = game_data_adapter
+3. seed_loader.load_if_empty() itera UPSERT_MAP tabla por tabla:
+   a. Llama a game_data_adapter.count_rows(table_name)
+   b. count = 0 → busca seeds/game_data/<table_name>.json
+   c. Lee la lista de objetos y llama al upsert correspondiente por cada objeto
+4. Al terminar: troop_stats=90, troop_upgrades=1780, icon_metadata=140,
+   building_catalog=50, building_stats=1003
+5. lifespan() continúa: app.state.game_data_port = game_data_adapter
 ```
 
 ### Flujo B — re-arranque con datos ya presentes (idempotencia)
 
 ```
-1–3 igual que el Flujo A
-4. count > 0 → seed_loader.load_if_empty() retorna sin hacer nada
-5. Tiempo extra: ~0ms (solo un COUNT query)
+1–2 igual que el Flujo A
+3. Para cada tabla: count_rows() > 0 → esa tabla se omite
+4. Todas las tablas tienen datos → 0 upserts en total
+5. Tiempo extra: ~0ms (5 COUNT queries, uno por tabla)
 ```
 
 ### Flujo C — el dev regenera el seed tras nuevo scraping
@@ -650,22 +652,30 @@ El desarrollador-funcionalidades debe ejecutar estos pasos en el orden indicado:
 - [ ] **CA-03:** Al arrancar la app por segunda vez (seed ya cargado), los logs de startup NO
   incluyen "filas cargadas": aparece "troop_stats ya tiene N filas — carga omitida".
 
-- [ ] **CA-04:** `python scripts/export_game_data_seed.py` produce los 3 ficheros JSON en
-  `seeds/game_data/` con el número correcto de objetos (90, 1780, 93 respectivamente).
+- [ ] **CA-04:** `python scripts/export_game_data_seed.py` produce los 5 ficheros JSON en
+  `seeds/game_data/` con el número correcto de objetos: troop_stats=90, troop_upgrades=1780,
+  icon_metadata=140, building_catalog=50, building_stats=1003.
 
-- [ ] **CA-05:** Ningún objeto en los ficheros JSON exportados contiene la clave `scraped_at`.
+- [ ] **CA-04b:** Los ficheros `seeds/game_data/building_catalog.json` y
+  `seeds/game_data/building_stats.json` existen y contienen 50 y 1003 objetos respectivamente.
+
+- [ ] **CA-05:** Ningún objeto en los ficheros JSON exportados (ninguno de los 5) contiene
+  la clave `scraped_at`.
 
 - [ ] **CA-06:** Las tablas `accounts` y `worlds` tienen 0 filas tras la carga del seed en
   una BD recién creada (verificable con consulta directa a la BD).
 
+- [ ] **CA-06b:** Con tropas ya presentes pero edificios vacíos (estado parcial), `load_if_empty`
+  carga solo los edificios sin tocar las tropas (gate por-tabla verificado en T-B2).
+
 ### De calidad
 
-- [ ] **CA-07:** `pytest tests/unit/test_seed_loader.py` pasa (T-01 a T-09).
+- [ ] **CA-07:** `pytest tests/unit/test_seed_loader.py` pasa (T-01 a T-09 + T-B1 a T-B4).
 
-- [ ] **CA-08:** `pytest tests/unit/test_export_game_data_seed.py` pasa (T-10 a T-14).
+- [ ] **CA-08:** `pytest tests/unit/test_export_game_data_seed.py` pasa (T-10 a T-14 + T-B5 a T-B8).
 
-- [ ] **CA-09:** `pytest tests/unit/test_game_data_sqlite_adapter.py` pasa incluyendo T-15
-  y T-16 nuevos.
+- [ ] **CA-09:** `pytest tests/unit/test_game_data_sqlite_adapter.py` pasa incluyendo T-15,
+  T-16 y los nuevos tests de count_rows.
 
 - [ ] **CA-10:** El conjunto completo de tests existente (`pytest tests/`) sigue pasando
   (sin regresiones).
@@ -733,4 +743,58 @@ pytest tests/ -q
 - T-09 verifica que `scraped_at` empiece por "2026" en lugar de comprobar el timestamp exacto, para no acoplar el test a la fecha de ejecución. La comprobación de que no empiece por "2020" (año del timestamp fosilizado del JSON) es suficiente para verificar EC-08.
 - `test_export_game_data_seed.py` importa `TABLES_CONFIG` del script y reusa `_run_export()` helper local (lógica equivalente a la función `export()` del script pero parametrizable por BD y directorio) en lugar de llamar al script como subproceso, para mantener el patrón `:memory:` del proyecto y no depender del fichero `travian_bot.db`.
 - En T-14 se simula el fallo de `write_text` para verificar que no quedan `.tmp`; como `write_text` lanza la excepción antes de escribir el fichero, el `.tmp` nunca se crea (el assert `tmp_files == []` siempre se cumple). El comportamiento real de "atomicidad" queda cubierto por el rename en `export()`.
+
+---
+
+## Registro de implementación — Extensión a edificios (2026-05-27)
+
+Decisión del usuario (2026-05-27): tras completar el scraper de kirilloid-edificios y
+verificar que `building_catalog` (50 filas) y `building_stats` (1003 filas) están pobladas
+en la BD real, se amplía el alcance del seed a estas dos tablas, aprovechando la
+forward-compatibility ya diseñada en el spec original (sección 4.6, EC-10, UPSERT_MAP comentado).
+
+**Ficheros modificados:**
+- `core/ports/game_data_port.py` — añadido `count_rows(table_name: str) -> int` abstracto
+  (aditivo; `count_troop_stats()` se mantiene intacto por retrocompatibilidad)
+- `adapters/db/game_data_sqlite_adapter.py` — implementado `count_rows()` con allowlist
+  `_ALLOWED_COUNT_TABLES` (seguridad: rechaza `accounts`/`worlds` con `ValueError`)
+- `adapters/db/seed_loader.py` — reescrito con gate por-tabla: itera `UPSERT_MAP`,
+  comprueba `count_rows(table)` para cada tabla; `building_catalog` y `building_stats`
+  activados en `UPSERT_MAP`; ya no depende solo de `count_troop_stats()` como gate global
+- `scripts/export_game_data_seed.py` — extendido `TABLES_CONFIG` con `building_catalog`
+  y `building_stats` (queries con columnas explícitas, ordenadas por PK)
+- `tests/unit/test_seed_loader.py` — añadidos T-B1 a T-B4 (edificios + estado parcial)
+- `tests/unit/test_export_game_data_seed.py` — añadidos T-B5 a T-B8 (export de edificios)
+- `tests/unit/test_game_data_sqlite_adapter.py` — añadidos tests de `count_rows()` para
+  todas las tablas permitidas + tests de rechazo de `accounts`/`worlds`
+
+**Ficheros nuevos (seeds):**
+- `seeds/game_data/building_catalog.json` — 50 filas exportadas de la BD real
+- `seeds/game_data/building_stats.json` — 1003 filas exportadas de la BD real
+
+**Regeneración del seed real:**
+- `icon_metadata.json` pasó de 93 → 140 filas (añade los 47 iconos de edificios que
+  faltaban del export anterior, corrido antes de que el scraper de edificios terminara)
+- Todos los conteos verificados: troop_stats=90, troop_upgrades=1780, icon_metadata=140,
+  building_catalog=50, building_stats=1003
+
+**Comando para ejecutar los tests:**
+```bash
+# Tests de seed y game data
+pytest tests/unit/test_seed_loader.py tests/unit/test_export_game_data_seed.py tests/unit/test_game_data_sqlite_adapter.py -v
+
+# Suite completa
+pytest tests/ -q
+```
+
+**Resultado de tests:** 773 passed, 23 skipped — EXIT 0 (sin regresiones; +16 tests nuevos).
+
+**Desviaciones respecto al diseño:**
+- El spec original usaba `count_troop_stats() > 0` como gate global. La extensión introdujo
+  `count_rows(table_name)` como nuevo método genérico y reescribió `load_if_empty()` con
+  gate por-tabla. Esta es la única desviación significativa respecto al diseño original; es
+  la corrección del bug "estado parcial" descrito en el encargo (usuario con tropas pero
+  sin edificios). `count_troop_stats()` se mantiene sin modificar (retrocompatibilidad).
+- `_ALLOWED_COUNT_TABLES` como frozenset (no set) para inmutabilidad: decisión de
+  implementación no especificada en el spec, adoptada como buena práctica de Python.
 

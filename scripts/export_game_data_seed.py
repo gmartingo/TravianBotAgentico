@@ -5,15 +5,22 @@ Uso:
     python scripts/export_game_data_seed.py
 
 Descripción:
-    Lee las tablas troop_stats, troop_upgrades e icon_metadata de travian_bot.db
-    y escribe seeds/game_data/{troop_stats,troop_upgrades,icon_metadata}.json.
+    Lee las tablas de datos de juego de travian_bot.db y escribe los ficheros
+    JSON en seeds/game_data/.
+
+    Tablas exportadas (2026-05-27, ampliado con edificios):
+      - troop_stats        → seeds/game_data/troop_stats.json
+      - troop_upgrades     → seeds/game_data/troop_upgrades.json
+      - icon_metadata      → seeds/game_data/icon_metadata.json
+      - building_catalog   → seeds/game_data/building_catalog.json
+      - building_stats     → seeds/game_data/building_stats.json
 
     Solo necesita ejecutarse cuando el desarrollador ha hecho un nuevo scraping y
     quiere versionar los datos actualizados en git. Los clones frescos leen estos
     ficheros al arrancar (via seed_loader.load_if_empty).
 
 Seguridad:
-    - Solo lee las tablas de datos de juego: troop_stats, troop_upgrades, icon_metadata.
+    - Solo lee las tablas de datos de juego (lista explícita en TABLES_CONFIG).
     - Las tablas accounts y worlds NUNCA se tocan ni se exportan.
     - Las queries SQL usan columnas explícitas (sin SELECT *).
     - scraped_at se omite del JSON; el loader lo rellena con datetime.now(UTC) al cargar.
@@ -95,6 +102,31 @@ TABLES_CONFIG: dict[str, dict] = {
         "columns": [
             "icon_id", "icon_type", "tribe", "ordinal", "stat_name",
             "file_path", "file_size_bytes", "width_px", "height_px",
+        ],
+    },
+    # --- Edificios — añadidos el 2026-05-27 tras completar el scraper kirilloid ---
+    "building_catalog": {
+        "query": (
+            "SELECT server_version, gid, alias, category, description, icon_id "
+            "FROM building_catalog "
+            "ORDER BY server_version, gid"
+        ),
+        "columns": [
+            "server_version", "gid", "alias", "category", "description", "icon_id",
+        ],
+    },
+    "building_stats": {
+        "query": (
+            "SELECT server_version, gid, level, "
+            "cost_wood, cost_clay, cost_iron, cost_crop, cost_sum, "
+            "upkeep, culture_points, build_time_s, effect_value, effect_label "
+            "FROM building_stats "
+            "ORDER BY server_version, gid, level"
+        ),
+        "columns": [
+            "server_version", "gid", "level",
+            "cost_wood", "cost_clay", "cost_iron", "cost_crop", "cost_sum",
+            "upkeep", "culture_points", "build_time_s", "effect_value", "effect_label",
         ],
     },
 }

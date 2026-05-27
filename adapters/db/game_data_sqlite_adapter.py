@@ -433,15 +433,45 @@ class GameDataSQLiteAdapter(GameDataPort):
         await self._conn.commit()
 
     # ------------------------------------------------------------------
-    # Gate de seed — método añadido para la feature seed-datos-juego-tropas
+    # Gate de seed — métodos añadidos para la feature seed-datos-juego-tropas
+    # (extendidos para edificios el 2026-05-27)
     # ------------------------------------------------------------------
+
+    #: Tablas cuyo conteo está permitido desde el exterior (seguridad: no contar
+    #: accounts, worlds ni tablas que no sean de datos de juego).
+    _ALLOWED_COUNT_TABLES = frozenset({
+        "troop_stats",
+        "troop_upgrades",
+        "icon_metadata",
+        "building_catalog",
+        "building_stats",
+    })
 
     async def count_troop_stats(self) -> int:
         """
         Devuelve el número de filas en troop_stats.
         0 indica que la tabla está vacía y el seed debe cargarse.
+        Mantenido por retrocompatibilidad; el gate actual usa count_rows().
         """
         async with self._conn.execute("SELECT COUNT(*) FROM troop_stats") as cursor:
+            row = await cursor.fetchone()
+        return row[0]
+
+    async def count_rows(self, table_name: str) -> int:
+        """
+        Devuelve el número de filas en la tabla indicada.
+
+        Solo acepta las tablas de datos de juego (_ALLOWED_COUNT_TABLES).
+        Lanza ValueError si table_name no está permitida (evita SQL injection
+        y acceso accidental a accounts/worlds).
+        """
+        if table_name not in self._ALLOWED_COUNT_TABLES:
+            raise ValueError(
+                f"count_rows: tabla '{table_name}' no permitida. "
+                f"Permitidas: {sorted(self._ALLOWED_COUNT_TABLES)}"
+            )
+        # Seguro: table_name está en un frozenset literal, no viene del usuario.
+        async with self._conn.execute(f"SELECT COUNT(*) FROM {table_name}") as cursor:
             row = await cursor.fetchone()
         return row[0]
 
