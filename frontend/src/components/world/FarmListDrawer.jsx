@@ -719,9 +719,9 @@ function SlotRow({ slot, isExpanded, onToggle, farmListId, worldId, onUpdated, i
                     key={ordinal}
                     src={url}
                     alt=""
-                    width={18}
-                    height={18}
-                    style={{ width: '18px', height: '18px', objectFit: 'contain', display: 'block' }}
+                    width={28}
+                    height={28}
+                    style={{ width: '28px', height: '28px', objectFit: 'contain', display: 'block' }}
                   />
                 )
               }
@@ -1602,7 +1602,7 @@ export function FarmListDrawer({
           position: 'fixed',
           top: 0, bottom: 0,
           insetInlineEnd: 0,
-          width: 'min(480px, 100vw)',
+          width: 'min(640px, 100vw)',
           background: 'var(--bg)',
           display: 'flex', flexDirection: 'column',
           boxShadow: 'var(--shadow-lg)',
