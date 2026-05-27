@@ -18,3 +18,4 @@
 - [troop-display-consolidation](troop-display-consolidation.md) — helper resolve_troop_display en core/use_cases/; use cases async; TroopNotFoundError(tribe, ordinal); edificios training icon_url forward-compatible
 - [session-registry-pattern](session-registry-pattern.md) — SessionRegistry singleton + patrón _StateOverride en tests de API; 9 fallos preexistentes en suite
 - [fernet-in-use-case-pattern](fernet-in-use-case-pattern.md) — descifrado en LoginUseCase (no en adaptador); _StateOverride necesita fernet=_TEST_FERNET en tests de POST; field(repr=False) en Account.password
+- [seed-loader-pattern](seed-loader-pattern.md) — export JSON + load_if_empty en lifespan; UPSERT_MAP extensible; count_troop_stats como gate; edificios: solo añadir ficheros+entradas en UPSERT_MAP

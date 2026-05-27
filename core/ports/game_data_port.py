@@ -184,3 +184,15 @@ class GameDataPort(ABC):
         Devuelve un dict {gid: meta_dict} con los metadatos de todos los edificios.
         Útil para poblar el endpoint GET /catalog/buildings sin N queries individuales.
         """
+
+    # ------------------------------------------------------------------
+    # Gate de seed — método añadido para la feature seed-datos-juego-tropas
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def count_troop_stats(self) -> int:
+        """
+        Devuelve el número de filas en troop_stats.
+        0 indica que la tabla está vacía y el seed debe cargarse.
+        Usado por seed_loader.load_if_empty() como gate de arranque.
+        """

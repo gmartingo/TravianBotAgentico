@@ -334,3 +334,33 @@ def test_get_icon_metadata_not_found():
         assert result is None
     finally:
         asyncio.run(conn.close())
+
+
+# ---------------------------------------------------------------------------
+# T-15 y T-16 — count_troop_stats (gate de seed)
+# ---------------------------------------------------------------------------
+
+
+def test_t15_count_troop_stats_empty_db():
+    """
+    T-15: BD recién creada sin datos → count_troop_stats() == 0.
+    """
+    adapter, conn = _make_adapter()
+    try:
+        count = asyncio.run(adapter.count_troop_stats())
+        assert count == 0, f"BD vacía debería devolver 0; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())
+
+
+def test_t16_count_troop_stats_after_upsert():
+    """
+    T-16: tras insertar 1 fila con upsert_troop_stats → count_troop_stats() == 1.
+    """
+    adapter, conn = _make_adapter()
+    try:
+        asyncio.run(adapter.upsert_troop_stats(_stats_romans_1()))
+        count = asyncio.run(adapter.count_troop_stats())
+        assert count == 1, f"Después de 1 upsert debería devolver 1; devolvió {count}"
+    finally:
+        asyncio.run(conn.close())

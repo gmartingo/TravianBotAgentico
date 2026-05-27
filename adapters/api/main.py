@@ -32,6 +32,7 @@ from adapters.browser.session_registry import SessionRegistry
 from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
 from adapters.db.database import get_connection
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
+from adapters.db.seed_loader import load_if_empty
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
 from core.crypto import load_fernet_key
 from core.exceptions import TravianBotError
@@ -143,6 +144,13 @@ async def lifespan(application: FastAPI):
     # GameDataSQLiteAdapter — stats de tropas e iconos
     game_data_adapter = GameDataSQLiteAdapter(conn)
     await game_data_adapter.ensure_tables()
+    # Seed: poblar tablas de juego desde ficheros JSON versionados si están vacías.
+    # Solo carga si troop_stats == 0 (clon fresco o BD sin scraper ejecutado).
+    # En re-arranques con datos ya presentes, este call es un COUNT query y retorna en ~0ms.
+    await load_if_empty(
+        game_data_adapter,
+        Path(__file__).parent.parent.parent / "seeds" / "game_data",
+    )
     application.state.game_data_port = game_data_adapter
 
     # AccountSQLiteAdapter — cuentas, mundos y aldeas

@@ -432,6 +432,19 @@ class GameDataSQLiteAdapter(GameDataPort):
         )
         await self._conn.commit()
 
+    # ------------------------------------------------------------------
+    # Gate de seed — método añadido para la feature seed-datos-juego-tropas
+    # ------------------------------------------------------------------
+
+    async def count_troop_stats(self) -> int:
+        """
+        Devuelve el número de filas en troop_stats.
+        0 indica que la tabla está vacía y el seed debe cargarse.
+        """
+        async with self._conn.execute("SELECT COUNT(*) FROM troop_stats") as cursor:
+            row = await cursor.fetchone()
+        return row[0]
+
     async def upsert_building_catalog(self, catalog: dict) -> None:
         """Inserta o actualiza un registro de building_catalog (UPSERT idempotente)."""
         now = datetime.now(timezone.utc).isoformat()
