@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo FR — Français
  * [AUTO] Traducción automática — requiere revisión nativa.
  * Claves no presentes aquí hacen fallback al catálogo 'es'.
@@ -81,6 +81,7 @@ const fr = {
   'page.account.col.session':        'Session',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Supprimer le monde',
+  'page.account.enterWorld':         'Entrer dans le monde',
   'page.account.notFound.title':     'Compte introuvable',
   'page.account.notFound.desc':      "Le compte recherché n'existe pas ou a été supprimé.",
   'page.account.notFound.back':      'Retour aux comptes',
@@ -178,18 +179,19 @@ const fr = {
   'world.session.error.toast':    'Impossible de se connecter à {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
+  'tribe.romans':    'Romains',
   'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
+  'tribe.gauls':     'Gaulois',
+  'tribe.egyptians': 'Égyptiens',
   'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
+  'tribe.spartans':  'Spartiates',
   'tribe.vikings':   'Vikings',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Erreur de connexion. Veuillez réessayer.',
   'error.retry':      'Réessayer',
   'error.loadFailed': "Les données n'ont pas pu être chargées.",
+  'error.loadDetail':  'Erreur lors du chargement des détails',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -198,6 +200,95 @@ const fr = {
   'placeholder.accounts.list':   'Liste des comptes — bientôt',
   'placeholder.account.detail':  'Détails du compte — bientôt',
   'placeholder.world.space':     'Espace monde — bientôt',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Voir le rapport',
+  'slot.error.actionFailed':    'Erreur lors de la modification du slot.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Tableau de bord complet →',
+  'scheduler.subpanel.kpi.nextSend':           'Prochain envoi',
+  'scheduler.subpanel.kpi.sendsToday':         "Envois aujourd'hui",
+  'scheduler.subpanel.kpi.avgBounty':          'Res./envoi',
+  'scheduler.subpanel.kpi.in':                 'dans {t}',
+  'scheduler.subpanel.feed.title':             'Activité récente',
+  'scheduler.subpanel.feed.updatedAgo':        'Mis à jour il y a {t}',
+  'scheduler.subpanel.feed.viewAll':           "Voir tout l'historique →",
+  'scheduler.subpanel.feed.empty':             'Aucun envoi récent',
+  'scheduler.subpanel.alerts.title':           'Alertes',
+  'scheduler.subpanel.alerts.unread':          '{n} non lue(s)',
+  'scheduler.subpanel.alerts.empty':           'Aucune alerte récente',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pause',
+  'scheduler.subpanel.toggle.activate':        '▶ Activer',
+  'scheduler.subpanel.toggle.soon':            'Bientôt',
+  'scheduler.subpanel.probe.confirm.activate': 'Activer la sonde sur ce village ?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Annuler la sonde sur ce village ?',
+  'scheduler.subpanel.probe.btn.confirm':      'Confirmer',
+  'scheduler.subpanel.probe.btn.dismiss':      'Ignorer',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agents',
+  'schedulerDash.breadcrumb.back':     '← Retour',
+  'schedulerDash.title':               'Tableau de bord {name}',
+  'schedulerDash.kpi.nextSend':        'Prochain envoi',
+  'schedulerDash.kpi.sendsToday':      "Envois aujourd'hui",
+  'schedulerDash.kpi.avgBounty':       'Res./envoi',
+  'schedulerDash.table.title':         'Résumé par liste',
+  'schedulerDash.table.col.list':      'Liste',
+  'schedulerDash.table.col.status':    'Dernier statut',
+  'schedulerDash.table.col.sent':      'Fermes envoyées',
+  'schedulerDash.table.col.active':    'Fermes actives',
+  'schedulerDash.table.col.avgBounty': 'Butin moy.',
+  'schedulerDash.table.col.lastSend':  'Dernier envoi',
+  'schedulerDash.table.empty':         'Aucune liste assignée',
+  'schedulerDash.history.title':       'Historique des envois',
+  'schedulerDash.alerts.title':        'Alertes',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Pertes détectées',
+  'alertEvent.PROBE_SENT':        '{list} · Sonde envoyée à {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Réactivé',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonde annulée',
+  'alertEvent.probe.activate':    '⚡ Activer la sonde',
+  'alertEvent.probe.cancel':      '✕ Annuler la sonde',
+  'alertEvent.probe.viewTravian': 'Voir dans Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Dernier envoi',
+  'feedback.status.success':   '✓ Terminé',
+  'feedback.status.partial':   '⚠ Partiel',
+  'feedback.status.error':     '✗ Erreur',
+  'feedback.status.unknown':   '? Inconnu',
+  'feedback.slotsRaiding':     '{n} slots en pillage',
+  'feedback.noDeactivated':    'Aucune ferme désactivée',
+  'feedback.deactivatedLabel': 'Fermes désactivées :',
+  'feedback.deactivatedMore':  'et {n} de plus',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistiques',
+  'stats.section.performance':  'Performance générale',
+  'stats.totalBounty':          'Butin total accumulé',
+  'stats.avgPerSend':           'Moyenne par envoi',
+  'stats.sendsLast7d':          'Envois (7 jours)',
+  'stats.bountyUnit':           'ressources',
+  'stats.section.distribution': 'Répartition des slots',
+  'stats.dist.active':          'Actifs',
+  'stats.dist.probe':           'Sonde pend.',
+  'stats.dist.botDisabled':     'Désactivés par le bot',
+  'stats.dist.manualDisabled':  'Désactivés manuellement',
+  'stats.section.topSlots':     'Top slots par butin (moy./envoi)',
+  'stats.topSlots.distance':    '{d} cases',
+  'stats.topSlots.avgBounty':   '{n} res/envoi',
+  'stats.empty.title':          'Aucune donnée de performance',
+  'stats.empty.subtitle':       'Les données apparaîtront après le premier envoi.',
 }
 
 export default fr

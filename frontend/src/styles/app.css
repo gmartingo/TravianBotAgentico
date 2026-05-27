@@ -132,3 +132,9 @@ a:hover {
 .skeleton-pulse {
   animation: skeleton-pulse 1.2s ease-in-out infinite;
 }
+
+/* Farm list row highlight (navegación desde scheduler) */
+tr[data-highlight="1"] td {
+  background: var(--accent-subtle) !important;
+  transition: background 2s ease-out;
+}

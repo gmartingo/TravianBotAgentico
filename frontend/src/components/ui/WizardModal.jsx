@@ -636,7 +636,7 @@ export function WizardModal({ triggerRef }) {
                   <p
                     aria-live="polite"
                     className={[
-                      'text-[12px] font-mono -mt-[10px]',
+                      'text-[12px] font-mono',
                       serverPreview
                         ? 'text-[var(--accent-text)]'
                         : 'text-[var(--text-tertiary)]',

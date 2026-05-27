@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo LV — Latviešu
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const lv = {
   'page.account.col.session':        'Sesija',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Dzēst pasauli',
+  'page.account.enterWorld':         'Ienākt pasaulē',
   'page.account.notFound.title':     'Konts nav atrasts',
   'page.account.notFound.desc':      'Meklētais konts neeksistē vai ir dzēsts.',
   'page.account.notFound.back':      'Atpakaļ uz kontiem',
@@ -177,18 +178,19 @@ const lv = {
   'world.session.error.toast':    'Neizdevās savienoties ar {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romieši',
+  'tribe.teutons':   'Teutoni',
+  'tribe.gauls':     'Galli',
+  'tribe.egyptians': 'Ēģiptieši',
+  'tribe.huns':      'Huņņi',
+  'tribe.spartans':  'Spartieši',
+  'tribe.vikings':   'Vikingi',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Savienojuma kļūda. Mēģiniet vēlreiz.',
   'error.retry':      'Mēģināt vēlreiz',
   'error.loadFailed': 'Neizdevās ielādēt datus.',
+  'error.loadDetail':  'Kļūda ielādējot datus',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const lv = {
   'placeholder.accounts.list':   'Kontu saraksts — drīzumā',
   'placeholder.account.detail':  'Konta informācija — drīzumā',
   'placeholder.world.space':     'Pasaules telpa — drīzumā',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Skatīt ziņojumu',
+  'slot.error.actionFailed':    'Kļūda mainot slotu.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Pilns panelis →',
+  'scheduler.subpanel.kpi.nextSend':           'Nākamā nosūtīšana',
+  'scheduler.subpanel.kpi.sendsToday':         'Nosūtīšanas šodien',
+  'scheduler.subpanel.kpi.avgBounty':          'Resursi/nosūt.',
+  'scheduler.subpanel.kpi.in':                 'pēc {t}',
+  'scheduler.subpanel.feed.title':             'Pēdējā aktivitāte',
+  'scheduler.subpanel.feed.updatedAgo':        'Atjaunināts pirms {t}',
+  'scheduler.subpanel.feed.viewAll':           'Pilna vēsture →',
+  'scheduler.subpanel.feed.empty':             'Nav nesenu nosūtīšanu',
+  'scheduler.subpanel.alerts.title':           'Brīdinājumi',
+  'scheduler.subpanel.alerts.unread':          '{n} nelasīti',
+  'scheduler.subpanel.alerts.empty':           'Nav nesenu brīdinājumu',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauze',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktivizēt',
+  'scheduler.subpanel.toggle.soon':            'Drīzumā',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivizēt zondi šajā ciemā?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Atcelt zondi šajā ciemā?',
+  'scheduler.subpanel.probe.btn.confirm':      'Apstiprināt',
+  'scheduler.subpanel.probe.btn.dismiss':      'Noraidīt',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Aģenti',
+  'schedulerDash.breadcrumb.back':     '← Atpakaļ',
+  'schedulerDash.title':               '{name} panelis',
+  'schedulerDash.kpi.nextSend':        'Nākamā nosūtīšana',
+  'schedulerDash.kpi.sendsToday':      'Nosūtīšanas šodien',
+  'schedulerDash.kpi.avgBounty':       'Resursi/nosūt.',
+  'schedulerDash.table.title':         'Kopsavilkums pēc saraksta',
+  'schedulerDash.table.col.list':      'Saraksts',
+  'schedulerDash.table.col.status':    'Pēd. statuss',
+  'schedulerDash.table.col.sent':      'Nosūtītās saimniecības',
+  'schedulerDash.table.col.active':    'Aktīvās saimniecības',
+  'schedulerDash.table.col.avgBounty': 'Vid. laupījums',
+  'schedulerDash.table.col.lastSend':  'Pēd. nosūtīšana',
+  'schedulerDash.table.empty':         'Nav piešķirtu sarakstu',
+  'schedulerDash.history.title':       'Nosūtīšanas vēsture',
+  'schedulerDash.alerts.title':        'Brīdinājumi',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Atklāti zaudējumi',
+  'alertEvent.PROBE_SENT':        '{list} · Zonde nosūtīta uz {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Reaktivizēts',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Zonde atcelta',
+  'alertEvent.probe.activate':    '⚡ Aktivizēt zondi',
+  'alertEvent.probe.cancel':      '✕ Atcelt zondi',
+  'alertEvent.probe.viewTravian': 'Skatīt Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Pēdējā nosūtīšana',
+  'feedback.status.success':   '✓ Pabeigts',
+  'feedback.status.partial':   '⚠ Daļējs',
+  'feedback.status.error':     '✗ Kļūda',
+  'feedback.status.unknown':   '? Nezināms',
+  'feedback.slotsRaiding':     '{n} sloti laupa',
+  'feedback.noDeactivated':    'Nav deaktivizētu saimniecību',
+  'feedback.deactivatedLabel': 'Deaktivizētās saimniecības:',
+  'feedback.deactivatedMore':  'un vēl {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistika',
+  'stats.section.performance':  'Vispārīga efektivitāte',
+  'stats.totalBounty':          'Kopējais uzkrātais laupījums',
+  'stats.avgPerSend':           'Vidēji uz nosūtīšanu',
+  'stats.sendsLast7d':          'Nosūtīšanas (7 dienas)',
+  'stats.bountyUnit':           'resursu',
+  'stats.section.distribution': 'Slotu sadalījums',
+  'stats.dist.active':          'Aktīvi',
+  'stats.dist.probe':           'Zonde gaida',
+  'stats.dist.botDisabled':     'Izslēgts ar botu',
+  'stats.dist.manualDisabled':  'Izslēgts manuāli',
+  'stats.section.topSlots':     'Labākie sloti pēc laupījuma (vid./nosūt.)',
+  'stats.topSlots.distance':    '{d} šūnas',
+  'stats.topSlots.avgBounty':   '{n} res/nosūt.',
+  'stats.empty.title':          'Nav efektivitātes datu',
+  'stats.empty.subtitle':       'Dati parādīsies pēc pirmās nosūtīšanas.',
 }
 
 export default lv

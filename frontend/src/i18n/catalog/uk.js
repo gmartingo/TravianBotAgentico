@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo UK — Українська
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const uk = {
   'page.account.col.session':        'Сесія',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Видалити світ',
+  'page.account.enterWorld':         'Увійти у світ',
   'page.account.notFound.title':     'Акаунт не знайдено',
   'page.account.notFound.desc':      'Акаунт, який ви шукаєте, не існує або був видалений.',
   'page.account.notFound.back':      'Повернутися до акаунтів',
@@ -177,18 +178,19 @@ const uk = {
   'world.session.error.toast':    'Не вдалося підключитися до {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Римляни',
+  'tribe.teutons':   'Тевтони',
+  'tribe.gauls':     'Гали',
+  'tribe.egyptians': 'Єгиптяни',
+  'tribe.huns':      'Гуни',
+  'tribe.spartans':  'Спартанці',
+  'tribe.vikings':   'Вікінги',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Помилка підключення. Спробуйте ще раз.',
   'error.retry':      'Повторити',
   'error.loadFailed': 'Не вдалося завантажити дані.',
+  'error.loadDetail':  'Помилка завантаження деталей',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const uk = {
   'placeholder.accounts.list':   'Список акаунтів — незабаром',
   'placeholder.account.detail':  'Деталі акаунту — незабаром',
   'placeholder.world.space':     'Простір світу — незабаром',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Переглянути звіт',
+  'slot.error.actionFailed':    'Помилка зміни слота.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Повна панель →',
+  'scheduler.subpanel.kpi.nextSend':           'Наступне надсилання',
+  'scheduler.subpanel.kpi.sendsToday':         'Надсилань сьогодні',
+  'scheduler.subpanel.kpi.avgBounty':          'Рес./надс.',
+  'scheduler.subpanel.kpi.in':                 'через {t}',
+  'scheduler.subpanel.feed.title':             'Остання активність',
+  'scheduler.subpanel.feed.updatedAgo':        'Оновлено {t} тому',
+  'scheduler.subpanel.feed.viewAll':           'Вся історія →',
+  'scheduler.subpanel.feed.empty':             'Немає нещодавніх надсилань',
+  'scheduler.subpanel.alerts.title':           'Сповіщення',
+  'scheduler.subpanel.alerts.unread':          '{n} непрочитаних',
+  'scheduler.subpanel.alerts.empty':           'Немає нещодавніх сповіщень',
+  'scheduler.subpanel.toggle.pause':           '⏸ Пауза',
+  'scheduler.subpanel.toggle.activate':        '▶ Активувати',
+  'scheduler.subpanel.toggle.soon':            'Незабаром',
+  'scheduler.subpanel.probe.confirm.activate': 'Активувати зонд у цьому селі?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Скасувати зонд у цьому селі?',
+  'scheduler.subpanel.probe.btn.confirm':      'Підтвердити',
+  'scheduler.subpanel.probe.btn.dismiss':      'Відхилити',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Агенти',
+  'schedulerDash.breadcrumb.back':     '← Назад',
+  'schedulerDash.title':               'Панель {name}',
+  'schedulerDash.kpi.nextSend':        'Наступне надсилання',
+  'schedulerDash.kpi.sendsToday':      'Надсилань сьогодні',
+  'schedulerDash.kpi.avgBounty':       'Рес./надс.',
+  'schedulerDash.table.title':         'Зведення за списками',
+  'schedulerDash.table.col.list':      'Список',
+  'schedulerDash.table.col.status':    'Остан. статус',
+  'schedulerDash.table.col.sent':      'Надіслано ферм',
+  'schedulerDash.table.col.active':    'Активних ферм',
+  'schedulerDash.table.col.avgBounty': 'Сер. здобич',
+  'schedulerDash.table.col.lastSend':  'Остан. надсилання',
+  'schedulerDash.table.empty':         'Немає призначених списків',
+  'schedulerDash.history.title':       'Історія надсилань',
+  'schedulerDash.alerts.title':        'Сповіщення',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Виявлено втрати',
+  'alertEvent.PROBE_SENT':        '{list} · Зонд надіслано до {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Реактивовано',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Зонд скасовано',
+  'alertEvent.probe.activate':    '⚡ Активувати зонд',
+  'alertEvent.probe.cancel':      '✕ Скасувати зонд',
+  'alertEvent.probe.viewTravian': 'Переглянути в Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Останнє надсилання',
+  'feedback.status.success':   '✓ Завершено',
+  'feedback.status.partial':   '⚠ Частково',
+  'feedback.status.error':     '✗ Помилка',
+  'feedback.status.unknown':   '? Невідомо',
+  'feedback.slotsRaiding':     '{n} слотів у рейді',
+  'feedback.noDeactivated':    'Немає деактивованих ферм',
+  'feedback.deactivatedLabel': 'Деактивовані ферми:',
+  'feedback.deactivatedMore':  'і ще {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Статистика',
+  'stats.section.performance':  'Загальна ефективність',
+  'stats.totalBounty':          'Загальна здобич',
+  'stats.avgPerSend':           'У середньому за надсилання',
+  'stats.sendsLast7d':          'Надсилань (7 днів)',
+  'stats.bountyUnit':           'ресурсів',
+  'stats.section.distribution': 'Розподіл слотів',
+  'stats.dist.active':          'Активні',
+  'stats.dist.probe':           'Зонд очік.',
+  'stats.dist.botDisabled':     'Вимкнено ботом',
+  'stats.dist.manualDisabled':  'Вимкнено вручну',
+  'stats.section.topSlots':     'Топ слотів за здобиччю (сер./надс.)',
+  'stats.topSlots.distance':    '{d} клітин',
+  'stats.topSlots.avgBounty':   '{n} рес/надс.',
+  'stats.empty.title':          'Немає даних про ефективність',
+  'stats.empty.subtitle':       "Дані з'являться після першого надсилання.",
 }
 
 export default uk

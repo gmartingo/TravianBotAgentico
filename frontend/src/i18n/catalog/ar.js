@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo AR — العربية (RTL)
  * [AUTO] Traducción automática — requiere revisión nativa.
  * RTL: el layout se espeja cuando este idioma está activo.
@@ -81,6 +81,7 @@ const ar = {
   'page.account.col.session':        'الجلسة',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'حذف العالم',
+  'page.account.enterWorld':         'الدخول إلى العالم',
   'page.account.notFound.title':     'الحساب غير موجود',
   'page.account.notFound.desc':      'الحساب الذي تبحث عنه غير موجود أو تم حذفه.',
   'page.account.notFound.back':      'العودة إلى الحسابات',
@@ -178,18 +179,19 @@ const ar = {
   'world.session.error.toast':    'تعذّر الاتصال في {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'الرومان',
+  'tribe.teutons':   'التيوتون',
+  'tribe.gauls':     'الغاليون',
+  'tribe.egyptians': 'المصريون',
+  'tribe.huns':      'الهون',
+  'tribe.spartans':  'الإسبرطيون',
+  'tribe.vikings':   'الفايكنج',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'خطأ في الاتصال. حاول مرة أخرى.',
   'error.retry':      'إعادة المحاولة',
   'error.loadFailed': 'تعذّر تحميل البيانات.',
+  'error.loadDetail':  'خطأ في تحميل التفاصيل',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -198,6 +200,95 @@ const ar = {
   'placeholder.accounts.list':   'قائمة الحسابات — قريباً',
   'placeholder.account.detail':  'تفاصيل الحساب — قريباً',
   'placeholder.world.space':     'مساحة العالم — قريباً',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'عرض التقرير',
+  'slot.error.actionFailed':    'خطأ في تعديل الخانة.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'لوحة التحكم الكاملة →',
+  'scheduler.subpanel.kpi.nextSend':           'الإرسال القادم',
+  'scheduler.subpanel.kpi.sendsToday':         'إرسالات اليوم',
+  'scheduler.subpanel.kpi.avgBounty':          'موارد/إرسال',
+  'scheduler.subpanel.kpi.in':                 'خلال {t}',
+  'scheduler.subpanel.feed.title':             'آخر نشاط',
+  'scheduler.subpanel.feed.updatedAgo':        'تم التحديث قبل {t}',
+  'scheduler.subpanel.feed.viewAll':           'السجل الكامل →',
+  'scheduler.subpanel.feed.empty':             'لا توجد إرسالات حديثة',
+  'scheduler.subpanel.alerts.title':           'تنبيهات',
+  'scheduler.subpanel.alerts.unread':          '{n} غير مقروء',
+  'scheduler.subpanel.alerts.empty':           'لا توجد تنبيهات حديثة',
+  'scheduler.subpanel.toggle.pause':           '⏸ إيقاف مؤقت',
+  'scheduler.subpanel.toggle.activate':        '▶ تنشيط',
+  'scheduler.subpanel.toggle.soon':            'قريباً',
+  'scheduler.subpanel.probe.confirm.activate': 'هل تفعّل المسح على هذه القرية؟',
+  'scheduler.subpanel.probe.confirm.cancel':   'هل تلغي المسح على هذه القرية؟',
+  'scheduler.subpanel.probe.btn.confirm':      'تأكيد',
+  'scheduler.subpanel.probe.btn.dismiss':      'رفض',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'الوكلاء',
+  'schedulerDash.breadcrumb.back':     'رجوع ←',
+  'schedulerDash.title':               'لوحة {name}',
+  'schedulerDash.kpi.nextSend':        'الإرسال القادم',
+  'schedulerDash.kpi.sendsToday':      'إرسالات اليوم',
+  'schedulerDash.kpi.avgBounty':       'موارد/إرسال',
+  'schedulerDash.table.title':         'ملخص حسب القائمة',
+  'schedulerDash.table.col.list':      'القائمة',
+  'schedulerDash.table.col.status':    'آخر حالة',
+  'schedulerDash.table.col.sent':      'المزارع المُرسَلة',
+  'schedulerDash.table.col.active':    'المزارع النشطة',
+  'schedulerDash.table.col.avgBounty': 'متوسط الغنيمة',
+  'schedulerDash.table.col.lastSend':  'آخر إرسال',
+  'schedulerDash.table.empty':         'لا توجد قوائم مُعيَّنة',
+  'schedulerDash.history.title':       'سجل الإرسالات',
+  'schedulerDash.alerts.title':        'تنبيهات',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · خسائر مكتشفة',
+  'alertEvent.PROBE_SENT':        '{list} · أُرسل مسح إلى {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · أُعيد تنشيطه',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · المسح مُلغى',
+  'alertEvent.probe.activate':    '⚡ تفعيل المسح',
+  'alertEvent.probe.cancel':      '✕ إلغاء المسح',
+  'alertEvent.probe.viewTravian': 'عرض في Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'آخر إرسال',
+  'feedback.status.success':   '✓ مكتمل',
+  'feedback.status.partial':   '⚠ جزئي',
+  'feedback.status.error':     '✗ خطأ',
+  'feedback.status.unknown':   '? غير معروف',
+  'feedback.slotsRaiding':     '{n} خانات في الغارة',
+  'feedback.noDeactivated':    'لا توجد مزارع معطّلة',
+  'feedback.deactivatedLabel': 'المزارع المعطّلة:',
+  'feedback.deactivatedMore':  'و{n} أخرى',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'الإحصائيات',
+  'stats.section.performance':  'الأداء العام',
+  'stats.totalBounty':          'إجمالي الغنيمة المتراكمة',
+  'stats.avgPerSend':           'المتوسط لكل إرسال',
+  'stats.sendsLast7d':          'الإرسالات (7 أيام)',
+  'stats.bountyUnit':           'موارد',
+  'stats.section.distribution': 'توزيع الخانات',
+  'stats.dist.active':          'نشطة',
+  'stats.dist.probe':           'مسح قيد الانتظار',
+  'stats.dist.botDisabled':     'مُعطَّل من البوت',
+  'stats.dist.manualDisabled':  'مُعطَّل يدوياً',
+  'stats.section.topSlots':     'أفضل الخانات حسب الغنيمة (متوسط/إرسال)',
+  'stats.topSlots.distance':    '{d} خلية',
+  'stats.topSlots.avgBounty':   '{n} مورد/إرسال',
+  'stats.empty.title':          'لا توجد بيانات أداء',
+  'stats.empty.subtitle':       'ستظهر البيانات بعد أول إرسال.',
 }
 
 export default ar

@@ -10,7 +10,7 @@
  *
  * Convención de tamaños: igual que el mockup aprobado (cuenta-detalle.playground.html).
  */
-import { useEffect } from 'react'
+import { useEffect, Component } from 'react'
 
 // ─── parseServerUrl ──────────────────────────────────────────────────────────
 // https://ts1.x1.international.travian.com/ → "ts1 · x1 · international"
@@ -152,4 +152,69 @@ export function showToast(msg) {
     el.style.opacity = '0'
     el.style.transform = 'translateY(8px)'
   }, 3000)
+}
+
+// ─── ErrorBoundary ───────────────────────────────────────────────────────────
+// Evita pantalla blanca cuando un componente hijo lanza durante el render.
+// Uso: <ErrorBoundary onReset={fn}><ComponenteProblematico /></ErrorBoundary>
+export class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary] Error en render:', error, info?.componentStack)
+  }
+
+  reset() {
+    this.setState({ error: null })
+    this.props.onReset?.()
+  }
+
+  render() {
+    if (this.state.error) {
+      const { title = 'Error al cargar el detalle', closeLabel = 'Cerrar' } = this.props
+      return (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 310,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,.4)',
+        }}>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: '28px 32px',
+            maxWidth: '400px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>
+              {title}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '20px', fontFamily: 'var(--font-mono)' }}>
+              {String(this.state.error?.message ?? this.state.error)}
+            </div>
+            <button
+              type="button"
+              onClick={() => this.reset()}
+              style={{
+                height: '32px', padding: '0 16px',
+                background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)',
+                border: 'none', borderRadius: 'var(--radius-sm)',
+                fontSize: '13px', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {closeLabel}
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }

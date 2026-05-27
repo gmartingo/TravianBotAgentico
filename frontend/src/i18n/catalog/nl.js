@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo NL — Nederlands
  * [AUTO] Traducción automática — requiere revisión nativa.
  * Claves no presentes aquí hacen fallback al catálogo 'es'.
@@ -81,6 +81,7 @@ const nl = {
   'page.account.col.session':        'Sessie',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Wereld verwijderen',
+  'page.account.enterWorld':         'Wereld betreden',
   'page.account.notFound.title':     'Account niet gevonden',
   'page.account.notFound.desc':      'Het gezochte account bestaat niet of is verwijderd.',
   'page.account.notFound.back':      'Terug naar accounts',
@@ -178,18 +179,19 @@ const nl = {
   'world.session.error.toast':    'Kon geen verbinding maken met {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romeinen',
+  'tribe.teutons':   'Teutonen',
+  'tribe.gauls':     'Galliërs',
+  'tribe.egyptians': 'Egyptenaren',
+  'tribe.huns':      'Hunnen',
+  'tribe.spartans':  'Spartanen',
+  'tribe.vikings':   'Vikingen',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Verbindingsfout. Probeer het opnieuw.',
   'error.retry':      'Opnieuw proberen',
   'error.loadFailed': 'Gegevens konden niet worden geladen.',
+  'error.loadDetail':  'Fout bij het laden van details',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -198,6 +200,95 @@ const nl = {
   'placeholder.accounts.list':   'Accountlijst — binnenkort',
   'placeholder.account.detail':  'Accountdetails — binnenkort',
   'placeholder.world.space':     'Wereldruimte — binnenkort',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Rapport bekijken',
+  'slot.error.actionFailed':    'Fout bij wijzigen van slot.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Volledig dashboard →',
+  'scheduler.subpanel.kpi.nextSend':           'Volgende verzending',
+  'scheduler.subpanel.kpi.sendsToday':         'Verzendingen vandaag',
+  'scheduler.subpanel.kpi.avgBounty':          'Res./verzend.',
+  'scheduler.subpanel.kpi.in':                 'over {t}',
+  'scheduler.subpanel.feed.title':             'Recente activiteit',
+  'scheduler.subpanel.feed.updatedAgo':        'Bijgewerkt {t} geleden',
+  'scheduler.subpanel.feed.viewAll':           'Volledige geschiedenis →',
+  'scheduler.subpanel.feed.empty':             'Geen recente verzendingen',
+  'scheduler.subpanel.alerts.title':           'Waarschuwingen',
+  'scheduler.subpanel.alerts.unread':          '{n} ongelezen',
+  'scheduler.subpanel.alerts.empty':           'Geen recente waarschuwingen',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauze',
+  'scheduler.subpanel.toggle.activate':        '▶ Activeren',
+  'scheduler.subpanel.toggle.soon':            'Binnenkort',
+  'scheduler.subpanel.probe.confirm.activate': 'Sonde activeren in dit dorp?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Sonde annuleren in dit dorp?',
+  'scheduler.subpanel.probe.btn.confirm':      'Bevestigen',
+  'scheduler.subpanel.probe.btn.dismiss':      'Afwijzen',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenten',
+  'schedulerDash.breadcrumb.back':     '← Terug',
+  'schedulerDash.title':               'Dashboard {name}',
+  'schedulerDash.kpi.nextSend':        'Volgende verzending',
+  'schedulerDash.kpi.sendsToday':      'Verzendingen vandaag',
+  'schedulerDash.kpi.avgBounty':       'Res./verzend.',
+  'schedulerDash.table.title':         'Overzicht per lijst',
+  'schedulerDash.table.col.list':      'Lijst',
+  'schedulerDash.table.col.status':    'Laatste status',
+  'schedulerDash.table.col.sent':      'Verzonden boerderijen',
+  'schedulerDash.table.col.active':    'Actieve boerderijen',
+  'schedulerDash.table.col.avgBounty': 'Gem. buit',
+  'schedulerDash.table.col.lastSend':  'Laatste verzending',
+  'schedulerDash.table.empty':         'Geen toegewezen lijsten',
+  'schedulerDash.history.title':       'Verzendgeschiedenis',
+  'schedulerDash.alerts.title':        'Waarschuwingen',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Verliezen gedetecteerd',
+  'alertEvent.PROBE_SENT':        '{list} · Sonde gestuurd naar {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Gereactiveerd',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonde geannuleerd',
+  'alertEvent.probe.activate':    '⚡ Sonde activeren',
+  'alertEvent.probe.cancel':      '✕ Sonde annuleren',
+  'alertEvent.probe.viewTravian': 'Bekijken in Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Laatste verzending',
+  'feedback.status.success':   '✓ Voltooid',
+  'feedback.status.partial':   '⚠ Gedeeltelijk',
+  'feedback.status.error':     '✗ Fout',
+  'feedback.status.unknown':   '? Onbekend',
+  'feedback.slotsRaiding':     '{n} slots plunderen',
+  'feedback.noDeactivated':    'Geen gedeactiveerde boerderijen',
+  'feedback.deactivatedLabel': 'Gedeactiveerde boerderijen:',
+  'feedback.deactivatedMore':  'en nog {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistieken',
+  'stats.section.performance':  'Algemene prestaties',
+  'stats.totalBounty':          'Totaal gecumuleerde buit',
+  'stats.avgPerSend':           'Gemiddelde per verzending',
+  'stats.sendsLast7d':          'Verzendingen (7 dagen)',
+  'stats.bountyUnit':           'resources',
+  'stats.section.distribution': 'Slotverdeling',
+  'stats.dist.active':          'Actief',
+  'stats.dist.probe':           'Sonde wacht',
+  'stats.dist.botDisabled':     'Uitgeschakeld door bot',
+  'stats.dist.manualDisabled':  'Handmatig uitgeschakeld',
+  'stats.section.topSlots':     'Top slots op buit (gem./verzending)',
+  'stats.topSlots.distance':    '{d} vakjes',
+  'stats.topSlots.avgBounty':   '{n} res/verzend.',
+  'stats.empty.title':          'Geen prestatiegegevens',
+  'stats.empty.subtitle':       'Gegevens verschijnen na de eerste verzending.',
 }
 
 export default nl

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo PL — Polski
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const pl = {
   'page.account.col.session':        'Sesja',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Usuń świat',
+  'page.account.enterWorld':         'Wejdź do świata',
   'page.account.notFound.title':     'Nie znaleziono konta',
   'page.account.notFound.desc':      'Szukane konto nie istnieje lub zostało usunięte.',
   'page.account.notFound.back':      'Wróć do kont',
@@ -177,18 +178,19 @@ const pl = {
   'world.session.error.toast':    'Nie można połączyć z {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Rzymianie',
+  'tribe.teutons':   'Teutoni',
+  'tribe.gauls':     'Galowie',
+  'tribe.egyptians': 'Egipcjanie',
+  'tribe.huns':      'Hunowie',
+  'tribe.spartans':  'Spartanie',
+  'tribe.vikings':   'Wikingowie',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Błąd połączenia. Spróbuj ponownie.',
   'error.retry':      'Ponów',
   'error.loadFailed': 'Nie udało się załadować danych.',
+  'error.loadDetail':  'Błąd ładowania szczegółów',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const pl = {
   'placeholder.accounts.list':   'Lista kont — wkrótce',
   'placeholder.account.detail':  'Szczegóły konta — wkrótce',
   'placeholder.world.space':     'Przestrzeń świata — wkrótce',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Zobacz raport',
+  'slot.error.actionFailed':    'Błąd modyfikacji slotu.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Pełny pulpit →',
+  'scheduler.subpanel.kpi.nextSend':           'Następne wysłanie',
+  'scheduler.subpanel.kpi.sendsToday':         'Wysłania dzisiaj',
+  'scheduler.subpanel.kpi.avgBounty':          'Zas./wysł.',
+  'scheduler.subpanel.kpi.in':                 'za {t}',
+  'scheduler.subpanel.feed.title':             'Ostatnia aktywność',
+  'scheduler.subpanel.feed.updatedAgo':        'Zaktualizowano {t} temu',
+  'scheduler.subpanel.feed.viewAll':           'Pełna historia →',
+  'scheduler.subpanel.feed.empty':             'Brak ostatnich wysłań',
+  'scheduler.subpanel.alerts.title':           'Alerty',
+  'scheduler.subpanel.alerts.unread':          '{n} nieprzeczytanych',
+  'scheduler.subpanel.alerts.empty':           'Brak ostatnich alertów',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauza',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktywuj',
+  'scheduler.subpanel.toggle.soon':            'Wkrótce',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktywować sondę w tej wiosce?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Anulować sondę w tej wiosce?',
+  'scheduler.subpanel.probe.btn.confirm':      'Potwierdź',
+  'scheduler.subpanel.probe.btn.dismiss':      'Odrzuć',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenci',
+  'schedulerDash.breadcrumb.back':     '← Wróć',
+  'schedulerDash.title':               'Pulpit {name}',
+  'schedulerDash.kpi.nextSend':        'Następne wysłanie',
+  'schedulerDash.kpi.sendsToday':      'Wysłania dzisiaj',
+  'schedulerDash.kpi.avgBounty':       'Zas./wysł.',
+  'schedulerDash.table.title':         'Podsumowanie wg listy',
+  'schedulerDash.table.col.list':      'Lista',
+  'schedulerDash.table.col.status':    'Ost. status',
+  'schedulerDash.table.col.sent':      'Wysłane farmy',
+  'schedulerDash.table.col.active':    'Aktywne farmy',
+  'schedulerDash.table.col.avgBounty': 'Śr. łup',
+  'schedulerDash.table.col.lastSend':  'Ost. wysłanie',
+  'schedulerDash.table.empty':         'Brak przypisanych list',
+  'schedulerDash.history.title':       'Historia wysłań',
+  'schedulerDash.alerts.title':        'Alerty',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Wykryto straty',
+  'alertEvent.PROBE_SENT':        '{list} · Sonda wysłana do {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Reaktywowano',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonda anulowana',
+  'alertEvent.probe.activate':    '⚡ Aktywuj sondę',
+  'alertEvent.probe.cancel':      '✕ Anuluj sondę',
+  'alertEvent.probe.viewTravian': 'Pokaż w Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Ostatnie wysłanie',
+  'feedback.status.success':   '✓ Ukończono',
+  'feedback.status.partial':   '⚠ Częściowe',
+  'feedback.status.error':     '✗ Błąd',
+  'feedback.status.unknown':   '? Nieznany',
+  'feedback.slotsRaiding':     '{n} slotów plądruje',
+  'feedback.noDeactivated':    'Brak dezaktywowanych farm',
+  'feedback.deactivatedLabel': 'Dezaktywowane farmy:',
+  'feedback.deactivatedMore':  'i {n} więcej',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statystyki',
+  'stats.section.performance':  'Ogólna wydajność',
+  'stats.totalBounty':          'Całkowity zgromadzony łup',
+  'stats.avgPerSend':           'Średnio za wysłanie',
+  'stats.sendsLast7d':          'Wysłania (7 dni)',
+  'stats.bountyUnit':           'zasobów',
+  'stats.section.distribution': 'Rozkład slotów',
+  'stats.dist.active':          'Aktywne',
+  'stats.dist.probe':           'Sonda czeka',
+  'stats.dist.botDisabled':     'Wyłączone przez bota',
+  'stats.dist.manualDisabled':  'Wyłączone ręcznie',
+  'stats.section.topSlots':     'Najlepsze sloty wg łupu (śr./wysłanie)',
+  'stats.topSlots.distance':    '{d} pól',
+  'stats.topSlots.avgBounty':   '{n} zas./wysł.',
+  'stats.empty.title':          'Brak danych wydajności',
+  'stats.empty.subtitle':       'Dane pojawią się po pierwszym wysłaniu.',
 }
 
 export default pl

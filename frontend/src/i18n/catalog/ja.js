@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo JA — 日本語
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const ja = {
   'page.account.col.session':        'セッション',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'ワールドを削除',
+  'page.account.enterWorld':         'ワールドへ入る',
   'page.account.notFound.title':     'アカウントが見つかりません',
   'page.account.notFound.desc':      '指定されたアカウントは存在しないか、削除されました。',
   'page.account.notFound.back':      'アカウント一覧に戻る',
@@ -177,18 +178,19 @@ const ja = {
   'world.session.error.toast':    '{world} での接続に失敗しました',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'ローマ人',
+  'tribe.teutons':   'テウトン人',
+  'tribe.gauls':     'ガリア人',
+  'tribe.egyptians': 'エジプト人',
+  'tribe.huns':      'フン族',
+  'tribe.spartans':  'スパルタ人',
+  'tribe.vikings':   'ヴァイキング',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    '接続エラー。もう一度お試しください。',
   'error.retry':      '再試行',
   'error.loadFailed': 'データを読み込めませんでした。',
+  'error.loadDetail':  '詳細の読み込みエラー',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const ja = {
   'placeholder.accounts.list':   'アカウント一覧 — 近日公開',
   'placeholder.account.detail':  'アカウント詳細 — 近日公開',
   'placeholder.world.space':     'ワールドスペース — 近日公開',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'レポートを見る',
+  'slot.error.actionFailed':    'スロット変更エラー。',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'フルダッシュボード →',
+  'scheduler.subpanel.kpi.nextSend':           '次の送信',
+  'scheduler.subpanel.kpi.sendsToday':         '本日の送信数',
+  'scheduler.subpanel.kpi.avgBounty':          '資源/送信',
+  'scheduler.subpanel.kpi.in':                 '{t}後',
+  'scheduler.subpanel.feed.title':             '最近の活動',
+  'scheduler.subpanel.feed.updatedAgo':        '{t}前に更新',
+  'scheduler.subpanel.feed.viewAll':           '全履歴を見る →',
+  'scheduler.subpanel.feed.empty':             '最近の送信なし',
+  'scheduler.subpanel.alerts.title':           'アラート',
+  'scheduler.subpanel.alerts.unread':          '{n}件未読',
+  'scheduler.subpanel.alerts.empty':           '最近のアラートなし',
+  'scheduler.subpanel.toggle.pause':           '⏸ 一時停止',
+  'scheduler.subpanel.toggle.activate':        '▶ 有効化',
+  'scheduler.subpanel.toggle.soon':            'まもなく',
+  'scheduler.subpanel.probe.confirm.activate': 'この村でプローブを有効にしますか？',
+  'scheduler.subpanel.probe.confirm.cancel':   'この村のプローブをキャンセルしますか？',
+  'scheduler.subpanel.probe.btn.confirm':      '確認',
+  'scheduler.subpanel.probe.btn.dismiss':      '却下',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'エージェント',
+  'schedulerDash.breadcrumb.back':     '← 戻る',
+  'schedulerDash.title':               '{name}ダッシュボード',
+  'schedulerDash.kpi.nextSend':        '次の送信',
+  'schedulerDash.kpi.sendsToday':      '本日の送信数',
+  'schedulerDash.kpi.avgBounty':       '資源/送信',
+  'schedulerDash.table.title':         'リスト別サマリー',
+  'schedulerDash.table.col.list':      'リスト',
+  'schedulerDash.table.col.status':    '最終ステータス',
+  'schedulerDash.table.col.sent':      '送信ファーム',
+  'schedulerDash.table.col.active':    'アクティブファーム',
+  'schedulerDash.table.col.avgBounty': '平均報酬',
+  'schedulerDash.table.col.lastSend':  '最終送信',
+  'schedulerDash.table.empty':         '割り当てられたリストなし',
+  'schedulerDash.history.title':       '送信履歴',
+  'schedulerDash.alerts.title':        'アラート',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · 損失検出',
+  'alertEvent.PROBE_SENT':        '{list} · {slot}にプローブ送信',
+  'alertEvent.REACTIVATED':       '{slot} · 再有効化',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · プローブキャンセル',
+  'alertEvent.probe.activate':    '⚡ プローブ有効化',
+  'alertEvent.probe.cancel':      '✕ プローブキャンセル',
+  'alertEvent.probe.viewTravian': 'Travianで表示',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            '最後の送信',
+  'feedback.status.success':   '✓ 完了',
+  'feedback.status.partial':   '⚠ 部分的',
+  'feedback.status.error':     '✗ エラー',
+  'feedback.status.unknown':   '? 不明',
+  'feedback.slotsRaiding':     '{n}スロットが略奪中',
+  'feedback.noDeactivated':    '無効化されたファームなし',
+  'feedback.deactivatedLabel': '無効化ファーム:',
+  'feedback.deactivatedMore':  'さらに{n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                '統計',
+  'stats.section.performance':  '全体パフォーマンス',
+  'stats.totalBounty':          '累計報酬合計',
+  'stats.avgPerSend':           '送信あたりの平均',
+  'stats.sendsLast7d':          '送信数（7日間）',
+  'stats.bountyUnit':           '資源',
+  'stats.section.distribution': 'スロット分布',
+  'stats.dist.active':          'アクティブ',
+  'stats.dist.probe':           'プローブ待機',
+  'stats.dist.botDisabled':     'ボット無効化',
+  'stats.dist.manualDisabled':  '手動無効化',
+  'stats.section.topSlots':     '報酬上位スロット（平均/送信）',
+  'stats.topSlots.distance':    '{d}マス',
+  'stats.topSlots.avgBounty':   '{n}資源/送信',
+  'stats.empty.title':          'パフォーマンスデータなし',
+  'stats.empty.subtitle':       '最初の送信後にデータが表示されます。',
 }
 
 export default ja
