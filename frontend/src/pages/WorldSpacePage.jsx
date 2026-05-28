@@ -125,6 +125,7 @@ export function WorldSpacePage() {
   // Schedulers
   const [schedulers, setSchedulers] = useState([])
   const [loadingSchedulers, setLoadingSchedulers] = useState(true)
+  const schedulersInitialized = useRef(false)
 
   // Farm lists
   const [farmLists, setFarmLists] = useState([])
@@ -199,10 +200,11 @@ export function WorldSpacePage() {
   }
 
   async function fetchSchedulers() {
-    setLoadingSchedulers(true)
+    if (!schedulersInitialized.current) setLoadingSchedulers(true)
     try {
       const data = await api.getSchedulers(worldId)
       setSchedulers(data?.schedulers ?? data ?? [])
+      schedulersInitialized.current = true
     } catch {
       showToast(t('error.loadFailed'))
     } finally {
