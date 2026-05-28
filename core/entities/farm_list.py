@@ -1,10 +1,11 @@
 """
 Entidades de dominio para farm lists (listas de vacas).
 
-FarmSlot   — una vaca (aldea objetivo) dentro de una lista.
-FarmList   — lista de vacas con sus slots.
-BotSlotStatus — resumen del estado bot de un slot (para queries de monitoreo).
-SlotEvent  — evento de cambio de estado de un slot (pérdidas, sonda, reactivación).
+FarmSlot        — una vaca (aldea objetivo) dentro de una lista.
+FarmList        — lista de vacas con sus slots.
+BotSlotStatus   — resumen del estado bot de un slot (para queries de monitoreo).
+SlotEvent       — evento de cambio de estado de un slot (pérdidas, sonda, reactivación).
+SlotBountyRecord — registro histórico de botín por slot (acumulación TTL 7 días).
 """
 from __future__ import annotations
 
@@ -89,3 +90,21 @@ class SlotEvent:
     last_raid_state: str = ""
     cooldown_seconds: int = 3600
     last_raid_report_id: str = ""
+
+
+@dataclass
+class SlotBountyRecord:
+    """
+    Registro histórico de botín por slot (acumulación para total_bounty).
+
+    Se inserta en slot_bounty_history cuando last_raid_report_id cambia
+    y last_raid_bounty > 0 (RN-C01). TTL de 7 días (RN-C02).
+    No tiene FK a farm_slots: los registros sobreviven al borrado del slot origen.
+    """
+    slot_id: int
+    farm_list_id: int
+    world_id: int
+    timestamp: datetime
+    bounty: int
+    raid_report_id: str = ""
+    id: int = 0   # asignado por BD al persistir

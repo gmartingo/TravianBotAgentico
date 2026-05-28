@@ -30,6 +30,12 @@ class FarmListSendEvent:
     scheduler_id: int | None = None
     bot_disabled_slots: list[str] = field(default_factory=list)
     id: int = 0   # asignado por BD al persistir
+    # Gap B: metadata del scheduler desnormalizada en el momento del envío (RN-B01, RN-B02).
+    # NULL si el envío fue manual o el scheduler fue borrado justo antes del insert (EC-B02).
+    scheduler_name: str | None = None
+    scheduler_interval_min_ms: int | None = None
+    scheduler_interval_max_ms: int | None = None
+    scheduler_execution_count: int | None = None
     loot_wood: int = 0    # reservado Agente ROI
     loot_clay: int = 0    # reservado Agente ROI
     loot_iron: int = 0    # reservado Agente ROI

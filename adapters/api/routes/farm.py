@@ -62,6 +62,7 @@ from core.exceptions import (
     SchedulerNotFoundError,
     SessionNotActiveError,
 )
+from core.entities.farm_scheduler import SchedulerStats
 from core.use_cases.farm_lists import (
     ActivateSlotInTravianUseCase,
     CancelProbeUseCase,
@@ -69,6 +70,7 @@ from core.use_cases.farm_lists import (
     DisableSlotByBotUseCase,
     EnableSlotByBotUseCase,
     GetFarmListsUseCase,
+    GetSchedulerStatsUseCase,
     ReadFarmListsUseCase,
     SendFarmListUseCase,
 )
@@ -161,7 +163,14 @@ def _serialize_slot(slot: FarmSlot) -> dict:
     }
 
 
-def _serialize_farm_list(fl: FarmList) -> dict:
+def _serialize_farm_list(
+    fl: FarmList,
+    last_send_time: datetime | None = None,
+) -> dict:
+    """
+    Serializa una FarmList. last_send_time se pasa desde fuera (Gap A):
+    es el MAX(timestamp) del historial de envíos, calculado por get_last_send_times_by_world.
+    """
     active_slots = [s for s in fl.slots if s.is_active]
     total_bounty = sum(s.total_bounty for s in fl.slots)
     avg_bounty_per_send = (
@@ -179,7 +188,8 @@ def _serialize_farm_list(fl: FarmList) -> dict:
         "slots": [_serialize_slot(s) for s in fl.slots],
         "total_bounty": total_bounty,
         "avg_bounty_per_send": avg_bounty_per_send,
-        "last_send_time": None,
+        # Gap A: poblado desde el historial de envíos (RN-A01, RN-A02)
+        "last_send_time": last_send_time.isoformat() if last_send_time else None,
     }
 
 
@@ -195,11 +205,43 @@ def _serialize_send_event(ev: FarmListSendEvent) -> dict:
         "being_raided_total": ev.being_raided_total,
         "triggered_by": ev.triggered_by,
         "scheduler_id": ev.scheduler_id,
+        # Gap B: metadata del scheduler en el momento del envío (RN-B01)
+        "scheduler_name": ev.scheduler_name,
+        "scheduler_interval_min_ms": ev.scheduler_interval_min_ms,
+        "scheduler_interval_max_ms": ev.scheduler_interval_max_ms,
+        "scheduler_execution_count": ev.scheduler_execution_count,
         "deactivated_slots": ev.bot_disabled_slots,
         "loot_wood": ev.loot_wood,
         "loot_clay": ev.loot_clay,
         "loot_iron": ev.loot_iron,
         "loot_crop": ev.loot_crop,
+    }
+
+
+def _serialize_scheduler_stats(stats: SchedulerStats) -> dict:
+    """Serializa un SchedulerStats a dict (Gap D, sección 8.3)."""
+    return {
+        "scheduler_id": stats.scheduler_id,
+        "scheduler_name": stats.scheduler_name,
+        "world_id": stats.world_id,
+        "execution_count": stats.execution_count,
+        "last_send_time": stats.last_send_time.isoformat() if stats.last_send_time else None,
+        "success_rate": stats.success_rate,
+        "active_slots_avg": stats.active_slots_avg,
+        "total_bounty": stats.total_bounty,
+        "bounty_per_hour": stats.bounty_per_hour,
+        "per_list": [
+            {
+                "farm_list_id": ls.farm_list_id,
+                "farm_list_name": ls.farm_list_name,
+                "last_send_time": ls.last_send_time.isoformat() if ls.last_send_time else None,
+                "success_rate": ls.success_rate,
+                "active_slots_avg": ls.active_slots_avg,
+                "total_bounty": ls.total_bounty,
+                "bounty_per_hour": ls.bounty_per_hour,
+            }
+            for ls in stats.per_list
+        ],
     }
 
 
@@ -375,6 +417,29 @@ async def toggle_scheduler(
     return _serialize_scheduler(updated)
 
 
+@router.get(
+    "/worlds/{world_id}/schedulers/{scheduler_id}/stats",
+    summary="Estadísticas de un scheduler",
+)
+async def get_scheduler_stats(
+    world_id: int, scheduler_id: int, request: Request
+) -> dict:
+    """
+    Métricas agregadas del scheduler y por cada farm list asignada (Gap D, sección 8.3).
+    No requiere sesión activa del browser (solo consulta BD, RN-D07).
+    404 si el scheduler no existe o su world_id no coincide con el de la ruta (EC-D03).
+    """
+    db = _get_farm_db(request)
+    try:
+        stats = await GetSchedulerStatsUseCase(db=db).execute(scheduler_id, world_id)
+    except SchedulerNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Scheduler {scheduler_id} no encontrado en el mundo {world_id}",
+        )
+    return _serialize_scheduler_stats(stats)
+
+
 # ---------------------------------------------------------------------------
 # 8.2 Farm Lists
 # ---------------------------------------------------------------------------
@@ -385,11 +450,19 @@ async def toggle_scheduler(
     summary="Lista farm lists de un mundo",
 )
 async def list_farm_lists(world_id: int, request: Request) -> list[dict]:
-    """Devuelve todas las farm lists del mundo con sus slots."""
+    """Devuelve todas las farm lists del mundo con sus slots y last_send_time (Gap A)."""
     db = _get_farm_db(request)
     uc = GetFarmListsUseCase(db=db)
     farm_lists = await uc.execute(world_id)
-    return [_serialize_farm_list(fl) for fl in farm_lists]
+
+    # Gap A: poblar last_send_time consultando el historial de envíos (RN-A01, RN-A02)
+    farm_list_ids = [fl.id for fl in farm_lists]
+    last_send_times = await db.get_last_send_times_by_world(world_id, farm_list_ids)
+
+    return [
+        _serialize_farm_list(fl, last_send_time=last_send_times.get(fl.id))
+        for fl in farm_lists
+    ]
 
 
 @router.post(
@@ -418,7 +491,14 @@ async def read_farm_lists(world_id: int, request: Request) -> list[dict]:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al leer farm lists del DOM: {e}",
         )
-    return [_serialize_farm_list(fl) for fl in farm_lists]
+
+    # Gap A: poblar last_send_time también en la respuesta del POST /read
+    farm_list_ids = [fl.id for fl in farm_lists]
+    last_send_times = await db.get_last_send_times_by_world(world_id, farm_list_ids)
+    return [
+        _serialize_farm_list(fl, last_send_time=last_send_times.get(fl.id))
+        for fl in farm_lists
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -2,16 +2,17 @@
 Use cases de farm lists.
 
 Implementa toda la lógica de negocio descrita en el spec (secciones 4, 5, 9):
-  - ReadFarmListsUseCase       — navega + lee DOM + sincroniza en BD.
-  - GetFarmListsUseCase        — consulta BD por mundo.
-  - ProcessFarmListUseCase     — ciclo inteligente de envío con cooldown y backoff.
-  - SendSchedulerGroupUseCase  — procesa todas las listas de un scheduler.
-  - SendFarmListUseCase        — envío manual de una lista.
+  - ReadFarmListsUseCase         — navega + lee DOM + sincroniza en BD.
+  - GetFarmListsUseCase          — consulta BD por mundo.
+  - ProcessFarmListUseCase       — ciclo inteligente de envío con cooldown y backoff.
+  - SendSchedulerGroupUseCase    — procesa todas las listas de un scheduler.
+  - SendFarmListUseCase          — envío manual de una lista.
+  - GetSchedulerStatsUseCase     — métricas agregadas de un scheduler (Gap D).
   - ActivateSlotInTravianUseCase — activa slot + registra REACTIVATED si procede.
   - DeactivateSlotInTravianUseCase — desactiva slot (sin tocar disabled_by_bot).
-  - DisableSlotByBotUseCase    — toggle Bot→excluir.
-  - EnableSlotByBotUseCase     — toggle Bot→incluir.
-  - CancelProbeUseCase         — cancela sonda pendiente (mode: deactivate|send_now).
+  - DisableSlotByBotUseCase      — toggle Bot→excluir.
+  - EnableSlotByBotUseCase       — toggle Bot→incluir.
+  - CancelProbeUseCase           — cancela sonda pendiente (mode: deactivate|send_now).
 
 Las constantes de negocio se definen aquí (no en la capa de API ni en la BD).
 """
@@ -25,7 +26,9 @@ from datetime import datetime, timedelta
 
 from core.entities.farm_list import FarmList, FarmSlot, SlotEvent
 from core.entities.farm_list_send_event import FarmListSendEvent
+from core.entities.farm_scheduler import SchedulerStats
 from core.entities.village import Village
+from core.exceptions import SchedulerNotFoundError
 from core.ports.farm_list_browser_port import FarmListBrowserPort
 from core.ports.farm_list_db_port import FarmListDbPort
 
@@ -143,7 +146,7 @@ class ReadFarmListsUseCase:
 
         result: list[FarmList] = []
         for village_id, fls in lists_by_village.items():
-            synced = await self.db.sync_farm_lists(village_id, fls)
+            synced = await self.db.sync_farm_lists(village_id, fls, world_id)
             village = village_by_id[village_id]
             for fl in synced:
                 fl.village_name = village.name
@@ -193,7 +196,7 @@ class ProcessFarmListUseCase:
     async def execute(self, farm_list_id: int, world_id: int) -> None:
         now = datetime.utcnow()
         fresh  = await self.browser.read_farm_list(farm_list_id)
-        synced = await self.db.sync_farm_list(fresh)
+        synced = await self.db.sync_farm_list(fresh, world_id)
 
         probe_slot_ids: list[int] = []
         bot_disabled_slot_names: list[str] = []
@@ -277,6 +280,16 @@ class ProcessFarmListUseCase:
                     probe_slot_ids.append(slot.id)
                 # else: cooldown aún activo y sin informe nuevo → no hacer nada.
 
+        # Gap B / sección 9.5: obtener metadata del scheduler ANTES de crear el evento.
+        # Se obtiene el valor de execution_count previo al incremento (RN-B02).
+        # EC-B02: si el scheduler fue borrado en carrera, capturar la excepción y guardar NULLs.
+        scheduler_meta = None
+        if synced.scheduler_id:
+            try:
+                scheduler_meta = await self.db.get_scheduler(synced.scheduler_id)
+            except SchedulerNotFoundError:
+                pass   # scheduler borrado en carrera → metadata en NULL (EC-B02)
+
         # Enviar la lista (las sondas salen incluidas) y registrar en historial.
         send_result = await self.browser.send_farm_list(farm_list_id)
         await self.db.add_farm_list_send_event(FarmListSendEvent(
@@ -289,6 +302,10 @@ class ProcessFarmListUseCase:
             being_raided_total=send_result.being_raided_total,
             triggered_by="scheduler",
             scheduler_id=synced.scheduler_id,
+            scheduler_name=scheduler_meta.name if scheduler_meta else None,
+            scheduler_interval_min_ms=scheduler_meta.interval_min_ms if scheduler_meta else None,
+            scheduler_interval_max_ms=scheduler_meta.interval_max_ms if scheduler_meta else None,
+            scheduler_execution_count=scheduler_meta.execution_count if scheduler_meta else None,
             bot_disabled_slots=bot_disabled_slot_names,
         ))
         logger.info(
@@ -391,6 +408,19 @@ class SendFarmListUseCase:
         )
         await self.db.add_farm_list_send_event(event)
         return event
+
+
+@dataclass
+class GetSchedulerStatsUseCase:
+    """
+    Devuelve métricas agregadas de un scheduler (Gap D, sección 6.2).
+    Delega enteramente en el puerto de BD (RN-D07: no requiere browser).
+    Lanza SchedulerNotFoundError si el scheduler no existe o world_id no coincide (EC-D03).
+    """
+    db: FarmListDbPort
+
+    async def execute(self, scheduler_id: int, world_id: int) -> SchedulerStats:
+        return await self.db.get_scheduler_stats(scheduler_id, world_id)
 
 
 @dataclass

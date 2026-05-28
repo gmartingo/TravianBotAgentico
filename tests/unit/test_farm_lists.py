@@ -205,7 +205,11 @@ def _make_farm_list(
 async def _insert_farm_list(
     db: FarmListSQLiteAdapter, conn: aiosqlite.Connection, fl: FarmList
 ) -> FarmList:
-    """Inserta directamente en BD sin pasar por sync (para setup de tests)."""
+    """Inserta directamente en BD sin pasar por sync (para setup de tests).
+
+    Nota: total_bounty ya no existe como columna en farm_slots (Gap C, EC-C05).
+    El total_bounty se calcula desde slot_bounty_history.
+    """
     await conn.execute(
         "INSERT OR REPLACE INTO farm_lists (id, name, owner_village_id, scheduler_id) "
         "VALUES (?, ?, ?, ?)",
@@ -218,15 +222,15 @@ async def _insert_farm_list(
                (id, farm_list_id, target_name, x, y, population, troops,
                 is_active, disabled_by_bot, last_raid_state, last_raid_time,
                 last_raid_report_id, last_raid_bounty, average_raid_bounty,
-                total_bounty, distance, disabled_at, cooldown_seconds, report_id_at_disable)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                distance, disabled_at, cooldown_seconds, report_id_at_disable)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 slot.id, slot.farm_list_id, slot.target_name, slot.x, slot.y,
                 slot.population, _json.dumps(slot.troops),
                 int(slot.is_active), int(slot.disabled_by_bot),
                 slot.last_raid_state, slot.last_raid_time,
                 slot.last_raid_report_id, slot.last_raid_bounty,
-                slot.average_raid_bounty, slot.total_bounty, slot.distance,
+                slot.average_raid_bounty, slot.distance,
                 slot.disabled_at.isoformat() if slot.disabled_at else None,
                 slot.cooldown_seconds, slot.report_id_at_disable,
             ),
@@ -563,7 +567,7 @@ def test_sync_farm_lists_new_list():
         await _seed_village(conn)
         fl = _make_farm_list()
 
-        synced = await db.sync_farm_lists(10, [fl])
+        synced = await db.sync_farm_lists(10, [fl], world_id=1)
         assert len(synced) == 1
         assert synced[0].id == fl.id
 
@@ -585,7 +589,7 @@ def test_sync_farm_lists_deleted_list():
         await _insert_farm_list(db, conn, fl)
 
         # Sincronizar con lista vacía → la lista debe borrarse
-        synced = await db.sync_farm_lists(10, [])
+        synced = await db.sync_farm_lists(10, [], world_id=1)
         assert synced == []
 
         # No está en BD
@@ -602,23 +606,42 @@ def test_sync_farm_lists_deleted_list():
 
 
 def test_sync_farm_list_slot_reordered():
-    """EC-05 / RN-15: Travian reasigna ID de slot (mismo x,y) → preserva total_bounty."""
+    """EC-05 / RN-15 / EC-C03: Travian reasigna ID de slot (mismo x,y) →
+    registros de slot_bounty_history reasignados al nuevo ID (RN-C06).
+    """
     async def _run():
         db, conn = await _make_db()
         await _seed_village(conn)
-        slot_old = _make_slot(slot_id=200, x=10, y=-3)
-        slot_old.total_bounty = 5000  # acumulado
+        slot_old = _make_slot(slot_id=200, x=10, y=-3, last_raid_report_id="rpt_old")
         fl = _make_farm_list(slots=[slot_old])
         await _insert_farm_list(db, conn, fl)
 
+        # Insertar un registro de bounty para el slot antiguo en slot_bounty_history
+        await conn.execute(
+            "INSERT INTO slot_bounty_history (slot_id, farm_list_id, world_id, timestamp, bounty, raid_report_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (200, fl.id, 1, datetime.utcnow().isoformat(), 5000, "rpt_old"),
+        )
+        await conn.commit()
+
         # Travian reasigna ID del slot: mismo x,y pero id=999
-        slot_new = _make_slot(slot_id=999, x=10, y=-3)
+        slot_new = _make_slot(slot_id=999, x=10, y=-3, last_raid_report_id="rpt_old")
         fl_new = _make_farm_list(slots=[slot_new])
 
-        synced = await db.sync_farm_list(fl_new)
+        synced = await db.sync_farm_list(fl_new, world_id=1)
         updated_slot = synced.slots[0]
         assert updated_slot.id == 999           # nuevo ID de Travian
-        assert updated_slot.total_bounty == 5000  # total_bounty preservado
+
+        # Verificar que slot_bounty_history apunta al nuevo ID
+        cursor = await conn.execute(
+            "SELECT slot_id FROM slot_bounty_history WHERE farm_list_id = ?", (fl.id,)
+        )
+        rows = await cursor.fetchall()
+        assert len(rows) >= 1
+        assert all(r["slot_id"] == 999 for r in rows)
+
+        # total_bounty del slot nuevo refleja el historial reasignado
+        assert updated_slot.total_bounty == 5000
 
         await conn.close()
 
@@ -638,7 +661,7 @@ def test_sync_farm_list_ec06_bot_reset():
         slot_dom = _make_slot(is_active=True, disabled_by_bot=False)
         fl_dom = _make_farm_list(slots=[slot_dom])
 
-        synced = await db.sync_farm_list(fl_dom)
+        synced = await db.sync_farm_list(fl_dom, world_id=1)
         updated = synced.slots[0]
         assert updated.disabled_by_bot is False
         assert updated.is_active is True

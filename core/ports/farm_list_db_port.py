@@ -15,9 +15,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from core.entities.farm_list import BotSlotStatus, FarmList, FarmSlot, SlotEvent
+from core.entities.farm_list import BotSlotStatus, FarmList, FarmSlot, SlotBountyRecord, SlotEvent
 from core.entities.farm_list_send_event import FarmListSendEvent
-from core.entities.farm_scheduler import FarmScheduler
+from core.entities.farm_scheduler import FarmScheduler, SchedulerStats
 from core.entities.village import Village
 
 
@@ -26,25 +26,32 @@ class FarmListDbPort(ABC):
     # --- Farm lists ---
 
     @abstractmethod
-    async def sync_farm_lists(self, village_id: int, farm_lists: list[FarmList]) -> list[FarmList]:
+    async def sync_farm_lists(
+        self, village_id: int, farm_lists: list[FarmList], world_id: int
+    ) -> list[FarmList]:
         """
         Sincroniza la lista completa de farm lists de una aldea.
         - Inserta listas nuevas.
         - Actualiza las existentes.
         - Borra listas que ya no aparecen en el DOM.
         Devuelve la lista sincronizada (con estado bot preservado en los slots).
+        world_id es necesario para delegar a sync_farm_list (Gap C).
         """
 
     @abstractmethod
-    async def sync_farm_list(self, farm_list: FarmList) -> FarmList:
+    async def sync_farm_list(self, farm_list: FarmList, world_id: int) -> FarmList:
         """
         Sincroniza una sola farm list. Matching de slots por coordenadas (x, y)
-        para preservar total_bounty y el estado bot aunque Travian reasigne IDs
-        (RN-15, EC-05).
+        para preservar el estado bot aunque Travian reasigne IDs (RN-15, EC-05).
+        world_id es necesario para insertar en slot_bounty_history y para la purga TTL.
 
         EC-06: si el DOM devuelve is_active=True para un slot que tenía
         disabled_by_bot=True, resetea disabled_by_bot=False, disabled_at=None,
         cooldown_seconds=3600.
+
+        Gap C: inserta en slot_bounty_history cuando last_raid_report_id cambia
+        y last_raid_bounty > 0 (RN-C01). Reasigna IDs de slot en slot_bounty_history
+        antes de borrar el slot viejo (EC-C03, RN-C06).
         """
 
     @abstractmethod
@@ -220,4 +227,37 @@ class FarmListDbPort(ABC):
         """
         Devuelve (items, total) — historial de envíos paginado.
         Filtra por scheduler_id y/o rango de fechas si se especifica.
+        """
+
+    # --- Gap C: historial de bounty por slot ---
+
+    @abstractmethod
+    async def add_slot_bounty_record(self, record: SlotBountyRecord) -> None:
+        """
+        Inserta un registro de bounty en slot_bounty_history y purga los registros
+        con más de 7 días para el mismo world_id (RN-C01, RN-C02).
+        No llamar directamente si bounty == 0 o raid_report_id == ''.
+        """
+
+    # --- Gap A: last_send_time por farm list ---
+
+    @abstractmethod
+    async def get_last_send_times_by_world(
+        self, world_id: int, farm_list_ids: list[int]
+    ) -> dict[int, datetime | None]:
+        """
+        Devuelve MAX(timestamp) de farm_list_send_history GROUP BY farm_list_id,
+        filtrado a los farm_list_ids indicados (RN-A01, RN-A02).
+        Clave: farm_list_id. Valor: datetime o None si no hay historial.
+        """
+
+    # --- Gap D: estadísticas del scheduler ---
+
+    @abstractmethod
+    async def get_scheduler_stats(
+        self, scheduler_id: int, world_id: int
+    ) -> SchedulerStats:
+        """
+        Devuelve métricas agregadas del scheduler (RN-D01..D07).
+        Lanza SchedulerNotFoundError si no existe o world_id no coincide (EC-D03).
         """

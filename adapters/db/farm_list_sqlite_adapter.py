@@ -26,9 +26,9 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
-from core.entities.farm_list import BotSlotStatus, FarmList, FarmSlot, SlotEvent
+from core.entities.farm_list import BotSlotStatus, FarmList, FarmSlot, SlotBountyRecord, SlotEvent
 from core.entities.farm_list_send_event import FarmListSendEvent
-from core.entities.farm_scheduler import FarmScheduler
+from core.entities.farm_scheduler import FarmScheduler, SchedulerListStats, SchedulerStats
 from core.entities.village import Village
 from core.exceptions import (
     FarmListNotFoundError,
@@ -151,6 +151,28 @@ _CREATE_IDX_SLOT_EVENTS_WORLD = """
 CREATE INDEX IF NOT EXISTS idx_slot_events_world ON slot_events(world_id, timestamp);
 """
 
+_CREATE_SLOT_BOUNTY_HISTORY = """
+CREATE TABLE IF NOT EXISTS slot_bounty_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot_id         INTEGER NOT NULL,
+    farm_list_id    INTEGER NOT NULL,
+    world_id        INTEGER NOT NULL,
+    timestamp       TEXT    NOT NULL,
+    bounty          INTEGER NOT NULL,
+    raid_report_id  TEXT    NOT NULL DEFAULT ''
+);
+"""
+
+_CREATE_IDX_SLOT_BOUNTY_SLOT = """
+CREATE INDEX IF NOT EXISTS idx_slot_bounty_slot
+    ON slot_bounty_history(slot_id, farm_list_id);
+"""
+
+_CREATE_IDX_SLOT_BOUNTY_WORLD_TS = """
+CREATE INDEX IF NOT EXISTS idx_slot_bounty_world_ts
+    ON slot_bounty_history(world_id, timestamp);
+"""
+
 # ---------------------------------------------------------------------------
 # Helpers de conversión
 # ---------------------------------------------------------------------------
@@ -189,7 +211,9 @@ def _to_slot(row: aiosqlite.Row) -> FarmSlot:
         last_raid_report_id=row["last_raid_report_id"] or "",
         last_raid_bounty=row["last_raid_bounty"] or 0,
         average_raid_bounty=row["average_raid_bounty"] or 0,
-        total_bounty=row["total_bounty"] or 0,
+        # Gap C: total_bounty se calcula desde slot_bounty_history; aquí siempre = 0.
+        # _load_slots y _sync_slots lo enriquecen con _get_bounty_sums (RN-C03, RN-C04).
+        total_bounty=0,
         distance=float(row["distance"] or 0.0),
         disabled_at=_str_to_dt(row["disabled_at"] or ""),
         cooldown_seconds=row["cooldown_seconds"] or 3600,
@@ -234,6 +258,11 @@ def _to_send_event(row: aiosqlite.Row) -> FarmListSendEvent:
         triggered_by=row["triggered_by"],
         scheduler_id=row["scheduler_id"],
         bot_disabled_slots=json.loads(row["bot_disabled_slots"] or "[]"),
+        # Gap B: metadata del scheduler desnormalizada (puede ser NULL en filas antiguas)
+        scheduler_name=row["scheduler_name"] if "scheduler_name" in row.keys() else None,
+        scheduler_interval_min_ms=row["scheduler_interval_min_ms"] if "scheduler_interval_min_ms" in row.keys() else None,
+        scheduler_interval_max_ms=row["scheduler_interval_max_ms"] if "scheduler_interval_max_ms" in row.keys() else None,
+        scheduler_execution_count=row["scheduler_execution_count"] if "scheduler_execution_count" in row.keys() else None,
         loot_wood=row["loot_wood"] or 0,
         loot_clay=row["loot_clay"] or 0,
         loot_iron=row["loot_iron"] or 0,
@@ -278,7 +307,7 @@ class FarmListSQLiteAdapter(FarmListDbPort):
 
     async def ensure_tables(self) -> None:
         """
-        Crea las tablas de farm lists si no existen.
+        Crea las tablas de farm lists si no existen y aplica migraciones de esquema.
         Idempotente. Se llama desde el lifespan de la aplicación.
         """
         await self._conn.execute("PRAGMA foreign_keys = ON")
@@ -294,8 +323,35 @@ class FarmListSQLiteAdapter(FarmListDbPort):
             _CREATE_IDX_FARM_HISTORY_WORLD,
             _CREATE_SLOT_EVENTS,
             _CREATE_IDX_SLOT_EVENTS_WORLD,
+            # Gap C: tabla de historial de bounty por slot
+            _CREATE_SLOT_BOUNTY_HISTORY,
+            _CREATE_IDX_SLOT_BOUNTY_SLOT,
+            _CREATE_IDX_SLOT_BOUNTY_WORLD_TS,
         ]:
             await self._conn.execute(ddl)
+
+        # Gap B: añadir columnas de metadata del scheduler al historial (idempotente).
+        # SQLite no soporta IF NOT EXISTS en ALTER TABLE ADD COLUMN; usamos PRAGMA table_info.
+        cursor = await self._conn.execute("PRAGMA table_info(farm_list_send_history)")
+        existing_cols = {row["name"] for row in await cursor.fetchall()}
+        for col_name, col_ddl in [
+            ("scheduler_name",             "TEXT DEFAULT NULL"),
+            ("scheduler_interval_min_ms",  "INTEGER DEFAULT NULL"),
+            ("scheduler_interval_max_ms",  "INTEGER DEFAULT NULL"),
+            ("scheduler_execution_count",  "INTEGER DEFAULT NULL"),
+        ]:
+            if col_name not in existing_cols:
+                await self._conn.execute(
+                    f"ALTER TABLE farm_list_send_history ADD COLUMN {col_name} {col_ddl}"
+                )
+
+        # Gap C: eliminar total_bounty de farm_slots si aún existe (SQLite >= 3.35).
+        # Esta operación es destructiva: el valor acumulado se pierde (EC-C05, aceptado).
+        cursor = await self._conn.execute("PRAGMA table_info(farm_slots)")
+        slot_cols = {row["name"] for row in await cursor.fetchall()}
+        if "total_bounty" in slot_cols:
+            await self._conn.execute("ALTER TABLE farm_slots DROP COLUMN total_bounty")
+
         await self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -303,12 +359,13 @@ class FarmListSQLiteAdapter(FarmListDbPort):
     # ------------------------------------------------------------------
 
     async def sync_farm_lists(
-        self, village_id: int, farm_lists: list[FarmList]
+        self, village_id: int, farm_lists: list[FarmList], world_id: int
     ) -> list[FarmList]:
         """
         Sincroniza todas las farm lists de una aldea.
         - Inserta/actualiza las que llegan del DOM.
         - Borra las que ya no están en Travian.
+        world_id necesario para delegar a sync_farm_list (Gap C).
         """
         incoming_ids = {fl.id for fl in farm_lists}
 
@@ -327,13 +384,15 @@ class FarmListSQLiteAdapter(FarmListDbPort):
         # Sincronizar cada lista.
         result: list[FarmList] = []
         for fl in farm_lists:
-            synced = await self._sync_one_farm_list(fl, village_id)
+            synced = await self._sync_one_farm_list(fl, village_id, world_id)
             result.append(synced)
 
         await self._conn.commit()
         return result
 
-    async def _sync_one_farm_list(self, fl: FarmList, village_id: int) -> FarmList:
+    async def _sync_one_farm_list(
+        self, fl: FarmList, village_id: int, world_id: int
+    ) -> FarmList:
         """INSERT OR REPLACE de una farm list (sin modificar scheduler_id)."""
         await self._conn.execute(
             """
@@ -352,13 +411,15 @@ class FarmListSQLiteAdapter(FarmListDbPort):
             owner_village_id=village_id,
             slots=fl.slots,
         )
-        return await self._sync_slots(fl_with_slots)
+        return await self._sync_slots(fl_with_slots, world_id)
 
-    async def sync_farm_list(self, farm_list: FarmList) -> FarmList:
+    async def sync_farm_list(self, farm_list: FarmList, world_id: int) -> FarmList:
         """
         Sincroniza una sola farm list por ID, haciendo matching de slots por (x, y).
-        Preserva total_bounty y estado bot si las coordenadas coinciden (RN-15, EC-05).
+        Preserva estado bot si las coordenadas coinciden (RN-15, EC-05).
+        world_id es necesario para insertar en slot_bounty_history (Gap C).
         EC-06: si el DOM marca is_active=True y había disabled_by_bot=True, resetea el estado bot.
+        Gap C: detecta cambios de last_raid_report_id e inserta en slot_bounty_history (RN-C01, RN-C05).
         """
         # Asegurar que la farm list existe en BD.
         cursor = await self._conn.execute(
@@ -375,18 +436,22 @@ class FarmListSQLiteAdapter(FarmListDbPort):
             (farm_list.name, farm_list.id),
         )
 
-        synced = await self._sync_slots(farm_list)
+        synced = await self._sync_slots(farm_list, world_id)
         await self._conn.commit()
         return synced
 
-    async def _sync_slots(self, farm_list: FarmList) -> FarmList:
+    async def _sync_slots(self, farm_list: FarmList, world_id: int) -> FarmList:
         """
         Sincroniza los slots de una farm list. Matching por (x, y) para preservar
-        total_bounty y estado bot aunque Travian reasigne IDs (RN-15, EC-05).
+        estado bot aunque Travian reasigne IDs (RN-15, EC-05).
 
         EC-06: si el DOM devuelve is_active=True y el slot en BD tiene
         disabled_by_bot=True, resetea: disabled_by_bot=False, disabled_at=None,
         cooldown_seconds=3600.
+
+        Gap C: detecta cambio de last_raid_report_id y registra bounty en
+        slot_bounty_history si bounty > 0 (RN-C01, RN-C05). Reasigna IDs de slot
+        en slot_bounty_history antes de borrar el slot viejo (EC-C03, RN-C06).
         """
         # Cargar slots existentes en BD.
         cursor = await self._conn.execute(
@@ -403,15 +468,29 @@ class FarmListSQLiteAdapter(FarmListDbPort):
         incoming_ids = {s.id for s in farm_list.slots}
 
         # Borrar slots que ya no aparecen en el DOM.
-        for old_id in list(existing_by_id.keys()):
-            if old_id not in incoming_ids:
-                # Puede que el ID haya cambiado pero las coords sean las mismas;
-                # en ese caso lo reemplazamos abajo. Borramos el antiguo aquí.
+        # EC-C03 / RN-C06: si el slot fue reasignado (mismo x,y, distinto id),
+        # reasignar registros de bounty al nuevo id antes de borrar el viejo.
+        for old_slot in list(existing_by_id.values()):
+            if old_slot.id not in incoming_ids:
+                # Buscar si hay un slot entrante con las mismas coordenadas
+                matching_new = next(
+                    (ns for ns in farm_list.slots if (ns.x, ns.y) == (old_slot.x, old_slot.y)),
+                    None,
+                )
+                if matching_new and matching_new.id != old_slot.id:
+                    # Reasignar registros de bounty al nuevo id antes de borrar el viejo
+                    await self._conn.execute(
+                        "UPDATE slot_bounty_history SET slot_id = ? "
+                        "WHERE slot_id = ? AND farm_list_id = ?",
+                        (matching_new.id, old_slot.id, farm_list.id),
+                    )
+                # Borrar el slot viejo
                 await self._conn.execute(
                     "DELETE FROM farm_slots WHERE id = ? AND farm_list_id = ?",
-                    (old_id, farm_list.id),
+                    (old_slot.id, farm_list.id),
                 )
 
+        now = datetime.utcnow()
         synced_slots: list[FarmSlot] = []
         for slot in farm_list.slots:
             # Buscar slot existente por coords para preservar estado bot.
@@ -425,7 +504,6 @@ class FarmListSQLiteAdapter(FarmListDbPort):
             disabled_at = existing.disabled_at if existing else None
             cooldown_seconds = (existing.cooldown_seconds if existing else 3600)
             report_id_at_disable = existing.report_id_at_disable if existing else ""
-            total_bounty = existing.total_bounty if existing else 0
 
             if slot.is_active and disabled_by_bot:
                 disabled_by_bot = False
@@ -437,15 +515,32 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                     slot.x, slot.y,
                 )
 
+            # Gap C / RN-C01, RN-C05: registrar bounty si last_raid_report_id cambió
+            # y hay bounty real (> 0) y report_id no está vacío (EC-C01, EC-C02).
+            old_report_id = existing.last_raid_report_id if existing else ""
+            if (
+                slot.last_raid_report_id
+                and slot.last_raid_report_id != old_report_id
+                and slot.last_raid_bounty > 0
+            ):
+                await self._insert_slot_bounty(
+                    slot_id=slot.id,
+                    farm_list_id=farm_list.id,
+                    world_id=world_id,
+                    timestamp=now,
+                    bounty=slot.last_raid_bounty,
+                    raid_report_id=slot.last_raid_report_id,
+                )
+
             await self._conn.execute(
                 """
                 INSERT INTO farm_slots (
                     id, farm_list_id, target_name, x, y, population, troops,
                     is_active, disabled_by_bot, last_raid_state, last_raid_time,
                     last_raid_report_id, last_raid_bounty, average_raid_bounty,
-                    total_bounty, distance, disabled_at, cooldown_seconds,
+                    distance, disabled_at, cooldown_seconds,
                     report_id_at_disable
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id, farm_list_id) DO UPDATE SET
                     target_name          = excluded.target_name,
                     x                    = excluded.x,
@@ -462,8 +557,7 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                     disabled_by_bot      = ?,
                     disabled_at          = ?,
                     cooldown_seconds     = ?,
-                    report_id_at_disable = ?,
-                    total_bounty         = total_bounty
+                    report_id_at_disable = ?
                 """,
                 (
                     slot.id, farm_list.id, slot.target_name, slot.x, slot.y,
@@ -471,7 +565,7 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                     int(slot.is_active), int(disabled_by_bot),
                     slot.last_raid_state, slot.last_raid_time,
                     slot.last_raid_report_id, slot.last_raid_bounty,
-                    slot.average_raid_bounty, total_bounty,
+                    slot.average_raid_bounty,
                     slot.distance, _dt_to_str(disabled_at) or None,
                     cooldown_seconds, report_id_at_disable,
                     # Parámetros para el UPDATE SET
@@ -496,7 +590,7 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                 last_raid_report_id=slot.last_raid_report_id,
                 last_raid_bounty=slot.last_raid_bounty,
                 average_raid_bounty=slot.average_raid_bounty,
-                total_bounty=total_bounty,
+                total_bounty=0,  # se enriquecerá tras el commit con _get_bounty_sums
                 distance=slot.distance,
                 disabled_at=disabled_at,
                 cooldown_seconds=cooldown_seconds,
@@ -516,6 +610,14 @@ class FarmListSQLiteAdapter(FarmListDbPort):
         row = await cursor.fetchone()
         if row:
             farm_list_out.scheduler_id = row["scheduler_id"]
+
+        # Enriquecer total_bounty desde slot_bounty_history (RN-C03, RN-C04).
+        # Se hace dentro de _sync_slots antes de hacer commit en el caller,
+        # ya que los inserts de bounty van al conn sin commit aún.
+        bounty_sums = await self._get_bounty_sums(farm_list.id)
+        for s in farm_list_out.slots:
+            s.total_bounty = bounty_sums.get(s.id, 0)
+
         return farm_list_out
 
     async def get_farm_lists_by_village(self, village_id: int) -> list[FarmList]:
@@ -560,12 +662,62 @@ class FarmListSQLiteAdapter(FarmListDbPort):
         return fl
 
     async def _load_slots(self, farm_list_id: int) -> list[FarmSlot]:
+        """
+        Carga los slots de una farm list y enriquece total_bounty desde
+        slot_bounty_history con una única query de agregación (EC-C04, RN-C04).
+        """
         cursor = await self._conn.execute(
             "SELECT * FROM farm_slots WHERE farm_list_id = ? ORDER BY id",
             (farm_list_id,),
         )
         rows = await cursor.fetchall()
-        return [_to_slot(r) for r in rows]
+        slots = [_to_slot(r) for r in rows]
+
+        # Enriquecer total_bounty en una sola pasada (EC-C04)
+        bounty_sums = await self._get_bounty_sums(farm_list_id)
+        for slot in slots:
+            slot.total_bounty = bounty_sums.get(slot.id, 0)
+
+        return slots
+
+    async def _get_bounty_sums(self, farm_list_id: int) -> dict[int, int]:
+        """
+        Devuelve {slot_id: SUM(bounty)} desde slot_bounty_history para la farm list dada.
+        Una sola query de agregación (EC-C04).
+        """
+        cursor = await self._conn.execute(
+            "SELECT slot_id, SUM(bounty) AS total FROM slot_bounty_history "
+            "WHERE farm_list_id = ? GROUP BY slot_id",
+            (farm_list_id,),
+        )
+        rows = await cursor.fetchall()
+        return {r["slot_id"]: (r["total"] or 0) for r in rows}
+
+    async def _insert_slot_bounty(
+        self,
+        slot_id: int,
+        farm_list_id: int,
+        world_id: int,
+        timestamp: datetime,
+        bounty: int,
+        raid_report_id: str,
+    ) -> None:
+        """
+        Inserta en slot_bounty_history y purga registros > 7 días para el world_id (RN-C02).
+        Uso interno de _sync_slots; no valida bounty > 0 (el caller lo asegura).
+        """
+        await self._conn.execute(
+            """
+            INSERT INTO slot_bounty_history (slot_id, farm_list_id, world_id, timestamp, bounty, raid_report_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (slot_id, farm_list_id, world_id, _dt_to_str(timestamp), bounty, raid_report_id),
+        )
+        cutoff = datetime.utcnow() - timedelta(days=_HISTORY_TTL_DAYS)
+        await self._conn.execute(
+            "DELETE FROM slot_bounty_history WHERE world_id = ? AND timestamp < ?",
+            (world_id, _dt_to_str(cutoff)),
+        )
 
     async def get_villages_by_world(self, world_id: int) -> list[Village]:
         cursor = await self._conn.execute(
@@ -946,8 +1098,10 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                 farm_list_id, farm_list_name, world_id, timestamp, status,
                 being_raided_current, being_raided_total, triggered_by,
                 scheduler_id, bot_disabled_slots,
+                scheduler_name, scheduler_interval_min_ms,
+                scheduler_interval_max_ms, scheduler_execution_count,
                 loot_wood, loot_clay, loot_iron, loot_crop
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 event.farm_list_id,
@@ -960,6 +1114,11 @@ class FarmListSQLiteAdapter(FarmListDbPort):
                 event.triggered_by,
                 event.scheduler_id,
                 json.dumps(event.bot_disabled_slots),
+                # Gap B: metadata del scheduler (NULL si envío manual o scheduler borrado)
+                event.scheduler_name,
+                event.scheduler_interval_min_ms,
+                event.scheduler_interval_max_ms,
+                event.scheduler_execution_count,
                 event.loot_wood,
                 event.loot_clay,
                 event.loot_iron,
@@ -1009,3 +1168,221 @@ class FarmListSQLiteAdapter(FarmListDbPort):
         )
         rows = await cursor.fetchall()
         return [_to_send_event(r) for r in rows], total
+
+    # ------------------------------------------------------------------
+    # Gap C: historial de bounty por slot
+    # ------------------------------------------------------------------
+
+    async def add_slot_bounty_record(self, record: SlotBountyRecord) -> None:
+        """
+        Inserta un registro de bounty en slot_bounty_history y purga los registros
+        con más de 7 días para el mismo world_id (RN-C01, RN-C02).
+        """
+        await self._insert_slot_bounty(
+            slot_id=record.slot_id,
+            farm_list_id=record.farm_list_id,
+            world_id=record.world_id,
+            timestamp=record.timestamp,
+            bounty=record.bounty,
+            raid_report_id=record.raid_report_id,
+        )
+        await self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # Gap A: last_send_time por farm list
+    # ------------------------------------------------------------------
+
+    async def get_last_send_times_by_world(
+        self, world_id: int, farm_list_ids: list[int]
+    ) -> dict[int, datetime | None]:
+        """
+        Devuelve MAX(timestamp) de farm_list_send_history GROUP BY farm_list_id,
+        filtrado a los farm_list_ids indicados (RN-A01, RN-A02).
+        """
+        if not farm_list_ids:
+            return {}
+        placeholders = ",".join("?" * len(farm_list_ids))
+        cursor = await self._conn.execute(
+            f"""
+            SELECT farm_list_id, MAX(timestamp) AS last_send_time
+            FROM farm_list_send_history
+            WHERE farm_list_id IN ({placeholders})
+            GROUP BY farm_list_id
+            """,
+            farm_list_ids,
+        )
+        rows = await cursor.fetchall()
+        result: dict[int, datetime | None] = {}
+        for r in rows:
+            result[r["farm_list_id"]] = _str_to_dt(r["last_send_time"] or "")
+        return result
+
+    # ------------------------------------------------------------------
+    # Gap D: estadísticas del scheduler
+    # ------------------------------------------------------------------
+
+    async def get_scheduler_stats(
+        self, scheduler_id: int, world_id: int
+    ) -> SchedulerStats:
+        """
+        Devuelve métricas agregadas del scheduler (RN-D01..D07).
+        Lanza SchedulerNotFoundError si no existe o world_id no coincide (EC-D03).
+        """
+        scheduler = await self.get_scheduler(scheduler_id)
+        if scheduler.world_id != world_id:
+            raise SchedulerNotFoundError(scheduler_id)  # EC-D03
+
+        farm_list_ids = scheduler.farm_list_ids
+        if not farm_list_ids:
+            # EC-D01: scheduler sin farm lists → todo a cero
+            return SchedulerStats(
+                scheduler_id=scheduler_id,
+                scheduler_name=scheduler.name,
+                world_id=world_id,
+                execution_count=scheduler.execution_count,
+                last_send_time=None,
+                success_rate=0.0,
+                active_slots_avg=0.0,
+                total_bounty=0,
+                bounty_per_hour=0.0,
+                per_list=[],
+            )
+
+        placeholders = ",".join("?" * len(farm_list_ids))
+        cutoff_str = _dt_to_str(datetime.utcnow() - timedelta(days=_HISTORY_TTL_DAYS))
+
+        # --- Historial de envíos (últimos 7 días) ---
+        history_cursor = await self._conn.execute(
+            f"""
+            SELECT farm_list_id, status, being_raided_total, timestamp
+            FROM farm_list_send_history
+            WHERE scheduler_id = ? AND world_id = ? AND timestamp >= ?
+            ORDER BY farm_list_id, timestamp
+            """,
+            (scheduler_id, world_id, cutoff_str),
+        )
+        history_rows = await history_cursor.fetchall()
+
+        # --- Bounty por farm list desde slot_bounty_history ---
+        bounty_cursor = await self._conn.execute(
+            f"""
+            SELECT farm_list_id, SUM(bounty) AS total_bounty
+            FROM slot_bounty_history
+            WHERE farm_list_id IN ({placeholders})
+            GROUP BY farm_list_id
+            """,
+            farm_list_ids,
+        )
+        bounty_rows = await bounty_cursor.fetchall()
+        bounty_by_list: dict[int, int] = {
+            r["farm_list_id"]: (r["total_bounty"] or 0) for r in bounty_rows
+        }
+
+        # --- Nombres de las farm lists ---
+        name_cursor = await self._conn.execute(
+            f"SELECT id, name FROM farm_lists WHERE id IN ({placeholders})",
+            farm_list_ids,
+        )
+        name_rows = await name_cursor.fetchall()
+        name_by_list: dict[int, str] = {r["id"]: r["name"] for r in name_rows}
+
+        # --- Calcular métricas por lista ---
+        # Agrupar filas del historial por farm_list_id
+        from collections import defaultdict
+        hist_by_list: dict[int, list] = defaultdict(list)
+        for r in history_rows:
+            hist_by_list[r["farm_list_id"]].append(r)
+
+        per_list_stats: list[SchedulerListStats] = []
+        total_success = 0
+        total_sends = 0
+        all_active_slots: list[float] = []
+        total_bounty_global = sum(bounty_by_list.values())
+        global_timestamps: list[str] = []
+
+        for fl_id in farm_list_ids:
+            rows_fl = hist_by_list[fl_id]
+            fl_name = name_by_list.get(fl_id, f"Lista {fl_id}")
+            fl_bounty = bounty_by_list.get(fl_id, 0)
+
+            if not rows_fl:
+                # Sin historial: métricas en cero (flujo alternativo)
+                per_list_stats.append(SchedulerListStats(
+                    farm_list_id=fl_id,
+                    farm_list_name=fl_name,
+                    last_send_time=None,
+                    success_rate=0.0,
+                    active_slots_avg=0.0,
+                    total_bounty=fl_bounty,
+                    bounty_per_hour=0.0,
+                ))
+                continue
+
+            # RN-D01: success_rate
+            fl_success = sum(1 for r in rows_fl if r["status"] == "success")
+            fl_total = len(rows_fl)
+            fl_success_rate = fl_success / fl_total if fl_total > 0 else 0.0
+
+            # RN-D02: active_slots_avg (excluir NULLs)
+            active_vals = [r["being_raided_total"] for r in rows_fl if r["being_raided_total"] is not None]
+            fl_active_avg = (sum(active_vals) / len(active_vals)) if active_vals else 0.0
+
+            # RN-D06: last_send_time por lista
+            fl_timestamps = [r["timestamp"] for r in rows_fl]
+            fl_last_ts = max(fl_timestamps) if fl_timestamps else None
+
+            # RN-D04: bounty_per_hour por lista
+            if fl_timestamps:
+                min_ts_str = min(fl_timestamps)
+                min_ts = _str_to_dt(min_ts_str) or datetime.utcnow()
+                horas = max(1.0, (datetime.utcnow() - min_ts).total_seconds() / 3600.0)
+                fl_bph = fl_bounty / horas
+            else:
+                fl_bph = 0.0
+
+            per_list_stats.append(SchedulerListStats(
+                farm_list_id=fl_id,
+                farm_list_name=fl_name,
+                last_send_time=_str_to_dt(fl_last_ts) if fl_last_ts else None,
+                success_rate=round(fl_success_rate, 4),
+                active_slots_avg=round(fl_active_avg, 2),
+                total_bounty=fl_bounty,
+                bounty_per_hour=round(fl_bph, 2),
+            ))
+
+            total_success += fl_success
+            total_sends += fl_total
+            all_active_slots.extend(active_vals)
+            global_timestamps.extend(fl_timestamps)
+
+        # --- Métricas globales ---
+        # RN-D01: success_rate global
+        global_success_rate = (total_success / total_sends) if total_sends > 0 else 0.0
+
+        # RN-D02: active_slots_avg global
+        global_active_avg = (sum(all_active_slots) / len(all_active_slots)) if all_active_slots else 0.0
+
+        # RN-D04: bounty_per_hour global
+        if global_timestamps:
+            min_global_ts = _str_to_dt(min(global_timestamps)) or datetime.utcnow()
+            horas_global = max(1.0, (datetime.utcnow() - min_global_ts).total_seconds() / 3600.0)
+            global_bph = total_bounty_global / horas_global
+        else:
+            global_bph = 0.0
+
+        # last_send_time global (MAX de todos los timestamps)
+        global_last_send = _str_to_dt(max(global_timestamps)) if global_timestamps else None
+
+        # RN-D05: execution_count directo de BD
+        return SchedulerStats(
+            scheduler_id=scheduler_id,
+            scheduler_name=scheduler.name,
+            world_id=world_id,
+            execution_count=scheduler.execution_count,
+            last_send_time=global_last_send,
+            success_rate=round(global_success_rate, 4),
+            active_slots_avg=round(global_active_avg, 2),
+            total_bounty=total_bounty_global,
+            bounty_per_hour=round(global_bph, 2),
+            per_list=per_list_stats,
+        )

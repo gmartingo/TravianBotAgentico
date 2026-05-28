@@ -105,6 +105,32 @@ function IconClose({ size = 16 }) {
   )
 }
 
+/** Espadas cruzadas de resultado de raid */
+function IconSwords({ size = 14, color }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke={color} strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+      <line x1="13" y1="19" x2="19" y2="13" />
+      <line x1="16" y1="16" x2="20" y2="20" />
+      <line x1="19" y1="21" x2="21" y2="19" />
+      <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
+      <line x1="5" y1="14" x2="8.5" y2="17.5" />
+      <line x1="3" y1="19" x2="5" y2="21" />
+      <line x1="4" y1="22" x2="6" y2="22" />
+    </svg>
+  )
+}
+
+function raidStateColor(state) {
+  if (!state) return null
+  if (state.includes('withoutLosses')) return 'var(--success)'       // verde
+  if (state.includes('withLosses'))    return '#D4900A'              // amarillo
+  if (state.includes('lost'))          return 'var(--danger)'        // rojo
+  return null
+}
+
 /** Icono de enlace externo (↗) para el link de reporte */
 function IconExternalLink({ size = 11 }) {
   return (
@@ -710,31 +736,28 @@ function SlotRow({ slot, isExpanded, onToggle, farmListId, worldId, onUpdated, i
       >
         {/* Columna 1: Tropas (iconos) */}
         <td style={{ ...tdBase, padding: '6px 4px 6px 8px' }}>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: '2px', alignItems: 'center', flexWrap: 'nowrap' }}>
-            {troopEntries.map(({ ordinal }) => {
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', alignItems: 'center', flexWrap: 'nowrap' }}>
+            {troopEntries.map(({ ordinal, qty }) => {
               const url = iconsByOrdinal[ordinal]
-              if (url) {
-                return (
-                  <img
-                    key={ordinal}
-                    src={url}
-                    alt=""
-                    width={28}
-                    height={28}
-                    style={{ width: '28px', height: '28px', objectFit: 'contain', display: 'block' }}
-                  />
-                )
-              }
-              // Fallback texto "TN"
               return (
-                <span key={ordinal} style={{
-                  fontSize: '11px',
-                  color: 'var(--text-tertiary)',
-                  fontFamily: 'var(--font-mono)',
-                  lineHeight: 1,
-                }}>
-                  T{ordinal}
-                </span>
+                <div key={ordinal} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
+                  {url ? (
+                    <img
+                      src={url}
+                      alt=""
+                      width={20}
+                      height={20}
+                      style={{ width: '20px', height: '20px', objectFit: 'contain', display: 'block' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                      T{ordinal}
+                    </span>
+                  )}
+                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                    {qty}
+                  </span>
+                </div>
               )
             })}
           </div>
@@ -766,15 +789,20 @@ function SlotRow({ slot, isExpanded, onToggle, farmListId, worldId, onUpdated, i
           </span>
         </td>
 
-        {/* Columna 5: Botín último + link reporte */}
+        {/* Columna 5: Botín último + icono resultado + link reporte */}
         <td style={{ ...tdBase, padding: '8px 8px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: '13px',
-              fontVariantNumeric: 'tabular-nums',
-            }}>
-              {fmtNum(slot.last_raid_bounty)}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              {raidStateColor(slot.last_raid_state) && (
+                <IconSwords size={13} color={raidStateColor(slot.last_raid_state)} />
+              )}
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '13px',
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                {fmtNum(slot.last_raid_bounty)}
+              </span>
+            </div>
             {slot.last_raid_report_id ? (
               reportUrl ? (
                 <a
