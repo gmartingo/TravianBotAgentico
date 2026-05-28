@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario — Listas de vacas | TravianBot</title>
+  <style>
+    /* === Variables === */
+    :root {
+      --bg: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-2: #F0F0F2;
+      --border: #D8D8DC;
+      --text: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #A0A0A5;
+      --accent: #8A6418;
+      --accent-subtle: #F4ECD8;
+      --success: #1A7F37;
+      --danger: #C9352C;
+      --warning: #D4900A;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* === Base === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    /* === Layout === */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    /* === Sidebar === */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 0 24px;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .sidebar-section {
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+    .sidebar-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 8px 8px 4px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background .15s, color .15s;
+    }
+    .sidebar-link:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .sidebar-link.active {
+      background: var(--accent-subtle);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* === Main content === */
+    .main {
+      padding: 48px 56px 80px;
+      max-width: 960px;
+    }
+
+    /* === Header === */
+    .page-header {
+      margin-bottom: 48px;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .breadcrumb a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .breadcrumb a:hover { text-decoration: underline; }
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -.03em;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .page-intro {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 680px;
+      line-height: 1.7;
+    }
+
+    /* === Sections === */
+    section {
+      margin-bottom: 64px;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 24px;
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 28px 0 10px;
+      color: var(--text);
+    }
+    p { margin-bottom: 12px; color: var(--text-secondary); }
+    p:last-child { margin-bottom: 0; }
+    strong { color: var(--text); }
+
+    /* === Screenshots === */
+    .screenshot-block {
+      margin: 20px 0 28px;
+    }
+    .screenshot-block img {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+      display: block;
+    }
+    .screenshot-caption {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 8px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* === Annotated screenshot === */
+    .annotated {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    .annotation {
+      position: absolute;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      cursor: default;
+    }
+    .annotation-legend {
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .annotation-item {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .annotation-num {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .annotation-text { color: var(--text-secondary); }
+    .annotation-text strong { color: var(--text); }
+
+    /* === Steps === */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      margin: 16px 0 24px;
+    }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+    .steps li::before {
+      content: counter(step);
+      background: var(--text);
+      color: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .steps li p { margin: 0; }
+
+    /* === Info boxes === */
+    .info-box {
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      border-left: 3px solid;
+    }
+    .info-box.tip {
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+      color: #5A4010;
+    }
+    .info-box.warning {
+      background: rgba(212, 144, 10, .1);
+      border-color: var(--warning);
+      color: #7A5500;
+    }
+    .info-box.note {
+      background: var(--surface-2);
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+    .info-box-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    /* === Tables === */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0 24px;
+    }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+    td strong { color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+
+    /* === Badges === */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .badge-green { background: rgba(26,127,55,.12); color: var(--success); }
+    .badge-gold  { background: var(--accent-subtle); color: var(--accent); }
+    .badge-red   { background: rgba(201,53,44,.10); color: var(--danger); }
+    .badge-grey  { background: var(--surface-2); color: var(--text-secondary); }
+
+    /* === TOC === */
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 24px;
+      margin-bottom: 48px;
+      max-width: 560px;
+    }
+    .toc-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .toc ol {
+      list-style: decimal;
+      padding-left: 20px;
+    }
+    .toc li { margin-bottom: 6px; }
+    .toc a {
+      font-size: 13px;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .toc a:hover { text-decoration: underline; }
+
+    /* === Responsive === */
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 32px 20px 64px; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- Sidebar navegación -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Primeros pasos</div>
+      <a class="sidebar-link" href="index.html">Inicio</a>
+      <a class="sidebar-link" href="es/index.html">Cuentas y mundos</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Farm Lists</div>
+      <a class="sidebar-link active" href="#intro">Qué son las listas de vacas</a>
+      <a class="sidebar-link" href="#acceder">Cómo acceder</a>
+      <a class="sidebar-link" href="#tabla-listas">La tabla de listas</a>
+      <a class="sidebar-link" href="#drawer-slots">El drawer: pestaña Slots</a>
+      <a class="sidebar-link" href="#drawer-stats">El drawer: pestaña Stats</a>
+      <a class="sidebar-link" href="#drawer-historial">El drawer: pestaña Historial</a>
+      <a class="sidebar-link" href="#enviar-ahora">Enviar una lista ahora</a>
+      <a class="sidebar-link" href="#estados-vaca">Estados de una vaca</a>
+      <a class="sidebar-link" href="#acciones-vaca">Acciones sobre una vaca</a>
+      <a class="sidebar-link" href="#schedulers">Schedulers</a>
+      <a class="sidebar-link" href="#sincronizar">Sincronizar desde Travian</a>
+    </div>
+  </aside>
+
+  <!-- Contenido principal -->
+  <main class="main">
+
+    <div class="page-header">
+      <div class="breadcrumb">
+        <a href="index.html">Inicio</a> &rsaquo; Listas de vacas
+      </div>
+      <h1>Listas de vacas</h1>
+      <p class="page-intro">
+        Aprende a usar la sección de <strong>Listas de vacas</strong> del dashboard:
+        cómo leer el estado de tus listas, gestionar vacas individuales, revisar el historial
+        de envíos y configurar schedulers para que el bot envíe automáticamente.
+      </p>
+    </div>
+
+    <!-- TOC -->
+    <nav class="toc" aria-label="Contenido de esta página">
+      <div class="toc-title">En esta página</div>
+      <ol>
+        <li><a href="#intro">Qué son las listas de vacas</a></li>
+        <li><a href="#acceder">Cómo acceder a la sección</a></li>
+        <li><a href="#tabla-listas">La tabla de listas</a></li>
+        <li><a href="#drawer-slots">El drawer: pestaña Slots</a></li>
+        <li><a href="#drawer-stats">El drawer: pestaña Stats</a></li>
+        <li><a href="#drawer-historial">El drawer: pestaña Historial</a></li>
+        <li><a href="#enviar-ahora">Enviar una lista manualmente</a></li>
+        <li><a href="#estados-vaca">Estados de una vaca</a></li>
+        <li><a href="#acciones-vaca">Acciones sobre una vaca</a></li>
+        <li><a href="#schedulers">Configurar schedulers</a></li>
+        <li><a href="#sincronizar">Sincronizar desde Travian</a></li>
+      </ol>
+    </nav>
+
+    <!-- SECCIÓN 1: Introducción -->
+    <section id="intro">
+      <h2>1. Qué son las listas de vacas</h2>
+      <p>
+        En Travian, una <strong>lista de vacas</strong> (o farm list) es un grupo de aldeas
+        enemigas débiles que el jugador ataca regularmente para robar recursos. Travian permite
+        crear estas listas en la plaza de reuniones y asignar tropas a cada aldea objetivo.
+      </p>
+      <p>
+        El bot gestiona estas listas de forma automática: las lee desde Travian, las guarda
+        en su base de datos, y las envía periódicamente según la programación que el usuario
+        configure. Además, supervisa el resultado de cada raid: si una aldea empieza a defender
+        y causa bajas, el bot la desactiva temporalmente para proteger las tropas.
+      </p>
+      <div class="info-box tip">
+        <span class="info-box-title">Funcionamiento resumido</span>
+        El bot envía tus listas, detecta cuándo una vaca es peligrosa, la aparta durante un
+        tiempo prudencial y la vuelve a incluir cuando parece segura de nuevo. Tú solo tienes
+        que revisar el dashboard de vez en cuando.
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: Cómo acceder -->
+    <section id="acceder">
+      <h2>2. Cómo acceder a la sección</h2>
+      <p>
+        Las listas de vacas forman parte del espacio de mundo. Para llegar hasta ellas:
+      </p>
+      <ol class="steps">
+        <li><p>En la pantalla de <strong>Cuentas</strong>, haz clic sobre tu cuenta para ver sus mundos.</p></li>
+        <li><p>Haz clic en el mundo que quieres gestionar. Entrarás en el espacio de mundo.</p></li>
+        <li><p>En el menú lateral izquierdo, haz clic en <strong>Listas de vacas</strong>.</p></li>
+      </ol>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-02-mundo-pestanyas.png" alt="Vista del espacio de mundo con el menú lateral mostrando Agentes y Listas de vacas">
+        <div class="screenshot-caption">
+          Espacio de mundo. El menú lateral muestra las secciones disponibles:
+          Dashboard, Agentes, Listas de vacas y Calculadora (próximamente).
+        </div>
+      </div>
+
+      <div class="info-box note">
+        <span class="info-box-title">Requisito previo</span>
+        Para ver datos en las listas de vacas, el bot debe haber leído las listas desde Travian
+        al menos una vez. Si es la primera vez, usa el botón <strong>Sincronizar ahora</strong>
+        (ver sección 11).
+      </div>
+    </section>
+
+    <!-- SECCIÓN 3: La tabla de listas -->
+    <section id="tabla-listas">
+      <h2>3. La tabla de listas</h2>
+      <p>
+        La sección <strong>Listas de vacas</strong> muestra todas las farm lists del mundo,
+        agrupadas por aldea propietaria. Cada fila de la tabla es una lista.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-03-listas-vacas.png" alt="Tabla de listas de vacas agrupadas por aldea">
+        <div class="screenshot-caption">
+          Vista principal de Listas de vacas. Las listas están agrupadas por aldea
+          (01, 00, 02, etc.). Cada fila muestra el nombre, los slots activos,
+          el scheduler asignado, el último envío y el botín promedio por envío.
+        </div>
+      </div>
+
+      <h3>Columnas de la tabla</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Columna</th>
+            <th>Qué muestra</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nombre</strong></td>
+            <td>El nombre que le diste a la lista en Travian.</td>
+          </tr>
+          <tr>
+            <td><strong>Slots</strong></td>
+            <td>Número de vacas activas / total de vacas en la lista. En verde si hay activas, en naranja si hay pocas o ninguna.</td>
+          </tr>
+          <tr>
+            <td><strong>Scheduler</strong></td>
+            <td>Nombre del scheduler asignado, o &ldquo;—&rdquo; si la lista no tiene scheduler y solo puede enviarse manualmente.</td>
+          </tr>
+          <tr>
+            <td><strong>Último envío</strong></td>
+            <td>Hace cuánto tiempo se envió la lista por última vez. &ldquo;—&rdquo; si nunca se ha enviado.</td>
+          </tr>
+          <tr>
+            <td><strong>Rec/Env</strong></td>
+            <td>Recursos promedio obtenidos por envío (botín medio del último ciclo de vacas activas).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        Haz clic en cualquier fila para abrir el <strong>drawer</strong> de detalle de esa lista.
+      </p>
+    </section>
+
+    <!-- SECCIÓN 4: Drawer Slots -->
+    <section id="drawer-slots">
+      <h2>4. El drawer: pestaña Slots</h2>
+      <p>
+        Al hacer clic en una lista se abre un panel lateral (drawer) desde el lado derecho de la
+        pantalla. La primera pestaña, <strong>Slots</strong>, muestra todas las vacas de la lista
+        con su estado actual.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-04-drawer-slots.png" alt="Drawer lateral con la pestaña Slots mostrando la tabla de vacas">
+        <div class="screenshot-caption">
+          Drawer de detalle de la lista &ldquo;00 Vacas 7x7&rdquo;. Muestra 3 chips de resumen en la
+          parte superior y la tabla de slots ordenable por columna.
+        </div>
+      </div>
+
+      <h3>Chips de resumen</h3>
+      <p>En la parte superior de la pestaña Slots hay tres chips:</p>
+      <table>
+        <thead>
+          <tr><th>Chip</th><th>Qué indica</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Slots activos</strong></td>
+            <td>Cuántas vacas están activas ahora mismo frente al total.</td>
+          </tr>
+          <tr>
+            <td><strong>Rec / Envío</strong></td>
+            <td>Media de recursos que obtiene esta lista por cada envío.</td>
+          </tr>
+          <tr>
+            <td><strong>Total acum.</strong></td>
+            <td>Suma total de botín acumulado en los últimos 7 días para esta lista.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Tabla de slots</h3>
+      <p>Cada fila es una vaca. Las columnas son:</p>
+      <table>
+        <thead>
+          <tr><th>Columna</th><th>Qué muestra</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tropas</strong> (icono)</td>
+            <td>Iconos de las tropas asignadas a esta vaca, con su cantidad debajo. El icono corresponde al tipo de tropa de tu tribu.</td>
+          </tr>
+          <tr>
+            <td><strong>Nombre</strong></td>
+            <td>Nombre de la aldea objetivo.</td>
+          </tr>
+          <tr>
+            <td><strong>Dist</strong></td>
+            <td>Distancia en casillas desde tu aldea. Oculta en pantallas pequeñas.</td>
+          </tr>
+          <tr>
+            <td><strong>Acum.</strong></td>
+            <td>Botín acumulado de esta vaca en los últimos 7 días. Oculta en pantallas pequeñas.</td>
+          </tr>
+          <tr>
+            <td><strong>Botín</strong></td>
+            <td>Recursos obtenidos en el último raid. El icono de espadas indica el resultado: verde (sin bajas), amarillo (bajas pero victoria), rojo (derrota).</td>
+          </tr>
+          <tr>
+            <td><strong>Estado</strong></td>
+            <td>Estado actual de la vaca. Ver sección 8 para el significado de cada estado.</td>
+          </tr>
+          <tr>
+            <td><strong>&middot;&middot;&middot;</strong></td>
+            <td>Menú de acciones sobre la vaca. Ver sección 9.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Ordenar la tabla</h3>
+      <p>
+        Haz clic en la cabecera de cualquier columna ordenable (Nombre, Dist, Acum., Botín,
+        Estado) para ordenar por ese campo. Un segundo clic invierte el orden; un tercer clic
+        vuelve al orden original.
+      </p>
+
+      <h3>Ver el detalle de una vaca (accordion)</h3>
+      <p>
+        Haz clic en cualquier fila de la tabla para expandirla y ver el detalle completo de
+        esa vaca: último informe de raid, botín promedio, botín acumulado y los botones de
+        acción. Haz clic de nuevo para cerrar.
+      </p>
+      <p>
+        Si la vaca tiene una <strong>sonda pendiente</strong>, el detalle muestra además
+        un contador regresivo con el tiempo que queda hasta que el bot la envíe.
+      </p>
+    </section>
+
+    <!-- SECCIÓN 5: Drawer Stats -->
+    <section id="drawer-stats">
+      <h2>5. El drawer: pestaña Stats</h2>
+      <p>
+        La pestaña <strong>Stats</strong> resume el rendimiento de la lista: cuánto ha producido,
+        cómo se distribuyen los slots entre sus distintos estados y cuáles son las vacas más
+        rentables.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-05-drawer-stats.png" alt="Drawer con la pestaña Stats mostrando rendimiento, distribución y top slots">
+        <div class="screenshot-caption">
+          Pestaña Stats de la lista &ldquo;00 Vacas 7x7&rdquo;. Muestra rendimiento general,
+          una barra de distribución de slots y el ranking de las 5 vacas más rentables.
+        </div>
+      </div>
+
+      <h3>Rendimiento general</h3>
+      <table>
+        <thead>
+          <tr><th>Métrica</th><th>Qué mide</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Botín total acumulado</strong></td>
+            <td>Suma de todos los recursos obtenidos por esta lista en los últimos 7 días.</td>
+          </tr>
+          <tr>
+            <td><strong>Media por envío</strong></td>
+            <td>Botín promedio de las vacas activas en el último ciclo.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Distribución de slots</h3>
+      <p>
+        La barra de colores muestra en un vistazo qué proporción de las vacas está en cada
+        estado. La leyenda debajo indica el número exacto de slots en cada categoría.
+      </p>
+
+      <h3>Top slots por botín</h3>
+      <p>
+        Ranking de las 5 vacas que más recursos producen por envío (media). Es útil para
+        identificar las vacas más valiosas y asegurarte de que el bot las mantiene activas.
+      </p>
+
+      <div class="info-box note">
+        Si la lista no tiene envíos registrados todavía, la pestaña Stats mostrará un
+        mensaje indicando que aún no hay datos suficientes.
+      </div>
+    </section>
+
+    <!-- SECCIÓN 6: Drawer Historial -->
+    <section id="drawer-historial">
+      <h2>6. El drawer: pestaña Historial</h2>
+      <p>
+        La pestaña <strong>Historial</strong> muestra los últimos envíos registrados de esa
+        lista, con la hora, el resultado y el origen (automático o manual).
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-07-drawer-historial.png" alt="Drawer con la pestaña Historial mostrando envíos de los últimos 7 días">
+        <div class="screenshot-caption">
+          Pestaña Historial de &ldquo;01 Madera&rdquo;. Muestra hora del envío, estado,
+          slots raideando y si fue automático (Auto) o manual (Manual).
+          El historial cubre los últimos 7 días.
+        </div>
+      </div>
+
+      <h3>Columnas del historial</h3>
+      <table>
+        <thead>
+          <tr><th>Columna</th><th>Qué muestra</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Hora</strong></td>
+            <td>Hora exacta del envío (hh:mm:ss).</td>
+          </tr>
+          <tr>
+            <td><strong>Estado</strong></td>
+            <td>
+              <span class="badge badge-green">OK</span> Envío completado &nbsp;
+              <span class="badge badge-gold">Parcial</span> Algunos slots no pudieron enviarse &nbsp;
+              <span class="badge badge-red">Error</span> Fallo en el envío
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Slots</strong></td>
+            <td>Cuántas vacas estaban raideando en ese envío frente al total disponible.</td>
+          </tr>
+          <tr>
+            <td><strong>Origen</strong></td>
+            <td><strong>Auto</strong> = disparado por el scheduler. <strong>Manual</strong> = enviado por ti desde el botón "Enviar ahora".</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Cargar más entradas</h3>
+      <p>
+        Por defecto se muestran los 20 envíos más recientes. Si hay más, aparece el botón
+        <strong>Cargar más</strong> al final de la lista.
+      </p>
+
+      <div class="info-box note">
+        El historial solo conserva registros de los <strong>últimos 7 días</strong>.
+        Los envíos más antiguos se eliminan automáticamente.
+      </div>
+    </section>
+
+    <!-- SECCIÓN 7: Enviar ahora -->
+    <section id="enviar-ahora">
+      <h2>7. Enviar una lista manualmente</h2>
+      <p>
+        Desde cualquier pestaña del drawer, el pie de página tiene un botón
+        <strong>Enviar ahora</strong>. Al pulsarlo, el bot envía la lista en ese momento,
+        independientemente del scheduler.
+      </p>
+
+      <ol class="steps">
+        <li><p>Abre el drawer de la lista que quieres enviar (haz clic en su fila).</p></li>
+        <li><p>En la parte inferior del drawer, haz clic en <strong>Enviar ahora</strong>.</p></li>
+        <li><p>El botón mostrará un indicador de carga mientras el bot se conecta a Travian.</p></li>
+        <li><p>Al terminar aparece un panel de feedback con el resultado del envío:
+          cuántas vacas se han puesto a raidear y si el bot desactivó alguna por pérdidas.</p></li>
+      </ol>
+
+      <div class="info-box warning">
+        <span class="info-box-title">Importante</span>
+        El envío manual no activa la lógica de cooldown y sondas. Solo pulsa el botón
+        de envío en Travian y registra el resultado. Si quieres que el bot también gestione
+        las pérdidas, usa el scheduler.
+      </div>
+    </section>
+
+    <!-- SECCIÓN 8: Estados de una vaca -->
+    <section id="estados-vaca">
+      <h2>8. Estados de una vaca</h2>
+      <p>
+        Cada vaca puede estar en uno de los siguientes estados, visibles en la columna
+        <strong>Estado</strong> de la tabla de slots:
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Badge</th>
+            <th>Estado</th>
+            <th>Qué significa</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-green">Activa</span></td>
+            <td>Activa</td>
+            <td>La vaca está incluida en el envío. El bot la raidea normalmente.</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-gold">Sonda</span></td>
+            <td>Sonda pendiente</td>
+            <td>El bot la desactivó por pérdidas, el tiempo de cuarentena expiró y aún no llegó ningún informe nuevo. El bot la incluirá brevemente en el próximo ciclo como prueba y la volverá a desactivar.</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-red">Bot</span></td>
+            <td>Desactivada por el bot</td>
+            <td>El bot la desactivó porque el último raid tuvo bajas. Está en cuarentena hasta que expire el cooldown o llegue un informe limpio.</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-grey">Manual</span></td>
+            <td>Desactivada manualmente</td>
+            <td>Tú la desactivaste en Travian o desde el dashboard. El bot no la toca.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>El cooldown de cuarentena</h3>
+      <p>
+        Cuando el bot detecta pérdidas en una vaca, la desactiva durante <strong>1 hora</strong>.
+        Si al reactivarla (sonda) vuelven a producirse pérdidas, el siguiente cooldown es de
+        <strong>2 horas</strong>, luego 4, 8, hasta un máximo de <strong>24 horas</strong>.
+      </p>
+      <p>
+        El cooldown se resetea a 1 hora cuando llega un informe limpio (sin pérdidas).
+      </p>
+    </section>
+
+    <!-- SECCIÓN 9: Acciones sobre una vaca -->
+    <section id="acciones-vaca">
+      <h2>9. Acciones sobre una vaca</h2>
+      <p>
+        Cada fila de la tabla de slots tiene un botón <strong>&middot;&middot;&middot;</strong>
+        en la columna de acciones. Al pulsarlo se despliega un menú con las opciones disponibles
+        para esa vaca.
+      </p>
+      <p>
+        También puedes expandir la fila (clic en la vaca) y usar los botones del panel de
+        detalle.
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Acción</th><th>Qué hace</th><th>Cuándo aparece</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Activar</strong></td>
+            <td>Activa la vaca en Travian. El bot la incluirá en el próximo envío.</td>
+            <td>Cuando la vaca no está activa.</td>
+          </tr>
+          <tr>
+            <td><strong>Desactivar</strong></td>
+            <td>Desactiva la vaca en Travian. El bot no la tocará (desactivación manual).</td>
+            <td>Cuando la vaca está activa y no fue desactivada por el bot.</td>
+          </tr>
+          <tr>
+            <td><strong>Cancelar sonda</strong> &rsaquo; <em>Desactivar</em></td>
+            <td>Cancela la sonda y deja la vaca apagada indefinidamente como si la hubieras desactivado tú. El bot no la gestionará más.</td>
+            <td>Cuando la vaca tiene una sonda pendiente.</td>
+          </tr>
+          <tr>
+            <td><strong>Cancelar sonda</strong> &rsaquo; <em>Enviar ahora</em></td>
+            <td>Fuerza que la sonda se envíe en el próximo ciclo del bot, sin esperar a que expire el cooldown.</td>
+            <td>Cuando la vaca tiene una sonda pendiente.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="info-box tip">
+        <span class="info-box-title">Consejo</span>
+        Si sabes que una vaca es segura pero el bot la tiene en cuarentena, usa
+        <strong>Cancelar sonda &rsaquo; Enviar ahora</strong> para que la pruebe en el
+        próximo ciclo sin tener que esperar horas.
+      </div>
+    </section>
+
+    <!-- SECCIÓN 10: Schedulers -->
+    <section id="schedulers">
+      <h2>10. Configurar schedulers</h2>
+      <p>
+        Los schedulers son los temporizadores que envían las listas automáticamente.
+        Están en la sección <strong>Agentes</strong> del menú lateral.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/farm-06-scheduler.png" alt="Vista de la sección Agentes con un scheduler configurado">
+        <div class="screenshot-caption">
+          Sección Agentes. Muestra los schedulers creados, las listas que tienen asignadas,
+          el intervalo configurado y el número de envíos realizados.
+        </div>
+      </div>
+
+      <h3>Crear un scheduler</h3>
+      <ol class="steps">
+        <li><p>Ve a <strong>Agentes</strong> en el menú lateral.</p></li>
+        <li><p>Haz clic en <strong>+ Nuevo scheduler</strong>.</p></li>
+        <li><p>Escribe un nombre descriptivo (por ejemplo: "Madera cada 5 min").</p></li>
+        <li><p>Configura el <strong>intervalo mínimo</strong> y <strong>máximo</strong> en minutos. El bot elegirá un tiempo aleatorio entre los dos valores en cada disparo.</p></li>
+        <li><p>Guarda. El scheduler aparece en la lista pero aún no tiene listas asignadas.</p></li>
+      </ol>
+
+      <h3>Asignar listas de vacas a un scheduler</h3>
+      <ol class="steps">
+        <li><p>Haz clic en el menú <strong>&middot;&middot;&middot;</strong> del scheduler y elige <strong>Editar listas</strong>.</p></li>
+        <li><p>Selecciona las farm lists que quieres que este scheduler envíe.</p></li>
+        <li><p>Guarda. Las listas aparecen como chips bajo el nombre del scheduler.</p></li>
+      </ol>
+
+      <h3>Activar y desactivar un scheduler</h3>
+      <p>
+        Cada scheduler tiene un interruptor en el extremo derecho. Puedes pausarlo en cualquier
+        momento sin perder su configuración ni su historial.
+      </p>
+
+      <h3>Enviar ahora (saltar la espera)</h3>
+      <p>
+        El botón <strong>Enviar ahora</strong> junto al scheduler adelanta el próximo disparo
+        a este mismo instante. El bot necesita estar arrancado (estado "activo" en la barra
+        inferior).
+      </p>
+
+      <h3>Arrancar y parar el bot</h3>
+      <p>
+        En la barra inferior del espacio de mundo aparece el estado del bot: <strong>Bot parado</strong>
+        o <strong>Bot activo</strong>. Para que los schedulers funcionen, el bot debe estar activo.
+        El botón de la barra permite arrancarlo y pararlo.
+      </p>
+
+      <div class="info-box tip">
+        <span class="info-box-title">Por qué el intervalo es aleatorio</span>
+        Un bot que envía siempre exactamente a la misma hora es más fácil de detectar por
+        Travian. El intervalo variable hace que el patrón de envíos parezca humano.
+      </div>
+
+      <h3>Borrar un scheduler</h3>
+      <p>
+        Al borrar un scheduler, las farm lists que tenía asignadas no se borran: solo quedan
+        sin scheduler asignado. Puedes reasignarlas a otro scheduler cuando quieras.
+      </p>
+    </section>
+
+    <!-- SECCIÓN 11: Sincronizar -->
+    <section id="sincronizar">
+      <h2>11. Sincronizar desde Travian</h2>
+      <p>
+        El bot guarda las listas de vacas en su base de datos local. Si creas, modificas o
+        borras listas directamente en Travian, esos cambios no se reflejan automáticamente en
+        el dashboard: hay que sincronizar manualmente.
+      </p>
+
+      <ol class="steps">
+        <li><p>Asegúrate de que el bot está activo y tiene sesión abierta en Travian (indica "Activo" en la barra superior).</p></li>
+        <li><p>Ve a <strong>Listas de vacas</strong>.</p></li>
+        <li><p>Haz clic en <strong>Sincronizar ahora</strong> (esquina superior derecha).</p></li>
+        <li><p>El bot navega a la plaza de reuniones, lee todas las listas del DOM de Travian y actualiza la base de datos. Este proceso puede tardar unos segundos.</p></li>
+        <li><p>La fecha de "Última sincronización" bajo el título se actualiza al terminar.</p></li>
+      </ol>
+
+      <div class="info-box warning">
+        <span class="info-box-title">Requiere sesión activa</span>
+        Si el bot no tiene sesión abierta en Travian, la sincronización fallará con el mensaje
+        "No hay sesión activa". Inicia sesión primero desde la sección de cuentas.
+      </div>
+
+      <h3>Qué hace exactamente la sincronización</h3>
+      <p>El bot:</p>
+      <ul style="padding-left: 20px; color: var(--text-secondary); font-size: 14px; margin: 8px 0 12px; line-height: 1.8;">
+        <li>Añade las listas nuevas que aparecen en Travian.</li>
+        <li>Actualiza el nombre de las listas existentes si cambió.</li>
+        <li>Elimina las listas que ya no existen en Travian.</li>
+        <li>Actualiza los slots (vacas) de cada lista, preservando el estado bot (cooldowns, sondas) de las que sigan activas.</li>
+      </ul>
+
+      <div class="info-box note">
+        Si Travian reasigna el ID interno de una vaca (puede ocurrir al reordenar las listas),
+        el bot la reconoce por sus coordenadas y conserva su historial de botín.
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <hr style="border: none; border-top: 1px solid var(--border); margin: 48px 0 24px;">
+    <p style="font-size: 12px; color: var(--text-tertiary);">
+      TravianBot &mdash; Manual de usuario &mdash; Farm Lists<br>
+      Revisión: 2026-05-28
+    </p>
+
+  </main>
+</div>
+
+</body>
+</html>
