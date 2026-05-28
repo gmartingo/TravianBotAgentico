@@ -211,6 +211,7 @@ const en = {
   'schedulers.card.next':            'Next:',
   'schedulers.card.noNext':          '—',
   'schedulers.card.assignLists':     'Assign lists',
+  'schedulers.card.stopped':         'stopped',
   'schedulers.card.disabled':        'Disabled',
   'schedulers.card.sendNow':              'Send now',
   'schedulers.card.sendNow.noLists':      'No lists assigned',

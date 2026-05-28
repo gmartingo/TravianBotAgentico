@@ -234,6 +234,7 @@ const es = {
   'schedulers.card.next':            'Próximo:',
   'schedulers.card.noNext':          '—',
   'schedulers.card.assignLists':     'Asignar listas',
+  'schedulers.card.stopped':         'parado',
   'schedulers.card.disabled':        'Desactivado',
   'schedulers.card.sendNow':              'Enviar ahora',
   'schedulers.card.sendNow.noLists':      'Sin listas asignadas',

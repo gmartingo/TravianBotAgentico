@@ -665,8 +665,8 @@ function SchedulerCard({
           fontFamily: 'var(--font-mono)', flexShrink: 0, whiteSpace: 'nowrap',
         }}>
           {isRunning && next_run
-            ? `próx. ${new Date(next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-            : 'parado'
+            ? `${t('schedulers.card.next')} ${new Date(next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : t('schedulers.card.stopped')
           }
         </span>
 
