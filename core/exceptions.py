@@ -241,3 +241,67 @@ class LoginFailedError(TravianBotError):
         super().__init__(f"Login fallido para '{username}'")
         self.username = username
         self.params = {"username": username}
+
+
+# --- Excepciones añadidas en la feature farm-lists ---
+
+class SchedulerNotFoundError(TravianBotError):
+    """Scheduler de farm lists no encontrado."""
+
+    error_code = "SCHEDULER_NOT_FOUND"
+
+    def __init__(self, scheduler_id: int) -> None:
+        super().__init__(f"Scheduler {scheduler_id} no encontrado")
+        self.scheduler_id = scheduler_id
+        self.params = {"scheduler_id": scheduler_id}
+
+
+class FarmSlotNotFoundError(TravianBotError):
+    """Slot de farm list no encontrado (clave compuesta id + farm_list_id)."""
+
+    error_code = "FARM_SLOT_NOT_FOUND"
+
+    def __init__(self, slot_id: int) -> None:
+        super().__init__(f"Slot {slot_id} no encontrado")
+        self.slot_id = slot_id
+        self.params = {"slot_id": slot_id}
+
+
+class FarmListSendError(TravianBotError):
+    """Error al pulsar el botón Start de una farm list en Travian."""
+
+    error_code = "FARM_LIST_SEND_ERROR"
+
+    def __init__(self, farm_list_id: int, reason: str) -> None:
+        super().__init__(f"Error enviando la lista {farm_list_id}: {reason}")
+        self.farm_list_id = farm_list_id
+        self.reason = reason
+        self.params = {"farm_list_id": farm_list_id, "reason": reason}
+
+
+class FarmListPageError(TravianBotError):
+    """
+    La página de farm lists no cargó o el Gold Club no está activo.
+    Se lanza cuando navigate_to_farm_list no puede cargar la plaza de reuniones
+    o cuando no hay listas en el DOM.
+    """
+
+    error_code = "FARM_LIST_PAGE_ERROR"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.params = {"message": message}
+
+
+class FarmListResponseError(TravianBotError):
+    """
+    El DOM devolvió datos incompletos o malformados para una farm list concreta.
+    Se lanza cuando faltan campos obligatorios (id, name) en el objeto JS extraído.
+    """
+
+    error_code = "FARM_LIST_RESPONSE_ERROR"
+
+    def __init__(self, index: int, message: str) -> None:
+        super().__init__(f"Lista[{index}]: {message}")
+        self.index = index
+        self.params = {"index": index, "message": message}

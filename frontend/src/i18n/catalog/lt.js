@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo LT — Lietuvių
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const lt = {
   'page.account.col.session':        'Sesija',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Ištrinti pasaulį',
+  'page.account.enterWorld':         'Įeiti į pasaulį',
   'page.account.notFound.title':     'Paskyra nerasta',
   'page.account.notFound.desc':      'Ieškoma paskyra neegzistuoja arba buvo ištrinta.',
   'page.account.notFound.back':      'Grįžti į paskyras',
@@ -177,18 +178,19 @@ const lt = {
   'world.session.error.toast':    'Nepavyko prisijungti prie {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romėnai',
+  'tribe.teutons':   'Teutonai',
+  'tribe.gauls':     'Galai',
+  'tribe.egyptians': 'Egiptiečiai',
+  'tribe.huns':      'Hunai',
+  'tribe.spartans':  'Spartiečiai',
+  'tribe.vikings':   'Vikingai',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Ryšio klaida. Bandykite dar kartą.',
   'error.retry':      'Bandyti dar kartą',
   'error.loadFailed': 'Nepavyko įkelti duomenų.',
+  'error.loadDetail':  'Klaida įkeliant informaciją',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const lt = {
   'placeholder.accounts.list':   'Paskyrų sąrašas — netrukus',
   'placeholder.account.detail':  'Paskyros informacija — netrukus',
   'placeholder.world.space':     'Pasaulio erdvė — netrukus',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Peržiūrėti ataskaitą',
+  'slot.error.actionFailed':    'Klaida keičiant slotą.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Pilna suvestinė →',
+  'scheduler.subpanel.kpi.nextSend':           'Kitas siuntimas',
+  'scheduler.subpanel.kpi.sendsToday':         'Šiandienos siuntimai',
+  'scheduler.subpanel.kpi.avgBounty':          'Ištekl./siunt.',
+  'scheduler.subpanel.kpi.in':                 'po {t}',
+  'scheduler.subpanel.feed.title':             'Paskutinis aktyvumas',
+  'scheduler.subpanel.feed.updatedAgo':        'Atnaujinta prieš {t}',
+  'scheduler.subpanel.feed.viewAll':           'Visa istorija →',
+  'scheduler.subpanel.feed.empty':             'Nėra naujausių siuntimų',
+  'scheduler.subpanel.alerts.title':           'Įspėjimai',
+  'scheduler.subpanel.alerts.unread':          '{n} neperskaityta',
+  'scheduler.subpanel.alerts.empty':           'Nėra naujausių įspėjimų',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauzė',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktyvuoti',
+  'scheduler.subpanel.toggle.soon':            'Netrukus',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktyvuoti zondą šiame kaime?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Atšaukti zondą šiame kaime?',
+  'scheduler.subpanel.probe.btn.confirm':      'Patvirtinti',
+  'scheduler.subpanel.probe.btn.dismiss':      'Atmesti',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agentai',
+  'schedulerDash.breadcrumb.back':     '← Atgal',
+  'schedulerDash.title':               '{name} suvestinė',
+  'schedulerDash.kpi.nextSend':        'Kitas siuntimas',
+  'schedulerDash.kpi.sendsToday':      'Šiandienos siuntimai',
+  'schedulerDash.kpi.avgBounty':       'Ištekl./siunt.',
+  'schedulerDash.table.title':         'Santrauka pagal sąrašą',
+  'schedulerDash.table.col.list':      'Sąrašas',
+  'schedulerDash.table.col.status':    'Posled. būsena',
+  'schedulerDash.table.col.sent':      'Siųsti fermai',
+  'schedulerDash.table.col.active':    'Aktyvūs fermai',
+  'schedulerDash.table.col.avgBounty': 'Vid. grobis',
+  'schedulerDash.table.col.lastSend':  'Posled. siuntimas',
+  'schedulerDash.table.empty':         'Nėra priskirtų sąrašų',
+  'schedulerDash.history.title':       'Siuntimų istorija',
+  'schedulerDash.alerts.title':        'Įspėjimai',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Aptikti nuostoliai',
+  'alertEvent.PROBE_SENT':        '{list} · Zondas išsiųstas į {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Reaktyvuota',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Zondas atšauktas',
+  'alertEvent.probe.activate':    '⚡ Aktyvuoti zondą',
+  'alertEvent.probe.cancel':      '✕ Atšaukti zondą',
+  'alertEvent.probe.viewTravian': 'Peržiūrėti Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Paskutinis siuntimas',
+  'feedback.status.success':   '✓ Baigta',
+  'feedback.status.partial':   '⚠ Dalinis',
+  'feedback.status.error':     '✗ Klaida',
+  'feedback.status.unknown':   '? Nežinoma',
+  'feedback.slotsRaiding':     '{n} slotų plėšia',
+  'feedback.noDeactivated':    'Nėra deaktyvuotų fermų',
+  'feedback.deactivatedLabel': 'Deaktyvuoti fermai:',
+  'feedback.deactivatedMore':  'ir dar {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistika',
+  'stats.section.performance':  'Bendras efektyvumas',
+  'stats.totalBounty':          'Bendras sukauptas grobis',
+  'stats.avgPerSend':           'Vidurkis už siuntimą',
+  'stats.sendsLast7d':          'Siuntimai (7 dienos)',
+  'stats.bountyUnit':           'išteklių',
+  'stats.section.distribution': 'Slotų pasiskirstymas',
+  'stats.dist.active':          'Aktyvūs',
+  'stats.dist.probe':           'Zondas laukia',
+  'stats.dist.botDisabled':     'Išjungta boto',
+  'stats.dist.manualDisabled':  'Išjungta rankiniu būdu',
+  'stats.section.topSlots':     'Geriausi slotai pagal grobį (vid./siunt.)',
+  'stats.topSlots.distance':    '{d} ląstelės',
+  'stats.topSlots.avgBounty':   '{n} išt./siunt.',
+  'stats.empty.title':          'Nėra efektyvumo duomenų',
+  'stats.empty.subtitle':       'Duomenys pasirodys po pirmojo siuntimo.',
 }
 
 export default lt

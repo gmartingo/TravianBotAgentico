@@ -696,12 +696,22 @@ export function AccountDetailPage() {
                         {/* URL completa — P2, oculta en < md */}
                         <td
                           className="px-[14px] h-10 border-b border-[var(--border)] align-middle
-                                     hidden md:table-cell font-mono text-[12px] text-[var(--text-secondary)]
+                                     hidden md:table-cell font-mono text-[12px]
                                      max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap"
-                          title={world.server}
                           role="cell"
                         >
-                          {world.server}
+                          {state === 'active' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleEnter(world.id)}
+                              title={t('page.account.enterWorld')}
+                              className="text-[var(--accent-text)] font-mono text-[12px] bg-transparent border-0 p-0 cursor-pointer font-[inherit] underline underline-offset-2 truncate max-w-[200px] block"
+                            >
+                              {world.server}
+                            </button>
+                          ) : (
+                            <span className="text-[var(--text-secondary)]">{world.server}</span>
+                          )}
                         </td>
                         {/* Vista parsada — P1 */}
                         <td className="px-[14px] h-10 border-b border-[var(--border)] align-middle
@@ -764,9 +774,20 @@ export function AccountDetailPage() {
                                flex items-center gap-3"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-[14px] text-[var(--accent-text)] font-mono truncate">
-                        {parsed}
-                      </div>
+                      {state === 'active' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEnter(world.id)}
+                          title={t('page.account.enterWorld')}
+                          className="font-semibold text-[14px] text-[var(--accent-text)] font-mono truncate bg-transparent border-0 p-0 cursor-pointer font-[inherit] underline underline-offset-2 text-left w-full"
+                        >
+                          {parsed}
+                        </button>
+                      ) : (
+                        <div className="font-semibold text-[14px] text-[var(--accent-text)] font-mono truncate">
+                          {parsed}
+                        </div>
+                      )}
                       <div className="text-[12px] text-[var(--text-secondary)] mt-[2px]">
                         {t(`tribe.${world.tribe}`)}
                       </div>

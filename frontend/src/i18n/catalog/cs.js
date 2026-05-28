@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo CS — Čeština
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const cs = {
   'page.account.col.session':        'Relace',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Smazat svět',
+  'page.account.enterWorld':         'Vstoupit do světa',
   'page.account.notFound.title':     'Účet nenalezen',
   'page.account.notFound.desc':      'Hledaný účet neexistuje nebo byl smazán.',
   'page.account.notFound.back':      'Zpět na účty',
@@ -177,18 +178,19 @@ const cs = {
   'world.session.error.toast':    'Nelze se připojit na {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Římané',
+  'tribe.teutons':   'Teutoni',
+  'tribe.gauls':     'Galové',
+  'tribe.egyptians': 'Egypťané',
+  'tribe.huns':      'Hunové',
+  'tribe.spartans':  'Sparťané',
+  'tribe.vikings':   'Vikingové',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Chyba připojení. Zkuste to znovu.',
   'error.retry':      'Zkusit znovu',
   'error.loadFailed': 'Data se nepodařilo načíst.',
+  'error.loadDetail':  'Chyba při načítání podrobností',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const cs = {
   'placeholder.accounts.list':   'Seznam účtů — brzy',
   'placeholder.account.detail':  'Detail účtu — brzy',
   'placeholder.world.space':     'Prostor světa — brzy',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Zobrazit zprávu',
+  'slot.error.actionFailed':    'Chyba při úpravě slotu.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Plný přehled →',
+  'scheduler.subpanel.kpi.nextSend':           'Příští odeslání',
+  'scheduler.subpanel.kpi.sendsToday':         'Odesláno dnes',
+  'scheduler.subpanel.kpi.avgBounty':          'Sur./odeslání',
+  'scheduler.subpanel.kpi.in':                 'za {t}',
+  'scheduler.subpanel.feed.title':             'Poslední aktivita',
+  'scheduler.subpanel.feed.updatedAgo':        'Aktualizováno před {t}',
+  'scheduler.subpanel.feed.viewAll':           'Celá historie →',
+  'scheduler.subpanel.feed.empty':             'Žádná poslední odeslání',
+  'scheduler.subpanel.alerts.title':           'Upozornění',
+  'scheduler.subpanel.alerts.unread':          '{n} nepřečtených',
+  'scheduler.subpanel.alerts.empty':           'Žádná poslední upozornění',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauza',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktivovat',
+  'scheduler.subpanel.toggle.soon':            'Brzy',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivovat sondu v této vesnici?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Zrušit sondu v této vesnici?',
+  'scheduler.subpanel.probe.btn.confirm':      'Potvrdit',
+  'scheduler.subpanel.probe.btn.dismiss':      'Zamítnout',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenti',
+  'schedulerDash.breadcrumb.back':     '← Zpět',
+  'schedulerDash.title':               'Přehled {name}',
+  'schedulerDash.kpi.nextSend':        'Příští odeslání',
+  'schedulerDash.kpi.sendsToday':      'Odesláno dnes',
+  'schedulerDash.kpi.avgBounty':       'Sur./odeslání',
+  'schedulerDash.table.title':         'Souhrn podle seznamu',
+  'schedulerDash.table.col.list':      'Seznam',
+  'schedulerDash.table.col.status':    'Posl. stav',
+  'schedulerDash.table.col.sent':      'Odeslané farmy',
+  'schedulerDash.table.col.active':    'Aktivní farmy',
+  'schedulerDash.table.col.avgBounty': 'Prům. kořist',
+  'schedulerDash.table.col.lastSend':  'Posl. odeslání',
+  'schedulerDash.table.empty':         'Žádné přiřazené seznamy',
+  'schedulerDash.history.title':       'Historie odesílání',
+  'schedulerDash.alerts.title':        'Upozornění',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Zjištěny ztráty',
+  'alertEvent.PROBE_SENT':        '{list} · Sonda odeslána do {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Znovu aktivován',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonda zrušena',
+  'alertEvent.probe.activate':    '⚡ Aktivovat sondu',
+  'alertEvent.probe.cancel':      '✕ Zrušit sondu',
+  'alertEvent.probe.viewTravian': 'Zobrazit v Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Poslední odeslání',
+  'feedback.status.success':   '✓ Dokončeno',
+  'feedback.status.partial':   '⚠ Částečné',
+  'feedback.status.error':     '✗ Chyba',
+  'feedback.status.unknown':   '? Neznámé',
+  'feedback.slotsRaiding':     '{n} slotů rabuje',
+  'feedback.noDeactivated':    'Žádné deaktivované farmy',
+  'feedback.deactivatedLabel': 'Deaktivované farmy:',
+  'feedback.deactivatedMore':  'a {n} dalších',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistiky',
+  'stats.section.performance':  'Celkový výkon',
+  'stats.totalBounty':          'Celková kořist',
+  'stats.avgPerSend':           'Průměr za odeslání',
+  'stats.sendsLast7d':          'Odeslání (7 dní)',
+  'stats.bountyUnit':           'surovin',
+  'stats.section.distribution': 'Rozdělení slotů',
+  'stats.dist.active':          'Aktivní',
+  'stats.dist.probe':           'Sonda čeká',
+  'stats.dist.botDisabled':     'Vypnuto botem',
+  'stats.dist.manualDisabled':  'Vypnuto ručně',
+  'stats.section.topSlots':     'Top sloty podle kořisti (prům./odeslání)',
+  'stats.topSlots.distance':    '{d} polí',
+  'stats.topSlots.avgBounty':   '{n} sur./odes.',
+  'stats.empty.title':          'Žádná výkonnostní data',
+  'stats.empty.subtitle':       'Data se zobrazí po prvním odeslání.',
 }
 
 export default cs

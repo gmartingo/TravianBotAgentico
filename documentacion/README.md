@@ -23,6 +23,7 @@
 |---|---|
 | [`backend/i18n.md`](backend/i18n.md) | Internacionalización: `core/i18n/`, `core/ports/translation_port.py`, `adapters/translations/`, `adapters/api/main.py` (exception handler, lifespan, middlewares) |
 | [`backend/sesion.md`](backend/sesion.md) | Sesión del bot: `SessionRegistry`, `LoginUseCase`, `LogoutUseCase`, endpoints de sesión, cableado en `lifespan`, seguridad de credenciales |
+| [`backend/farm-lists.md`](backend/farm-lists.md) | Farm Lists y Farm Stats: entidades (`FarmSlot`, `FarmList`, `FarmScheduler`, `SlotEvent`, `SlotBountyRecord`), puerto `FarmListDbPort`, adaptador SQLite (esquema, migraciones, lógica de sync por coordenadas), 10 casos de uso (ciclo automático, envío manual, sondas, stats), router `/farm` (21 endpoints) |
 
 ### Referencia de funciones
 
@@ -47,6 +48,7 @@
 | Documento | Contenido |
 |---|---|
 | [`manual-usuario/index.html`](manual-usuario/index.html) | **Manual de usuario (HTML con capturas reales)** — landing con selector de idioma. Disponible en **español** (`manual-usuario/es/`) e **inglés** (`manual-usuario/en/`), cada uno con sus capturas en su idioma (estructura preparada para los 25 idiomas). Cubre: pantalla de Cuentas, crear cuenta (asistente), detalle y mundos, añadir mundo, arrancar sesión, editar/borrar, idioma y tema. Ábrelo en el navegador. |
+| [`manual-usuario/farm-lists.html`](manual-usuario/farm-lists.html) | **Manual de listas de vacas (HTML con capturas reales)** — cubre: acceso a la sección Farm Lists desde el mundo, tabla de listas con columnas, drawer Slots (chips de estado + tabla de vacas + acordeón de historial por vaca), drawer Stats (distribución + ranking), drawer Historial (paginado), envío manual, estados de vaca y sus insignias, menú de acciones (activar/desactivar/sonda), gestión de schedulers, y sincronización desde Travian. Capturas reales del 2026-05-28. |
 
 ---
 
@@ -57,6 +59,7 @@
 | [`funcionalidades/i18n-backend.md`](funcionalidades/i18n-backend.md) | Internacionalización del backend: edificios, tropas y mensajes de error |
 | [`funcionalidades/cuentas-mundos.md`](funcionalidades/cuentas-mundos.md) | Registro y gestión de cuentas y mundos + sesión del bot de extremo a extremo (negocio: reglas, flujos, restricciones) |
 | [`funcionalidades/sesion.md`](funcionalidades/sesion.md) | Sesión del bot: login/logout/estado, seguridad de credenciales, nota de operación sobre `TRAVIAN_BOT_SECRET_KEY` |
+| [`funcionalidades/farm-lists.md`](funcionalidades/farm-lists.md) | Farm lists y farm stats: qué son las listas de vacas, problema que resuelve el bot, actores, opciones configurables (schedulers), 16 reglas de negocio (RN-01 a RN-16), seguimiento de botín, estados de vaca, límites conocidos |
 
 ---
 
@@ -85,4 +88,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-05-26 (añadidos: api/cuentas-mundos.md, funcionalidades/cuentas-mundos.md, frontend/dashboard.md)
+🔖 Última revisión: 2026-05-28 (añadidos: backend/farm-lists.md, funcionalidades/farm-lists.md, manual-usuario/farm-lists.html — feature farm lists + farm stats completa con 7 capturas reales)

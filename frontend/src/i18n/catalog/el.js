@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo EL — Ελληνικά
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const el = {
   'page.account.col.session':        'Σύνοδος',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Διαγραφή κόσμου',
+  'page.account.enterWorld':         'Είσοδος στον κόσμο',
   'page.account.notFound.title':     'Ο λογαριασμός δεν βρέθηκε',
   'page.account.notFound.desc':      'Ο λογαριασμός που αναζητάτε δεν υπάρχει ή διαγράφηκε.',
   'page.account.notFound.back':      'Επιστροφή στους λογαριασμούς',
@@ -177,18 +178,19 @@ const el = {
   'world.session.error.toast':    'Δεν ήταν δυνατή η σύνδεση στον {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Ρωμαίοι',
+  'tribe.teutons':   'Τεύτονες',
+  'tribe.gauls':     'Γαλάτες',
+  'tribe.egyptians': 'Αιγύπτιοι',
+  'tribe.huns':      'Ούννοι',
+  'tribe.spartans':  'Σπαρτιάτες',
+  'tribe.vikings':   'Βίκινγκς',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Σφάλμα σύνδεσης. Δοκιμάστε ξανά.',
   'error.retry':      'Δοκιμή ξανά',
   'error.loadFailed': 'Δεν ήταν δυνατή η φόρτωση δεδομένων.',
+  'error.loadDetail':  'Σφάλμα φόρτωσης λεπτομερειών',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const el = {
   'placeholder.accounts.list':   'Λίστα λογαριασμών — σύντομα',
   'placeholder.account.detail':  'Λεπτομέρειες λογαριασμού — σύντομα',
   'placeholder.world.space':     'Χώρος κόσμου — σύντομα',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Προβολή αναφοράς',
+  'slot.error.actionFailed':    'Σφάλμα κατά την τροποποίηση του slot.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Πλήρης πίνακας →',
+  'scheduler.subpanel.kpi.nextSend':           'Επόμενη αποστολή',
+  'scheduler.subpanel.kpi.sendsToday':         'Αποστολές σήμερα',
+  'scheduler.subpanel.kpi.avgBounty':          'Πόρ./αποστ.',
+  'scheduler.subpanel.kpi.in':                 'σε {t}',
+  'scheduler.subpanel.feed.title':             'Πρόσφατη δραστηριότητα',
+  'scheduler.subpanel.feed.updatedAgo':        'Ενημερώθηκε πριν {t}',
+  'scheduler.subpanel.feed.viewAll':           'Πλήρες ιστορικό →',
+  'scheduler.subpanel.feed.empty':             'Δεν υπάρχουν πρόσφατες αποστολές',
+  'scheduler.subpanel.alerts.title':           'Ειδοποιήσεις',
+  'scheduler.subpanel.alerts.unread':          '{n} αδιάβαστα',
+  'scheduler.subpanel.alerts.empty':           'Δεν υπάρχουν πρόσφατες ειδοποιήσεις',
+  'scheduler.subpanel.toggle.pause':           '⏸ Παύση',
+  'scheduler.subpanel.toggle.activate':        '▶ Ενεργοποίηση',
+  'scheduler.subpanel.toggle.soon':            'Σύντομα',
+  'scheduler.subpanel.probe.confirm.activate': 'Ενεργοποίηση ανιχνευτή σε αυτό το χωριό;',
+  'scheduler.subpanel.probe.confirm.cancel':   'Ακύρωση ανιχνευτή σε αυτό το χωριό;',
+  'scheduler.subpanel.probe.btn.confirm':      'Επιβεβαίωση',
+  'scheduler.subpanel.probe.btn.dismiss':      'Απόρριψη',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Πράκτορες',
+  'schedulerDash.breadcrumb.back':     '← Πίσω',
+  'schedulerDash.title':               'Πίνακας {name}',
+  'schedulerDash.kpi.nextSend':        'Επόμενη αποστολή',
+  'schedulerDash.kpi.sendsToday':      'Αποστολές σήμερα',
+  'schedulerDash.kpi.avgBounty':       'Πόρ./αποστ.',
+  'schedulerDash.table.title':         'Σύνοψη ανά λίστα',
+  'schedulerDash.table.col.list':      'Λίστα',
+  'schedulerDash.table.col.status':    'Τελ. κατάσταση',
+  'schedulerDash.table.col.sent':      'Αποστ. αγροκτήματα',
+  'schedulerDash.table.col.active':    'Ενεργά αγροκτήματα',
+  'schedulerDash.table.col.avgBounty': 'Μέσο λάφυρο',
+  'schedulerDash.table.col.lastSend':  'Τελ. αποστολή',
+  'schedulerDash.table.empty':         'Δεν υπάρχουν ανατεθειμένες λίστες',
+  'schedulerDash.history.title':       'Ιστορικό αποστολών',
+  'schedulerDash.alerts.title':        'Ειδοποιήσεις',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Εντοπίστηκαν απώλειες',
+  'alertEvent.PROBE_SENT':        '{list} · Ανιχνευτής στάλθηκε στο {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Επανενεργοποιήθηκε',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Ανιχνευτής ακυρώθηκε',
+  'alertEvent.probe.activate':    '⚡ Ενεργοποίηση ανιχνευτή',
+  'alertEvent.probe.cancel':      '✕ Ακύρωση ανιχνευτή',
+  'alertEvent.probe.viewTravian': 'Προβολή στο Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Τελευταία αποστολή',
+  'feedback.status.success':   '✓ Ολοκληρώθηκε',
+  'feedback.status.partial':   '⚠ Μερική',
+  'feedback.status.error':     '✗ Σφάλμα',
+  'feedback.status.unknown':   '? Άγνωστο',
+  'feedback.slotsRaiding':     '{n} slots σε επιδρομή',
+  'feedback.noDeactivated':    'Δεν υπάρχουν απενεργοποιημένα αγροκτήματα',
+  'feedback.deactivatedLabel': 'Απενεργ. αγροκτήματα:',
+  'feedback.deactivatedMore':  'και {n} ακόμα',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Στατιστικά',
+  'stats.section.performance':  'Γενική απόδοση',
+  'stats.totalBounty':          'Συνολικό συσσωρευμένο λάφυρο',
+  'stats.avgPerSend':           'Μέσος όρος ανά αποστολή',
+  'stats.sendsLast7d':          'Αποστολές (7 ημέρες)',
+  'stats.bountyUnit':           'πόροι',
+  'stats.section.distribution': 'Κατανομή slots',
+  'stats.dist.active':          'Ενεργά',
+  'stats.dist.probe':           'Ανιχν. αναμ.',
+  'stats.dist.botDisabled':     'Απεν. από bot',
+  'stats.dist.manualDisabled':  'Απεν. χειροκίνητα',
+  'stats.section.topSlots':     'Κορυφαία slots κατά λάφυρο (μέσος/αποστολή)',
+  'stats.topSlots.distance':    '{d} κελιά',
+  'stats.topSlots.avgBounty':   '{n} πόρ./αποστ.',
+  'stats.empty.title':          'Δεν υπάρχουν δεδομένα απόδοσης',
+  'stats.empty.subtitle':       'Τα δεδομένα θα εμφανιστούν μετά την πρώτη αποστολή.',
 }
 
 export default el

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo BG — Български
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const bg = {
   'page.account.col.session':        'Сесия',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Изтрий свят',
+  'page.account.enterWorld':         'Влезте в света',
   'page.account.notFound.title':     'Акаунтът не е намерен',
   'page.account.notFound.desc':      'Акаунтът, който търсите, не съществува или е изтрит.',
   'page.account.notFound.back':      'Назад към акаунти',
@@ -177,18 +178,19 @@ const bg = {
   'world.session.error.toast':    'Не е възможно свързване с {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Римляни',
+  'tribe.teutons':   'Тевтони',
+  'tribe.gauls':     'Гали',
+  'tribe.egyptians': 'Египтяни',
+  'tribe.huns':      'Хуни',
+  'tribe.spartans':  'Спартанци',
+  'tribe.vikings':   'Викинги',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Грешка в връзката. Опитайте отново.',
   'error.retry':      'Опитай отново',
   'error.loadFailed': 'Данните не можаха да се заредят.',
+  'error.loadDetail':  'Грешка при зареждане на подробности',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const bg = {
   'placeholder.accounts.list':   'Списък с акаунти — скоро',
   'placeholder.account.detail':  'Детайли на акаунт — скоро',
   'placeholder.world.space':     'Пространство на свят — скоро',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Виж рапорта',
+  'slot.error.actionFailed':    'Грешка при промяна на слота.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Пълно табло →',
+  'scheduler.subpanel.kpi.nextSend':           'Следващо изпращане',
+  'scheduler.subpanel.kpi.sendsToday':         'Изпращания днес',
+  'scheduler.subpanel.kpi.avgBounty':          'Рес./изпр.',
+  'scheduler.subpanel.kpi.in':                 'след {t}',
+  'scheduler.subpanel.feed.title':             'Последна активност',
+  'scheduler.subpanel.feed.updatedAgo':        'Актуализирано преди {t}',
+  'scheduler.subpanel.feed.viewAll':           'Цяла история →',
+  'scheduler.subpanel.feed.empty':             'Няма последни изпращания',
+  'scheduler.subpanel.alerts.title':           'Известия',
+  'scheduler.subpanel.alerts.unread':          '{n} непрочетени',
+  'scheduler.subpanel.alerts.empty':           'Няма последни известия',
+  'scheduler.subpanel.toggle.pause':           '⏸ Пауза',
+  'scheduler.subpanel.toggle.activate':        '▶ Активирай',
+  'scheduler.subpanel.toggle.soon':            'Скоро',
+  'scheduler.subpanel.probe.confirm.activate': 'Активиране на сонда за това село?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Отмяна на сонда за това село?',
+  'scheduler.subpanel.probe.btn.confirm':      'Потвърди',
+  'scheduler.subpanel.probe.btn.dismiss':      'Отхвърли',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Агенти',
+  'schedulerDash.breadcrumb.back':     '← Назад',
+  'schedulerDash.title':               'Табло {name}',
+  'schedulerDash.kpi.nextSend':        'Следващо изпращане',
+  'schedulerDash.kpi.sendsToday':      'Изпращания днес',
+  'schedulerDash.kpi.avgBounty':       'Рес./изпр.',
+  'schedulerDash.table.title':         'Обобщение по списък',
+  'schedulerDash.table.col.list':      'Списък',
+  'schedulerDash.table.col.status':    'Посл. статус',
+  'schedulerDash.table.col.sent':      'Изпратени ферми',
+  'schedulerDash.table.col.active':    'Активни ферми',
+  'schedulerDash.table.col.avgBounty': 'Ср. плячка',
+  'schedulerDash.table.col.lastSend':  'Посл. изпращане',
+  'schedulerDash.table.empty':         'Няма назначени списъци',
+  'schedulerDash.history.title':       'История на изпращанията',
+  'schedulerDash.alerts.title':        'Известия',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Открити загуби',
+  'alertEvent.PROBE_SENT':        '{list} · Изпратена сонда до {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Реактивиран',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Сонда отменена',
+  'alertEvent.probe.activate':    '⚡ Активирай сонда',
+  'alertEvent.probe.cancel':      '✕ Отмени сонда',
+  'alertEvent.probe.viewTravian': 'Виж в Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Последно изпращане',
+  'feedback.status.success':   '✓ Завършено',
+  'feedback.status.partial':   '⚠ Частично',
+  'feedback.status.error':     '✗ Грешка',
+  'feedback.status.unknown':   '? Неизвестно',
+  'feedback.slotsRaiding':     '{n} слота в набег',
+  'feedback.noDeactivated':    'Няма деактивирани ферми',
+  'feedback.deactivatedLabel': 'Деактивирани ферми:',
+  'feedback.deactivatedMore':  'и още {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Статистика',
+  'stats.section.performance':  'Обща ефективност',
+  'stats.totalBounty':          'Обща плячка',
+  'stats.avgPerSend':           'Средно за изпращане',
+  'stats.sendsLast7d':          'Изпращания (7 дни)',
+  'stats.bountyUnit':           'ресурса',
+  'stats.section.distribution': 'Разпределение на слотове',
+  'stats.dist.active':          'Активни',
+  'stats.dist.probe':           'Сонда изч.',
+  'stats.dist.botDisabled':     'Изкл. от бота',
+  'stats.dist.manualDisabled':  'Изкл. ръчно',
+  'stats.section.topSlots':     'Топ слотове по плячка (ср./изпр.)',
+  'stats.topSlots.distance':    '{d} клетки',
+  'stats.topSlots.avgBounty':   '{n} рес/изпр.',
+  'stats.empty.title':          'Няма данни за ефективност',
+  'stats.empty.subtitle':       'Данните ще се появят след първото изпращане.',
 }
 
 export default bg

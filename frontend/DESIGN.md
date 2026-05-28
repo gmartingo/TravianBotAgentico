@@ -661,10 +661,368 @@ componente real.
 
 ---
 
-🔖 Última revisión: 2026-05-25 (sistema de diseño: minimalismo estilo Apple, plata +
+## 19. Patrones de layout y componentes implementados
+
+Patrones extraídos del código real y verificados visualmente. Referencia obligatoria para crear nuevos mockups y componentes. Los tokens de layout viven en `tokens.css`.
+
+### 19.1 Las dos shells — Management vs WorldSpace
+
+Existen **dos shells completamente distintas** según el contexto:
+
+#### Shell Management (`/cuentas`, `/cuentas/:id`)
+
+```
+┌── Topbar (52px) ─────────────────────────────────────────────────┐
+│  [TB ■  TravianBot]                       [🌙 toggle][🌐 lang]   │
+├── Sidebar (200px) ──┬── Contenido (padding: 24–32px) ────────────┤
+│  ▶ Cuentas          │  H1 + acciones                             │
+│                     │  tabla o contenido de página               │
+│  ────────────────   │                                            │
+│  v0.1.0 (mono 11px) │                                            │
+└─────────────────────┴────────────────────────────────────────────┘
+```
+
+- Topbar: `[TB ■]` + `"TravianBot"` como wordmark fijo (no es botón de back)
+- Sidebar: 200px, `background: var(--surface)`, `border-inline-end: 1px solid var(--border)`
+- Footer sidebar: `border-top: 1px solid var(--border)`, `padding: 12px 16px`, versión en `var(--font-mono)` / `var(--text-tertiary)` / 11px
+
+#### Shell WorldSpace (`/mundos/:id`)
+
+```
+┌── Topbar (52px) ─────────────────────────────────────────────────────────────┐
+│  [TB ■ ←]   email(oro) · ● Activo(verde) · server · tribe (centrado)  [🌙][🌐]│
+├── Sidebar (180px) ──┬── Contenido principal (padding: 24px 24px 72px) ────────┤
+│  Dashboard          │  section heading + sección activa                       │
+│  ▶ Agentes          │                                                         │
+│  Listas de vacas    │  (72px de padding inferior = clearance del bottom bar)  │
+│  Calculadora PRONTO │                                                         │
+├─────────────────────┴──────────────────────────────────────────────────────────┤
+│  [● Bot activo]  │  [pill: "nombre  00:00:00"]  ···  (carrusel horizontal)     │
+│  AgentBottomBar (position:fixed, inset-inline:0, bottom:0, height:48px)        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- Topbar: `[TB ■]` solo (es `<button>` que hace `navigate(-1)`); info del mundo CENTRADA
+- Sidebar: 180px (`--sidebar-w`); nav items en lugar de pestañas — no hay tabs
+- AgentBottomBar: `position: fixed; z-index: 200; background: var(--surface); border-top: 1px solid var(--border)`
+
+### 19.2 Topbar — el bloque TB ■
+
+Compartido entre las dos shells, pero con comportamiento diferente:
+
+```css
+/* El cuadrado TB */
+width: 28px; height: 28px; border-radius: 7px;
+background: var(--btn-primary-bg); color: var(--btn-primary-text);
+font-weight: 700; font-size: 12px;
+display: grid; place-items: center;
+```
+
+- **Management Shell**: envuelto en `<button>` junto al texto "TravianBot" (15px/600), navega a `/`. Hover: `opacity: 0.75`.
+- **WorldSpace Shell**: solo el cuadrado, sin texto, actúa como botón ← (navigate(-1)).
+
+**Centro del topbar en WorldSpace** — una sola fila `flex`, overflow hidden:
+- Email: `var(--accent-text)` / `var(--font-mono)` / fontWeight 500 / `max-width: 220px` / truncado
+- `·` separador: `var(--text-disabled)`
+- `● Activo`: punto 6px + texto, ambos en `var(--success)`
+- `·` separador + server: `var(--font-mono)` / `var(--text-secondary)`
+- `·` separador + tribu: `var(--text-secondary)`
+
+### 19.3 Sidebar nav item
+
+```css
+/* Contenedor */
+padding: 8px 10px; border-radius: var(--radius-sm);
+display: flex; align-items: center; gap: 10px;
+font-size: 14px; width: 100%; border: none; cursor: pointer;
+position: relative;
+transition: background var(--dur-fast) var(--ease);
+
+/* ACTIVO */
+background: var(--accent-subtle);
+color: var(--accent-text); font-weight: 500;
+
+/* Barra de acento izquierda (solo activo) */
+position: absolute; inset-block: 4px; inset-inline-start: 0;
+width: 3px; border-radius: var(--radius-full); background: var(--accent);
+
+/* HOVER (inactivo) */
+background: var(--surface-2);
+
+/* DISABLED — ej. "Calculadora PRONTO" */
+color: var(--text-disabled); cursor: not-allowed;
+/* etiqueta "PRONTO": font-mono, 10px, uppercase, letterSpacing .04em, text-disabled, al final del item */
+```
+
+Icono: 16px, `aria-hidden="true"`. Label del item: flex:1. Sidebar no es colapsable en la implementación actual.
+
+### 19.4 AgentBottomBar (barra inferior + carrusel)
+
+```css
+/* Sección izquierda = --sidebar-w = 180px */
+/* [● dot] [label "Bot activo" / "Bot parado"] — clic = toggle ON/OFF */
+dot: 7px × 7px, border-radius 50%
+  running → background: var(--success)
+  stopped → background: var(--danger)
+label: font-size 13px, font-weight 500, color = mismo que el dot
+
+/* Divisor vertical */
+width: 1px; height: 20px; background: var(--border); align-self: center;
+margin-inline-end: 14px;
+
+/* Carrusel de pills — scrollable horizontal sin scrollbar visible */
+flex: 1; display: flex; align-items: center; gap: 6px;
+overflow-x: auto; scrollbar-width: none;
+```
+
+Cuando el agente está parado: texto "Bot parado — sin tareas programadas" en `var(--text-disabled)` / 12px.
+
+### 19.5 Task pill (carrusel del AgentBottomBar)
+
+```css
+flex-shrink: 0; width: 168px; height: 28px; padding: 0 10px;
+border-radius: var(--radius-full);
+border: 1px solid var(--border); background: var(--surface-2);
+display: flex; align-items: center; gap: 6px;
+```
+
+Nombre: 12px / fontWeight 500. Countdown: `var(--font-mono)` / 12px / fontWeight 600.
+
+**Variante `isNext` (primera en la cola):**
+```css
+border-color: var(--accent); background: var(--accent-subtle);
+/* countdown color: var(--accent-text) */
+```
+
+### 19.6 Scheduler card
+
+Componente central de la pestaña Agentes. Una tarjeta por scheduler:
+
+```css
+/* Contenedor */
+background: var(--surface); border: 1px solid var(--border);
+border-radius: var(--radius-md); padding: 16px 20px;
+transition: box-shadow var(--dur-fast);
+/* Hover */
+box-shadow: var(--shadow-sm);
+/* Disabled (is_enabled=false) */
+opacity: 0.6;
+```
+
+**Fila de cabecera** (`display:flex; align-items:center; gap:12px; margin-bottom:10px`):
+- Nombre: 15px / fontWeight 500 / flex:1
+- Badge "INACTIVO" si `!is_enabled`: text-disabled / font-mono / 11px
+- Botón "Enviar ahora": secundario, icono ✈ (13px) + texto
+- Botón "Asignar listas": secundario
+- Botón `⋮` (RowMenu): ghost 28×28px, `var(--text-tertiary)`, abre dropdown con Editar / Ejecutar ahora / Eliminar
+- **ToggleSwitch** (ver §19.7)
+
+**Sub-info** (`font-size: 12px; color: var(--text-secondary)`):
+`"N listas · intervalo X–Y min · N envíos"`
+
+**Fila inferior** (`border-top: 1px solid var(--border); padding-top: 10px; display:flex; gap:12px`):
+- Chips de listas (ver §19.8) — lado izquierdo, `flex:1`
+- Countdown área — lado derecho, `flex-shrink:0`:
+  - Label "Próximo:": 12px / text-secondary
+  - Countdown: `var(--font-mono)` / **18px** / fontWeight 600 / `var(--text)` (o text-disabled si sin próxima ejecución)
+  - `·` + hora exacta: font-mono / 12px / text-secondary / tabular-nums
+
+### 19.7 ToggleSwitch
+
+```css
+/* Track */
+width: 36px; height: 20px; border-radius: var(--radius-full);
+cursor: pointer; position: relative; flex-shrink: 0;
+transition: background var(--dur-base), border-color var(--dur-base);
+
+/* ON */
+background: var(--success); border: 1px solid var(--success);
+/* OFF */
+background: var(--surface-2); border: 1px solid var(--border-strong);
+
+/* Thumb (span absoluto) */
+width: 14px; height: 14px; border-radius: 50%; background: #fff;
+top: 2px;
+inset-inline-start: 18px;  /* ON */
+inset-inline-start: 2px;   /* OFF */
+transition: inset-inline-start var(--dur-base);
+```
+
+Semántica: `role="switch"` + `aria-checked` + `aria-label`.
+
+### 19.8 Farm list assignment chips (dentro del scheduler card)
+
+Chips clicables que navegan a la farm list correspondiente:
+
+```css
+display: inline-flex; align-items: center;
+background: var(--surface-2); border: 1px solid var(--border);
+border-radius: var(--radius-full); padding: 2px 10px;
+font-size: 11px; color: var(--text-secondary);
+white-space: nowrap; max-width: 180px;
+overflow: hidden; text-overflow: ellipsis;
+cursor: pointer;
+transition: background var(--dur-fast), color var(--dur-fast);
+
+/* Hover → oro */
+background: var(--accent-subtle);
+color: var(--accent-text);
+border-color: var(--accent);
+```
+
+### 19.9 Village group y tabla de farm lists
+
+**Cabecera de grupo** (aldea):
+```css
+font-size: 13px; font-weight: 500; color: var(--text-secondary);
+margin-bottom: 8px; padding-bottom: 6px;
+border-bottom: 1px solid var(--border);
+display: flex; align-items: baseline; gap: 6px;
+/* coordenadas: font-mono / 12px / text-tertiary → "(x,y)" */
+```
+
+**Tabla** (dentro del grupo):
+```css
+width: 100%; border-collapse: collapse;
+background: var(--surface); border: 1px solid var(--border);
+border-radius: var(--radius-md); overflow: hidden;
+/* thead: background: var(--surface-2), micro-caps 11px/500, text-secondary */
+/* filas: cursor pointer, hover implicit via el td highlight */
+/* flecha de detalle: › (›) al final de cada fila, text-tertiary */
+```
+
+**Columna SLOTS — color según actividad:**
+```css
+/* 0/N (ninguno activo) → peligro */
+color: var(--danger);
+/* X/N (alguno activo, X > 0) → éxito */
+color: var(--success);
+/* font: var(--font-mono); font-variant-numeric: tabular-nums */
+```
+
+### 19.10 Badge / chip de estado inline
+
+```css
+display: inline-flex; align-items: center; gap: 4px;
+border-radius: var(--radius-full); padding: 1px 7px;
+font-size: 11px; font-weight: 500;
+```
+
+| Variante | Background | Color | Uso |
+|---|---|---|---|
+| Aviso / sonda | `var(--accent-subtle)` | `var(--accent-text)` | Slots en cooldown por bot |
+| Neutral | `var(--surface-2)` | `var(--text-secondary)` | Estado manual |
+| Dot de estado | (inline, sin bg) | `var(--success)`/`var(--danger)` | Acompañado de texto |
+
+Icono opcional: 9–10px, `currentColor`, antes del texto.
+
+### 19.11 Drawer lateral
+
+Panel que desliza desde el extremo `end` (RTL-safe):
+
+```css
+position: fixed; inset-block: 0; inset-inline-end: 0;
+width: 480px;   /* ≥ lg; móvil → 100vw */
+background: var(--surface);
+border-inline-start: 1px solid var(--border);
+box-shadow: var(--shadow-lg); z-index: 300; overflow-y: auto;
+transform: translateX(100%);   /* cerrado */
+transition: transform var(--dur-base) var(--ease);
+/* abierto: translateX(0) */
+```
+
+Cabecera sticky: `height: 52px; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0`. Botón cierre ghost 28×28px con `×`.
+
+### 19.12 Toast
+
+```css
+position: fixed; inset-inline: 0; bottom: 24px; margin: auto;
+width: max-content; max-width: 90vw;
+background: var(--btn-primary-bg); color: var(--btn-primary-text);
+padding: 10px 16px; border-radius: var(--radius-sm);
+box-shadow: var(--shadow-lg); font-size: 13px; pointer-events: none;
+opacity: 0; transform: translateY(8px);
+transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
+/* visible: opacity:1; transform:translateY(0) — auto-dismiss 3s */
+```
+
+### 19.13 ErrorBoundary overlay
+
+```css
+/* Fondo */
+position: fixed; inset: 0; z-index: 310;
+display: flex; align-items: center; justify-content: center;
+background: rgba(0, 0, 0, 0.4);
+/* Panel */
+background: var(--surface); border-radius: var(--radius-lg);
+box-shadow: var(--shadow-lg); padding: 28px 32px; max-width: 400px; text-align: center;
+```
+
+Jerarquía: título 15px/600, detalle 12px/`var(--text-secondary)`/`var(--font-mono)`, botón primario.
+
+### 19.14 Row highlight (nav scheduler → farm list)
+
+```css
+tr[data-highlight="1"] td {
+  background: var(--accent-subtle) !important;
+  transition: background 2s ease-out;
+}
+```
+
+La fila recibe `data-highlight="1"` durante ~2s; la transición disuelve el fondo suavemente.
+
+### 19.15 Active link en tabla (URL de servidor activo)
+
+Cuando un mundo tiene sesión activa, su URL se convierte en botón:
+
+```css
+color: var(--accent-text); font-family: var(--font-mono); font-size: 12px;
+text-decoration: underline; text-underline-offset: 2px;
+background: transparent; border: none; padding: 0; cursor: pointer;
+overflow: hidden; text-overflow: ellipsis; max-width: 200px; display: block;
+```
+
+### 19.16 Token de mockup — bloque a copiar
+
+Todo `*.playground.html` nuevo debe copiar este bloque (fuente de verdad: `frontend/src/styles/tokens.css`):
+
+```css
+:root {
+  --bg:#F5F5F7; --surface:#fff; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93; --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012; --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#fff; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+  --topbar-h:52px; --sidebar-w:180px; --bottombar-h:48px;
+}
+[data-theme="dark"] {
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+```
+
+---
+
+🔖 Última revisión: 2026-05-27 (sistema de diseño: minimalismo estilo Apple, plata +
 grafito con modo claro/oscuro y toggle; acento único oro antiguo `#8A6418` claro /
 champán `#CBB079` oscuro reservado a enlaces + estados activos; botones primarios
 monocromos invertidos; tokens duales Tailwind v4; internacionalización para 25
 idiomas con RTL, expansión de texto y multi-script; responsive mobile-first con
 jerarquía de prioridad P1/P2/P3 y tablas adaptativas; workflow mockup-first
-obligatorio antes de implementar cualquier UI)
+obligatorio antes de implementar cualquier UI; §19 añadido con patrones verificados
+visualmente: 2 shells (Management vs WorldSpace), nav lateral con barra de acento,
+AgentBottomBar con carrusel, scheduler card con toggle switch, farm list chips,
+group headers con slots coloreados, drawer lateral, toast, tokens de layout)

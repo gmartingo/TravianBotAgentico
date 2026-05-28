@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo FA — فارسی (RTL)
  * [AUTO] Traducción automática — requiere revisión nativa.
  * RTL: el layout se espeja cuando este idioma está activo.
@@ -81,6 +81,7 @@ const fa = {
   'page.account.col.session':        'جلسه',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'حذف دنیا',
+  'page.account.enterWorld':         'ورود به دنیا',
   'page.account.notFound.title':     'حساب یافت نشد',
   'page.account.notFound.desc':      'حسابی که دنبال آن هستید وجود ندارد یا حذف شده است.',
   'page.account.notFound.back':      'بازگشت به حساب‌ها',
@@ -178,18 +179,19 @@ const fa = {
   'world.session.error.toast':    'اتصال در {world} ممکن نشد',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'رومیان',
+  'tribe.teutons':   'تیوتون‌ها',
+  'tribe.gauls':     'گُل‌ها',
+  'tribe.egyptians': 'مصریان',
+  'tribe.huns':      'هون‌ها',
+  'tribe.spartans':  'اسپارتیان',
+  'tribe.vikings':   'وایکینگ‌ها',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'خطای اتصال. دوباره امتحان کنید.',
   'error.retry':      'تلاش مجدد',
   'error.loadFailed': 'بارگذاری داده‌ها ممکن نشد.',
+  'error.loadDetail':  'خطا در بارگذاری جزئیات',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -198,6 +200,95 @@ const fa = {
   'placeholder.accounts.list':   'لیست حساب‌ها — به زودی',
   'placeholder.account.detail':  'جزئیات حساب — به زودی',
   'placeholder.world.space':     'فضای دنیا — به زودی',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'مشاهده گزارش',
+  'slot.error.actionFailed':    'خطا در تغییر اسلات.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'داشبورد کامل →',
+  'scheduler.subpanel.kpi.nextSend':           'ارسال بعدی',
+  'scheduler.subpanel.kpi.sendsToday':         'ارسال‌های امروز',
+  'scheduler.subpanel.kpi.avgBounty':          'منابع/ارسال',
+  'scheduler.subpanel.kpi.in':                 'در {t}',
+  'scheduler.subpanel.feed.title':             'فعالیت اخیر',
+  'scheduler.subpanel.feed.updatedAgo':        'به‌روز شده {t} پیش',
+  'scheduler.subpanel.feed.viewAll':           'مشاهده تاریخچه کامل →',
+  'scheduler.subpanel.feed.empty':             'ارسال اخیری وجود ندارد',
+  'scheduler.subpanel.alerts.title':           'هشدارها',
+  'scheduler.subpanel.alerts.unread':          '{n} خوانده نشده',
+  'scheduler.subpanel.alerts.empty':           'هشدار اخیری وجود ندارد',
+  'scheduler.subpanel.toggle.pause':           '⏸ مکث',
+  'scheduler.subpanel.toggle.activate':        '▶ فعال‌سازی',
+  'scheduler.subpanel.toggle.soon':            'به زودی',
+  'scheduler.subpanel.probe.confirm.activate': 'آیا سنسور برای این روستا فعال شود؟',
+  'scheduler.subpanel.probe.confirm.cancel':   'آیا سنسور این روستا لغو شود؟',
+  'scheduler.subpanel.probe.btn.confirm':      'تأیید',
+  'scheduler.subpanel.probe.btn.dismiss':      'رد کردن',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'عوامل',
+  'schedulerDash.breadcrumb.back':     '→ بازگشت',
+  'schedulerDash.title':               'داشبورد {name}',
+  'schedulerDash.kpi.nextSend':        'ارسال بعدی',
+  'schedulerDash.kpi.sendsToday':      'ارسال‌های امروز',
+  'schedulerDash.kpi.avgBounty':       'منابع/ارسال',
+  'schedulerDash.table.title':         'خلاصه بر اساس لیست',
+  'schedulerDash.table.col.list':      'لیست',
+  'schedulerDash.table.col.status':    'آخرین وضعیت',
+  'schedulerDash.table.col.sent':      'مزارع ارسال شده',
+  'schedulerDash.table.col.active':    'مزارع فعال',
+  'schedulerDash.table.col.avgBounty': 'میانگین غنیمت',
+  'schedulerDash.table.col.lastSend':  'آخرین ارسال',
+  'schedulerDash.table.empty':         'لیستی اختصاص داده نشده',
+  'schedulerDash.history.title':       'تاریخچه ارسال‌ها',
+  'schedulerDash.alerts.title':        'هشدارها',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · تلفات شناسایی شد',
+  'alertEvent.PROBE_SENT':        '{list} · سنسور به {slot} ارسال شد',
+  'alertEvent.REACTIVATED':       '{slot} · مجدداً فعال شد',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · سنسور لغو شد',
+  'alertEvent.probe.activate':    '⚡ فعال‌سازی سنسور',
+  'alertEvent.probe.cancel':      '✕ لغو سنسور',
+  'alertEvent.probe.viewTravian': 'مشاهده در Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'آخرین ارسال',
+  'feedback.status.success':   '✓ کامل',
+  'feedback.status.partial':   '⚠ جزئی',
+  'feedback.status.error':     '✗ خطا',
+  'feedback.status.unknown':   '? نامشخص',
+  'feedback.slotsRaiding':     '{n} اسلات در حمله',
+  'feedback.noDeactivated':    'مزرعه‌ای غیرفعال نشد',
+  'feedback.deactivatedLabel': 'مزارع غیرفعال شده:',
+  'feedback.deactivatedMore':  'و {n} مورد دیگر',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'آمار',
+  'stats.section.performance':  'عملکرد کلی',
+  'stats.totalBounty':          'کل غنیمت جمع‌آوری شده',
+  'stats.avgPerSend':           'میانگین در هر ارسال',
+  'stats.sendsLast7d':          'ارسال‌ها (۷ روز)',
+  'stats.bountyUnit':           'منابع',
+  'stats.section.distribution': 'توزیع اسلات‌ها',
+  'stats.dist.active':          'فعال',
+  'stats.dist.probe':           'سنسور معلق',
+  'stats.dist.botDisabled':     'غیرفعال شده توسط ربات',
+  'stats.dist.manualDisabled':  'غیرفعال شده دستی',
+  'stats.section.topSlots':     'برترین اسلات‌ها بر اساس غنیمت (میانگین/ارسال)',
+  'stats.topSlots.distance':    '{d} خانه',
+  'stats.topSlots.avgBounty':   '{n} منابع/ارسال',
+  'stats.empty.title':          'داده‌ای برای عملکرد وجود ندارد',
+  'stats.empty.subtitle':       'داده‌ها پس از اولین ارسال نمایش داده می‌شوند.',
 }
 
 export default fa

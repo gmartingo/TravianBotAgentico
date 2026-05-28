@@ -56,6 +56,11 @@
   --dur-fast: 150ms;
   --dur-base: 220ms;
   --dur-slow: 300ms;
+
+  /* Layout — dimensiones del shell global */
+  --topbar-h:    52px;   /* Topbar fija */
+  --sidebar-w:   180px;  /* Sidebar WorldSpace */
+  --bottombar-h: 48px;   /* AgentBottomBar fija */
 }
 
 /* ── TOKENS MODO OSCURO — "grafito" ──────────────────────── */

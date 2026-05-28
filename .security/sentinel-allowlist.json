@@ -1,0 +1,6 @@
+﻿{
+  "allowedPaths": [
+    ".env.example"
+  ],
+  "reason": "Template file, no secrets"
+}

@@ -126,4 +126,134 @@ export const api = {
   /** DELETE /accounts/:id/worlds/:worldId/session → parar */
   stopSession: (accountId, worldId) =>
     request('DELETE', `/accounts/${accountId}/worlds/${worldId}/session`),
+
+  // ── Farm — Schedulers ─────────────────────────────────────────────────────
+
+  /** GET /farm/worlds/:worldId/schedulers → lista de schedulers */
+  getSchedulers: (worldId) =>
+    request('GET', `/farm/worlds/${worldId}/schedulers`),
+
+  /** POST /farm/worlds/:worldId/schedulers → 201 scheduler creado */
+  createScheduler: (worldId, data) =>
+    request('POST', `/farm/worlds/${worldId}/schedulers`, data),
+
+  /** PUT /farm/worlds/:worldId/schedulers/:id → scheduler actualizado */
+  updateScheduler: (worldId, schedulerId, data) =>
+    request('PUT', `/farm/worlds/${worldId}/schedulers/${schedulerId}`, data),
+
+  /** DELETE /farm/worlds/:worldId/schedulers/:id → 204 */
+  deleteScheduler: (worldId, schedulerId) =>
+    request('DELETE', `/farm/worlds/${worldId}/schedulers/${schedulerId}`),
+
+  /** PUT /farm/worlds/:worldId/schedulers/:id/farm-lists → asignar listas */
+  assignFarmLists: (worldId, schedulerId, farmListIds) =>
+    request('PUT', `/farm/worlds/${worldId}/schedulers/${schedulerId}/farm-lists`, {
+      farm_list_ids: farmListIds,
+    }),
+
+  // ── Farm — Farm Lists ─────────────────────────────────────────────────────
+
+  /** GET /farm/worlds/:worldId/farm-lists → lista de farm lists con slots */
+  getFarmLists: (worldId) =>
+    request('GET', `/farm/worlds/${worldId}/farm-lists`),
+
+  /** POST /farm/worlds/:worldId/farm-lists/read → sincronizar desde Travian */
+  readFarmLists: (worldId) =>
+    request('POST', `/farm/worlds/${worldId}/farm-lists/read`),
+
+  // ── Farm — Slots ──────────────────────────────────────────────────────────
+
+  /** POST /farm/slots/:slotId/activate */
+  activateSlot: (slotId, farmListId, worldId) =>
+    request('POST', `/farm/slots/${slotId}/activate`, { farm_list_id: farmListId, world_id: worldId }),
+
+  /** POST /farm/slots/:slotId/deactivate */
+  deactivateSlot: (slotId, farmListId, worldId) =>
+    request('POST', `/farm/slots/${slotId}/deactivate`, { farm_list_id: farmListId, world_id: worldId }),
+
+  /** POST /farm/slots/:slotId/cancel-probe */
+  cancelProbe: (slotId, farmListId, worldId, mode) =>
+    request('POST', `/farm/slots/${slotId}/cancel-probe`, {
+      farm_list_id: farmListId,
+      world_id: worldId,
+      mode,
+    }),
+
+  // ── Farm — Envío manual ───────────────────────────────────────────────────
+
+  /** POST /farm/farm-lists/:farmListId/send */
+  sendFarmList: (farmListId, worldId) =>
+    request('POST', `/farm/farm-lists/${farmListId}/send`, { world_id: worldId }),
+
+  // ── Farm — Historial ──────────────────────────────────────────────────────
+
+  /** GET /farm/worlds/:worldId/history?farm_list_id=...&page=...&page_size=... */
+  getFarmListHistory: (worldId, farmListId, page = 1, pageSize = 20) =>
+    request('GET', `/farm/worlds/${worldId}/history?farm_list_id=${farmListId}&page=${page}&page_size=${pageSize}`),
+
+  // ── Farm — Historial global + slot-events ────────────────────────────────
+
+  /**
+   * GET /farm/worlds/:worldId/history?scheduler_id=...&from_dt=...&to_dt=...&page=...&page_size=...
+   * Historial paginado de envíos de todo el mundo (sin filtro de lista).
+   */
+  getWorldHistory: (worldId, params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.schedulerId) qs.set('scheduler_id', params.schedulerId)
+    if (params.fromDt)      qs.set('from_dt', params.fromDt)
+    if (params.toDt)        qs.set('to_dt', params.toDt)
+    if (params.page)        qs.set('page', params.page)
+    if (params.pageSize)    qs.set('page_size', params.pageSize)
+    const q = qs.toString()
+    return request('GET', `/farm/worlds/${worldId}/history${q ? '?' + q : ''}`)
+  },
+
+  /**
+   * GET /farm/worlds/:worldId/slot-events?from_dt=...&to_dt=...&page=...&page_size=...
+   * Eventos de slots (pérdidas, sondas, reactivaciones).
+   */
+  getSlotEvents: (worldId, params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.fromDt)   qs.set('from_dt', params.fromDt)
+    if (params.toDt)     qs.set('to_dt', params.toDt)
+    if (params.page)     qs.set('page', params.page)
+    if (params.pageSize) qs.set('page_size', params.pageSize)
+    const q = qs.toString()
+    return request('GET', `/farm/worlds/${worldId}/slot-events${q ? '?' + q : ''}`)
+  },
+
+  // ── Catálogo — Iconos ─────────────────────────────────────────────────────
+
+  /**
+   * GET /catalog/icons?icon_type=<type>&tribe=<tribe>
+   * Devuelve IconListResponse { icons: [{ icon_id, ordinal, tribe, url, width_px, height_px }] }
+   * El cliente ya envía Accept-Language en cada petición.
+   */
+  getCatalogIcons: ({ icon_type, tribe } = {}) => {
+    const params = new URLSearchParams()
+    if (icon_type) params.set('icon_type', icon_type)
+    if (tribe)     params.set('tribe', tribe)
+    return request('GET', `/catalog/icons?${params}`)
+  },
+
+  // TODO: endpoint pendiente — POST /farm/schedulers/:schedulerId/toggle (pausar/activar)
+  // No existe aún en el backend. El frontend llama a updateScheduler para toggle.
+
+  // ── Farm — Agente ─────────────────────────────────────────────────────────
+
+  /** GET /farm/worlds/:worldId/agent/status */
+  getAgentStatus: (worldId) =>
+    request('GET', `/farm/worlds/${worldId}/agent/status`),
+
+  /** POST /farm/worlds/:worldId/agent/start */
+  startAgent: (worldId) =>
+    request('POST', `/farm/worlds/${worldId}/agent/start`),
+
+  /** POST /farm/worlds/:worldId/agent/stop */
+  stopAgent: (worldId) =>
+    request('POST', `/farm/worlds/${worldId}/agent/stop`),
+
+  /** POST /farm/worlds/:worldId/schedulers/:schedulerId/run-now */
+  runSchedulerNow: (worldId, schedulerId) =>
+    request('POST', `/farm/worlds/${worldId}/schedulers/${schedulerId}/run-now`),
 }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo HU — Magyar
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const hu = {
   'page.account.col.session':        'Munkamenet',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Világ törlése',
+  'page.account.enterWorld':         'Belépés a világba',
   'page.account.notFound.title':     'Fiók nem található',
   'page.account.notFound.desc':      'A keresett fiók nem létezik vagy törölték.',
   'page.account.notFound.back':      'Vissza a fiókokhoz',
@@ -177,18 +178,19 @@ const hu = {
   'world.session.error.toast':    'Nem sikerült csatlakozni ide: {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Rómaiak',
+  'tribe.teutons':   'Teutonok',
+  'tribe.gauls':     'Gallusok',
+  'tribe.egyptians': 'Egyiptomiak',
+  'tribe.huns':      'Hunok',
+  'tribe.spartans':  'Spártaiak',
+  'tribe.vikings':   'Vikingek',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Kapcsolódási hiba. Próbálja újra.',
   'error.retry':      'Újra',
   'error.loadFailed': 'Az adatok nem tölthetők be.',
+  'error.loadDetail':  'Hiba a részletek betöltésekor',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const hu = {
   'placeholder.accounts.list':   'Fióklista — hamarosan',
   'placeholder.account.detail':  'Fiók részletei — hamarosan',
   'placeholder.world.space':     'Világ tere — hamarosan',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Jelentés megtekintése',
+  'slot.error.actionFailed':    'Hiba a slot módosításakor.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Teljes irányítópult →',
+  'scheduler.subpanel.kpi.nextSend':           'Következő küldés',
+  'scheduler.subpanel.kpi.sendsToday':         'Mai küldések',
+  'scheduler.subpanel.kpi.avgBounty':          'Erőf./küldés',
+  'scheduler.subpanel.kpi.in':                 '{t} múlva',
+  'scheduler.subpanel.feed.title':             'Legutóbbi aktivitás',
+  'scheduler.subpanel.feed.updatedAgo':        'Frissítve {t} ezelőtt',
+  'scheduler.subpanel.feed.viewAll':           'Teljes előzmény →',
+  'scheduler.subpanel.feed.empty':             'Nincs legutóbbi küldés',
+  'scheduler.subpanel.alerts.title':           'Figyelmeztetések',
+  'scheduler.subpanel.alerts.unread':          '{n} olvasatlan',
+  'scheduler.subpanel.alerts.empty':           'Nincs legutóbbi figyelmeztetés',
+  'scheduler.subpanel.toggle.pause':           '⏸ Szünet',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktiválás',
+  'scheduler.subpanel.toggle.soon':            'Hamarosan',
+  'scheduler.subpanel.probe.confirm.activate': 'Szonda aktiválása ezen a falun?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Szonda törlése ezen a falun?',
+  'scheduler.subpanel.probe.btn.confirm':      'Megerősítés',
+  'scheduler.subpanel.probe.btn.dismiss':      'Elvetés',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Ügynökök',
+  'schedulerDash.breadcrumb.back':     '← Vissza',
+  'schedulerDash.title':               '{name} irányítópult',
+  'schedulerDash.kpi.nextSend':        'Következő küldés',
+  'schedulerDash.kpi.sendsToday':      'Mai küldések',
+  'schedulerDash.kpi.avgBounty':       'Erőf./küldés',
+  'schedulerDash.table.title':         'Összefoglaló lista szerint',
+  'schedulerDash.table.col.list':      'Lista',
+  'schedulerDash.table.col.status':    'Utolsó állapot',
+  'schedulerDash.table.col.sent':      'Küldött farmok',
+  'schedulerDash.table.col.active':    'Aktív farmok',
+  'schedulerDash.table.col.avgBounty': 'Átl. zsákmány',
+  'schedulerDash.table.col.lastSend':  'Utolsó küldés',
+  'schedulerDash.table.empty':         'Nincs hozzárendelt lista',
+  'schedulerDash.history.title':       'Küldési előzmények',
+  'schedulerDash.alerts.title':        'Figyelmeztetések',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Veszteségek észlelve',
+  'alertEvent.PROBE_SENT':        '{list} · Szonda elküldve ide: {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Újraaktiválva',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Szonda törölve',
+  'alertEvent.probe.activate':    '⚡ Szonda aktiválása',
+  'alertEvent.probe.cancel':      '✕ Szonda törlése',
+  'alertEvent.probe.viewTravian': 'Megtekintés Travianban',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Utolsó küldés',
+  'feedback.status.success':   '✓ Kész',
+  'feedback.status.partial':   '⚠ Részleges',
+  'feedback.status.error':     '✗ Hiba',
+  'feedback.status.unknown':   '? Ismeretlen',
+  'feedback.slotsRaiding':     '{n} slot rabol',
+  'feedback.noDeactivated':    'Nincs deaktivált farm',
+  'feedback.deactivatedLabel': 'Deaktivált farmok:',
+  'feedback.deactivatedMore':  'és még {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statisztikák',
+  'stats.section.performance':  'Általános teljesítmény',
+  'stats.totalBounty':          'Teljes felhalmozott zsákmány',
+  'stats.avgPerSend':           'Átlag küldésenként',
+  'stats.sendsLast7d':          'Küldések (7 nap)',
+  'stats.bountyUnit':           'erőforrás',
+  'stats.section.distribution': 'Slot-eloszlás',
+  'stats.dist.active':          'Aktív',
+  'stats.dist.probe':           'Szonda várakozik',
+  'stats.dist.botDisabled':     'Bot által kikapcsolt',
+  'stats.dist.manualDisabled':  'Manuálisan kikapcsolt',
+  'stats.section.topSlots':     'Top slotok zsákmány szerint (átl./küldés)',
+  'stats.topSlots.distance':    '{d} mező',
+  'stats.topSlots.avgBounty':   '{n} erőf./küldés',
+  'stats.empty.title':          'Nincs teljesítményadat',
+  'stats.empty.subtitle':       'Az adatok az első küldés után jelennek meg.',
 }
 
 export default hu

@@ -21,16 +21,19 @@ from fastapi.staticfiles import StaticFiles
 from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
 from adapters.api.routes.accounts import router as accounts_router
 from adapters.api.routes.catalog import router as catalog_router
+from adapters.api.routes.farm import router as farm_router
 from adapters.api.routes.game_data import router as game_data_router
 from adapters.api.routes.game_culture_points import router as game_culture_points_router
 from adapters.api.routes.game_overview import router as game_overview_router
 from adapters.api.routes.game_resources import router as game_resources_router
 from adapters.api.routes.game_troops import router as game_troops_router
 from adapters.browser.fixture_overview_adapter import FixtureOverviewAdapter
+from adapters.browser.live_farm_list_adapter import LiveFarmListAdapter
 from adapters.browser.live_overview_adapter import LiveOverviewAdapter
 from adapters.browser.session_registry import SessionRegistry
 from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
 from adapters.db.database import get_connection
+from adapters.db.farm_list_sqlite_adapter import FarmListSQLiteAdapter
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.db.seed_loader import load_if_empty
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
@@ -163,8 +166,6 @@ async def lifespan(application: FastAPI):
     # 'live':              navega Travian con Chrome autenticado
     _overview_source = os.environ.get("OVERVIEW_SOURCE", "fixture").lower()
     if _overview_source == "live":
-        # get_browser y get_world_server se cablearán cuando exista SessionRegistry.
-        # Por ahora lambdas que devuelven None/""  → SessionNotActiveError controlado.
         html_source_port = LiveOverviewAdapter(
             get_browser=lambda wid: None,
             get_world_server=lambda wid: "",
@@ -197,6 +198,40 @@ async def lifespan(application: FastAPI):
         session_registry.set_live_adapter(html_source_port)
     # En modo 'fixture', session_registry no necesita referencia a html_source_port
     # (FixtureOverviewAdapter no tiene caché que invalidar).
+
+    # -----------------------------------------------------------------------
+    # Farm Lists — FarmListSQLiteAdapter (comparte la misma conexión SQLite)
+    # -----------------------------------------------------------------------
+    farm_db_adapter = FarmListSQLiteAdapter(conn)
+    await farm_db_adapter.ensure_tables()
+    application.state.farm_db_port = farm_db_adapter
+
+    # Dict de LiveFarmListAdapter por world_id.
+    # Se puebla on-demand cuando el usuario arranca el WorldAgent para un mundo
+    # (endpoint POST /farm/worlds/{world_id}/agent/start).
+    # Los adaptadores ya creados se pueden reutilizar si el agente se para y se
+    # vuelve a arrancar — set_callables() permite recablear los callables si el
+    # SessionRegistry cambia.
+    application.state.farm_browser_adapters = {}
+
+    # Dict de WorldAgent por world_id.
+    # Se gestiona desde el endpoint /farm/worlds/{world_id}/agent/start|stop.
+    application.state.world_agents = {}
+
+    # Helper para crear o recuperar un LiveFarmListAdapter por world_id.
+    # Se almacena en app.state para que el endpoint start pueda usarlo sin
+    # necesitar importar LiveFarmListAdapter directamente.
+    def _get_or_create_farm_browser(world_id: int) -> LiveFarmListAdapter:
+        adapters: dict = application.state.farm_browser_adapters
+        if world_id not in adapters:
+            adapters[world_id] = LiveFarmListAdapter(
+                world_id=world_id,
+                get_browser=session_registry.get_browser,
+                get_world_server=session_registry.get_world_server,
+            )
+        return adapters[world_id]
+
+    application.state.get_or_create_farm_browser = _get_or_create_farm_browser
 
     yield
 
@@ -346,6 +381,7 @@ app.mount(
 
 app.include_router(accounts_router)
 app.include_router(catalog_router)
+app.include_router(farm_router)
 app.include_router(game_data_router)
 app.include_router(game_overview_router)
 app.include_router(game_resources_router)

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo DA — Dansk
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const da = {
   'page.account.col.session':        'Session',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Slet verden',
+  'page.account.enterWorld':         'Gå ind i verden',
   'page.account.notFound.title':     'Konto ikke fundet',
   'page.account.notFound.desc':      'Den konto, du leder efter, findes ikke eller blev slettet.',
   'page.account.notFound.back':      'Tilbage til konti',
@@ -177,18 +178,19 @@ const da = {
   'world.session.error.toast':    'Kunne ikke oprette forbindelse til {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romere',
+  'tribe.teutons':   'Teutoner',
+  'tribe.gauls':     'Gallere',
+  'tribe.egyptians': 'Egyptere',
+  'tribe.huns':      'Hunner',
+  'tribe.spartans':  'Spartanere',
+  'tribe.vikings':   'Vikinger',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Forbindelsesfejl. Prøv igen.',
   'error.retry':      'Prøv igen',
   'error.loadFailed': 'Dataene kunne ikke indlæses.',
+  'error.loadDetail':  'Fejl ved indlæsning af detaljer',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const da = {
   'placeholder.accounts.list':   'Kontoliste — kommer snart',
   'placeholder.account.detail':  'Kontooplysninger — kommer snart',
   'placeholder.world.space':     'Verdensrum — kommer snart',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Se rapport',
+  'slot.error.actionFailed':    'Fejl ved ændring af slot.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Fuldt dashboard →',
+  'scheduler.subpanel.kpi.nextSend':           'Næste afsendelse',
+  'scheduler.subpanel.kpi.sendsToday':         'Afsendelser i dag',
+  'scheduler.subpanel.kpi.avgBounty':          'Res./afs.',
+  'scheduler.subpanel.kpi.in':                 'om {t}',
+  'scheduler.subpanel.feed.title':             'Seneste aktivitet',
+  'scheduler.subpanel.feed.updatedAgo':        'Opdateret for {t} siden',
+  'scheduler.subpanel.feed.viewAll':           'Se hele historik →',
+  'scheduler.subpanel.feed.empty':             'Ingen seneste afsendelser',
+  'scheduler.subpanel.alerts.title':           'Advarsler',
+  'scheduler.subpanel.alerts.unread':          '{n} ulæste',
+  'scheduler.subpanel.alerts.empty':           'Ingen seneste advarsler',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pause',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktivér',
+  'scheduler.subpanel.toggle.soon':            'Snart',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivér sonde i denne landsby?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Annullér sonde i denne landsby?',
+  'scheduler.subpanel.probe.btn.confirm':      'Bekræft',
+  'scheduler.subpanel.probe.btn.dismiss':      'Afvis',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenter',
+  'schedulerDash.breadcrumb.back':     '← Tilbage',
+  'schedulerDash.title':               'Dashboard {name}',
+  'schedulerDash.kpi.nextSend':        'Næste afsendelse',
+  'schedulerDash.kpi.sendsToday':      'Afsendelser i dag',
+  'schedulerDash.kpi.avgBounty':       'Res./afs.',
+  'schedulerDash.table.title':         'Oversigt pr. liste',
+  'schedulerDash.table.col.list':      'Liste',
+  'schedulerDash.table.col.status':    'Seneste status',
+  'schedulerDash.table.col.sent':      'Sendte gårde',
+  'schedulerDash.table.col.active':    'Aktive gårde',
+  'schedulerDash.table.col.avgBounty': 'Gns. bytte',
+  'schedulerDash.table.col.lastSend':  'Seneste afsendelse',
+  'schedulerDash.table.empty':         'Ingen tildelte lister',
+  'schedulerDash.history.title':       'Afsendelseshistorik',
+  'schedulerDash.alerts.title':        'Advarsler',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Tab registreret',
+  'alertEvent.PROBE_SENT':        '{list} · Sonde sendt til {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Genaktiveret',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonde annulleret',
+  'alertEvent.probe.activate':    '⚡ Aktivér sonde',
+  'alertEvent.probe.cancel':      '✕ Annullér sonde',
+  'alertEvent.probe.viewTravian': 'Vis i Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Seneste afsendelse',
+  'feedback.status.success':   '✓ Fuldført',
+  'feedback.status.partial':   '⚠ Delvis',
+  'feedback.status.error':     '✗ Fejl',
+  'feedback.status.unknown':   '? Ukendt',
+  'feedback.slotsRaiding':     '{n} slots plyndrer',
+  'feedback.noDeactivated':    'Ingen deaktiverede gårde',
+  'feedback.deactivatedLabel': 'Deaktiverede gårde:',
+  'feedback.deactivatedMore':  'og {n} til',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistik',
+  'stats.section.performance':  'Generel ydeevne',
+  'stats.totalBounty':          'Samlet akkumuleret bytte',
+  'stats.avgPerSend':           'Gennemsnit pr. afsendelse',
+  'stats.sendsLast7d':          'Afsendelser (7 dage)',
+  'stats.bountyUnit':           'ressourcer',
+  'stats.section.distribution': 'Slot-fordeling',
+  'stats.dist.active':          'Aktive',
+  'stats.dist.probe':           'Sonde afvent.',
+  'stats.dist.botDisabled':     'Deakt. af bot',
+  'stats.dist.manualDisabled':  'Deakt. manuelt',
+  'stats.section.topSlots':     'Top slots efter bytte (gns./afs.)',
+  'stats.topSlots.distance':    '{d} felter',
+  'stats.topSlots.avgBounty':   '{n} res/afs.',
+  'stats.empty.title':          'Ingen ydeevnedata',
+  'stats.empty.subtitle':       'Data vises efter første afsendelse.',
 }
 
 export default da

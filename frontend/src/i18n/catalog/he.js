@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo HE — עברית (RTL)
  * [AUTO] Traducción automática — requiere revisión nativa.
  * RTL: el layout se espeja cuando este idioma está activo.
@@ -81,6 +81,7 @@ const he = {
   'page.account.col.session':        'סשן',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'מחק עולם',
+  'page.account.enterWorld':         'כניסה לעולם',
   'page.account.notFound.title':     'החשבון לא נמצא',
   'page.account.notFound.desc':      'החשבון שחיפשת אינו קיים או נמחק.',
   'page.account.notFound.back':      'חזור לחשבונות',
@@ -178,18 +179,19 @@ const he = {
   'world.session.error.toast':    'לא ניתן להתחבר ב-{world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'רומאים',
+  'tribe.teutons':   'טוטונים',
+  'tribe.gauls':     'גאלים',
+  'tribe.egyptians': 'מצרים',
+  'tribe.huns':      'הונים',
+  'tribe.spartans':  'ספרטנים',
+  'tribe.vikings':   'ויקינגים',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'שגיאת חיבור. נסה שוב.',
   'error.retry':      'נסה שוב',
   'error.loadFailed': 'לא ניתן היה לטעון את הנתונים.',
+  'error.loadDetail':  'שגיאה בטעינת הפרטים',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -198,6 +200,95 @@ const he = {
   'placeholder.accounts.list':   'רשימת חשבונות — בקרוב',
   'placeholder.account.detail':  'פרטי חשבון — בקרוב',
   'placeholder.world.space':     'מרחב עולם — בקרוב',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'הצג דוח',
+  'slot.error.actionFailed':    'שגיאה בעריכת הסלוט.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'לוח מלא →',
+  'scheduler.subpanel.kpi.nextSend':           'שליחה הבאה',
+  'scheduler.subpanel.kpi.sendsToday':         'שליחות היום',
+  'scheduler.subpanel.kpi.avgBounty':          'משאב/שליחה',
+  'scheduler.subpanel.kpi.in':                 'בעוד {t}',
+  'scheduler.subpanel.feed.title':             'פעילות אחרונה',
+  'scheduler.subpanel.feed.updatedAgo':        'עודכן לפני {t}',
+  'scheduler.subpanel.feed.viewAll':           'כל ההיסטוריה →',
+  'scheduler.subpanel.feed.empty':             'אין שליחות אחרונות',
+  'scheduler.subpanel.alerts.title':           'התראות',
+  'scheduler.subpanel.alerts.unread':          '{n} לא נקראו',
+  'scheduler.subpanel.alerts.empty':           'אין התראות אחרונות',
+  'scheduler.subpanel.toggle.pause':           '⏸ השהה',
+  'scheduler.subpanel.toggle.activate':        '▶ הפעל',
+  'scheduler.subpanel.toggle.soon':            'בקרוב',
+  'scheduler.subpanel.probe.confirm.activate': 'להפעיל בדיקה בכפר זה?',
+  'scheduler.subpanel.probe.confirm.cancel':   'לבטל בדיקה בכפר זה?',
+  'scheduler.subpanel.probe.btn.confirm':      'אישור',
+  'scheduler.subpanel.probe.btn.dismiss':      'דחה',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'סוכנים',
+  'schedulerDash.breadcrumb.back':     '→ חזרה',
+  'schedulerDash.title':               'לוח {name}',
+  'schedulerDash.kpi.nextSend':        'שליחה הבאה',
+  'schedulerDash.kpi.sendsToday':      'שליחות היום',
+  'schedulerDash.kpi.avgBounty':       'משאב/שליחה',
+  'schedulerDash.table.title':         'סיכום לפי רשימה',
+  'schedulerDash.table.col.list':      'רשימה',
+  'schedulerDash.table.col.status':    'סטטוס אחרון',
+  'schedulerDash.table.col.sent':      'חוות שנשלחו',
+  'schedulerDash.table.col.active':    'חוות פעילות',
+  'schedulerDash.table.col.avgBounty': 'שלל ממוצע',
+  'schedulerDash.table.col.lastSend':  'שליחה אחרונה',
+  'schedulerDash.table.empty':         'אין רשימות מוקצות',
+  'schedulerDash.history.title':       'היסטוריית שליחות',
+  'schedulerDash.alerts.title':        'התראות',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · אובדן זוהה',
+  'alertEvent.PROBE_SENT':        '{list} · נשלחה בדיקה ל{slot}',
+  'alertEvent.REACTIVATED':       '{slot} · הופעל מחדש',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · בדיקה בוטלה',
+  'alertEvent.probe.activate':    '⚡ הפעל בדיקה',
+  'alertEvent.probe.cancel':      '✕ בטל בדיקה',
+  'alertEvent.probe.viewTravian': 'הצג ב-Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'שליחה אחרונה',
+  'feedback.status.success':   '✓ הושלם',
+  'feedback.status.partial':   '⚠ חלקי',
+  'feedback.status.error':     '✗ שגיאה',
+  'feedback.status.unknown':   '? לא ידוע',
+  'feedback.slotsRaiding':     '{n} משבצות בשוד',
+  'feedback.noDeactivated':    'אין חוות שהושבתו',
+  'feedback.deactivatedLabel': 'חוות שהושבתו:',
+  'feedback.deactivatedMore':  'ועוד {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'סטטיסטיקה',
+  'stats.section.performance':  'ביצועים כלליים',
+  'stats.totalBounty':          'סך שלל מצטבר',
+  'stats.avgPerSend':           'ממוצע לשליחה',
+  'stats.sendsLast7d':          'שליחות (7 ימים)',
+  'stats.bountyUnit':           'משאבים',
+  'stats.section.distribution': 'פיזור משבצות',
+  'stats.dist.active':          'פעילות',
+  'stats.dist.probe':           'בדיקה ממתינה',
+  'stats.dist.botDisabled':     'הושבת ע"י הבוט',
+  'stats.dist.manualDisabled':  'הושבת ידנית',
+  'stats.section.topSlots':     'משבצות מובילות לפי שלל (ממוצע/שליחה)',
+  'stats.topSlots.distance':    '{d} משבצות',
+  'stats.topSlots.avgBounty':   '{n} משאב/שליחה',
+  'stats.empty.title':          'אין נתוני ביצועים',
+  'stats.empty.subtitle':       'נתונים יופיעו לאחר השליחה הראשונה.',
 }
 
 export default he

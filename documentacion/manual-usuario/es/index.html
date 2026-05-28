@@ -18,7 +18,23 @@
     background:var(--bg); color:var(--text); line-height:1.6;
     -webkit-font-smoothing:antialiased;
   }
-  .wrap{max-width:880px;margin:0 auto;padding:56px 24px 96px;}
+  .layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
+  .sidebar{background:#fff;border-right:1px solid var(--border);position:sticky;top:0;
+    height:100vh;overflow-y:auto;padding:32px 0 24px;}
+  .sidebar-logo{padding:0 20px 24px;font-size:13px;font-weight:600;color:var(--text-2);
+    letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:16px;}
+  .sidebar-logo span{display:block;font-size:17px;color:var(--text);text-transform:none;
+    letter-spacing:normal;font-weight:700;margin-bottom:2px;}
+  .sidebar-section{padding:0 12px;margin-bottom:8px;}
+  .sidebar-section-title{font-size:10px;font-weight:600;color:var(--text-3);
+    text-transform:uppercase;letter-spacing:.06em;padding:8px 8px 4px;}
+  .sidebar-link{display:block;padding:7px 8px;border-radius:6px;color:var(--text-2);
+    text-decoration:none;font-size:13px;transition:background .15s,color .15s;}
+  .sidebar-link:hover{background:var(--surface-2);color:var(--text);}
+  .sidebar-link.active{background:var(--accent-soft);color:var(--accent);font-weight:500;}
+  .wrap{padding:48px 56px 80px;max-width:960px;}
+  @media(max-width:768px){.layout{grid-template-columns:1fr;}.sidebar{display:none;}
+    .wrap{padding:32px 20px 64px;}}
   .langbar{text-align:center;font-size:14px;color:var(--text-3);margin-bottom:8px;}
   .langbar a{color:var(--accent);text-decoration:none;}
   .langbar a:hover{text-decoration:underline;}
@@ -63,6 +79,34 @@
 </style>
 </head>
 <body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Primeros pasos</div>
+      <a class="sidebar-link" href="../index.html">Inicio</a>
+      <a class="sidebar-link active" href="#">Cuentas y mundos</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Gestión del bot</div>
+      <a class="sidebar-link" href="../farm-lists.html">Listas de vacas</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">En esta página</div>
+      <a class="sidebar-link" href="#cuentas">La pantalla de Cuentas</a>
+      <a class="sidebar-link" href="#crear">Crear una cuenta</a>
+      <a class="sidebar-link" href="#detalle">Detalle y mundos</a>
+      <a class="sidebar-link" href="#mundo">Añadir un mundo</a>
+      <a class="sidebar-link" href="#editar">Editar o borrar</a>
+      <a class="sidebar-link" href="#idioma">Idioma y tema</a>
+    </div>
+  </aside>
+
+  <main>
 <div class="wrap">
 
   <div class="langbar"><span class="current">Español</span> · <a href="../en/index.html">English</a></div>
@@ -75,7 +119,7 @@
   </header>
 
   <nav class="toc">
-    <h2>Contenido</h2>
+    <h2>En esta página</h2>
     <ol>
       <li><a href="#cuentas">La pantalla de Cuentas</a></li>
       <li><a href="#crear">Crear una cuenta nueva</a></li>
@@ -202,9 +246,11 @@
   </section>
 
   <footer>
-    TravianBot — Manual de usuario · 🔖 Última revisión: 2026-05-26
+    TravianBot — Manual de usuario · 🔖 Última revisión: 2026-05-28
   </footer>
 
+</div>
+  </main>
 </div>
 </body>
 </html>

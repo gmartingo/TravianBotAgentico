@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo SV — Svenska
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const sv = {
   'page.account.col.session':        'Session',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Radera värld',
+  'page.account.enterWorld':         'Gå in i världen',
   'page.account.notFound.title':     'Kontot hittades inte',
   'page.account.notFound.desc':      'Kontot du letar efter finns inte eller har raderats.',
   'page.account.notFound.back':      'Tillbaka till konton',
@@ -177,18 +178,19 @@ const sv = {
   'world.session.error.toast':    'Det gick inte att ansluta till {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romare',
+  'tribe.teutons':   'Teutoner',
+  'tribe.gauls':     'Galler',
+  'tribe.egyptians': 'Egyptier',
+  'tribe.huns':      'Hunner',
+  'tribe.spartans':  'Spartaner',
+  'tribe.vikings':   'Vikingar',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Anslutningsfel. Försök igen.',
   'error.retry':      'Försök igen',
   'error.loadFailed': 'Det gick inte att läsa in data.',
+  'error.loadDetail':  'Fel vid inläsning av detaljer',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const sv = {
   'placeholder.accounts.list':   'Kontolista — kommer snart',
   'placeholder.account.detail':  'Kontodetaljer — kommer snart',
   'placeholder.world.space':     'Världsutrymme — kommer snart',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Se rapport',
+  'slot.error.actionFailed':    'Fel vid ändring av slot.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Fullständig instrumentpanel →',
+  'scheduler.subpanel.kpi.nextSend':           'Nästa skickning',
+  'scheduler.subpanel.kpi.sendsToday':         'Skickningar idag',
+  'scheduler.subpanel.kpi.avgBounty':          'Res./skick.',
+  'scheduler.subpanel.kpi.in':                 'om {t}',
+  'scheduler.subpanel.feed.title':             'Senaste aktivitet',
+  'scheduler.subpanel.feed.updatedAgo':        'Uppdaterat för {t} sedan',
+  'scheduler.subpanel.feed.viewAll':           'Se hela historik →',
+  'scheduler.subpanel.feed.empty':             'Inga senaste skickningar',
+  'scheduler.subpanel.alerts.title':           'Varningar',
+  'scheduler.subpanel.alerts.unread':          '{n} olästa',
+  'scheduler.subpanel.alerts.empty':           'Inga senaste varningar',
+  'scheduler.subpanel.toggle.pause':           '⏸ Paus',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktivera',
+  'scheduler.subpanel.toggle.soon':            'Snart',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivera sond i denna by?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Avbryt sond i denna by?',
+  'scheduler.subpanel.probe.btn.confirm':      'Bekräfta',
+  'scheduler.subpanel.probe.btn.dismiss':      'Avfärda',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenter',
+  'schedulerDash.breadcrumb.back':     '← Tillbaka',
+  'schedulerDash.title':               'Dashboard {name}',
+  'schedulerDash.kpi.nextSend':        'Nästa skickning',
+  'schedulerDash.kpi.sendsToday':      'Skickningar idag',
+  'schedulerDash.kpi.avgBounty':       'Res./skick.',
+  'schedulerDash.table.title':         'Sammanfattning per lista',
+  'schedulerDash.table.col.list':      'Lista',
+  'schedulerDash.table.col.status':    'Senaste status',
+  'schedulerDash.table.col.sent':      'Skickade gårdar',
+  'schedulerDash.table.col.active':    'Aktiva gårdar',
+  'schedulerDash.table.col.avgBounty': 'Gns. byte',
+  'schedulerDash.table.col.lastSend':  'Senaste skickning',
+  'schedulerDash.table.empty':         'Inga tilldelade listor',
+  'schedulerDash.history.title':       'Skickningshistorik',
+  'schedulerDash.alerts.title':        'Varningar',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Förluster registrerade',
+  'alertEvent.PROBE_SENT':        '{list} · Sond skickad till {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Återaktiverad',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sond avbruten',
+  'alertEvent.probe.activate':    '⚡ Aktivera sond',
+  'alertEvent.probe.cancel':      '✕ Avbryt sond',
+  'alertEvent.probe.viewTravian': 'Visa i Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Senaste skickning',
+  'feedback.status.success':   '✓ Klar',
+  'feedback.status.partial':   '⚠ Delvis',
+  'feedback.status.error':     '✗ Fel',
+  'feedback.status.unknown':   '? Okänd',
+  'feedback.slotsRaiding':     '{n} slots plundrar',
+  'feedback.noDeactivated':    'Inga deaktiverade gårdar',
+  'feedback.deactivatedLabel': 'Deaktiverade gårdar:',
+  'feedback.deactivatedMore':  'och {n} till',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistik',
+  'stats.section.performance':  'Allmän prestanda',
+  'stats.totalBounty':          'Totalt ackumulerat byte',
+  'stats.avgPerSend':           'Genomsnitt per skickning',
+  'stats.sendsLast7d':          'Skickningar (7 dagar)',
+  'stats.bountyUnit':           'resurser',
+  'stats.section.distribution': 'Slotfördelning',
+  'stats.dist.active':          'Aktiva',
+  'stats.dist.probe':           'Sond väntar',
+  'stats.dist.botDisabled':     'Avakt. av bot',
+  'stats.dist.manualDisabled':  'Avakt. manuellt',
+  'stats.section.topSlots':     'Topslots på byte (gns./skick.)',
+  'stats.topSlots.distance':    '{d} fält',
+  'stats.topSlots.avgBounty':   '{n} res/skick.',
+  'stats.empty.title':          'Inga prestandadata',
+  'stats.empty.subtitle':       'Data visas efter första skickningen.',
 }
 
 export default sv

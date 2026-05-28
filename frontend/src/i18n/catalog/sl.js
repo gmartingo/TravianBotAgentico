@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo SL — Slovenščina
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const sl = {
   'page.account.col.session':        'Seja',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Izbriši svet',
+  'page.account.enterWorld':         'Vstopi v svet',
   'page.account.notFound.title':     'Račun ni bil najden',
   'page.account.notFound.desc':      'Račun, ki ga iščete, ne obstaja ali je bil izbrisan.',
   'page.account.notFound.back':      'Nazaj na račune',
@@ -177,18 +178,19 @@ const sl = {
   'world.session.error.toast':    'Ni mogoče vzpostaviti povezave z {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Rimljani',
+  'tribe.teutons':   'Tevtoni',
+  'tribe.gauls':     'Gali',
+  'tribe.egyptians': 'Egipčani',
+  'tribe.huns':      'Huni',
+  'tribe.spartans':  'Spartanci',
+  'tribe.vikings':   'Vikingi',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Napaka povezave. Poskusite znova.',
   'error.retry':      'Poskusi znova',
   'error.loadFailed': 'Podatkov ni bilo mogoče naložiti.',
+  'error.loadDetail':  'Napaka pri nalaganju podrobnosti',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const sl = {
   'placeholder.accounts.list':   'Seznam računov — kmalu',
   'placeholder.account.detail':  'Podrobnosti računa — kmalu',
   'placeholder.world.space':     'Prostor sveta — kmalu',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Poglej poročilo',
+  'slot.error.actionFailed':    'Napaka pri spremembi reže.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Celotna nadzorna plošča →',
+  'scheduler.subpanel.kpi.nextSend':           'Naslednje pošiljanje',
+  'scheduler.subpanel.kpi.sendsToday':         'Pošiljanja danes',
+  'scheduler.subpanel.kpi.avgBounty':          'Vir./pošilj.',
+  'scheduler.subpanel.kpi.in':                 'čez {t}',
+  'scheduler.subpanel.feed.title':             'Nedavna aktivnost',
+  'scheduler.subpanel.feed.updatedAgo':        'Posodobljeno pred {t}',
+  'scheduler.subpanel.feed.viewAll':           'Celotna zgodovina →',
+  'scheduler.subpanel.feed.empty':             'Ni nedavnih pošiljanj',
+  'scheduler.subpanel.alerts.title':           'Opozorila',
+  'scheduler.subpanel.alerts.unread':          '{n} neprebrano',
+  'scheduler.subpanel.alerts.empty':           'Ni nedavnih opozoril',
+  'scheduler.subpanel.toggle.pause':           '⏸ Premor',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktiviraj',
+  'scheduler.subpanel.toggle.soon':            'Kmalu',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivirati sondo v tej vasi?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Preklicati sondo v tej vasi?',
+  'scheduler.subpanel.probe.btn.confirm':      'Potrdi',
+  'scheduler.subpanel.probe.btn.dismiss':      'Zavrni',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenti',
+  'schedulerDash.breadcrumb.back':     '← Nazaj',
+  'schedulerDash.title':               'Nadzorna plošča {name}',
+  'schedulerDash.kpi.nextSend':        'Naslednje pošiljanje',
+  'schedulerDash.kpi.sendsToday':      'Pošiljanja danes',
+  'schedulerDash.kpi.avgBounty':       'Vir./pošilj.',
+  'schedulerDash.table.title':         'Povzetek po seznamu',
+  'schedulerDash.table.col.list':      'Seznam',
+  'schedulerDash.table.col.status':    'Zadnji status',
+  'schedulerDash.table.col.sent':      'Poslane kmetije',
+  'schedulerDash.table.col.active':    'Aktivne kmetije',
+  'schedulerDash.table.col.avgBounty': 'Povpr. plen',
+  'schedulerDash.table.col.lastSend':  'Zadnje pošiljanje',
+  'schedulerDash.table.empty':         'Ni dodeljenih seznamov',
+  'schedulerDash.history.title':       'Zgodovina pošiljanj',
+  'schedulerDash.alerts.title':        'Opozorila',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Zaznane izgube',
+  'alertEvent.PROBE_SENT':        '{list} · Sonda poslana v {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Ponovno aktivirano',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonda preklicana',
+  'alertEvent.probe.activate':    '⚡ Aktiviraj sondo',
+  'alertEvent.probe.cancel':      '✕ Prekliči sondo',
+  'alertEvent.probe.viewTravian': 'Poglej v Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Zadnje pošiljanje',
+  'feedback.status.success':   '✓ Končano',
+  'feedback.status.partial':   '⚠ Delno',
+  'feedback.status.error':     '✗ Napaka',
+  'feedback.status.unknown':   '? Neznano',
+  'feedback.slotsRaiding':     '{n} rež roplja',
+  'feedback.noDeactivated':    'Ni deaktiviranih kmetij',
+  'feedback.deactivatedLabel': 'Deaktivirane kmetije:',
+  'feedback.deactivatedMore':  'in še {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistika',
+  'stats.section.performance':  'Splošna učinkovitost',
+  'stats.totalBounty':          'Skupni nakopičeni plen',
+  'stats.avgPerSend':           'Povprečje na pošiljanje',
+  'stats.sendsLast7d':          'Pošiljanja (7 dni)',
+  'stats.bountyUnit':           'virov',
+  'stats.section.distribution': 'Razporeditev rež',
+  'stats.dist.active':          'Aktivne',
+  'stats.dist.probe':           'Sonda čaka',
+  'stats.dist.botDisabled':     'Izkl. z botom',
+  'stats.dist.manualDisabled':  'Izkl. ročno',
+  'stats.section.topSlots':     'Najboljše reže po plenu (povpr./pošilj.)',
+  'stats.topSlots.distance':    '{d} polj',
+  'stats.topSlots.avgBounty':   '{n} vir/pošilj.',
+  'stats.empty.title':          'Ni podatkov o učinkovitosti',
+  'stats.empty.subtitle':       'Podatki se prikažejo po prvem pošiljanju.',
 }
 
 export default sl

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo RS — Srpski (código kirilloid)
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const rs = {
   'page.account.col.session':        'Sesija',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Obriši svet',
+  'page.account.enterWorld':         'Uđi u svet',
   'page.account.notFound.title':     'Nalog nije pronađen',
   'page.account.notFound.desc':      'Nalog koji tražite ne postoji ili je obrisan.',
   'page.account.notFound.back':      'Nazad na naloge',
@@ -177,18 +178,19 @@ const rs = {
   'world.session.error.toast':    'Nije moguće povezati se sa {world}',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Rimljani',
+  'tribe.teutons':   'Teutoni',
+  'tribe.gauls':     'Gali',
+  'tribe.egyptians': 'Egipćani',
+  'tribe.huns':      'Huni',
+  'tribe.spartans':  'Spartanci',
+  'tribe.vikings':   'Vikinzi',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Greška veze. Pokušajte ponovo.',
   'error.retry':      'Pokušaj ponovo',
   'error.loadFailed': 'Podaci nisu mogli biti učitani.',
+  'error.loadDetail':  'Greška pri učitavanju detalja',
 
   // ── Versión ────────────────────────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const rs = {
   'placeholder.accounts.list':   'Lista naloga — uskoro',
   'placeholder.account.detail':  'Detalji naloga — uskoro',
   'placeholder.world.space':     'Prostor sveta — uskoro',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Pogledaj izveštaj',
+  'slot.error.actionFailed':    'Greška pri izmeni slota.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Puna tabla →',
+  'scheduler.subpanel.kpi.nextSend':           'Sledeće slanje',
+  'scheduler.subpanel.kpi.sendsToday':         'Slanja danas',
+  'scheduler.subpanel.kpi.avgBounty':          'Res./slanje',
+  'scheduler.subpanel.kpi.in':                 'za {t}',
+  'scheduler.subpanel.feed.title':             'Poslednja aktivnost',
+  'scheduler.subpanel.feed.updatedAgo':        'Ažurirano pre {t}',
+  'scheduler.subpanel.feed.viewAll':           'Cela istorija →',
+  'scheduler.subpanel.feed.empty':             'Nema nedavnih slanja',
+  'scheduler.subpanel.alerts.title':           'Upozorenja',
+  'scheduler.subpanel.alerts.unread':          '{n} nepročitanih',
+  'scheduler.subpanel.alerts.empty':           'Nema nedavnih upozorenja',
+  'scheduler.subpanel.toggle.pause':           '⏸ Pauza',
+  'scheduler.subpanel.toggle.activate':        '▶ Aktiviraj',
+  'scheduler.subpanel.toggle.soon':            'Uskoro',
+  'scheduler.subpanel.probe.confirm.activate': 'Aktivirati sondu u ovom selu?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Otkazati sondu u ovom selu?',
+  'scheduler.subpanel.probe.btn.confirm':      'Potvrdi',
+  'scheduler.subpanel.probe.btn.dismiss':      'Odbaci',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Agenti',
+  'schedulerDash.breadcrumb.back':     '← Nazad',
+  'schedulerDash.title':               'Tabla {name}',
+  'schedulerDash.kpi.nextSend':        'Sledeće slanje',
+  'schedulerDash.kpi.sendsToday':      'Slanja danas',
+  'schedulerDash.kpi.avgBounty':       'Res./slanje',
+  'schedulerDash.table.title':         'Pregled po listi',
+  'schedulerDash.table.col.list':      'Lista',
+  'schedulerDash.table.col.status':    'Posled. status',
+  'schedulerDash.table.col.sent':      'Poslate farme',
+  'schedulerDash.table.col.active':    'Aktivne farme',
+  'schedulerDash.table.col.avgBounty': 'Sr. plen',
+  'schedulerDash.table.col.lastSend':  'Posled. slanje',
+  'schedulerDash.table.empty':         'Nema dodeljenih lista',
+  'schedulerDash.history.title':       'Istorija slanja',
+  'schedulerDash.alerts.title':        'Upozorenja',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Otkriveni gubici',
+  'alertEvent.PROBE_SENT':        '{list} · Sonda poslata u {slot}',
+  'alertEvent.REACTIVATED':       '{slot} · Reaktivirano',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sonda otkazana',
+  'alertEvent.probe.activate':    '⚡ Aktiviraj sondu',
+  'alertEvent.probe.cancel':      '✕ Otkaži sondu',
+  'alertEvent.probe.viewTravian': 'Pogledaj u Travian',
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Poslednje slanje',
+  'feedback.status.success':   '✓ Završeno',
+  'feedback.status.partial':   '⚠ Delimično',
+  'feedback.status.error':     '✗ Greška',
+  'feedback.status.unknown':   '? Nepoznato',
+  'feedback.slotsRaiding':     '{n} slotova pljačka',
+  'feedback.noDeactivated':    'Nema deaktiviranih farmi',
+  'feedback.deactivatedLabel': 'Deaktivirane farme:',
+  'feedback.deactivatedMore':  'i još {n}',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'Statistika',
+  'stats.section.performance':  'Ukupna efikasnost',
+  'stats.totalBounty':          'Ukupan plen',
+  'stats.avgPerSend':           'Prosek po slanju',
+  'stats.sendsLast7d':          'Slanja (7 dana)',
+  'stats.bountyUnit':           'resursa',
+  'stats.section.distribution': 'Raspodela slotova',
+  'stats.dist.active':          'Aktivni',
+  'stats.dist.probe':           'Sonda čeka',
+  'stats.dist.botDisabled':     'Isklj. botom',
+  'stats.dist.manualDisabled':  'Isklj. ručno',
+  'stats.section.topSlots':     'Najb. slotovi po plenu (sr./slanje)',
+  'stats.topSlots.distance':    '{d} polja',
+  'stats.topSlots.avgBounty':   '{n} res/slanje',
+  'stats.empty.title':          'Nema podataka o efikasnosti',
+  'stats.empty.subtitle':       'Podaci će se pojaviti nakon prvog slanja.',
 }
 
 export default rs

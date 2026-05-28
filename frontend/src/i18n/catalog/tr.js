@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Catálogo TR — Türkçe
  * [AUTO] Traducción automática — requiere revisión nativa.
  */
@@ -80,6 +80,7 @@ const tr = {
   'page.account.col.session':        'Oturum',
   'page.account.col.actions':        '',
   'page.account.action.deleteWorld': 'Dünyayı sil',
+  'page.account.enterWorld':         'Dünyaya gir',
   'page.account.notFound.title':     'Hesap bulunamadı',
   'page.account.notFound.desc':      'Aradığınız hesap mevcut değil veya silindi.',
   'page.account.notFound.back':      'Hesaplara geri dön',
@@ -177,18 +178,19 @@ const tr = {
   'world.session.error.toast':    '{world} adresine bağlanılamadı',
 
   // ── Tribus ──────────────────────────────────────────────
-  'tribe.romans':    'Romans',
-  'tribe.teutons':   'Teutons',
-  'tribe.gauls':     'Gauls',
-  'tribe.egyptians': 'Egyptians',
-  'tribe.huns':      'Huns',
-  'tribe.spartans':  'Spartans',
-  'tribe.vikings':   'Vikings',
+  'tribe.romans':    'Romalılar',
+  'tribe.teutons':   'Tötonlar',
+  'tribe.gauls':     'Galyalılar',
+  'tribe.egyptians': 'Mısırlılar',
+  'tribe.huns':      'Hunlar',
+  'tribe.spartans':  'Spartalılar',
+  'tribe.vikings':   'Vikingler',
 
   // ── Errores globales ───────────────────────────────────
   'error.network':    'Bağlantı hatası. Tekrar deneyin.',
   'error.retry':      'Tekrar dene',
   'error.loadFailed': 'Veriler yüklenemedi.',
+  'error.loadDetail':  'Ayrıntılar yüklenirken hata oluştu',
 
   // ── Versión (sidebar footer) ───────────────────────────
   'app.version': 'v0.1.0',
@@ -197,6 +199,95 @@ const tr = {
   'placeholder.accounts.list':   'Hesap listesi — yakında',
   'placeholder.account.detail':  'Hesap detayı — yakında',
   'placeholder.world.space':     'Dünya alanı — yakında',
+  // -- Slot — mejoras V6-delta (fallback ES) -----------------
+  'slot.col.totalBounty':       'Acum.',
+  'slot.col.troops':            'Tropas',
+  'slot.col.actions':           'Acciones',
+  'slot.actions.menuLabel':     'Acciones del slot',
+  'slot.actions.activate':      'Activar',
+  'slot.actions.deactivate':    'Desactivar',
+  'slot.actions.cancelProbeHeader': 'Cancelar sonda',
+  'slot.actions.probeDeactivate':   'Desactivar indefinidamente',
+  'slot.actions.probeSendNow':      'Enviar ahora',
+  'slot.viewReport':            'Raporu görüntüle',
+  'slot.error.actionFailed':    'Slot değiştirilirken hata oluştu.',
+
+  // ── Scheduler sub-panel ──────────────────────────────────────────────────────
+  'scheduler.subpanel.dashboardLink':          'Tam gösterge paneli →',
+  'scheduler.subpanel.kpi.nextSend':           'Sonraki gönderim',
+  'scheduler.subpanel.kpi.sendsToday':         'Bugünkü gönderimleri',
+  'scheduler.subpanel.kpi.avgBounty':          'Kaynak/gönd.',
+  'scheduler.subpanel.kpi.in':                 '{t} içinde',
+  'scheduler.subpanel.feed.title':             'Son aktivite',
+  'scheduler.subpanel.feed.updatedAgo':        '{t} önce güncellendi',
+  'scheduler.subpanel.feed.viewAll':           'Tam geçmişi görüntüle →',
+  'scheduler.subpanel.feed.empty':             'Son gönderim yok',
+  'scheduler.subpanel.alerts.title':           'Uyarılar',
+  'scheduler.subpanel.alerts.unread':          '{n} okunmamış',
+  'scheduler.subpanel.alerts.empty':           'Son uyarı yok',
+  'scheduler.subpanel.toggle.pause':           '⏸ Duraklat',
+  'scheduler.subpanel.toggle.activate':        '▶ Etkinleştir',
+  'scheduler.subpanel.toggle.soon':            'Yakında',
+  'scheduler.subpanel.probe.confirm.activate': 'Bu köyde sondu etkinleştir?',
+  'scheduler.subpanel.probe.confirm.cancel':   'Bu köydeki sondu iptal et?',
+  'scheduler.subpanel.probe.btn.confirm':      'Onayla',
+  'scheduler.subpanel.probe.btn.dismiss':      'Reddet',
+
+  // ── Scheduler dashboard ──────────────────────────────────────────────────────
+  'schedulerDash.breadcrumb.agents':   'Ajanlar',
+  'schedulerDash.breadcrumb.back':     '← Geri',
+  'schedulerDash.title':               '{name} gösterge paneli',
+  'schedulerDash.kpi.nextSend':        'Sonraki gönderim',
+  'schedulerDash.kpi.sendsToday':      'Bugünkü gönderimleri',
+  'schedulerDash.kpi.avgBounty':       'Kaynak/gönd.',
+  'schedulerDash.table.title':         'Listeye göre özet',
+  'schedulerDash.table.col.list':      'Liste',
+  'schedulerDash.table.col.status':    'Son durum',
+  'schedulerDash.table.col.sent':      'Gönderilen çiftlikler',
+  'schedulerDash.table.col.active':    'Aktif çiftlikler',
+  'schedulerDash.table.col.avgBounty': 'Ort. ganimet',
+  'schedulerDash.table.col.lastSend':  'Son gönderim',
+  'schedulerDash.table.empty':         'Atanmış liste yok',
+  'schedulerDash.history.title':       'Gönderim geçmişi',
+  'schedulerDash.alerts.title':        'Uyarılar',
+
+  // ── Alert events ─────────────────────────────────────────────────────────────
+  'alertEvent.LOSSES_DETECTED':   '{slot} · Kayıplar tespit edildi',
+  'alertEvent.PROBE_SENT':        '{list} · {slot} adresine sond gönderildi',
+  'alertEvent.REACTIVATED':       '{slot} · Yeniden etkinleştirildi',
+  'alertEvent.PROBE_CANCELLED':   '{slot} · Sond iptal edildi',
+  'alertEvent.probe.activate':    '⚡ Sondu etkinleştir',
+  'alertEvent.probe.cancel':      '✕ Sondu iptal et',
+  'alertEvent.probe.viewTravian': "Travian'da görüntüle",
+
+  // ── Send feedback panel ───────────────────────────────────────────────────────
+  'feedback.title':            'Son gönderim',
+  'feedback.status.success':   '✓ Tamamlandı',
+  'feedback.status.partial':   '⚠ Kısmi',
+  'feedback.status.error':     '✗ Hata',
+  'feedback.status.unknown':   '? Bilinmiyor',
+  'feedback.slotsRaiding':     '{n} slot akın ediyor',
+  'feedback.noDeactivated':    'Devre dışı bırakılan çiftlik yok',
+  'feedback.deactivatedLabel': 'Devre dışı çiftlikler:',
+  'feedback.deactivatedMore':  've {n} daha',
+
+  // ── Stats tab ────────────────────────────────────────────────────────────────
+  'stats.title':                'İstatistikler',
+  'stats.section.performance':  'Genel performans',
+  'stats.totalBounty':          'Toplam birikmiş ganimet',
+  'stats.avgPerSend':           'Gönderim başına ortalama',
+  'stats.sendsLast7d':          'Gönderimleri (7 gün)',
+  'stats.bountyUnit':           'kaynak',
+  'stats.section.distribution': 'Slot dağılımı',
+  'stats.dist.active':          'Aktif',
+  'stats.dist.probe':           'Sond bekliyor',
+  'stats.dist.botDisabled':     'Bot tarafından devre dışı',
+  'stats.dist.manualDisabled':  'Manuel devre dışı',
+  'stats.section.topSlots':     'Ganimete göre en iyi slotlar (ort./gönderim)',
+  'stats.topSlots.distance':    '{d} hücre',
+  'stats.topSlots.avgBounty':   '{n} kaynak/gönd.',
+  'stats.empty.title':          'Performans verisi yok',
+  'stats.empty.subtitle':       'Veriler ilk gönderimden sonra görünecek.',
 }
 
 export default tr
