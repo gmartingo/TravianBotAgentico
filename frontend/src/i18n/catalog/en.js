@@ -475,7 +475,6 @@ const en = {
   'calc.optimizer.oasisDefense':           'Oasis defense',
   'calc.optimizer.config':                 'Configuration',
   'calc.optimizer.topN':                   'Top N results',
-  'calc.optimizer.exponent':               'Exponent',
   'calc.optimizer.weights':                'Optimization weights',
   'calc.optimizer.weight.resources':       'Resources gained',
   'calc.optimizer.weight.losses':          'Resource losses',
@@ -496,6 +495,26 @@ const en = {
   'calc.optimizer.result.col.losses':      'Losses (R)',
   'calc.optimizer.result.col.gained':      'Res. gained',
   'calc.optimizer.noDetail':              'Detail not available',
+  'calc.optimizer.defenderNote':          'Defender losses from the best winning combat; may differ for this alternative.',
+
+  // ── Optimizer weights: legend for the 0..2 scale ────────────────────────
+  'calc.optimizer.weights.intro':
+    'Each weight goes from 0 to 2. 0 = ignore this criterion · 1 = normal importance · 2 = double priority. The higher it is, the more it drives the choice of best combinations.',
+  'calc.optimizer.weight.endLeft':         'ignore',
+  'calc.optimizer.weight.endRight':        'double',
+
+  // Semantic labels for the current value (shown next to the number)
+  'calc.optimizer.weight.value.ignore':    'ignored',
+  'calc.optimizer.weight.value.low':       'low',
+  'calc.optimizer.weight.value.normal':    'normal',
+  'calc.optimizer.weight.value.high':      'high',
+  'calc.optimizer.weight.value.max':       'max',
+
+  // Per-criterion hint (what raising the slider does)
+  'calc.optimizer.weight.resources.hint':  'Higher → prefer attacks that loot more resources from the oasis',
+  'calc.optimizer.weight.losses.hint':     'Higher → prefer attacks that cost you fewer troops',
+  'calc.optimizer.weight.troops.hint':     'Higher → prefer waves with fewer units sent',
+  'calc.optimizer.weight.travel.hint':     'Higher → prefer attacks with shorter travel time',
 }
 
 export default en

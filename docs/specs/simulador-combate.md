@@ -47,7 +47,7 @@ No hay permisos por rol en este MVP. La API es interna al bot.
 - **Optimizador de ataque a oasis** (`POST /combat/optimize`): dado un conjunto de tipos de tropas o un conjunto acotado por aldea, calcula la combinación óptima según criterio multi-objetivo (maximizar recursos de animales, minimizar coste en recursos de bajas, minimizar tropas enviadas, considerar tiempo de marcha).
 - Soporte de idioma vía `Accept-Language` y `?lang=` para nombres de tropas y resultado.
 - Iconos de tropas: URL `/static/icons/{icon_id}.png` incluida en los resultados cuando el `icon_id` existe en BD.
-- Fórmula real con exponente configurable (default 0.5, alternativa 0.45).
+- Fórmula real de Travian T4.5 con factor K derivado del tamaño total del campo (no es input — verificado contra kirilloid).
 - Modificadores de smithy, ataque y bonus de héroe (puntos propios + porcentaje), bonus de alianza, nivel de muro (desde BD), stonemason, moral.
 - Artefactos de velocidad y consumo de crop para el atacante; artefactos de durabilidad de edificios y cranny para el defensor — campos en el request para cálculos correctos de marcha y crop.
 - **`attack_type`** (`"attack"` vs `"raid"`): distingue si catapultas y arietes actúan en modo asedio (daño estructural) o como tropa normal (saqueo).
@@ -446,7 +446,7 @@ Los datos de `building_gid`, nivel y `wall_bonus` se obtienen de `GameDataPort.g
    modificadores de ataque (hero_attack_points, hero_attack_bonus_percent, alliance_bonus, morale,
    artifacts), lista de ejércitos defensores (cada uno con tribe + tropas + hero_defense_points +
    hero_defense_bonus_percent + artifacts), modificadores de muro (wall_level, wall_tribe,
-   stonemason_level), parámetros opcionales (exponente, distancia_campos, server_speed).
+   stonemason_level), parámetros opcionales (distancia_campos, server_speed).
 
 2. Handler valida el request (Pydantic). → 422 si falla validación estructural.
 
@@ -483,7 +483,7 @@ Los datos de `building_gid`, nivel y `wall_bonus` se obtienen de `GameDataPort.g
 1. Frontend envía: modo de tropas del atacante (Modo A: troop_types, o Modo B: village_troops),
    modificadores de ataque (hero_attack_points, hero_attack_bonus_percent, alliance_bonus,
    artifacts), defensa del oasis (lista de tropas nature con cantidades), parámetros
-   opcionales (exponente, server_speed, distance_fields, top_n, optimization_weights).
+   opcionales (server_speed, distance_fields, top_n, optimization_weights).
 
 2. Handler valida (Pydantic). → 422 si falla o si se envían ambos modos.
 
@@ -540,7 +540,7 @@ Los datos de `building_gid`, nivel y `wall_bonus` se obtienen de `GameDataPort.g
 | EC-11 | Tropa de tribu NATURE en ataque | Técnicamente válido (el simulador no restringe; solo el optimizador lo fuerza para oasis) |
 | EC-12 | distancia_campos = 0 | `crop_consumption = 0` (no hay viaje) |
 | EC-13 | Optimizador sin ninguna combinación ganadora | 200 con `has_winning_combination: false`, `message` explicativo, y las mejores alternativas no-ganadoras (nunca lista vacía) |
-| EC-14 | Exponente no configurado (omitido en request) | Default 0.5 sin error |
+| EC-14 | `config.exponent` enviado por error en el request | 422 (`extra_forbidden`); K se deriva siempre internamente del tamaño del campo |
 | EC-15 | `icon_id` nulo en BD para una tropa | `icon_url: null` en la respuesta (no es error) |
 | EC-16 | Un defensor sin héroe (campos hero omitidos) | `hero_defense_points=0`, `hero_defense_bonus_percent=0` por defecto |
 | EC-17 | `artifact_fast_troops` < 1.0 (artefacto que ralentiza, improbable) | Aplicado tal cual; no hay validación de sentido de negocio |
@@ -692,10 +692,15 @@ class WallConfig:
 ```python
 @dataclass
 class CombatConfig:
-    exponent: float          # default 0.5
-    server_speed: float      # 1..10, divisor de velocidad, default 1
-    distance_fields: float | None  # distancia en campos, None si no se quiere crop
+    server_speed: float = 1.0          # 1..10 (divisor de velocidad)
+    distance_fields: float | None = None  # distancia en campos, None si no se quiere crop
 ```
+
+**Nota sobre el exponente K**: Travian T4.5 no expone K como input — se deriva en tiempo
+real del total de tropas en el campo (atacante + defensor) mediante `compute_k(total_units)`
+en `combat_engine.py` (K = 1.5 si N ≤ 1000, K = 2·(1.8592 − N^0.015) si N > 1000, rango
+1.2578..1.5). Versiones anteriores de esta spec lo trataron como `config.exponent`
+configurable; se eliminó tras verificar la fórmula real contra kirilloid.
 
 ### TroopResult (tropa con resultado del combate)
 ```python
@@ -910,7 +915,6 @@ Accept-Language: es   (o ?lang=es)
     "wall_tribe": "gauls"
   },
   "config": {
-    "exponent": 0.5,
     "server_speed": 1,
     "distance_fields": 10
   }
@@ -1077,7 +1081,6 @@ Accept-Language: es
     ]
   },
   "config": {
-    "exponent": 0.5,
     "server_speed": 1,
     "distance_fields": 10,
     "top_n": 3,
@@ -1115,7 +1118,6 @@ Accept-Language: es
     ]
   },
   "config": {
-    "exponent": 0.5,
     "server_speed": 1,
     "distance_fields": 10,
     "top_n": 3,
@@ -1327,12 +1329,17 @@ async def simulate_combat(
     else:
         ratio_raw = A_efectivo / D_efectiva
         attacker_wins = ratio_raw >= 1
-        if attacker_wins:
-            atk_survived = [round(e["quantity"] * ratio_raw ** (-config.exponent)) for e in atk_enriched]
-            def_survived = [0] * len(all_def_enriched)
-        else:
-            atk_survived = [0] * len(atk_enriched)
-            def_survived = [round(e["quantity"] * (1 / ratio_raw) ** (-config.exponent)) for e in all_def_enriched]
+        # K = factor de bajas (Travian "involved factor"). NO es input — se deriva del
+        # total de tropas en el campo. Ver compute_k() en combat_engine.py.
+        K = compute_k(total_units=sum(e["quantity"] for e in atk_enriched)
+                                  + sum(e["quantity"] for e in all_def_enriched))
+        # x = (perdedor / ganador) ^ K — base de la fórmula T4.5 (raid y attack).
+        # winner_loss_pct y loser_loss_pct dependen de attack_type:
+        #   - raid:   winner_loss = x/(1+x);  loser_loss = 1/(1+x)
+        #   - attack: winner_loss = min(x,1); loser_loss = 1.0
+        # Ver implementación completa en combat_engine.simulate_combat (§8).
+        atk_survived, def_survived = _apply_t45_losses(
+            atk_enriched, all_def_enriched, ratio_raw, K, attacker.attack_type)
         ratio = round(ratio_raw, 4)
 
     # 9. Botín (RN-07)
@@ -1514,9 +1521,24 @@ Estrategia principal (pymoo NSGA-II para N tipos de tropas):
   Devolver top_n
 
 Fallback por muestreo (si pymoo no disponible o N <= 5):
-  Parámetros:
-    Para cada tipo i: pasos = 10% de quantity_max[i] (Modo B) o 10% de cantidad estimada mínima (Modo A)
-    Generar combinaciones por proporciones discretas: {0%, 10%, ..., 100%}
+  Estrategia en DOS fases para cubrir tanto ejércitos grandes como mínimos:
+
+  Fase 1 — gruesa (paso ~10% de la escala):
+    Para cada tipo i: paso = max(1, scale[i] // 10)
+    Generar {0%, 10%, ..., 100%} de la escala (scale = quantity_max[i] en Modo B,
+    100 por defecto en Modo A).
+    Detecta la región general donde la victoria es trivial.
+
+  Fase 2 — fina (paso 1):
+    Para cada tipo i: rango 0..fine_max con incremento de 1.
+    fine_max es adaptativo según N para mantener presupuesto ≈ 10 000 combos:
+      N=1..2 → 30   |   N=3 → 21   |   N=4 → 10   |   N=5 → 6
+    Esta fase descubre el "ejército mínimo ganador" (p.ej. 1 espada + 1 TT +
+    1 Heudo vs 1 cocodrilo), interesante en oasis típicos con defensa pequeña.
+
+  Combinar las dos fases deduplicando (la fase fina solapa con la gruesa en
+  cantidades bajas) y aplicar salvaguarda HARD_CAP = 30 000 combos totales.
+
   Para cada combinación:
     Simular combate
     Registrar (is_winning, total_losses, troops_sent_count, travel_time_h)
@@ -1529,12 +1551,13 @@ Garantía de resultado no vacío:
   Si no hay ninguna combinación evaluada (sin candidatos posibles), devolver 422.
   El `alternatives` en el response NUNCA está vacío.
 
-Complejidad (fallback):
-  N=1: 11 → inmediato
-  N=2: 121 → inmediato
-  N=3: 1331 → <50ms
-  N=5: ~161k → ~500ms
-  N>5: usar pymoo (o cap en 5 + warning)
+Complejidad (fallback, suma de fase gruesa + fina, tras dedup):
+  N=1: ~41   → inmediato
+  N=2: ~1 080 → ~0,5 s
+  N=3: ~11 000 → ~10 s (caso típico oasis, suficiente para encontrar ejército mínimo)
+  N=4: ~28 000 → ~25 s (cerca del HARD_CAP)
+  N=5: HARD_CAP → ~30 s (paso fino reducido a fine_max=6)
+  N>5: NSGA-II con pymoo automáticamente
 ```
 
 ### Mermaid — flujo de `simulate_combat`
@@ -1598,7 +1621,6 @@ flowchart TD
 | `wall.wall_level` | `int` | 0..20, default 0 |
 | `wall.stonemason_level` | `int` | 0..5, default 0 |
 | `wall.wall_tribe` | `str \| null` | Valor en `Tribe` enum o null |
-| `config.exponent` | `float` | 0.4..0.6, default 0.5 |
 | `config.server_speed` | `float` | 1..10, default 1 |
 | `config.distance_fields` | `float \| null` | > 0 si presente, default null |
 | `config.top_n` (optimize) | `int` | 1..10, default 3 |
@@ -1638,7 +1660,7 @@ flowchart TD
 ### Rendimiento
 - **Simulador**: O(N_atk + N_def) en tipos de tropas. Con caches de GameDataPort en memoria: < 100ms.
 - **Optimizador con pymoo**: depende de `population_size` × `n_gen` × costo de evaluación. Para N=5 y parámetros conservadores: < 3 segundos. Para N>10: puede superar 10 segundos → usar ThreadPoolExecutor.
-- **Optimizador con muestreo** (fallback, N<=5): O(11^N) × O(N_atk + N_def). Worst case N=5: ~161k × operaciones ligeras. Estimado < 2 segundos.
+- **Optimizador con muestreo** (fallback, N<=5): dos fases (gruesa + fina). Worst case con HARD_CAP=30 000 combos × ~ms por combate ≈ 30 s. Para N>5 se activa NSGA-II que es notablemente más rápido.
 - **Sin caché de respuesta**: `Cache-Control: no-store` obligatorio.
 - Las queries a GameDataPort son async (no bloquean el event loop).
 
@@ -1847,7 +1869,7 @@ flowchart TD
 
 | Decisión técnica | Origen |
 |---|---|
-| Fórmula con exponente 0.5 (configurable a 0.45) | Fase 1 confirmada por el usuario |
+| Exponente K derivado del tamaño del campo (no input) — fórmula real T4.5 verificada contra kirilloid | Revisión 2026-05-29: spec inicial decía `config.exponent` configurable; la implementación adoptó el K dinámico y se eliminó el input del contrato |
 | Héroe con puntos propios + bonus porcentual (RN-01) | Corrección de diseño 2026-05-28 — héroe Travian tiene ambos componentes |
 | Artefactos en MVP como campos declarativos sin validación automática (RN-12) | Corrección de diseño 2026-05-28 — entran al MVP, sistema confía en el usuario |
 | Catapultas como tropas estándar en MVP (RN-13) | Corrección de diseño 2026-05-28 — su efecto sobre edificios es fuera del MVP |

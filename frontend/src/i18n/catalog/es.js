@@ -505,7 +505,6 @@ const es = {
   'calc.optimizer.oasisDefense':           'Defensa del oasis',
   'calc.optimizer.config':                 'Configuración',
   'calc.optimizer.topN':                   'Top N resultados',
-  'calc.optimizer.exponent':               'Exponente',
   'calc.optimizer.weights':                'Pesos de optimización',
   'calc.optimizer.weight.resources':       'Recursos ganados',
   'calc.optimizer.weight.losses':          'Pérdidas en recursos',
@@ -526,6 +525,26 @@ const es = {
   'calc.optimizer.result.col.losses':      'Bajas (R)',
   'calc.optimizer.result.col.gained':      'Rec. ganados',
   'calc.optimizer.noDetail':              'Detalle no disponible',
+  'calc.optimizer.defenderNote':          'Bajas defensoras del mejor combate ganador; pueden variar para esta alternativa.',
+
+  // ── Pesos del optimizador: leyenda de la escala 0..2 ─────────────────────
+  'calc.optimizer.weights.intro':
+    'Cada peso va de 0 a 2. 0 = ignorar este criterio · 1 = importancia normal · 2 = doble prioridad. Cuanto más alto, más manda ese criterio al elegir las mejores combinaciones.',
+  'calc.optimizer.weight.endLeft':         'ignorar',
+  'calc.optimizer.weight.endRight':        'doble',
+
+  // Etiquetas semánticas del valor actual (se muestran junto al número)
+  'calc.optimizer.weight.value.ignore':    'ignorado',
+  'calc.optimizer.weight.value.low':       'bajo',
+  'calc.optimizer.weight.value.normal':    'normal',
+  'calc.optimizer.weight.value.high':      'alto',
+  'calc.optimizer.weight.value.max':       'máximo',
+
+  // Hint específico de cada criterio (qué pasa al subirlo)
+  'calc.optimizer.weight.resources.hint':  'Más alto → prioriza saquear más recursos del oasis',
+  'calc.optimizer.weight.losses.hint':     'Más alto → prioriza ataques que te cuestan menos tropas',
+  'calc.optimizer.weight.troops.hint':     'Más alto → prioriza oleadas con menos unidades enviadas',
+  'calc.optimizer.weight.travel.hint':     'Más alto → prioriza ataques con menor tiempo de viaje',
 }
 
 export default es

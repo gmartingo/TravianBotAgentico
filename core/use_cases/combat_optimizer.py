@@ -261,54 +261,82 @@ async def _optimize_by_sampling(
     server_version: str = "1.45",
 ) -> list[dict]:
     """
-    Busca combinaciones de tropas por muestreo en pasos del 10%.
+    Busca combinaciones de tropas por muestreo en DOS fases:
 
-    Para Modo A (max=0): estima la cantidad mínima ganadora y muestrea en torno a ella.
-    Para Modo B (max>0): muestrea {0%, 10%, ..., 100%} de la cantidad disponible.
+    Fase 1 — gruesa (paso ~10% de la escala): cubre ejércitos grandes y descubre
+             la región general donde la victoria es trivial (p.ej. enviar 1k
+             espadachines no requiere optimización fina).
+    Fase 2 — fina (paso 1): explora cantidades pequeñas (0..fine_max por tipo)
+             para descubrir el "ejército mínimo ganador" que es lo verdaderamente
+             interesante contra oasis típicos (10 ratas, 5 lobos, etc.).
+
+    El máximo por tipo en la fase fina es adaptativo según N para evitar
+    explosión combinatoria (presupuesto ≈ 10 000 combos en la fase fina).
+
+    Modo A (max=0): escala 100; fase fina hasta fine_max.
+    Modo B (max>0): escala = cantidad disponible; fase fina capada por scale[i].
     """
     n = len(troop_specs)
-    candidates: list[dict] = []
+    if n == 0:
+        return []
 
-    # Para Modo A, necesitamos una escala de referencia.
-    # Empezamos con una cantidad razonable para estimar (p.ej. 100 por tipo).
-    scale = [
-        max_q if max_q > 0 else 100
-        for max_q in max_quantities
+    scale = [max_q if max_q > 0 else 100 for max_q in max_quantities]
+
+    # ── Fase 1 — gruesa (paso ~10%) ──────────────────────────────────────────
+    coarse_steps = 10
+    coarse_ranges = [
+        list(range(0, scale[i] + 1, max(1, scale[i] // coarse_steps)))
+        for i in range(n)
     ]
-    steps = 10  # pasos del 10%
-
-    # Generar combinaciones por proporciones discretas
-    ranges = [list(range(0, scale[i] + 1, max(1, scale[i] // steps))) for i in range(n)]
-    # Asegurar que el máximo está incluido
     for i in range(n):
-        if scale[i] not in ranges[i]:
-            ranges[i].append(scale[i])
+        if scale[i] not in coarse_ranges[i]:
+            coarse_ranges[i].append(scale[i])
 
-    total_combos = 1
-    for r in ranges:
-        total_combos *= len(r)
+    # ── Fase 2 — fina (paso 1) ───────────────────────────────────────────────
+    # fine_max adaptativo: presupuesto ≈ 10 000 combos en esta fase.
+    #   N=1 → 30        (capado por techo absoluto)
+    #   N=2 → 30        (capado)
+    #   N=3 → 21
+    #   N=4 → 10
+    #   N=5 → 6
+    fine_max_per_type = max(5, min(30, int(10_000 ** (1.0 / n))))
+    fine_ranges = [
+        list(range(0, min(fine_max_per_type, scale[i]) + 1, 1))
+        for i in range(n)
+    ]
 
-    if total_combos > 200_000:
-        # Reducir resolución si hay demasiadas combinaciones
-        steps = 5
-        ranges = [list(range(0, scale[i] + 1, max(1, scale[i] // steps))) for i in range(n)]
-        for i in range(n):
-            if scale[i] not in ranges[i]:
-                ranges[i].append(scale[i])
+    # ── Combinar y deduplicar (la fase fina solapa con la gruesa en 0) ──────
+    seen: set[tuple[int, ...]] = set()
+    combos_to_eval: list[list[int]] = []
 
-    # Evaluar todas las combinaciones
-    tasks = []
-    combo_list = list(itertools.product(*ranges))
-
-    # Evaluar en batch asíncrono (secuencialmente para no saturar la BD)
-    for combo in combo_list:
-        quantities = list(combo)
-        if all(q == 0 for q in quantities):
+    for combo in itertools.product(*coarse_ranges):
+        if all(q == 0 for q in combo):
             continue
-        tasks.append(quantities)
+        if combo in seen:
+            continue
+        seen.add(combo)
+        combos_to_eval.append(list(combo))
 
+    for combo in itertools.product(*fine_ranges):
+        if all(q == 0 for q in combo):
+            continue
+        if combo in seen:
+            continue
+        seen.add(combo)
+        combos_to_eval.append(list(combo))
+
+    # Salvaguarda dura por si la combinación de fases dispara el total
+    HARD_CAP = 30_000
+    if len(combos_to_eval) > HARD_CAP:
+        logger.warning(
+            "Optimizer sampling: %d combos exceeds budget; truncating to %d.",
+            len(combos_to_eval), HARD_CAP,
+        )
+        combos_to_eval = combos_to_eval[:HARD_CAP]
+
+    # ── Evaluar ──────────────────────────────────────────────────────────────
     evaluated: list[dict] = []
-    for quantities in tasks:
+    for quantities in combos_to_eval:
         ev = await _evaluate_combination(
             quantities=quantities,
             troop_specs=troop_specs,

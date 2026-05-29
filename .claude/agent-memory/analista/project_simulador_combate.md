@@ -1,11 +1,13 @@
 ---
 name: project-simulador-combate
-description: Decisiones de diseño del simulador/optimizador de combate Travian — spec en docs/specs/simulador-combate.md, estado draft (pendiente revalidación de API por correcciones breaking 2026-05-29)
+description: Decisiones de diseño del simulador/optimizador de combate Travian (Modos A/B/C) — specs en docs/specs/simulador-combate.md y docs/specs/optimizador-multi-raid.md
 metadata:
   type: project
 ---
 
-Spec en `docs/specs/simulador-combate.md`. Estado actual: **`draft`** — pendiente de revisión v4 de `desarrollador-apis` por dos cambios breaking en el response (2026-05-29). Después de la revisión, volver a `ready-for-impl`.
+Spec simulador/optimizador A+B: `docs/specs/simulador-combate.md`. Estado actual: **`draft`** — pendiente de revisión v4 de `desarrollador-apis` por dos cambios breaking en el response (2026-05-29). Después de la revisión, volver a `ready-for-impl`.
+
+Spec Modo C (multi-raid): `docs/specs/optimizador-multi-raid.md`. Estado: **`ready-for-impl`** (2026-05-29). Pendiente validación formal de contrato por `desarrollador-apis` (campo `apis_validadas_por_desarrollador_apis: false`). El analista hizo revisión manual.
 
 **Why:** Se aplicaron dos correcciones del usuario (2026-05-29) que cambian contratos del response: (1) `resources_gained_from_animals` pasa de `integer` a objeto `{wood, clay, iron, crop, total}`; (2) default de `attack_type` cambia a `"raid"`. Ambas son breaking en el contrato del response.
 

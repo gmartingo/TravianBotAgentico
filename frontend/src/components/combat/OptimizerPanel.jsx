@@ -8,7 +8,7 @@
  *             (mismo grid de TroopGrid pero con máximos, no objetivo)
  *
  * Sección DEFENSA: siempre tribu NATURE, 10 tipos de animal.
- * Sección CONFIGURACIÓN: colapsable. top_n, exponent, sliders de pesos.
+ * Sección CONFIGURACIÓN: colapsable. top_n + sliders de pesos.
  *
  * Props:
  *   atkTribe           — string (tribu seleccionada del atacante)
@@ -313,33 +313,100 @@ function AnimalCell({ troop, qty, onChange }) {
 }
 
 // Slider de peso con valor visible
-function WeightSlider({ labelKey, value, onChange }) {
+// Etiqueta semántica del valor actual del peso.
+// 0 = ignorar este criterio, ~1 = importancia normal, 2 = doble prioridad.
+function weightLabel(value, t) {
+  if (value <= 0.05) return t('calc.optimizer.weight.value.ignore')
+  if (value < 0.85)  return t('calc.optimizer.weight.value.low')
+  if (value <= 1.15) return t('calc.optimizer.weight.value.normal')
+  if (value < 1.85)  return t('calc.optimizer.weight.value.high')
+  return t('calc.optimizer.weight.value.max')
+}
+
+// Slider de peso con doble nivel de ayuda:
+//  - Cabecera: label + slider + valor numérico + "etiqueta semántica" del valor
+//  - Pie:      "← ignorar"  ·  hint específico ("Más alto = X")  ·  "doble →"
+// hintKey es la frase concreta para ESTE criterio (qué significa subirlo).
+function WeightSlider({ labelKey, hintKey, value, onChange }) {
   const { t } = useI18n()
+  // Pista para lectores de pantalla: el aria-valuetext describe el peso de
+  // forma comprensible ("normal", "ignorar", etc.) en vez de solo el número.
+  const semantic = weightLabel(value, t)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '160px' }}>
-        {t(labelKey)}
-      </span>
-      <input
-        type="range"
-        min={0}
-        max={2}
-        step={0.1}
-        value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        aria-label={t(labelKey)}
-        style={{ flex: 2, accentColor: 'var(--accent)', cursor: 'pointer' }}
-      />
-      <span style={{
-        minWidth: '30px',
-        textAlign: 'end',
-        fontFamily: 'var(--font-mono)',
-        fontVariantNumeric: 'tabular-nums',
-        fontSize: '12px',
-        color: 'var(--text)',
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+      {/* Fila principal: label + slider + valor + etiqueta semántica */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '160px' }}>
+          {t(labelKey)}
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={2}
+          step={0.1}
+          value={value}
+          onChange={e => onChange(Number(e.target.value))}
+          aria-label={t(labelKey)}
+          aria-valuetext={`${value.toFixed(1)} — ${semantic}`}
+          list={`ticks-${labelKey}`}
+          style={{ flex: 2, accentColor: 'var(--accent)', cursor: 'pointer' }}
+        />
+        {/* Marcas nativas a 0 / 1 / 2 — el navegador las pinta debajo del slider */}
+        <datalist id={`ticks-${labelKey}`}>
+          <option value="0" />
+          <option value="1" />
+          <option value="2" />
+        </datalist>
+        <span style={{
+          minWidth: '64px',
+          textAlign: 'end',
+          fontSize: '11px',
+          color: 'var(--text)',
+          display: 'inline-flex',
+          alignItems: 'baseline',
+          justifyContent: 'flex-end',
+          gap: '4px',
+        }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontVariantNumeric: 'tabular-nums',
+            fontSize: '12px',
+            fontWeight: 600,
+          }}>
+            {value.toFixed(1)}
+          </span>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', whiteSpace: 'nowrap' }}>
+            {semantic}
+          </span>
+        </span>
+      </div>
+
+      {/* Pie de ayuda: extremos + frase específica del criterio.
+          Span completo del ancho para evitar problemas de alineación con la
+          columna del slider en distintos tamaños de panel. */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        paddingInlineStart: '4px',
       }}>
-        {value.toFixed(1)}
-      </span>
+        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+          ← {t('calc.optimizer.weight.endLeft')}
+        </span>
+        <span style={{
+          flex: 1,
+          fontSize: '11px',
+          color: 'var(--text-secondary)',
+          fontStyle: 'italic',
+          textAlign: 'center',
+          lineHeight: 1.35,
+        }}>
+          {t(hintKey)}
+        </span>
+        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+          {t('calc.optimizer.weight.endRight')} →
+        </span>
+      </div>
     </div>
   )
 }
@@ -424,7 +491,6 @@ export function OptimizerPanel({
   // ── Configuración ──────────────────────────────────────────────────────────
   const [configExpanded, setConfigExpanded] = useState(true)
   const [topN, setTopN] = useState(3)
-  const [exponent, setExponent] = useState(0.5)
   const [wResources, setWResources] = useState(1.0)
   const [wLosses, setWLosses] = useState(1.0)
   const [wTroops, setWTroops] = useState(0.5)
@@ -437,7 +503,6 @@ export function OptimizerPanel({
       .map(t => ({ ordinal: t.ordinal, quantity: Number(animalQty[t.ordinal]) }))
 
     const baseConfig = {
-      exponent,
       server_speed: 1.0,
       top_n: topN,
       optimization_weights: {
@@ -730,47 +795,45 @@ export function OptimizerPanel({
               />
             </div>
 
-            {/* Exponente */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '160px' }}>
-                {t('calc.optimizer.exponent')}
-              </span>
-              <input
-                type="number"
-                min={0.1}
-                max={2.0}
-                step={0.1}
-                value={exponent}
-                onChange={e => setExponent(Math.min(2, Math.max(0.1, Number(e.target.value))))}
-                aria-label={t('calc.optimizer.exponent')}
-                style={{
-                  width: '60px', height: '28px', padding: '0 6px',
-                  background: 'var(--surface-2)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '13px',
-                  fontFamily: 'var(--font-mono)',
-                  fontVariantNumeric: 'tabular-nums',
-                  color: 'var(--text)',
-                  textAlign: 'center',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-                onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
-                onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-strong)' }}
-              />
-            </div>
-
             {/* Separador */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>
                 {t('calc.optimizer.weights')}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <WeightSlider labelKey="calc.optimizer.weight.resources" value={wResources} onChange={setWResources} />
-                <WeightSlider labelKey="calc.optimizer.weight.losses" value={wLosses} onChange={setWLosses} />
-                <WeightSlider labelKey="calc.optimizer.weight.troops" value={wTroops} onChange={setWTroops} />
-                <WeightSlider labelKey="calc.optimizer.weight.travel" value={wTravel} onChange={setWTravel} />
+              {/* Explicación de la escala 0..2 para todos los pesos */}
+              <div style={{
+                fontSize: '11px',
+                color: 'var(--text-tertiary)',
+                marginBottom: '10px',
+                lineHeight: 1.4,
+              }}>
+                {t('calc.optimizer.weights.intro')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <WeightSlider
+                  labelKey="calc.optimizer.weight.resources"
+                  hintKey="calc.optimizer.weight.resources.hint"
+                  value={wResources}
+                  onChange={setWResources}
+                />
+                <WeightSlider
+                  labelKey="calc.optimizer.weight.losses"
+                  hintKey="calc.optimizer.weight.losses.hint"
+                  value={wLosses}
+                  onChange={setWLosses}
+                />
+                <WeightSlider
+                  labelKey="calc.optimizer.weight.troops"
+                  hintKey="calc.optimizer.weight.troops.hint"
+                  value={wTroops}
+                  onChange={setWTroops}
+                />
+                <WeightSlider
+                  labelKey="calc.optimizer.weight.travel"
+                  hintKey="calc.optimizer.weight.travel.hint"
+                  value={wTravel}
+                  onChange={setWTravel}
+                />
               </div>
             </div>
           </div>

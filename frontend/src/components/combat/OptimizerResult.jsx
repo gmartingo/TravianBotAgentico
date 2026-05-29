@@ -1,29 +1,17 @@
 /**
  * OptimizerResult — Panel de resultados del optimizador de combate.
  *
- * Muestra un ranking de las N mejores combinaciones de tropas.
- * Clic en una fila → expande el detalle inline (resultado completo del simulador
- * para esa combinación, usando el mismo layout compacto que CombatResult).
+ * Muestra un ranking de las N mejores alternativas (siempre — ganadoras o no).
+ * Clic en una fila → expande el detalle inline con los datos por-alternativa.
  *
  * Props:
- *   result     — respuesta de POST /combat/optimize (o null)
+ *   result     — respuesta de POST /combat/optimize (o null). Ver OptimizeResponse
+ *                en adapters/api/routes/combat.py.
  *   troopMeta  — [{ ordinal, name, iconUrl? }] tropas del atacante
  *
- * Estructura de la respuesta esperada:
- * {
- *   combinations: [
- *     {
- *       rank: 1,
- *       score: 0.87,
- *       troops_sent: [{ ordinal, quantity }],
- *       resource_losses: 6540,
- *       resources_gained: { wood, clay, iron, crop },
- *       simulation: { ...mismo shape que /simulate }  // opcional
- *     }
- *   ]
- * }
- *
- * Si result.combinations está vacío → muestra badge "sin combinación ganadora".
+ * Comportamiento UX clave: si has_winning_combination=false pero alternatives no
+ * está vacío, se pinta igualmente la tabla con las mejores alternativas no-ganadoras,
+ * y el banner avisa de que ninguna gana para que el usuario decida.
  */
 import { useState } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
@@ -55,17 +43,23 @@ function ResourceLine({ resources, lang }) {
   )
 }
 
-// Muestra iconos de tropas enviadas: 🗡×200 ⚔×50 ...
+// Muestra iconos de tropas enviadas con bajas por tipo: 🗡 200 −15  ⚔ 50 −0 ...
+// troopsSent llega como list[TroopResultResponse] (quantity_initial = enviadas,
+// quantity_lost = bajas por tipo). Mostrar las bajas por-tropa es lo que el
+// usuario pidió ("a parte de cuánto pierdo, qué tropas pierdo") sin tener que
+// expandir el detalle.
 function TroopsSentLine({ troopsSent, troopMeta, lang }) {
-  if (!troopsSent || troopsSent.length === 0) return <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+  const sent = (troopsSent ?? []).filter(t => (t.quantity_initial ?? 0) > 0)
+  if (sent.length === 0) return <span style={{ color: 'var(--text-tertiary)' }}>—</span>
 
   const metaMap = {}
   for (const m of (troopMeta ?? [])) metaMap[m.ordinal] = m
 
   return (
-    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-      {troopsSent.map(t => {
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+      {sent.map(t => {
         const meta = metaMap[t.ordinal]
+        const lost = t.quantity_lost ?? 0
         return (
           <span key={t.ordinal} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px' }}>
             {meta?.iconUrl ? (
@@ -74,7 +68,16 @@ function TroopsSentLine({ troopsSent, troopMeta, lang }) {
               <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)' }}>T{t.ordinal}</span>
             )}
             <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
-              ×{fmt(t.quantity, lang)}
+              {fmt(t.quantity_initial, lang)}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: '11px',
+              color: lost > 0 ? 'var(--danger)' : 'var(--text-tertiary)',
+              fontWeight: lost > 0 ? 600 : 400,
+            }}>
+              {lost > 0 ? `−${fmt(lost, lang)}` : '0'}
             </span>
           </span>
         )
@@ -83,18 +86,10 @@ function TroopsSentLine({ troopsSent, troopMeta, lang }) {
   )
 }
 
-// ── Panel de detalle inline (versión compacta del resultado de simulación) ─────
-
-function DetailPanel({ simulation, troopMeta, lang, t }) {
-  if (!simulation) {
-    return (
-      <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
-        {t('calc.optimizer.noDetail')}
-      </div>
-    )
-  }
-
-  const attackerWins = simulation.winner === 'attacker'
+// Tabla genérica de tropas (sent/lost/survived) reutilizada para atacante y defensor
+// dentro del detalle expandido. Mismo estilo que la del simulador.
+function TroopsTable({ title, troops, troopMeta, lang, t, footnote }) {
+  if (!troops || troops.length === 0) return null
 
   const thStyle = {
     padding: '5px 8px',
@@ -118,11 +113,92 @@ function DetailPanel({ simulation, troopMeta, lang, t }) {
     borderBottom: '1px solid var(--border)',
   }
 
+  // troopMeta puede venir como array (atacante) o vacío (defensor: usamos icon_url del propio resultado)
   const metaMap = {}
   for (const m of (troopMeta ?? [])) metaMap[m.ordinal] = m
 
-  const atkTroops = simulation.attacker?.troops ?? []
-  const defTroops = (simulation.defenders ?? [simulation.defender]).filter(Boolean).flatMap(d => d.troops ?? [])
+  function resolveIconUrl(iconUrl) {
+    if (!iconUrl) return null
+    if (iconUrl.startsWith('http')) return iconUrl
+    return `/api${iconUrl}`
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>
+        {title}
+      </div>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '300px' }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle, textAlign: 'start' }}>{t('calc.result.col.troop')}</th>
+              <th style={thStyle}>{t('calc.result.col.sent')}</th>
+              <th style={thStyle}>{t('calc.result.col.losses')}</th>
+              <th style={thStyle}>{t('calc.result.col.survived')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {troops.map((tr, idx) => {
+              const meta = metaMap[tr.ordinal]
+              // El defensor trae icon_url propio en la respuesta; el atacante usa troopMeta
+              const iconUrl = meta?.iconUrl ?? resolveIconUrl(tr.icon_url)
+              const sent = tr.quantity_initial ?? 0
+              const survived = tr.quantity_survived ?? 0
+              const losses = tr.quantity_lost ?? (sent - survived)
+              return (
+                <tr key={`${tr.tribe ?? ''}_${tr.ordinal}_${idx}`}
+                  style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'transparent' }}>
+                  <td style={{ ...tdStyle, textAlign: 'start', fontFamily: 'inherit' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      {iconUrl
+                        ? <img src={iconUrl} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
+                        : <span style={{ width: '16px', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>T{tr.ordinal}</span>
+                      }
+                      <span style={{ fontSize: '12px' }}>{meta?.name ?? tr.name ?? `T${tr.ordinal}`}</span>
+                    </div>
+                  </td>
+                  <td style={tdStyle}>{fmt(sent, lang)}</td>
+                  <td style={{ ...tdStyle, color: losses > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }}>
+                    {losses > 0 ? `−${fmt(losses, lang)}` : '0'}
+                  </td>
+                  <td style={{ ...tdStyle, color: survived > 0 ? 'var(--success)' : 'var(--text-tertiary)', fontWeight: 600 }}>
+                    {fmt(survived, lang)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {footnote && (
+        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '3px', fontStyle: 'italic' }}>
+          {footnote}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Panel de detalle inline (datos por-alternativa) ──────────────────────────
+
+function DetailPanel({ alternative, defenderTroops, troopMeta, lang, t }) {
+  if (!alternative) {
+    return (
+      <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+        {t('calc.optimizer.noDetail')}
+      </div>
+    )
+  }
+
+  const attackerWins = !!alternative.is_winning
+
+  const atkTroops = alternative.troops_sent ?? []
+  // defenderTroops es el campo top-level del response — los animales del oasis.
+  // El backend lo computa a partir del MEJOR resultado ganador, así que para
+  // alternativas no-ganadoras (o ganadoras de menor rank) refleja un escenario
+  // distinto. Se muestra como referencia y se anota debajo.
+  const defTroops = defenderTroops ?? []
 
   return (
     <div style={{
@@ -133,8 +209,8 @@ function DetailPanel({ simulation, troopMeta, lang, t }) {
       background: 'var(--surface-2)',
       borderTop: '1px solid var(--border)',
     }}>
-      {/* Badge ganador */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      {/* Badge ganador + ratio + fuerzas de combate (paridad con el simulador) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: '5px',
           padding: '3px 10px',
@@ -147,77 +223,81 @@ function DetailPanel({ simulation, troopMeta, lang, t }) {
             {attackerWins ? t('calc.result.attackerWins') : t('calc.result.defenderWins')}
           </span>
         </div>
-        {simulation.combat_ratio != null && (
+        {alternative.ratio != null && (
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {t('calc.result.ratio', { ratio: simulation.combat_ratio.toFixed(2) })}
+            {t('calc.result.ratio', { ratio: Number(alternative.ratio).toFixed(2) })}
           </span>
+        )}
+        {(alternative.attacker_power != null || alternative.defender_power != null) && (
+          <div style={{ display: 'flex', gap: '14px', marginLeft: 'auto', flexWrap: 'wrap' }}>
+            {alternative.attacker_power != null && (
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                ⚔ <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {fmt(alternative.attacker_power, lang)}
+                </span>
+              </span>
+            )}
+            {alternative.defender_power != null && (
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                🛡 <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {fmt(alternative.defender_power, lang)}
+                </span>
+              </span>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Tabla compacta */}
-      {atkTroops.length > 0 && (
-        <div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>
-            {t('calc.result.attacker')}
-          </div>
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '300px' }}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, textAlign: 'start' }}>{t('calc.result.col.troop')}</th>
-                  <th style={thStyle}>{t('calc.result.col.sent')}</th>
-                  <th style={thStyle}>{t('calc.result.col.survived')}</th>
-                  <th style={thStyle}>{t('calc.result.col.losses')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {atkTroops.map((tr, idx) => {
-                  const meta = metaMap[tr.ordinal]
-                  const losses = (tr.sent ?? 0) - (tr.survived ?? 0)
-                  return (
-                    <tr key={tr.ordinal ?? idx} style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'transparent' }}>
-                      <td style={{ ...tdStyle, textAlign: 'start', fontFamily: 'inherit' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          {meta?.iconUrl
-                            ? <img src={meta.iconUrl} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
-                            : <span style={{ width: '16px', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>T{tr.ordinal}</span>
-                          }
-                          <span style={{ fontSize: '12px' }}>{meta?.name ?? tr.name ?? `T${tr.ordinal}`}</span>
-                        </div>
-                      </td>
-                      <td style={tdStyle}>{fmt(tr.sent, lang)}</td>
-                      <td style={{ ...tdStyle, color: (tr.survived ?? 0) > 0 ? 'var(--success)' : 'var(--text-tertiary)' }}>
-                        {fmt(tr.survived, lang)}
-                      </td>
-                      <td style={{ ...tdStyle, color: losses > 0 ? 'var(--danger)' : 'var(--text-tertiary)' }}>
-                        {fmt(losses, lang)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* Tabla atacante: tropas enviadas con bajas y supervivientes por tipo */}
+      <TroopsTable
+        title={t('calc.result.attacker')}
+        troops={atkTroops}
+        troopMeta={troopMeta}
+        lang={lang}
+        t={t}
+      />
 
-      {/* Botín */}
-      {simulation.loot && (
+      {/* Tabla defensor: animales del oasis con bajas y supervivientes.
+          Nota: el backend solo devuelve un snapshot de defensores (el de la
+          mejor combinación ganadora), por lo que la columna de bajas es
+          orientativa para alternativas distintas a la #1. */}
+      <TroopsTable
+        title={t('calc.result.defender')}
+        troops={defTroops}
+        troopMeta={null}
+        lang={lang}
+        t={t}
+        footnote={alternative.rank > 1 ? t('calc.optimizer.defenderNote') : null}
+      />
+
+      {/* Recursos ganados de animales */}
+      {alternative.resources_gained && alternative.resources_gained.total > 0 && (
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
           <span style={{ fontWeight: 500 }}>{t('calc.result.loot.title')}:</span>
-          <ResourceLine resources={simulation.loot.potential ?? simulation.loot.capacity} lang={lang} />
+          <ResourceLine resources={alternative.resources_gained} lang={lang} />
         </div>
       )}
 
-      {/* Pérdidas atacante */}
-      {simulation.attacker?.resource_losses != null && (
+      {/* Pérdidas atacante (coste en recursos de las bajas) */}
+      {alternative.total_resource_losses != null && (
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'center' }}>
           <span style={{ fontWeight: 500 }}>{t('calc.result.losses.attacker')}:</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--danger)', fontWeight: 600 }}>
-            {fmt(simulation.attacker.resource_losses, lang)}
+            {fmt(alternative.total_resource_losses, lang)}
           </span>
         </div>
       )}
+
+      {/* Tiempo de marcha */}
+      {alternative.travel_time_h != null && (
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <span style={{ fontWeight: 500 }}>⏱</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+            {Number(alternative.travel_time_h).toFixed(2)} h
+          </span>
+        </div>
+      )}
+
     </div>
   )
 }
@@ -230,8 +310,9 @@ export function OptimizerResult({ result, troopMeta }) {
 
   if (!result) return null
 
-  const combinations = result.combinations ?? []
-  const hasWinners = combinations.length > 0
+  const alternatives = result.alternatives ?? []
+  const hasAlternatives = alternatives.length > 0
+  const hasWinning = !!result.has_winning_combination
 
   function toggleRow(rank) {
     setExpandedRank(prev => prev === rank ? null : rank)
@@ -259,7 +340,7 @@ export function OptimizerResult({ result, troopMeta }) {
         gap: '10px',
         flexWrap: 'wrap',
       }}>
-        {hasWinners ? (
+        {hasWinning ? (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
             padding: '4px 12px',
@@ -269,7 +350,7 @@ export function OptimizerResult({ result, troopMeta }) {
           }}>
             <span style={{ fontSize: '13px' }}>✓</span>
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
-              {t('calc.optimizer.result.found', { n: combinations.length })}
+              {t('calc.optimizer.result.found', { n: alternatives.length })}
             </span>
           </div>
         ) : (
@@ -286,10 +367,16 @@ export function OptimizerResult({ result, troopMeta }) {
             </span>
           </div>
         )}
+        {result.message && (
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {result.message}
+          </span>
+        )}
       </div>
 
       {/* ── Tabla de ranking ── */}
-      {hasWinners && (
+      {/* Se pinta SIEMPRE que haya alternatives, aunque ninguna gane. */}
+      {hasAlternatives && (
         <div>
           {/* Cabecera de la tabla */}
           <div style={{
@@ -313,7 +400,7 @@ export function OptimizerResult({ result, troopMeta }) {
           </div>
 
           {/* Filas */}
-          {combinations.map((combo, idx) => {
+          {alternatives.map((combo, idx) => {
             const isExpanded = expandedRank === combo.rank
             return (
               <div key={combo.rank ?? idx}>
@@ -341,15 +428,19 @@ export function OptimizerResult({ result, troopMeta }) {
                   onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--surface-2)' }}
                   onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = idx % 2 === 0 ? 'var(--surface)' : 'transparent' }}
                 >
-                  {/* Rango */}
+                  {/* Rango con marca visual de ganadora / no-ganadora */}
                   <span style={{
                     fontFamily: 'var(--font-mono)',
                     fontVariantNumeric: 'tabular-nums',
                     fontSize: '13px',
                     fontWeight: 700,
-                    color: isExpanded ? 'var(--accent-text)' : 'var(--text-secondary)',
-                  }}>
-                    {combo.rank ?? idx + 1}
+                    color: isExpanded
+                      ? 'var(--accent-text)'
+                      : (combo.is_winning ? 'var(--success)' : 'var(--danger)'),
+                  }}
+                    title={combo.is_winning ? t('calc.result.attackerWins') : t('calc.result.defenderWins')}
+                  >
+                    {combo.is_winning ? '✓' : '✗'} {combo.rank ?? idx + 1}
                   </span>
 
                   {/* Tropas enviadas */}
@@ -360,11 +451,11 @@ export function OptimizerResult({ result, troopMeta }) {
                     fontFamily: 'var(--font-mono)',
                     fontVariantNumeric: 'tabular-nums',
                     fontSize: '12px',
-                    color: combo.resource_losses > 0 ? 'var(--danger)' : 'var(--text-tertiary)',
+                    color: combo.total_resource_losses > 0 ? 'var(--danger)' : 'var(--text-tertiary)',
                     textAlign: 'end',
                     whiteSpace: 'nowrap',
                   }}>
-                    {combo.resource_losses != null ? `${fmt(combo.resource_losses, lang)} R` : '—'}
+                    {combo.total_resource_losses != null ? `${fmt(combo.total_resource_losses, lang)} R` : '—'}
                   </span>
 
                   {/* Recursos ganados */}
@@ -376,7 +467,8 @@ export function OptimizerResult({ result, troopMeta }) {
                 {/* Detalle inline expandido */}
                 {isExpanded && (
                   <DetailPanel
-                    simulation={combo.simulation}
+                    alternative={combo}
+                    defenderTroops={result.defender_troops}
                     troopMeta={troopMeta}
                     lang={lang}
                     t={t}
