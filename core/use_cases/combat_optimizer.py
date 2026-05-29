@@ -113,7 +113,6 @@ async def _evaluate_combination(
     alliance_bonus: float,
     artifacts: AttackerArtifacts,
     oasis_defenders: list[TroopEntry],
-    exponent: float,
     server_speed: float,
     distance_fields: float | None,
     lang: str,
@@ -171,7 +170,6 @@ async def _evaluate_combination(
     ]
 
     combat_config = CombatConfig(
-        exponent=exponent,
         server_speed=server_speed,
         distance_fields=distance_fields,
     )
@@ -253,7 +251,6 @@ async def _optimize_by_sampling(
     alliance_bonus: float,
     artifacts: AttackerArtifacts,
     oasis_defenders: list[TroopEntry],
-    exponent: float,
     server_speed: float,
     distance_fields: float | None,
     lang: str,
@@ -321,7 +318,6 @@ async def _optimize_by_sampling(
             alliance_bonus=alliance_bonus,
             artifacts=artifacts,
             oasis_defenders=oasis_defenders,
-            exponent=exponent,
             server_speed=server_speed,
             distance_fields=distance_fields,
             lang=lang,
@@ -348,7 +344,6 @@ async def _optimize_with_nsga2(
     alliance_bonus: float,
     artifacts: AttackerArtifacts,
     oasis_defenders: list[TroopEntry],
-    exponent: float,
     server_speed: float,
     distance_fields: float | None,
     lang: str,
@@ -408,7 +403,6 @@ async def _optimize_with_nsga2(
                         alliance_bonus=alliance_bonus,
                         artifacts=artifacts,
                         oasis_defenders=oasis_defenders,
-                        exponent=exponent,
                         server_speed=server_speed,
                         distance_fields=distance_fields,
                         lang=lang,
@@ -577,7 +571,6 @@ async def find_optimal_attack(
             alliance_bonus=alliance_bonus,
             artifacts=artifacts,
             oasis_defenders=oasis_defenders,
-            exponent=opt_config.exponent,
             server_speed=opt_config.server_speed,
             distance_fields=opt_config.distance_fields,
             lang=lang,
@@ -606,7 +599,6 @@ async def find_optimal_attack(
             alliance_bonus=alliance_bonus,
             artifacts=artifacts,
             oasis_defenders=oasis_defenders,
-            exponent=opt_config.exponent,
             server_speed=opt_config.server_speed,
             distance_fields=opt_config.distance_fields,
             lang=lang,

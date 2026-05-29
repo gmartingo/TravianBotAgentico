@@ -70,7 +70,9 @@ No hay permisos por rol en este MVP. La API es interna al bot.
 
 ### RN-01 — Fórmula base de combate Travian T4.5
 
-El héroe tiene dos componentes: puntos de ataque/defensa propios (se suman al pool base) y bonus porcentual sobre el ejército (multiplicador tras la suma). La fórmula queda:
+Fuente: kirilloid — `https://unofficialtravian.com/2025/01/game-secrets-combat-basics-written-by-kirilloid/`.
+
+**Cálculo de fuerzas (igual para ATTACK y RAID)**:
 
 ```
 # ATACANTE
@@ -79,33 +81,52 @@ A = (A_base + hero_attack_points) × (1 + hero_attack_bonus_percent/100)
     × (1 + alliance_bonus/100)
     × morale_factor
 
-# DEFENSOR (suma de todos los ejércitos defensores)
-D_base = Σ_defensores [ratio_cav × D_cav_j + (1-ratio_cav) × D_inf_j]  # con smithy por tropa
+# DEFENSOR (suma de todos los ejércitos defensores con proporción cav/inf del atacante)
+D_base = Σ_defensores cantidad_j × [def_inf_j × (1 - ratio_cav) + def_cav_j × ratio_cav]
 D = (D_base + hero_defense_points_total) × (1 + hero_defense_bonus_percent_avg/100)
     × wall_multiplier
     × stonemason_multiplier
 
-donde:
-  wall_multiplier = 1 + bonus_muro (obtenido de GameDataPort por gid de muro y nivel, ver RN-03)
-  stonemason_multiplier = 1 + 0.05 × nivel_stonemason
-
-Resultado:
-  ratio = A / D
-
-  Si ratio >= 1: el atacante gana
-    supervivientes_atk = round(cantidad_i × ratio^(-exponente))  para cada tropa atacante
-    bajas_def = D completo (defensa destruida)
-
-  Si ratio < 1: el defensor gana
-    supervivientes_def = round(cantidad_j × (1/ratio)^(-exponente))  para cada tropa defensora
-    bajas_atk = A completo (ataque destruido)
-
-  exponente: valor configurable, default 0.5, alternativa 0.45
+ratio = A / D
 ```
 
-**Nota sobre múltiples defensores**: `hero_defense_points_total` = suma de `hero_defense_points` de todos los defensores. `hero_defense_bonus_percent_avg` = media ponderada (por D_base aportado) de los bonus de cada defensor. El muro y stonemason aplican una sola vez sobre el D total.
+**Factor K — Involved factor (kirilloid)**:
 
-**Referencia verificada**: Fórmula estándar Travian documentada y validada por el usuario en Fase 1.
+```
+N = Σ cantidad_atacante + Σ cantidad_defensor   # total de tropas en el campo
+
+K = 1.5                                  si N ≤ 1000
+K = 2 × (1.8592 − N^0.015)               si N > 1000   (rango 1.2578..1.5)
+```
+
+K NO es input del usuario: se calcula en runtime desde N. Implementado en `core/use_cases/combat_engine.compute_k`.
+
+**Cálculo de bajas según `attack_type`**:
+
+```
+ganador = bando con mayor fuerza        # si ratio >= 1 → atacante; si ratio < 1 → defensor
+perdedor = el otro bando
+x = (fuerza_perdedor / fuerza_ganador) ^ K
+```
+
+- **`attack_type = "attack"` (ataque normal)**:
+  - `bajas_ganador% = x`        (porcentaje pequeño cuando la diferencia es grande)
+  - `bajas_perdedor% = 100%`    (aniquilado por completo)
+
+- **`attack_type = "raid"` (saqueo)**:
+  - `bajas_ganador% = x / (1 + x)`     (capado siempre por debajo de 50%)
+  - `bajas_perdedor% = 1 / (1 + x)`    (ambos bandos sobreviven proporcionalmente)
+  - Total combinado = 100% repartido por la fuerza relativa.
+
+```
+supervivientes_i = round(cantidad_i × (1 − bajas_bando%))
+```
+
+El % de bajas es uniforme para todas las tropas del mismo bando (no por tipo).
+
+**Regla de "mínimo 1 superviviente"**: solo el ganador la disfruta. Si todas sus tropas redondean a 0, se le concede 1 superviviente al tipo enviado en mayor cantidad. El perdedor en `attack` siempre queda a 0; en `raid` mantiene el remanente proporcional (que puede ser 0 cuando la diferencia es extrema).
+
+**Nota sobre múltiples defensores**: `hero_defense_points_total` = suma de `hero_defense_points`. `hero_defense_bonus_percent_avg` = media simple de los bonus de cada defensor. El muro y stonemason aplican una sola vez sobre el D total.
 
 ### RN-02 — Modificador de smithy (herrería)
 

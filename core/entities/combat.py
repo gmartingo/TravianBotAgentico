@@ -109,8 +109,11 @@ class WallConfig:
 
 @dataclass
 class CombatConfig:
-    """Parámetros de configuración del cálculo de combate."""
-    exponent: float = 1.5              # Validado contra T4.5 real: 1.5 da 0 bajas a ratio≥120, 1 baja a ratio~25
+    """Parámetros de configuración del cálculo de combate.
+
+    El exponente K (1.5..1.2578) NO es input: se calcula en runtime desde el
+    total de tropas en el campo (ver combat_engine.compute_k).
+    """
     server_speed: float = 1.0          # 1..10 (divisor de velocidad)
     distance_fields: float | None = None  # distancia en campos; None → sin crop
 
@@ -225,8 +228,7 @@ class OptimizationWeights:
 
 @dataclass
 class OptimizationConfig:
-    """Configuración del optimizador."""
-    exponent: float = 1.5
+    """Configuración del optimizador. K se calcula dinámicamente, igual que en CombatConfig."""
     server_speed: float = 1.0
     distance_fields: float | None = None
     top_n: int = 3                   # 1..10

@@ -101,7 +101,7 @@ _BASIC_SIMULATE_BODY = {
         }
     ],
     "wall": {"wall_level": 0},
-    "config": {"exponent": 0.5},
+    "config": {},
 }
 
 _BASIC_OPTIMIZE_BODY_MODE_A = {
@@ -305,7 +305,7 @@ def test_it18_attack_mode_catapult_results(client):
         },
         "defenders": [{"tribe": "nature", "troops": []}],  # sin defensa
         "wall": {"wall_level": 0},
-        "config": {"exponent": 0.5},
+        "config": {},
     }
     resp = client.post(
         "/combat/simulate",
@@ -336,7 +336,7 @@ def test_it19_rams_reduce_wall(client):
         },
         "defenders": [{"tribe": "romans", "troops": []}],
         "wall": {"wall_level": 10, "stonemason_level": 0, "wall_tribe": "romans"},
-        "config": {"exponent": 0.5},
+        "config": {},
     }
     resp = client.post(
         "/combat/simulate",
@@ -408,7 +408,7 @@ def test_it22_nature_spiders_killed_animal_drop(client):
             }
         ],
         "wall": {"wall_level": 0},
-        "config": {"exponent": 0.5},
+        "config": {},
     }
     resp = client.post(
         "/combat/simulate",
@@ -444,7 +444,7 @@ def test_it23_attacker_resource_losses_when_losses(client):
             }
         ],
         "wall": {"wall_level": 0},
-        "config": {"exponent": 0.5},
+        "config": {},
     }
     resp = client.post(
         "/combat/simulate",

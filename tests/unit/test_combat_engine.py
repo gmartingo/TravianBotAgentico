@@ -29,6 +29,7 @@ from core.entities.tribe import Tribe
 from core.use_cases.combat_engine import (
     WALL_GID_BY_TRIBE,
     apply_smithy,
+    compute_k,
     simulate_combat,
 )
 from core.use_cases.nature_animal_drops import NATURE_DROPS, get_nature_drop
@@ -182,12 +183,10 @@ def _make_defender(
 
 
 def _make_config(
-    exponent=0.5,
     server_speed=1.0,
     distance_fields=None,
 ) -> CombatConfig:
     return CombatConfig(
-        exponent=exponent,
         server_speed=server_speed,
         distance_fields=distance_fields,
     )
@@ -906,3 +905,119 @@ def test_wall_gid_by_tribe_has_main_tribes():
     assert Tribe.TEUTONS in WALL_GID_BY_TRIBE
     assert Tribe.GAULS in WALL_GID_BY_TRIBE
     assert Tribe.EGYPTIANS in WALL_GID_BY_TRIBE
+
+
+# ---------------------------------------------------------------------------
+# Tests numéricos blindados contra la fórmula kirilloid (anti-regresión).
+# Si alguien cambia la fórmula de bajas, estos tests fallan con números exactos
+# en vez de quedarse en verde con asserts estructurales débiles.
+# ---------------------------------------------------------------------------
+
+
+def test_compute_k_under_1000_is_15():
+    """N <= 1000 → K = 1.5 exacto (rama plana)."""
+    assert compute_k(0) == 1.5
+    assert compute_k(1) == 1.5
+    assert compute_k(500) == 1.5
+    assert compute_k(1000) == 1.5
+
+
+def test_compute_k_over_1000_uses_kirilloid_formula():
+    """N > 1000 → K = 2 × (1.8592 − N^0.015), valores muestreados."""
+    # N=10000: 2*(1.8592 - 10000^0.015) = 2*(1.8592 - 1.14815...) ≈ 1.4221
+    k_10k = compute_k(10000)
+    assert 1.42 < k_10k < 1.43
+
+    # N=1_000_000: ≈ 1.2578 según kirilloid
+    k_1m = compute_k(1_000_000)
+    assert 1.255 < k_1m < 1.260
+
+
+def test_formula_attack_mode_kirilloid_numbers():
+    """
+    Caso analítico: 800 atacantes (att=10) vs 400 defensores (def=10/10).
+    A = 8000, D = 4000, ratio = 2.0.
+    N = 1200 → K = 2 × (1.8592 − 1200^0.015) ≈ 1.4934.
+    En MODO ATAQUE: bajas_ganador = (1/2)^K ≈ 0.3551 → supervivientes_atk ≈ 516.
+    Defensor 100% aniquilado.
+    """
+    def _stats(tribe, ordinal):
+        return _make_stats(attack=10, def_inf=10, def_cav=10)
+    port = _make_game_data_port(troop_stats=_stats)
+    tr = _make_translation_port()
+
+    attacker = _make_attacker(
+        troops=[TroopEntry(Tribe.ROMANS, 1, 800, 0)],
+        attack_type="attack",
+    )
+    defenders = [_make_defender(troops=[TroopEntry(Tribe.GAULS, 1, 400, 0)])]
+
+    r = _run(simulate_combat(attacker, defenders, WallConfig(), _make_config(), "es", port, tr))
+
+    assert r.attacker_wins is True
+    assert r.ratio == 2.0
+    # 516 ± 1 deja margen para futuros redondeos de K sin debilitar el blindaje
+    assert r.attacker_troops[0].quantity_survived in (515, 516, 517)
+    assert r.defender_troops[0].quantity_survived == 0  # aniquilado por ATAQUE
+
+
+def test_formula_raid_mode_kirilloid_proportional():
+    """
+    Mismo escenario (ratio 2.0, N=1200, K≈1.4934) pero en MODO RAID.
+    x = (1/2)^K ≈ 0.355.
+    bajas_ganador = x/(1+x) ≈ 0.262 → supervivientes_atk ≈ 591.
+    bajas_perdedor = 1/(1+x) ≈ 0.738 → supervivientes_def ≈ 105.
+    Total combinado de bajas debe ser ≈ 100% (regla raid).
+    """
+    def _stats(tribe, ordinal):
+        return _make_stats(attack=10, def_inf=10, def_cav=10)
+    port = _make_game_data_port(troop_stats=_stats)
+    tr = _make_translation_port()
+
+    attacker = _make_attacker(
+        troops=[TroopEntry(Tribe.ROMANS, 1, 800, 0)],
+        attack_type="raid",
+    )
+    defenders = [_make_defender(troops=[TroopEntry(Tribe.GAULS, 1, 400, 0)])]
+
+    r = _run(simulate_combat(attacker, defenders, WallConfig(), _make_config(), "es", port, tr))
+
+    assert r.attacker_wins is True
+    assert r.attacker_troops[0].quantity_survived in (590, 591, 592)
+    # En raid el defensor sobrevive proporcionalmente — NO se queda a 0
+    assert r.defender_troops[0].quantity_survived in (104, 105, 106)
+
+    # Comprobación de la regla raid: suma de % bajas ≈ 100%
+    atk_lost_pct = r.attacker_troops[0].quantity_lost / 800
+    def_lost_pct = r.defender_troops[0].quantity_lost / 400
+    assert abs((atk_lost_pct + def_lost_pct) - 1.0) < 0.005  # tolerancia por round()
+
+
+def test_formula_attack_vs_raid_diverge_when_ratio_is_tight():
+    """Attack y raid divergen en supervivientes cuando la batalla está reñida.
+
+    Con ratio ~1, el `x/(1+x)` del raid difiere mucho del `x` directo del attack.
+    Este test garantiza que `attack_type` NO es decorativo y que cambia la fórmula.
+    """
+    def _stats(tribe, ordinal):
+        return _make_stats(attack=10, def_inf=10, def_cav=10)
+    port = _make_game_data_port(troop_stats=_stats)
+    tr = _make_translation_port()
+
+    troops = [TroopEntry(Tribe.ROMANS, 1, 110, 0)]  # A=1100
+    defs = [_make_defender(troops=[TroopEntry(Tribe.GAULS, 1, 100, 0)])]  # D=1000
+
+    r_atk = _run(simulate_combat(
+        _make_attacker(troops=troops, attack_type="attack"),
+        defs, WallConfig(), _make_config(), "es", port, tr,
+    ))
+    r_raid = _run(simulate_combat(
+        _make_attacker(troops=troops, attack_type="raid"),
+        defs, WallConfig(), _make_config(), "es", port, tr,
+    ))
+
+    # En attack: defensor aniquilado; en raid: defensor con remanente
+    assert r_atk.defender_troops[0].quantity_survived == 0
+    assert r_raid.defender_troops[0].quantity_survived > 0
+    # En attack el atacante pierde más en proporción que en raid
+    assert r_atk.attacker_troops[0].quantity_lost > r_raid.attacker_troops[0].quantity_lost

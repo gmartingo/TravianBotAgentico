@@ -12,6 +12,25 @@ from __future__ import annotations
 import asyncio
 from math import floor
 
+
+# ---------------------------------------------------------------------------
+# Factor K — "involved factor" de Travian T4.5 (fuente: kirilloid)
+# ---------------------------------------------------------------------------
+
+def compute_k(total_units: int) -> float:
+    """
+    Calcula el exponente K de la fórmula de bajas según el total de tropas.
+
+    Travian T4.5 (verificado contra kirilloid):
+      - N <= 1000:  K = 1.5
+      - N >  1000:  K = 2 * (1.8592 - N^0.015)   (rango 1.2578 .. 1.5)
+
+    `total_units` es la suma de TODAS las tropas (atacante + defensor) en el campo.
+    """
+    if total_units <= 1000:
+        return 1.5
+    return 2.0 * (1.8592 - total_units ** 0.015)
+
 from core.entities.combat import (
     AnimalResourceDrop,
     AttackerFormation,
@@ -653,8 +672,15 @@ async def simulate_combat(
     D_efectiva = D_con_heroe * wall_multiplier
 
     # -----------------------------------------------------------------------
-    # 8. Ratio y supervivientes
+    # 8. Ratio, factor K y supervivientes (fórmula Travian T4.5)
     # -----------------------------------------------------------------------
+    # K se calcula con el TOTAL de tropas en el campo (atacante + defensor).
+    # Fuente: kirilloid — K = 1.5 si N<=1000, K = 2*(1.8592 - N^0.015) en caso contrario.
+    total_units = sum(e["quantity"] for e in atk_enriched) + sum(
+        e["quantity"] for e in all_def_enriched
+    )
+    K = compute_k(total_units)
+
     if D_efectiva == 0:
         # EC-01: defensa vacía → victoria inmediata, todos sobreviven
         attacker_wins = True
@@ -664,54 +690,60 @@ async def simulate_combat(
     else:
         ratio_raw = A_efectivo / D_efectiva
         attacker_wins = ratio_raw >= 1.0  # EC-03: ratio exactamente 1 → atacante gana
+
+        # Fuerzas absolutas para la fórmula de bajas
         if attacker_wins:
-            # Travian: bajas_ganador% = x / (1 + x), donde x = (loser/winner)^exp
-            # Validado con 2S+2TT vs Cocodrilo (1+1) y 210S+186TT vs animales (2+2).
-            # round() en supervivientes, NO en bajas (Travian redondea al sup más cercano).
-            x = ratio_raw ** (-config.exponent)  # = (D/A)^exp
-            _atk_losses_pct = x / (1.0 + x)
-            atk_survived = [
-                round(e["quantity"] * (1.0 - _atk_losses_pct))
-                for e in atk_enriched
-            ]
-            def_survived = [0] * len(all_def_enriched)
+            winner_power, loser_power = A_efectivo, D_efectiva
         else:
-            atk_survived = [0] * len(atk_enriched)
-            # Simétrico: x = (A/D)^exp, bajas_def% = x / (1 + x)
-            x = (1.0 / ratio_raw) ** (-config.exponent)  # = (A/D)^exp
-            _def_losses_pct = x / (1.0 + x)
-            def_survived = [
-                round(e["quantity"] * (1.0 - _def_losses_pct))
-                for e in all_def_enriched
-            ]
+            winner_power, loser_power = D_efectiva, A_efectivo
+
+        # x = (loser / winner) ^ K  — base de las dos variantes (attack y raid)
+        x = (loser_power / winner_power) ** K
+
+        if attacker.attack_type == "attack":
+            # Attack normal (kirilloid):
+            #   winner_losses% = x        (capado a 1 por seguridad numérica)
+            #   loser_losses%  = 1        (perdedor aniquilado)
+            winner_loss_pct = min(x, 1.0)
+            loser_loss_pct = 1.0
+        else:
+            # Raid (kirilloid):
+            #   winner_losses% = x / (1+x)
+            #   loser_losses%  = 1 / (1+x)
+            # Total combinado = 100% repartido proporcionalmente.
+            winner_loss_pct = x / (1.0 + x)
+            loser_loss_pct = 1.0 / (1.0 + x)
+
+        if attacker_wins:
+            atk_loss_pct, def_loss_pct = winner_loss_pct, loser_loss_pct
+        else:
+            atk_loss_pct, def_loss_pct = loser_loss_pct, winner_loss_pct
+
+        # round() sobre supervivientes (Travian redondea al sup más cercano)
+        atk_survived = [
+            round(e["quantity"] * (1.0 - atk_loss_pct))
+            for e in atk_enriched
+        ]
+        def_survived = [
+            round(e["quantity"] * (1.0 - def_loss_pct))
+            for e in all_def_enriched
+        ]
         ratio = round(ratio_raw, 4)
 
         # -----------------------------------------------------------------------
-        # Regla mínimo 1 superviviente (Travian garantiza que el ganador nunca
-        # queda con 0 tropas si tenía al menos 1 al inicio)
+        # Regla mínimo 1 superviviente para el GANADOR (Travian garantiza que
+        # el ganador nunca queda con 0 tropas si tenía al menos 1 al inicio).
+        # El perdedor NO tiene esta garantía:
+        #   - en attack normal el perdedor es siempre aniquilado por fórmula;
+        #   - en raid el perdedor mantiene sus supervivientes proporcionales
+        #     según x/(1+x), incluyendo el caso 0 cuando la diferencia es brutal.
         # -----------------------------------------------------------------------
-        if attacker_wins:
-            if sum(atk_survived) == 0:
-                # Dar 1 superviviente a la tropa con más cantidad enviada
-                best = max(range(len(atk_enriched)), key=lambda i: atk_enriched[i]["quantity"])
-                atk_survived[best] = 1
-
-            # En RAID: el perdedor también puede escapar con mínimo 1 tropa
-            # (solo aplica a defensores jugadores, no a animales de naturaleza)
-            if attacker.attack_type == "raid":
-                all_nature = all(e["tribe"] == Tribe.NATURE for e in all_def_enriched)
-                if not all_nature and sum(def_survived) == 0:
-                    best = max(range(len(all_def_enriched)), key=lambda i: all_def_enriched[i]["quantity"])
-                    def_survived[best] = 1
-        else:
-            if sum(def_survived) == 0:
-                best = max(range(len(all_def_enriched)), key=lambda i: all_def_enriched[i]["quantity"])
-                def_survived[best] = 1
-
-            # En RAID: el atacante perdedor puede escapar con mínimo 1 tropa
-            if attacker.attack_type == "raid" and sum(atk_survived) == 0:
-                best = max(range(len(atk_enriched)), key=lambda i: atk_enriched[i]["quantity"])
-                atk_survived[best] = 1
+        if attacker_wins and sum(atk_survived) == 0:
+            best = max(range(len(atk_enriched)), key=lambda i: atk_enriched[i]["quantity"])
+            atk_survived[best] = 1
+        if (not attacker_wins) and sum(def_survived) == 0:
+            best = max(range(len(all_def_enriched)), key=lambda i: all_def_enriched[i]["quantity"])
+            def_survived[best] = 1
 
     # -----------------------------------------------------------------------
     # 9a. Botín (RN-07 + RN-08)

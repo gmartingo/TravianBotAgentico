@@ -138,7 +138,6 @@ class WallRequest(BaseModel):
 class CombatConfigRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    exponent: float = Field(default=0.5, ge=0.4, le=0.6)
     server_speed: float = Field(default=1.0, ge=1.0, le=10.0)
     distance_fields: float | None = Field(default=None, gt=0)
 
@@ -246,7 +245,6 @@ class OptimizationWeightsRequest(BaseModel):
 class OptimizationConfigRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    exponent: float = Field(default=0.5, ge=0.4, le=0.6)
     server_speed: float = Field(default=1.0, ge=1.0, le=10.0)
     distance_fields: float | None = Field(default=None, gt=0)
     top_n: int = Field(default=3, ge=1, le=10)
@@ -569,7 +567,6 @@ async def post_combat_simulate(
         wall_tribe=body.wall.wall_tribe,
     )
     config = CombatConfig(
-        exponent=body.config.exponent,
         server_speed=body.config.server_speed,
         distance_fields=body.config.distance_fields,
     )
@@ -691,7 +688,6 @@ async def post_combat_optimize(
     ]
 
     opt_config = OptimizationConfig(
-        exponent=body.config.exponent,
         server_speed=body.config.server_speed,
         distance_fields=body.config.distance_fields,
         top_n=body.config.top_n,
