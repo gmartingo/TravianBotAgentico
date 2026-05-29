@@ -7,6 +7,7 @@
  * /cuentas                → ManagementShell > AccountsListPage   (S2)
  * /cuentas/nueva          → ManagementShell > NewAccountPage      (S3 wizard sobre S2)
  * /cuentas/:id            → ManagementShell > AccountDetailPage  (S4)
+ * /calculadora            → ManagementShell > CalculatorPage      (acceso global, sin mundo)
  * /mundos/:worldId        → WorldSpacePage                       (S9, sin sidebar)
  * *                       → NotFound
  *
@@ -22,6 +23,15 @@ import { AccountsListPage }  from './pages/AccountsListPage.jsx'
 import { NewAccountPage }    from './pages/NewAccountPage.jsx'
 import { AccountDetailPage } from './pages/AccountDetailPage.jsx'
 import { WorldSpacePage }    from './pages/WorldSpacePage.jsx'
+import { CombatCalculator } from './components/combat/CombatCalculator.jsx'
+
+function CalculatorPage() {
+  return (
+    <div style={{ padding: '24px' }}>
+      <CombatCalculator />
+    </div>
+  )
+}
 
 function NotFound() {
   return (
@@ -48,6 +58,7 @@ export function App() {
         */}
         <Route path="/cuentas/nueva"  element={<NewAccountPage />} />
         <Route path="/cuentas/:id"    element={<AccountDetailPage />} />
+        <Route path="/calculadora"    element={<CalculatorPage />} />
       </Route>
 
       {/* ── Espacio del mundo (sin sidebar) ──────────── */}
