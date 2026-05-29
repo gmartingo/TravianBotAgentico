@@ -34,6 +34,7 @@ import { SchedulerDashboard } from '../components/world/SchedulerDashboard.jsx'
 import { FarmListsTab }   from '../components/world/FarmListsTab.jsx'
 import { FarmListDrawer } from '../components/world/FarmListDrawer.jsx'
 import { AgentBottomBar } from '../components/world/AgentBottomBar.jsx'
+import { CombatCalculator } from '../components/combat/CombatCalculator.jsx'
 
 // ── Iconos sidebar ────────────────────────────────────────────────────────────
 
@@ -353,8 +354,8 @@ export function WorldSpacePage() {
       id: 'calc',
       label: t('worldnav.calculator'),
       icon: <IconCalc />,
-      disabled: true,
-      soon: true,
+      disabled: false,
+      soon: false,
     },
   ]
 
@@ -616,17 +617,9 @@ export function WorldSpacePage() {
               </div>
             )}
 
-            {/* Pestaña: Calculadora (próximamente) */}
+            {/* Pestaña: Calculadora de combate */}
             {activeTab === 'calc' && (
-              <div style={{
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                padding: '64px 24px', textAlign: 'center', gap: '8px',
-              }}>
-                <p style={{ fontSize: '17px', fontWeight: 600 }}>
-                  {t('world.config.comingSoonTitle')}
-                </p>
-              </div>
+              <CombatCalculator />
             )}
 
           </div>

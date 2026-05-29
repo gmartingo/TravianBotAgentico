@@ -1,2 +1,3 @@
 - [Mapa de capacidades TravianBot](capability_map.md) — qué existe, dónde, quién lo usa. Incluye 4 bloques overview implementados. Recargado 2026-05-26.
 - [Consolidación 4 bloques overview](overview_consolidation.md) — decisiones vinculantes del gate de cierre: hexagonal, mercaderes, frozen DTOs, helpers _common.py, API naming.
+- [Gate entrada simulador combate/oasis](combat_simulator_pregame.md) — infraestructura reutilizable (GameDataPort+seed NATURE ya completo) y delta a crear (fórmula combate, optimizador, DTOs). Verificado 2026-05-28.

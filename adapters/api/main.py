@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
 from adapters.api.routes.accounts import router as accounts_router
 from adapters.api.routes.catalog import router as catalog_router
+from adapters.api.routes.combat import router as combat_router
 from adapters.api.routes.farm import router as farm_router
 from adapters.api.routes.game_data import router as game_data_router
 from adapters.api.routes.game_culture_points import router as game_culture_points_router
@@ -381,6 +382,7 @@ app.mount(
 
 app.include_router(accounts_router)
 app.include_router(catalog_router)
+app.include_router(combat_router)
 app.include_router(farm_router)
 app.include_router(game_data_router)
 app.include_router(game_overview_router)

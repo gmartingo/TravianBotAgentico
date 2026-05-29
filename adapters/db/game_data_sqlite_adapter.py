@@ -532,6 +532,35 @@ class GameDataSQLiteAdapter(GameDataPort):
             rows = await cursor.fetchall()
         return {r[1]: _row_to_building_catalog_dict(r) for r in rows}
 
+    async def get_building_defense_bonus(
+        self,
+        gid: int,
+        level: int,
+        server_version: str = "1.45",
+    ) -> float | None:
+        """
+        Devuelve el bonus de defensa de un edificio de muro para el nivel indicado.
+
+        El dato vive en building_stats.effect_value (entero porcentual, ej: 30 → 30%).
+        Se devuelve como fracción decimal (30 → 0.30) para que el llamador haga
+        D × (1 + bonus) directamente.
+
+        Devuelve None si el gid/level no están en building_stats o effect_value es NULL.
+        """
+        async with self._conn.execute(
+            """
+            SELECT effect_value
+            FROM building_stats
+            WHERE server_version = ? AND gid = ? AND level = ?
+            """,
+            (server_version, gid, level),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None or row[0] is None:
+            return None
+        # effect_value está almacenado como porcentaje entero (ej: 30 = 30%)
+        return row[0] / 100.0
+
 
 # ---------------------------------------------------------------------------
 # Helpers de conversión row → dict

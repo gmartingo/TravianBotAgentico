@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Simulador y Optimizador de Combate
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador.
+
+  Vistas disponibles (selector "Vista"):
+    1. Simulador — formulario + estado vacío
+    2. Simulador — con resultado (atacante gana)
+    3. Simulador — con resultado (defensor gana)
+    4. Optimizador — formulario + estado vacío
+    5. Optimizador — con resultado (alternativas Pareto)
+    6. Estado error
+
+  Controles:
+    — Toggle tema (claro / oscuro)
+    — Selector de vista
+    — Modo Editar: drag & drop con imán de 8px
+    — Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec: docs/design/simulador-combate-ui.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Simulador de Combate (playground)</title>
+<style>
+/* ===== TOKENS ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--danger:#C9352C;--info:#0A6FCC;
+  --success-subtle:rgba(36,138,61,.12);--danger-subtle:rgba(201,53,44,.08);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --sidebar-w:180px;--topbar-h:52px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.1);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.1);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:100;
+  font-size:12px;
+}
+.toolbar-label{color:var(--text-secondary);font-size:11px;white-space:nowrap;}
+.toolbar select,.toolbar button{
+  font-family:inherit;font-size:12px;padding:4px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+}
+.toolbar button{transition:background var(--dur-fast);}
+.toolbar button:hover{background:var(--surface-2);}
+.toolbar button.active{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.toolbar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+.grow{flex:1;}
+
+/* ===== APP SHELL ===== */
+.app-shell{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ===== FAKE SIDEBAR ===== */
+.fake-sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;padding:12px 8px;gap:2px;
+  overflow:hidden;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);font-size:14px;color:var(--text);
+  cursor:pointer;position:relative;
+}
+.nav-item.active{
+  background:var(--accent-subtle);color:var(--accent-text);font-weight:500;
+}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.nav-item:not(.active):hover{background:var(--surface-2);}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.7;}
+
+/* ===== MAIN CONTENT ===== */
+.main-content{
+  flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;
+}
+.tab-content{
+  flex:1;overflow-y:auto;padding:24px;
+  display:flex;flex-direction:column;gap:16px;
+}
+
+/* ===== CALC LAYOUT ===== */
+.calc-layout{
+  display:flex;gap:0;flex:1;min-height:0;
+  background:var(--bg);
+}
+.calc-form-panel{
+  width:420px;flex-shrink:0;
+  background:var(--surface);
+  border-inline-end:1px solid var(--border);
+  overflow-y:auto;padding:20px;
+  display:flex;flex-direction:column;gap:16px;
+}
+.calc-result-panel{
+  flex:1;min-width:0;overflow-y:auto;padding:24px;
+  display:flex;flex-direction:column;gap:16px;
+}
+
+/* ===== SEGMENT CONTROL ===== */
+.segment{
+  display:flex;background:var(--surface-2);border-radius:var(--radius-sm);
+  padding:2px;gap:2px;
+}
+.segment-btn{
+  flex:1;padding:6px 12px;border-radius:4px;border:none;
+  font-family:inherit;font-size:13px;font-weight:500;
+  cursor:pointer;color:var(--text-secondary);background:transparent;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.segment-btn.active{
+  background:var(--surface);color:var(--text);
+  box-shadow:var(--shadow-sm);
+}
+
+/* ===== FORM SECTIONS ===== */
+.form-section-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:8px;border-bottom:1px solid var(--border);
+  margin-bottom:12px;
+}
+.form-section-title{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-secondary);}
+.form-section-action{font-size:12px;color:var(--accent-text);cursor:pointer;background:none;border:none;font-family:inherit;padding:0;}
+.form-section-action:hover{color:var(--accent-hover);}
+
+/* ===== TRIBE SELECTOR + MODE TOGGLE ===== */
+.form-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.form-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;min-width:60px;}
+.form-select{
+  font-family:inherit;font-size:13px;padding:5px 10px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;flex:1;
+}
+.mode-toggle{
+  display:flex;gap:2px;background:var(--surface-2);border-radius:var(--radius-sm);padding:2px;
+}
+.mode-btn{
+  padding:4px 10px;border-radius:4px;border:none;
+  font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;
+  color:var(--text-secondary);background:transparent;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.mode-btn.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+
+/* ===== TROOP LIST ===== */
+.troop-list{display:flex;flex-direction:column;gap:0;}
+.troop-row{
+  display:flex;align-items:center;gap:8px;padding:6px 0;
+  border-bottom:1px solid var(--border);
+}
+.troop-row:last-child{border-bottom:none;}
+.troop-icon{
+  width:24px;height:24px;border-radius:4px;flex-shrink:0;
+  background:var(--surface-2);display:grid;place-items:center;
+  font-size:10px;font-weight:600;color:var(--text-tertiary);
+}
+.troop-icon img{width:100%;height:100%;object-fit:contain;border-radius:4px;}
+.troop-name{flex:1;font-size:13px;color:var(--text);}
+.troop-row.dim .troop-icon,.troop-row.dim .troop-name{opacity:.45;}
+.troop-qty{
+  width:68px;font-family:var(--font-mono);font-size:13px;padding:3px 6px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);text-align:end;
+  font-variant-numeric:tabular-nums;
+}
+.troop-smithy-label{font-size:11px;color:var(--text-tertiary);}
+.troop-smithy{
+  width:40px;font-family:var(--font-mono);font-size:12px;padding:3px 5px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text-secondary);text-align:end;
+}
+
+/* ===== COLLAPSIBLE ===== */
+.collapsible{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;}
+.collapsible-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;cursor:pointer;background:var(--surface-2);
+  font-size:12px;font-weight:500;color:var(--text-secondary);
+  user-select:none;
+}
+.collapsible-header:hover{background:var(--border);}
+.collapsible-header .chevron{font-size:10px;transition:transform var(--dur-fast);}
+.collapsible-body{padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:8px;}
+.collapsible.open .chevron{transform:rotate(180deg);}
+
+/* ===== INPUTS ===== */
+.input-field{
+  font-family:inherit;font-size:13px;padding:5px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);width:100%;
+}
+.input-field::placeholder{color:var(--text-tertiary);}
+.input-sm{width:72px;}
+.input-xs{width:52px;}
+.input-row{display:flex;align-items:center;gap:8px;}
+.input-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+
+/* ===== DEFENDER PANEL ===== */
+.defender-panel{
+  border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;
+}
+.defender-header{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);
+}
+.defender-title{font-size:12px;font-weight:600;color:var(--text-secondary);flex:1;}
+.defender-body{padding:12px;display:flex;flex-direction:column;gap:8px;}
+.btn-ghost{
+  background:none;border:none;cursor:pointer;padding:2px 6px;
+  border-radius:var(--radius-sm);font-size:12px;color:var(--text-tertiary);
+  font-family:inherit;
+}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);}
+
+/* ===== BUTTONS ===== */
+.btn-primary{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:10px 16px;border:none;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;}
+.btn-secondary{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:6px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:13px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-secondary:hover{background:var(--surface-2);}
+
+/* ===== RESULT BADGE ===== */
+.result-badge{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;border-radius:var(--radius-sm);border:1px solid;
+}
+.result-badge.win{
+  background:var(--success-subtle);border-color:var(--success);
+}
+.result-badge.lose{
+  background:var(--danger-subtle);border-color:var(--danger);
+}
+.result-badge-icon{font-size:20px;}
+.result-badge-main{flex:1;}
+.result-badge-title{font-size:15px;font-weight:600;}
+.result-badge.win .result-badge-title{color:var(--success);}
+.result-badge.lose .result-badge-title{color:var(--danger);}
+.result-badge-sub{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.result-ratio{font-family:var(--font-mono);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;}
+.result-badge.win .result-ratio{color:var(--success);}
+.result-badge.lose .result-ratio{color:var(--danger);}
+
+/* ===== RESULT TABLE ===== */
+.result-section-title{
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:6px;
+}
+.result-table{width:100%;border-collapse:collapse;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;}
+.result-table th{
+  background:var(--surface-2);padding:6px 10px;
+  font-size:11px;font-weight:500;color:var(--text-secondary);
+  text-align:start;letter-spacing:.04em;
+  border-bottom:1px solid var(--border);
+}
+.result-table th.num,.result-table td.num{text-align:end;}
+.result-table td{
+  padding:7px 10px;font-size:13px;border-bottom:1px solid var(--border);
+}
+.result-table tr:last-child td{border-bottom:none;}
+.result-table tr:hover td{background:var(--surface-2);}
+.num-cell{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;}
+.cell-won{color:var(--success);}
+.cell-lost{color:var(--danger);}
+.cell-dim{color:var(--text-disabled);}
+.troop-cell{display:flex;align-items:center;gap:6px;}
+.troop-icon-sm{width:20px;height:20px;border-radius:3px;background:var(--surface-2);
+  display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--text-tertiary);}
+
+/* ===== LOOT PANEL ===== */
+.loot-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:14px 16px;display:flex;flex-direction:column;gap:8px;
+}
+.loot-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.loot-label{font-size:13px;color:var(--text-secondary);}
+.loot-value{font-family:var(--font-mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;}
+.loot-animals{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+.resource-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-full);padding:3px 8px;font-size:12px;
+}
+.resource-chip .res-icon{font-size:14px;}
+.resource-chip .res-val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12px;font-weight:500;}
+.resource-total{font-size:12px;font-weight:600;font-family:var(--font-mono);color:var(--text);}
+
+/* ===== WARNING CHIPS ===== */
+.warning-row{display:flex;flex-wrap:wrap;gap:6px;}
+.warning-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--accent-subtle);color:var(--accent-text);
+  border:1px solid var(--accent);border-radius:var(--radius-full);
+  padding:2px 8px;font-size:11px;font-weight:500;
+}
+
+/* ===== EMPTY / ERROR / LOADING STATE ===== */
+.state-area{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:48px 24px;text-align:center;
+  color:var(--text-secondary);
+}
+.state-icon{font-size:36px;color:var(--text-tertiary);}
+.state-title{font-size:15px;font-weight:600;color:var(--text);}
+.state-desc{font-size:13px;max-width:280px;line-height:1.5;}
+.state-area.error .state-icon{color:var(--danger);}
+.error-detail{
+  font-size:12px;font-family:var(--font-mono);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:8px 12px;max-width:360px;text-align:start;color:var(--text-secondary);
+}
+
+/* ===== SPINNER ===== */
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{
+  width:24px;height:24px;border-radius:50%;
+  border:2px solid var(--border);border-top-color:var(--text-secondary);
+  animation:spin .8s linear infinite;
+}
+
+/* ===== OPTIMIZER TABLE ===== */
+.opt-table{width:100%;border-collapse:collapse;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;}
+.opt-table th{
+  background:var(--surface-2);padding:6px 10px;
+  font-size:11px;font-weight:500;color:var(--text-secondary);
+  text-align:start;letter-spacing:.04em;border-bottom:1px solid var(--border);
+}
+.opt-table td{padding:9px 10px;font-size:13px;border-bottom:1px solid var(--border);cursor:pointer;}
+.opt-table tr:last-child td{border-bottom:none;}
+.opt-table tr:hover td{background:var(--surface-2);}
+.opt-table tr.selected td{background:var(--accent-subtle);}
+.win-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  border-radius:var(--radius-full);padding:2px 7px;font-size:11px;font-weight:500;
+}
+.win-badge.yes{background:var(--success-subtle);color:var(--success);border:1px solid var(--success);}
+.win-badge.no{background:var(--danger-subtle);color:var(--danger);border:1px solid var(--danger);}
+.troop-icons-row{display:flex;align-items:center;gap:3px;}
+.troop-icon-xs{
+  width:20px;height:20px;border-radius:3px;background:var(--surface-2);
+  display:grid;place-items:center;font-size:9px;font-weight:700;color:var(--text-tertiary);
+  flex-shrink:0;position:relative;
+}
+.troop-count{font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);}
+
+/* ===== NO WINNER BANNER ===== */
+.no-winner-banner{
+  display:flex;align-items:center;gap:10px;
+  background:var(--danger-subtle);border:1px solid var(--danger);
+  border-radius:var(--radius-sm);padding:10px 14px;
+  font-size:13px;color:var(--danger);
+}
+
+/* ===== ALTERNATIVE DETAIL ===== */
+.alt-detail{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:16px;
+  display:flex;flex-direction:column;gap:12px;
+}
+.alt-detail-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+
+/* ===== SLIDER ===== */
+.slider-row{display:flex;align-items:center;gap:8px;}
+.slider-label{font-size:12px;color:var(--text-secondary);min-width:120px;}
+input[type=range]{flex:1;accent-color:var(--accent);}
+.slider-val{font-family:var(--font-mono);font-size:12px;color:var(--text);min-width:28px;text-align:end;}
+
+/* ===== RADIO ===== */
+.radio-group{display:flex;flex-direction:column;gap:6px;}
+.radio-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;
+}
+.radio-item.selected{border-color:var(--accent);background:var(--accent-subtle);}
+.radio-dot{
+  width:14px;height:14px;border-radius:50%;border:2px solid var(--border-strong);
+  display:grid;place-items:center;flex-shrink:0;
+}
+.radio-item.selected .radio-dot{border-color:var(--accent);}
+.radio-dot-inner{width:6px;height:6px;border-radius:50%;background:var(--accent);display:none;}
+.radio-item.selected .radio-dot-inner{display:block;}
+.radio-label{font-size:13px;color:var(--text);}
+
+/* ===== CHECKBOX ===== */
+.check-row{display:flex;align-items:center;gap:6px;padding:4px 0;}
+.check-box{
+  width:14px;height:14px;border:2px solid var(--border-strong);border-radius:3px;
+  background:var(--surface);flex-shrink:0;display:grid;place-items:center;cursor:pointer;
+}
+.check-box.checked{background:var(--accent);border-color:var(--accent);}
+.check-mark{color:#fff;font-size:9px;font-weight:700;display:none;}
+.check-box.checked .check-mark{display:block;}
+.check-label{font-size:13px;color:var(--text);}
+
+/* ===== DRAG & DROP EDIT ===== */
+.edit-mode .draggable{
+  cursor:grab;position:relative;
+}
+.edit-mode .draggable:hover::before{
+  content:'⠿';position:absolute;inset-inline-start:-20px;top:50%;transform:translateY(-50%);
+  color:var(--text-disabled);font-size:16px;pointer-events:none;
+}
+.edit-mode .draggable.dragging{opacity:.5;cursor:grabbing;}
+.edit-mode .draggable.drag-over{outline:2px dashed var(--accent);}
+
+/* ===== SECTION BLOCK ===== */
+.section-block{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:16px;
+  display:flex;flex-direction:column;gap:12px;
+}
+
+/* Separador visual */
+hr.hairline{border:none;border-top:1px solid var(--border);margin:4px 0;}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR PLAYGROUND ===== -->
+<div class="toolbar" id="toolbar">
+  <span style="font-weight:600;font-size:13px;">TravianBot</span>
+  <span class="toolbar-sep"></span>
+  <span class="toolbar-label">Vista:</span>
+  <select id="view-select" onchange="setView(this.value)">
+    <option value="1">1 · Simulador — formulario</option>
+    <option value="2">2 · Simulador — atacante gana</option>
+    <option value="3">3 · Simulador — defensor gana</option>
+    <option value="4">4 · Optimizador — formulario</option>
+    <option value="5">5 · Optimizador — resultados</option>
+    <option value="6">6 · Estado error</option>
+  </select>
+  <span class="toolbar-sep"></span>
+  <button onclick="toggleTheme()" id="theme-btn">🌙 Oscuro</button>
+  <span class="toolbar-sep"></span>
+  <button id="edit-btn" onclick="toggleEdit()">✎ Editar</button>
+  <button onclick="saveLayout()">💾 Guardar</button>
+  <button onclick="resetLayout()">↺ Restablecer</button>
+  <button onclick="exportLayout()">⬇ Exportar JSON</button>
+  <span class="grow"></span>
+  <span class="toolbar-label" style="font-size:10px;color:var(--text-tertiary);">Spec: docs/design/simulador-combate-ui.md</span>
+</div>
+
+<!-- ===== APP SHELL ===== -->
+<div class="app-shell">
+
+  <!-- FAKE SIDEBAR -->
+  <nav class="fake-sidebar" aria-label="Navegación del mundo">
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M16 16l2 2M16 8l2-2M8 16l-2 2M8 8l-2-2M12 7V3M12 21v-4M7 12H3M21 12h-4"/></svg>
+      Agentes
+    </div>
+    <div class="nav-item">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Listas de vacas
+    </div>
+    <div class="nav-item active">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="10" y2="16"/><line x1="14" y1="16" x2="16" y2="16"/></svg>
+      Calculadora
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <!-- ===== VISTAS ===== -->
+    <div id="view-container" style="flex:1;display:flex;min-height:0;overflow:hidden;"></div>
+  </div>
+</div>
+
+<script>
+/* ===== DATOS DE MUESTRA ===== */
+const TROOPS_ROMANS = [
+  {name:'Legionario', qty:500, smithy:10},
+  {name:'Pretoriano', qty:0, smithy:0},
+  {name:'Imperano', qty:200, smithy:8},
+  {name:'Explorador', qty:0, smithy:0},
+  {name:'Equitario', qty:0, smithy:0},
+  {name:'Catafrasto', qty:0, smithy:0},
+  {name:'Ariete', qty:0, smithy:0},
+  {name:'Catapulta de fuego', qty:0, smithy:0},
+  {name:'Senador', qty:0, smithy:0},
+];
+const TROOPS_NATURE = [
+  {name:'Rata', qty:20, smithy:0},
+  {name:'Araña', qty:0, smithy:0},
+  {name:'Serpiente', qty:15, smithy:0},
+  {name:'Murciélago', qty:0, smithy:0},
+  {name:'Jabalí', qty:40, smithy:0},
+  {name:'Lobo', qty:0, smithy:0},
+  {name:'Oso', qty:10, smithy:0},
+  {name:'Cocodrilo', qty:0, smithy:0},
+  {name:'Tigre', qty:0, smithy:0},
+  {name:'Elefante', qty:5, smithy:0},
+];
+const INITIALS = t => t.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+/* ===== VISTAS ===== */
+function renderTroopRow(t, showSmithy=true){
+  const dim = t.qty===0?'dim':'';
+  return `<div class="troop-row ${dim}">
+    <div class="troop-icon" title="${t.name}">${INITIALS(t.name)}</div>
+    <span class="troop-name">${t.name}</span>
+    <input class="troop-qty" type="number" value="${t.qty>0?t.qty:''}" placeholder="0" min="0" max="1000000" aria-label="Cantidad de ${t.name}">
+    ${showSmithy?`<span class="troop-smithy-label">S:</span><input class="troop-smithy" type="number" value="${t.smithy>0?t.smithy:''}" placeholder="0" min="0" max="20" aria-label="Smithy de ${t.name}">`:``}
+  </div>`;
+}
+
+function formPanel_simulator(){
+  return `<div class="calc-form-panel" id="form-panel">
+    <!-- Segmento -->
+    <div class="draggable" data-block="segment">
+      <div class="segment">
+        <button class="segment-btn active" type="button">Simulador</button>
+        <button class="segment-btn" type="button">Optimizador</button>
+      </div>
+    </div>
+
+    <!-- ATACANTE -->
+    <div class="draggable" data-block="attacker">
+      <div class="form-section-header">
+        <span class="form-section-title">Atacante</span>
+      </div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <span class="form-label">Tribu:</span>
+        <select class="form-select">
+          <option>Romanos</option><option>Teutones</option><option>Galos</option>
+          <option>Egipcios</option><option>Hunos</option><option>Espartanos</option><option>Vikingos</option>
+        </select>
+        <div class="mode-toggle">
+          <button class="mode-btn active" type="button">Saqueo</button>
+          <button class="mode-btn" type="button">Ataque</button>
+        </div>
+      </div>
+      <div class="troop-list">
+        ${TROOPS_ROMANS.map(t=>renderTroopRow(t)).join('')}
+      </div>
+    </div>
+
+    <!-- HÉROE (colapsable) -->
+    <div class="draggable collapsible" data-block="hero">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Héroe y bonus</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Pts ataque:</span>
+          <input class="input-field input-sm" type="number" value="1200" min="0" max="20000"/>
+          <span class="input-label">Bonus %:</span>
+          <input class="input-field input-xs" type="number" value="30" min="0" max="100"/>
+        </div>
+        <div class="input-row">
+          <span class="input-label">Alianza %:</span>
+          <input class="input-field input-xs" type="number" value="3" min="0" max="5"/>
+          <span class="input-label">Moral %:</span>
+          <input class="input-field input-xs" type="number" value="100" min="30" max="100"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEFENSORES -->
+    <div class="draggable" data-block="defenders">
+      <div class="form-section-header">
+        <span class="form-section-title">Defensor(es)</span>
+        <button class="form-section-action" type="button">+ Añadir</button>
+      </div>
+      <div class="defender-panel">
+        <div class="defender-header">
+          <select class="form-select" style="max-width:130px;padding:3px 8px;font-size:12px;">
+            <option>Nature</option><option>Romanos</option><option>Teutones</option><option>Galos</option>
+          </select>
+          <span class="defender-title" style="margin-inline-start:8px;">Defensor 1</span>
+        </div>
+        <div class="defender-body">
+          <div class="troop-list">
+            ${TROOPS_NATURE.map(t=>renderTroopRow(t,false)).join('')}
+          </div>
+          <hr class="hairline"/>
+          <div class="input-row">
+            <span class="input-label">Muro:</span>
+            <input class="input-field input-xs" type="number" value="0" min="0" max="20"/>
+            <span class="input-label">Stonemason:</span>
+            <input class="input-field input-xs" type="number" value="0" min="0" max="5"/>
+          </div>
+          <div class="input-row">
+            <span class="input-label">Rec. aldea:</span>
+            <input class="input-field" type="number" placeholder="Opcional" min="0"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG (colapsable P3) -->
+    <div class="draggable collapsible" data-block="config">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Configuración avanzada</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Exponente:</span>
+          <input class="input-field input-xs" type="number" value="0.5" step="0.05" min="0.4" max="0.6"/>
+          <span class="input-label">Velocidad:</span>
+          <select class="form-select" style="max-width:80px;">
+            <option>x1</option><option>x3</option><option>x5</option><option>x10</option>
+          </select>
+        </div>
+        <div class="input-row">
+          <span class="input-label">Distancia:</span>
+          <input class="input-field input-sm" type="number" placeholder="campos" min="0"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTÓN SIMULAR -->
+    <div class="draggable" data-block="simulate-btn">
+      <button class="btn-primary" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Simular
+      </button>
+    </div>
+  </div>`;
+}
+
+function resultPanel_empty(){
+  return `<div class="calc-result-panel">
+    <div class="state-area" role="status" aria-live="polite">
+      <div class="state-icon">🧮</div>
+      <div class="state-title">Sin simulación</div>
+      <p class="state-desc">Introduce los ejércitos en el formulario y pulsa <strong>Simular</strong> para ver el resultado del combate.</p>
+    </div>
+  </div>`;
+}
+
+function resultPanel_simulator(attackerWins=true){
+  const badgeClass = attackerWins ? 'win' : 'lose';
+  const badgeIcon = attackerWins ? '🛡' : '💀';
+  const badgeText = attackerWins ? 'Atacante gana' : 'Defensor gana';
+  const ratio = attackerWins ? '2.37' : '0.43';
+
+  const atkRows = [
+    {name:'Legionario',ini:500,surv:attackerWins?364:0,lost:attackerWins?136:500},
+    {name:'Imperano',ini:200,surv:attackerWins?146:0,lost:attackerWins?54:200},
+  ];
+  const defRows = [
+    {name:'Rata',ini:20,surv:attackerWins?0:14,lost:attackerWins?20:6},
+    {name:'Serpiente',ini:15,surv:attackerWins?0:11,lost:attackerWins?15:4},
+    {name:'Jabalí',ini:40,surv:attackerWins?0:29,lost:attackerWins?40:11},
+    {name:'Oso',ini:10,surv:attackerWins?0:7,lost:attackerWins?10:3},
+    {name:'Elefante',ini:5,surv:attackerWins?0:4,lost:attackerWins?5:1},
+  ];
+
+  function troopTable(rows){
+    return `<table class="result-table" role="table">
+      <thead><tr>
+        <th>Tropa</th>
+        <th class="num">Enviadas</th>
+        <th class="num">Supervivientes</th>
+        <th class="num">Bajas</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r=>`<tr>
+          <td><div class="troop-cell"><div class="troop-icon-sm">${INITIALS(r.name)}</div>${r.name}</div></td>
+          <td class="num num-cell">${r.ini.toLocaleString('es')}</td>
+          <td class="num num-cell ${r.surv>0?'cell-won':'cell-dim'}">${r.surv.toLocaleString('es')}</td>
+          <td class="num num-cell ${r.lost>0?'cell-lost':''}">${r.lost.toLocaleString('es')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  return `<div class="calc-result-panel" role="status" aria-live="polite">
+
+    <!-- BADGE RESULTADO -->
+    <div class="draggable result-badge ${badgeClass}" data-block="result-badge">
+      <span class="result-badge-icon">${badgeIcon}</span>
+      <div class="result-badge-main">
+        <div class="result-badge-title">${badgeText}</div>
+        <div class="result-badge-sub">Fuerza: ${attackerWins?'47 650':'8 210'} atacante vs ${attackerWins?'20 110':'19 100'} defensor</div>
+      </div>
+      <div class="result-ratio">${ratio}</div>
+    </div>
+
+    <!-- TROPAS ATACANTE -->
+    <div class="draggable section-block" data-block="attacker-troops">
+      <div class="result-section-title">Tropas atacante</div>
+      ${troopTable(atkRows)}
+    </div>
+
+    <!-- TROPAS DEFENSOR -->
+    <div class="draggable section-block" data-block="defender-troops">
+      <div class="result-section-title">Tropas defensor</div>
+      ${troopTable(defRows)}
+    </div>
+
+    <!-- BOTÍN -->
+    <div class="draggable section-block" data-block="loot">
+      <div class="result-section-title">Botín</div>
+      <div class="loot-panel">
+        <div class="loot-row">
+          <span class="loot-label">Capacidad de carga</span>
+          <span class="loot-value">${attackerWins?'54 600':'0'}</span>
+        </div>
+        <div class="loot-row">
+          <span class="loot-label">Botín potencial</span>
+          <span class="loot-value">${attackerWins?'27 300':'—'}</span>
+        </div>
+        ${attackerWins?`<hr class="hairline"/>
+        <div class="loot-label" style="font-size:12px;">Recursos de animales muertos:</div>
+        <div class="loot-animals">
+          <div class="resource-chip"><span class="res-icon">🪵</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">🧱</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">⚙</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">🌾</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip" style="background:var(--surface);"><strong class="resource-total">Total: 16 000</strong></div>
+        </div>`:`<div style="font-size:12px;color:var(--text-tertiary);">Sin animales muertos</div>`}
+      </div>
+    </div>
+
+    <!-- PÉRDIDAS (colapsable P2) -->
+    <div class="draggable collapsible" data-block="losses" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <span>Pérdidas en recursos — Atacante: <strong style="font-family:var(--font-mono);">${attackerWins?'45 200':'182 400'}</strong></span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <table class="result-table">
+          <thead><tr><th>Tropa</th><th class="num">Bajas</th><th class="num">Madera</th><th class="num">Arcilla</th><th class="num">Hierro</th><th class="num">Trigo</th></tr></thead>
+          <tbody>
+            <tr><td>Legionario</td><td class="num num-cell">136</td><td class="num num-cell">16 320</td><td class="num num-cell">13 600</td><td class="num num-cell">20 400</td><td class="num num-cell">4 080</td></tr>
+            <tr><td>Imperano</td><td class="num num-cell">54</td><td class="num num-cell">—</td><td class="num num-cell">—</td><td class="num num-cell">—</td><td class="num num-cell">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CROP CONSUMPTION -->
+    <div class="draggable" data-block="crop" style="font-size:12px;color:var(--text-secondary);padding:2px 0;">
+      Consumo de trigo (viaje ida y vuelta): <strong style="font-family:var(--font-mono);">1 240</strong>
+    </div>
+
+  </div>`;
+}
+
+function resultPanel_optimizer(){
+  const alternatives = [
+    {rank:1,wins:true,troops:[{n:'Leg',q:200},{n:'Imp',q:50}],losses:6540,resources:16000,ratio:2.50},
+    {rank:2,wins:true,troops:[{n:'Leg',q:180},{n:'Imp',q:60}],losses:5980,resources:14400,ratio:2.21},
+    {rank:3,wins:false,troops:[{n:'Leg',q:120},{n:'Imp',q:30}],losses:7100,resources:16000,ratio:0.87},
+  ];
+
+  return `<div class="calc-result-panel" role="status" aria-live="polite">
+    <div class="draggable" data-block="opt-alternatives">
+      <div class="result-section-title" style="margin-bottom:8px;">Alternativas Pareto (3)</div>
+      <table class="opt-table">
+        <thead><tr>
+          <th style="width:32px;">#</th>
+          <th>Tropas enviadas</th>
+          <th>Resultado</th>
+          <th class="num">Bajas (rec.)</th>
+          <th class="num">Rec. animales</th>
+          <th style="width:20px;"></th>
+        </tr></thead>
+        <tbody>
+          ${alternatives.map((a,i)=>`<tr onclick="selectAlt(${i})" id="alt-row-${i}">
+            <td class="num-cell" style="font-weight:600;">${a.rank}</td>
+            <td>
+              <div class="troop-icons-row">
+                ${a.troops.map(t=>`<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                  <div class="troop-icon-xs">${t.n.slice(0,2)}</div>
+                  <span class="troop-count">${t.q}</span>
+                </div>`).join('')}
+              </div>
+            </td>
+            <td><span class="win-badge ${a.wins?'yes':'no'}">${a.wins?'✓ Gana':'✗ No gana'}</span></td>
+            <td class="num num-cell">${a.losses.toLocaleString('es')}</td>
+            <td class="num num-cell">${a.resources.toLocaleString('es')}</td>
+            <td style="color:var(--text-tertiary);">›</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Detalle de alternativa (inicialmente oculto) -->
+    <div class="draggable alt-detail" data-block="alt-detail" id="alt-detail" style="display:none;">
+      <div class="alt-detail-header">
+        <span style="font-size:14px;font-weight:600;">Detalle — Alternativa #<span id="alt-detail-rank">1</span></span>
+        <button class="btn-ghost" onclick="closeAltDetail()">✕ Cerrar</button>
+      </div>
+      <!-- Badge resultado de la alternativa -->
+      <div class="result-badge win">
+        <span class="result-badge-icon">🛡</span>
+        <div class="result-badge-main">
+          <div class="result-badge-title">Atacante gana</div>
+          <div class="result-badge-sub">Fuerza: 12 000 vs 4 800</div>
+        </div>
+        <div class="result-ratio">2.50</div>
+      </div>
+      <!-- Tropas enviadas -->
+      <div>
+        <div class="result-section-title">Tropas enviadas / bajas</div>
+        <table class="result-table">
+          <thead><tr><th>Tropa</th><th class="num">Enviadas</th><th class="num">Supervivientes</th><th class="num">Bajas</th></tr></thead>
+          <tbody>
+            <tr><td><div class="troop-cell"><div class="troop-icon-sm">LE</div>Legionario</div></td><td class="num num-cell">200</td><td class="num num-cell cell-won">185</td><td class="num num-cell cell-lost">15</td></tr>
+            <tr><td><div class="troop-cell"><div class="troop-icon-sm">IM</div>Imperano</div></td><td class="num num-cell">50</td><td class="num num-cell cell-won">48</td><td class="num num-cell cell-lost">2</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Botín -->
+      <div class="loot-panel">
+        <div class="loot-row">
+          <span class="loot-label">Recursos de animales</span>
+        </div>
+        <div class="loot-animals">
+          <div class="resource-chip"><span class="res-icon">🪵</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">🧱</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">⚙</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip"><span class="res-icon">🌾</span><span class="res-val">4 000</span></div>
+          <div class="resource-chip" style="background:var(--surface);"><strong class="resource-total">Total: 16 000</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Defensa del oasis (referencia) -->
+    <div class="draggable section-block" data-block="oasis-defense" style="font-size:13px;">
+      <div class="result-section-title">Defensa del oasis (referencia)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <div class="resource-chip"><span>🐀</span><span class="res-val">Rata ×20</span></div>
+        <div class="resource-chip"><span>🐍</span><span class="res-val">Serpiente ×15</span></div>
+        <div class="resource-chip"><span>🐗</span><span class="res-val">Jabalí ×40</span></div>
+        <div class="resource-chip"><span>🐻</span><span class="res-val">Oso ×10</span></div>
+        <div class="resource-chip"><span>🐘</span><span class="res-val">Elefante ×5</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function formPanel_optimizer(){
+  return `<div class="calc-form-panel" id="form-panel">
+    <!-- Segmento -->
+    <div class="draggable" data-block="segment">
+      <div class="segment">
+        <button class="segment-btn" type="button">Simulador</button>
+        <button class="segment-btn active" type="button">Optimizador</button>
+      </div>
+    </div>
+
+    <!-- ATACANTE -->
+    <div class="draggable" data-block="attacker-opt">
+      <div class="form-section-header">
+        <span class="form-section-title">Atacante</span>
+      </div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <span class="form-label">Tribu:</span>
+        <select class="form-select">
+          <option>Romanos</option><option>Teutones</option><option>Galos</option>
+        </select>
+      </div>
+      <!-- Modo A / B -->
+      <div class="radio-group" style="margin-bottom:10px;">
+        <div class="radio-item selected" onclick="selectMode(this,'A')">
+          <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+          <span class="radio-label">A — Tipos libres (sin cantidad máxima)</span>
+        </div>
+        <div class="radio-item" onclick="selectMode(this,'B')">
+          <div class="radio-dot"><div class="radio-dot-inner"></div></div>
+          <span class="radio-label">B — Tropas de aldea (con cantidad disponible)</span>
+        </div>
+      </div>
+      <!-- Modo A: checkboxes -->
+      <div id="mode-a-panel" class="troop-list">
+        ${TROOPS_ROMANS.slice(0,5).map((t,i)=>`<div class="troop-row">
+          <div class="check-box ${i<3?'checked':''}" onclick="toggleCheck(this)"><span class="check-mark">✓</span></div>
+          <div class="troop-icon">${INITIALS(t.name)}</div>
+          <span class="troop-name">${t.name}</span>
+          <span class="troop-smithy-label">S:</span>
+          <input class="troop-smithy" type="number" value="${i<3?t.smithy:''}" placeholder="0" min="0" max="20" ${i>=3?'disabled':''}/>
+        </div>`).join('')}
+      </div>
+      <!-- Modo B: hidden -->
+      <div id="mode-b-panel" class="troop-list" style="display:none;">
+        ${TROOPS_ROMANS.slice(0,5).map(t=>`<div class="troop-row ${t.qty===0?'dim':''}">
+          <div class="troop-icon">${INITIALS(t.name)}</div>
+          <span class="troop-name">${t.name}</span>
+          <span class="troop-smithy-label">Disp:</span>
+          <input class="troop-qty" type="number" value="${t.qty>0?t.qty:''}" placeholder="0" min="0" style="width:80px;" aria-label="Disponibles ${t.name}"/>
+          <span class="troop-smithy-label">S:</span>
+          <input class="troop-smithy" type="number" value="${t.smithy>0?t.smithy:''}" placeholder="0" min="0" max="20" aria-label="Smithy ${t.name}"/>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- HÉROE (colapsable) -->
+    <div class="draggable collapsible" data-block="hero-opt">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Héroe y bonus</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Pts ataque:</span>
+          <input class="input-field input-sm" type="number" value="1200" min="0" max="20000"/>
+          <span class="input-label">Bonus %:</span>
+          <input class="input-field input-xs" type="number" value="30" min="0" max="100"/>
+        </div>
+        <div class="input-row">
+          <span class="input-label">Alianza %:</span>
+          <input class="input-field input-xs" type="number" value="3" min="0" max="5"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEFENSA OASIS -->
+    <div class="draggable" data-block="oasis-def">
+      <div class="form-section-header">
+        <span class="form-section-title">Defensa del oasis</span>
+      </div>
+      <div class="troop-list">
+        ${TROOPS_NATURE.map(t=>renderTroopRow(t,false)).join('')}
+      </div>
+    </div>
+
+    <!-- CONFIG (P3 colapsable) -->
+    <div class="draggable collapsible" data-block="config-opt">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Configuración</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Alternativas:</span>
+          <select class="form-select" style="max-width:80px;"><option>1</option><option selected>3</option><option>5</option><option>10</option></select>
+          <span class="input-label">Exponente:</span>
+          <input class="input-field input-xs" type="number" value="0.5" step="0.05" min="0.4" max="0.6"/>
+        </div>
+        <div class="input-row">
+          <span class="input-label">Velocidad:</span>
+          <select class="form-select" style="max-width:80px;"><option>x1</option><option>x3</option></select>
+          <span class="input-label">Distancia:</span>
+          <input class="input-field input-xs" type="number" placeholder="campos" min="0"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- PESOS OPTIMIZACIÓN (P3 colapsable) -->
+    <div class="draggable collapsible" data-block="weights">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Pesos de optimización</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="slider-row">
+          <span class="slider-label">Recursos ganados</span>
+          <input type="range" min="0" max="2" step="0.1" value="1.0" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)"/>
+          <span class="slider-val">1.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Pérdidas totales</span>
+          <input type="range" min="0" max="2" step="0.1" value="1.0" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)"/>
+          <span class="slider-val">1.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Tropas enviadas</span>
+          <input type="range" min="0" max="2" step="0.1" value="0.5" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)"/>
+          <span class="slider-val">0.5</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Tiempo de marcha</span>
+          <input type="range" min="0" max="2" step="0.1" value="0.0" oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(1)"/>
+          <span class="slider-val">0.0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTÓN OPTIMIZAR -->
+    <div class="draggable" data-block="optimize-btn">
+      <button class="btn-primary" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Optimizar
+      </button>
+    </div>
+  </div>`;
+}
+
+function viewError(){
+  return `<div class="calc-layout">
+    ${formPanel_simulator()}
+    <div class="calc-result-panel">
+      <div class="state-area error" role="alert">
+        <div class="state-icon">⚠</div>
+        <div class="state-title">Error al calcular</div>
+        <p class="state-desc">El servidor devolvió un error. Revisa los datos e inténtalo de nuevo.</p>
+        <div class="error-detail">422 Unprocessable Entity<br>detail: "El ejército atacante no tiene tropas activas"</div>
+        <button class="btn-secondary" type="button" style="margin-top:8px;">↺ Reintentar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===== RENDER VIEWS ===== */
+const views = {
+  '1': () => `<div class="calc-layout">${formPanel_simulator()}${resultPanel_empty()}</div>`,
+  '2': () => `<div class="calc-layout">${formPanel_simulator()}${resultPanel_simulator(true)}</div>`,
+  '3': () => `<div class="calc-layout">${formPanel_simulator()}${resultPanel_simulator(false)}</div>`,
+  '4': () => `<div class="calc-layout">${formPanel_optimizer()}<div class="calc-result-panel"><div class="state-area"><div class="state-icon">🎯</div><div class="state-title">Sin optimización</div><p class="state-desc">Selecciona tropas y la defensa del oasis, luego pulsa <strong>Optimizar</strong>.</p></div></div></div>`,
+  '5': () => `<div class="calc-layout">${formPanel_optimizer()}${resultPanel_optimizer()}</div>`,
+  '6': () => viewError(),
+};
+
+function setView(v){
+  const container = document.getElementById('view-container');
+  container.innerHTML = views[v]();
+  if(window._editMode) enableEditMode();
+}
+
+/* ===== THEME ===== */
+let _dark = false;
+function toggleTheme(){
+  _dark = !_dark;
+  document.documentElement.dataset.theme = _dark ? 'dark' : 'light';
+  document.getElementById('theme-btn').textContent = _dark ? '☀ Claro' : '🌙 Oscuro';
+}
+
+/* ===== EDIT MODE — drag & drop ===== */
+window._editMode = false;
+let _dragSrc = null;
+
+function toggleEdit(){
+  window._editMode = !window._editMode;
+  const btn = document.getElementById('edit-btn');
+  btn.classList.toggle('active', window._editMode);
+  btn.textContent = window._editMode ? '✓ Editar ON' : '✎ Editar';
+  if(window._editMode) enableEditMode();
+  else disableEditMode();
+}
+
+function enableEditMode(){
+  document.getElementById('view-container').classList.add('edit-mode');
+  document.querySelectorAll('.draggable').forEach(el=>{
+    el.setAttribute('draggable','true');
+    el.addEventListener('dragstart',onDragStart);
+    el.addEventListener('dragover',onDragOver);
+    el.addEventListener('drop',onDrop);
+    el.addEventListener('dragend',onDragEnd);
+    el.addEventListener('dragleave',onDragLeave);
+  });
+}
+
+function disableEditMode(){
+  document.getElementById('view-container').classList.remove('edit-mode');
+  document.querySelectorAll('.draggable').forEach(el=>{
+    el.setAttribute('draggable','false');
+  });
+}
+
+function snap8(v){ return Math.round(v/8)*8; }
+
+function onDragStart(e){
+  _dragSrc = this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain', this.dataset.block||'');
+}
+function onDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  this.classList.add('drag-over');
+}
+function onDragLeave(){ this.classList.remove('drag-over'); }
+function onDrop(e){
+  e.stopPropagation();
+  this.classList.remove('drag-over');
+  if(_dragSrc && _dragSrc!==this){
+    const parent = this.parentNode;
+    const srcIdx = [...parent.children].indexOf(_dragSrc);
+    const tgtIdx = [...parent.children].indexOf(this);
+    if(srcIdx<tgtIdx) parent.insertBefore(_dragSrc, this.nextSibling);
+    else parent.insertBefore(_dragSrc, this);
+  }
+}
+function onDragEnd(){ this.classList.remove('dragging'); _dragSrc=null; }
+
+/* ===== SAVE / RESTORE / EXPORT ===== */
+function getLayout(){
+  const blocks=[];
+  document.querySelectorAll('.draggable[data-block]').forEach(el=>{
+    blocks.push(el.dataset.block);
+  });
+  return {view: document.getElementById('view-select').value, blocks};
+}
+
+function saveLayout(){
+  localStorage.setItem('calc-playground-layout', JSON.stringify(getLayout()));
+  showToastMsg('Layout guardado');
+}
+
+function resetLayout(){
+  localStorage.removeItem('calc-playground-layout');
+  setView(document.getElementById('view-select').value);
+  showToastMsg('Layout restablecido');
+}
+
+function exportLayout(){
+  const data = JSON.stringify(getLayout(), null, 2);
+  const blob = new Blob([data],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'simulador-combate-layout.json';
+  a.click();
+  showToastMsg('Layout exportado');
+}
+
+function showToastMsg(msg){
+  let t = document.getElementById('__toast');
+  if(!t){ t=document.createElement('div'); t.id='__toast';
+    Object.assign(t.style,{
+      position:'fixed',insetInline:'0',bottom:'24px',margin:'auto',width:'max-content',
+      maxWidth:'90vw',background:'var(--btn-primary-bg)',color:'var(--btn-primary-text)',
+      padding:'10px 16px',borderRadius:'var(--radius-sm)',boxShadow:'var(--shadow-lg)',
+      fontSize:'13px',zIndex:'9999',opacity:'0',transform:'translateY(8px)',
+      transition:'opacity 220ms, transform 220ms',pointerEvents:'none',
+    });
+    document.body.appendChild(t);
+  }
+  t.textContent=msg; t.style.opacity='1'; t.style.transform='translateY(0)';
+  clearTimeout(t._tid); t._tid=setTimeout(()=>{t.style.opacity='0';t.style.transform='translateY(8px)';},2500);
+}
+
+/* ===== UI HELPERS ===== */
+function toggleCollapsible(header){
+  const body = header.nextElementSibling;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'flex';
+  header.parentElement.classList.toggle('open', !isOpen);
+}
+
+function selectMode(el, mode){
+  document.querySelectorAll('.radio-item').forEach(r=>r.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('mode-a-panel').style.display = mode==='A'?'flex':'none';
+  document.getElementById('mode-b-panel').style.display = mode==='B'?'flex':'none';
+}
+
+function toggleCheck(box){
+  box.classList.toggle('checked');
+  const smithy = box.closest('.troop-row').querySelector('.troop-smithy');
+  if(smithy) smithy.disabled = !box.classList.contains('checked');
+}
+
+function selectAlt(i){
+  document.querySelectorAll('.opt-table tr').forEach(r=>r.classList.remove('selected'));
+  const row = document.getElementById('alt-row-'+i);
+  if(row) row.classList.add('selected');
+  const detail = document.getElementById('alt-detail');
+  if(detail){
+    detail.style.display='flex';
+    document.getElementById('alt-detail-rank').textContent = i+1;
+  }
+}
+
+function closeAltDetail(){
+  const detail = document.getElementById('alt-detail');
+  if(detail) detail.style.display='none';
+  document.querySelectorAll('.opt-table tr').forEach(r=>r.classList.remove('selected'));
+}
+
+/* ===== INIT ===== */
+setView('1');
+
+// Restaurar layout guardado si existe
+const saved = localStorage.getItem('calc-playground-layout');
+if(saved){
+  try{
+    const data = JSON.parse(saved);
+    if(data.view){
+      document.getElementById('view-select').value = data.view;
+      setView(data.view);
+    }
+  }catch(e){}
+}
+</script>
+</body>
+</html>
