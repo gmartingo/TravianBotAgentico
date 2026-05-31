@@ -202,14 +202,21 @@ class CombatResult:
     attacker_wins: bool
     attacker_troops: list[TroopResult]
     defender_troops: list[TroopResult]   # aplanado: todas las formaciones juntas
-    attacker_power: float                # A efectivo
-    defender_power: float                # D efectivo
+    attacker_power: float                # A efectivo (total)
+    defender_power: float                # D efectivo (total)
     ratio: float | None                  # A/D — None cuando defender_power == 0
     loot: Loot
     resource_losses: ResourceLosses
     structural_damage: StructuralDamage | None  # None si attack_type='raid'
     crop_consumption: int | None               # None si distance_fields no proporcionado
     warnings: list[str]
+    # Desglose de potencia infantería vs caballería (raw, antes de moral/muro).
+    # Permite a la UI separar la fila "Fuerza de combate" en dos líneas con
+    # iconos del juego (stat_attack / stat_def_infantry / stat_def_cavalry).
+    attacker_infantry_power: float = 0.0     # A_inf — ataque hecho por infantería atacante
+    attacker_cavalry_power: float = 0.0      # A_cav — ataque hecho por caballería atacante
+    defender_infantry_power: float = 0.0     # Σ(qty × def_inf) — defensa total contra infantería
+    defender_cavalry_power: float = 0.0      # Σ(qty × def_cav) — defensa total contra caballería
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +231,7 @@ class OptimizationWeights:
     total_losses: float = 1.0      # minimizar coste en recursos de bajas
     troops_sent: float = 0.5       # minimizar tropas enviadas
     travel_time: float = 0.0       # minimizar tiempo de marcha
+    balance: float = 0.0           # minimizar desequilibrio de uso del inventario (0.0 = sin efecto)
 
 
 @dataclass
@@ -235,6 +243,23 @@ class OptimizationConfig:
     optimization_weights: OptimizationWeights = field(
         default_factory=OptimizationWeights
     )
+    # scoring_mode (RN-04): "single" puntúa cada alternativa por-raid (compatible);
+    # "aggregate" multiplica los términos de loot/pérdidas/tropas/tiempo por N efectivo.
+    # Solo Modo C lo activa.
+    scoring_mode: str = "single"     # "single" | "aggregate"
+    # n_min/n_max (RN-05): acotan N efectivo en modo aggregate. None = sin límite.
+    n_min: int | None = None
+    n_max: int | None = None
+
+
+@dataclass
+class MultiRaidAggregate:
+    """Totales acumulados de N raids idénticas."""
+    n_raids: int
+    total_resources_gained: AnimalResourceDrop   # N × resources_gained de la oleada
+    total_resource_losses: int                   # N × total_resource_losses del atacante
+    total_troops_sent: int                       # N × troops_sent_count
+    total_travel_time_h: float | None            # N × travel_time_h; None si sin distancia
 
 
 @dataclass
@@ -252,6 +277,19 @@ class OptimizationAlternative:
     resources_gained: AnimalResourceDrop | None  # null si sin tropas NATURE
     loot: Loot | None                # null en optimizador (sin village_resources)
     travel_time_h: float | None      # null si no se proporcionó distance_fields
+    raids_possible: int | None = None              # None si sin inventario (Modo A)
+    remaining_troops: list[TroopResult] | None = None  # None si sin inventario
+    aggregate: MultiRaidAggregate | None = None    # None si sin inventario
+    # Desglose por recurso del coste de tropas perdidas del atacante (POR-RAID).
+    # Permite a la UI calcular el neto madera/barro/hierro/cereal contra el botín
+    # de animales. La suma .total == total_resource_losses por construcción.
+    resource_losses_breakdown: AnimalResourceDrop | None = None
+    # Desglose de potencia infantería vs caballería para la fila "Fuerza de
+    # combate" partida en 2 en la UI (mismo origen que SimulateResult).
+    attacker_infantry_power: float = 0.0
+    attacker_cavalry_power: float = 0.0
+    defender_infantry_power: float = 0.0
+    defender_cavalry_power: float = 0.0
 
 
 @dataclass

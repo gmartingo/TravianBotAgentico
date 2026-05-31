@@ -812,6 +812,12 @@ async def simulate_combat(
         all_def_enriched, def_survived, lang, translation_port, game_data_port
     )
 
+    # Desglose de potencia infantería / caballería para la UI.
+    # En el atacante A_inf y A_cav son los sumatorios ya calculados arriba
+    # (§3); para el defensor sumamos la defensa total bruta contra cada tipo.
+    D_inf_total = sum(e["quantity"] * e["def_inf"] for e in all_def_enriched)
+    D_cav_total = sum(e["quantity"] * e["def_cav"] for e in all_def_enriched)
+
     return CombatResult(
         attacker_wins=attacker_wins,
         attacker_troops=atk_results,
@@ -824,4 +830,8 @@ async def simulate_combat(
         structural_damage=structural_damage,
         crop_consumption=crop_consumption,
         warnings=warnings,
+        attacker_infantry_power=round(A_inf, 2),
+        attacker_cavalry_power=round(A_cav, 2),
+        defender_infantry_power=round(D_inf_total, 2),
+        defender_cavalry_power=round(D_cav_total, 2),
     )
