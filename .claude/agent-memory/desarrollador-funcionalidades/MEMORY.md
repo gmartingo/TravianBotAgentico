@@ -19,3 +19,4 @@
 - [session-registry-pattern](session-registry-pattern.md) — SessionRegistry singleton + patrón _StateOverride en tests de API; 9 fallos preexistentes en suite
 - [fernet-in-use-case-pattern](fernet-in-use-case-pattern.md) — descifrado en LoginUseCase (no en adaptador); _StateOverride necesita fernet=_TEST_FERNET en tests de POST; field(repr=False) en Account.password
 - [seed-loader-pattern](seed-loader-pattern.md) — export JSON + load_if_empty en lifespan; UPSERT_MAP extensible; count_troop_stats como gate; edificios: solo añadir ficheros+entradas en UPSERT_MAP
+- [combat-simulator-pattern](combat-simulator-pattern.md) — motor combate Travian T4.5; ord7=ariet ord8=catapulta; get_building_defense_bonus; pymoo NSGA-II N>5; NATURE_DROPS dict estático

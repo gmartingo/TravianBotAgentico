@@ -256,4 +256,24 @@ export const api = {
   /** POST /farm/worlds/:worldId/schedulers/:schedulerId/run-now */
   runSchedulerNow: (worldId, schedulerId) =>
     request('POST', `/farm/worlds/${worldId}/schedulers/${schedulerId}/run-now`),
+
+  // ── Combate ───────────────────────────────────────────────────────────────
+
+  combat: {
+    /**
+     * POST /combat/simulate
+     * Body: { attacker: AttackerInput, defenders: DefenderInput[] }
+     * Response: CombatSimulationResponse
+     */
+    simulate: (body) =>
+      request('POST', '/combat/simulate', body),
+
+    /**
+     * POST /combat/optimize
+     * Body: { attacker: AttackerInput, defenders: DefenderInput[], ... }
+     * Response: CombatOptimizeResponse
+     */
+    optimize: (body) =>
+      request('POST', '/combat/optimize', body),
+  },
 }
