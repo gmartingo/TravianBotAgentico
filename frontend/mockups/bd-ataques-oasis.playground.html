@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — BD de Ataques a Oasis
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador.
+
+  Vistas disponibles (selector "Vista"):
+    1. Ingresar — estado inicial (textarea vacío)
+    2. Ingresar — cargando (analizando)
+    3. Ingresar — preview válido (sin duplicado)
+    4. Ingresar — preview con duplicado detectado
+    5. Ingresar — error de parseo (422)
+    6. Historial — con datos (tabla)
+    7. Historial — estado vacío (sin reportes)
+    8. Historial — vacío con filtros activos
+    9. Estadísticas — sin coordenadas
+   10. Estadísticas — con datos (2+ ataques)
+   11. Estadísticas — primer ataque (gaps null)
+   12. Estadísticas — oasis sin reportes
+   13. Drawer detalle de reporte (abierto)
+
+  Controles:
+    - Toggle tema (claro / oscuro)
+    - Selector de vista
+    - Modo Editar: drag & drop con imán de 8px sobre rejilla
+    - Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec: docs/design/bd-ataques-oasis-ui.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Reportes de Oasis (playground)</title>
+<style>
+/* ===== TOKENS ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--danger:#C9352C;--info:#0A6FCC;
+  --success-subtle:rgba(36,138,61,.10);--danger-subtle:rgba(201,53,44,.08);--accent-subtle-border:rgba(138,100,24,.40);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --sidebar-w:200px;--topbar-h:52px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);--accent-subtle-border:rgba(203,176,121,.45);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);--accent-subtle-border:rgba(203,176,121,.45);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);font-size:12px;flex-shrink:0;z-index:200;
+  position:sticky;top:0;
+}
+.toolbar label{color:var(--text-secondary);}
+.toolbar select,.toolbar button{
+  font:inherit;font-size:12px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);
+  padding:3px 8px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.toolbar select:hover,.toolbar button:hover{background:var(--border);}
+.toolbar button.active{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent-text);}
+.tb-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== SHELL LAYOUT ===== */
+.shell{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+/* Topbar */
+.topbar{
+  height:var(--topbar-h);display:flex;align-items:center;
+  padding:0 20px;gap:12px;flex-shrink:0;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.tb-logo{
+  display:flex;align-items:center;gap:8px;
+  font-size:15px;font-weight:600;color:var(--text);text-decoration:none;
+}
+.tb-square{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-weight:700;font-size:12px;display:grid;place-items:center;
+}
+.topbar-end{margin-inline-start:auto;display:flex;align-items:center;gap:8px;}
+
+/* Sidebar */
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sidebar nav{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  position:relative;display:flex;align-items:center;gap:10px;
+  padding:8px 10px;border-radius:var(--radius-sm);
+  font-size:14px;width:100%;border:none;cursor:pointer;
+  background:transparent;color:var(--text);text-align:start;
+  transition:background var(--dur-fast);
+}
+.nav-item:hover{background:var(--surface-2);}
+.nav-item.active{
+  background:var(--accent-subtle);color:var(--accent-text);font-weight:500;
+}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.sidebar-footer{
+  border-top:1px solid var(--border);padding:12px 16px;
+  font-size:11px;font-family:var(--font-mono);color:var(--text-tertiary);
+}
+
+/* Content */
+.content{flex:1;overflow-y:auto;padding:28px 32px;}
+.page-header{margin-bottom:20px;}
+.page-header h1{font-size:28px;font-weight:600;letter-spacing:-0.02em;color:var(--text);}
+
+/* ===== TAB BAR ===== */
+.tab-bar{
+  display:flex;gap:0;border-bottom:1px solid var(--border);
+  margin-bottom:24px;
+}
+.tab-item{
+  padding:10px 16px;font-size:14px;cursor:pointer;
+  border:none;background:transparent;color:var(--text-secondary);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color var(--dur-fast),border-color var(--dur-fast);
+}
+.tab-item:hover{color:var(--text);}
+.tab-item.active{color:var(--accent-text);border-bottom-color:var(--accent);font-weight:500;}
+
+/* ===== BLOQUES ARRASTRABLES ===== */
+.blocks-container{
+  display:flex;flex-direction:column;gap:16px;
+  min-height:200px;
+}
+.block{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+}
+.block-label{
+  font-size:10px;font-family:var(--font-mono);
+  color:var(--text-tertiary);letter-spacing:.04em;text-transform:uppercase;
+  padding:6px 12px 4px;border-bottom:1px solid var(--border);
+  background:var(--surface-2);display:flex;align-items:center;gap:6px;
+}
+.block-label .drag-handle{cursor:grab;color:var(--border-strong);font-size:14px;user-select:none;}
+.edit-mode .block{cursor:grab;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.edit-mode .block:active{cursor:grabbing;}
+.block.dragging{opacity:0.4;}
+
+/* ===== INGEST TAB COMPONENTS ===== */
+.ingest-label{
+  font-size:13px;font-weight:500;color:var(--text-secondary);
+  margin-bottom:8px;
+}
+.report-textarea{
+  width:100%;min-height:140px;
+  font-family:var(--font-mono);font-size:12px;line-height:1.5;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);color:var(--text);
+  padding:10px 12px;resize:vertical;
+  transition:border-color var(--dur-fast);
+}
+.report-textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px var(--accent-subtle);}
+.report-textarea::placeholder{color:var(--text-tertiary);}
+.report-textarea.readonly-look{background:var(--surface-2);color:var(--text-secondary);cursor:default;}
+.ingest-actions{
+  display:flex;justify-content:flex-end;align-items:center;gap:8px;
+  margin-top:10px;
+}
+.kbd-hint{font-size:11px;font-family:var(--font-mono);color:var(--text-tertiary);margin-inline-end:auto;}
+
+/* Buttons */
+.btn-primary{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font:inherit;font-size:13px;font-weight:500;border:none;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:0.45;cursor:not-allowed;}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);
+  background:var(--surface);border:1px solid var(--border-strong);
+  color:var(--text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-secondary:hover{background:var(--surface-2);}
+.btn-ghost{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 10px;border-radius:var(--radius-sm);
+  background:transparent;border:none;
+  color:var(--text-secondary);font:inherit;font-size:13px;cursor:pointer;
+  transition:color var(--dur-fast),background var(--dur-fast);white-space:nowrap;
+}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);}
+.btn-danger{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);
+  background:var(--danger);color:#fff;
+  font:inherit;font-size:13px;font-weight:500;border:none;cursor:pointer;
+  transition:opacity var(--dur-fast);white-space:nowrap;
+}
+.btn-danger:hover{opacity:.88;}
+
+/* Progress bar (under textarea) */
+.parse-progress{
+  height:2px;background:var(--border);border-radius:1px;margin-top:4px;overflow:hidden;
+}
+.parse-progress-inner{
+  height:100%;background:var(--accent);border-radius:1px;
+  animation:progress-slide 1.4s ease-in-out infinite;
+  width:40%;
+}
+@keyframes progress-slide{
+  0%{transform:translateX(-150%);}
+  100%{transform:translateX(350%);}
+}
+
+/* Spinner */
+.spinner{
+  display:inline-block;width:13px;height:13px;
+  border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Preview metadata bar */
+.preview-meta{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);
+}
+.preview-meta .coord{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);}
+.preview-meta .sep{color:var(--text-disabled);}
+.preview-meta .date{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);}
+.preview-meta .village{font-size:12px;color:var(--text-secondary);}
+.preview-body{padding:16px;}
+
+/* Textarea collapsed */
+.textarea-collapsed{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;background:var(--surface-2);border-radius:var(--radius-sm);
+  border:1px solid var(--border);margin-bottom:8px;
+}
+.textarea-collapsed .text-snippet{
+  flex:1;font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.textarea-collapsed .expand-btn{
+  font-size:11px;color:var(--accent-text);background:none;border:none;
+  cursor:pointer;white-space:nowrap;
+}
+
+/* Duplicate banner */
+.dup-banner{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;margin-bottom:0;
+  background:var(--accent-subtle);
+  border-bottom:1px solid var(--accent-subtle-border);
+}
+.dup-banner .dup-icon{font-size:16px;color:var(--accent-text);flex-shrink:0;}
+.dup-banner .dup-text{font-size:13px;color:var(--text);}
+.dup-banner .dup-link{
+  font-size:13px;color:var(--accent-text);text-decoration:none;font-weight:500;
+  margin-inline-start:4px;white-space:nowrap;
+}
+.dup-banner .dup-link:hover{color:var(--accent-hover);}
+
+/* Error inline */
+.error-inline{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:10px 12px;margin-top:8px;
+  background:var(--danger-subtle);
+  border:1px solid var(--danger);border-radius:var(--radius-sm);
+}
+.error-inline .err-icon{font-size:14px;color:var(--danger);flex-shrink:0;margin-top:1px;}
+.error-inline .err-text{font-size:13px;color:var(--text);}
+
+/* TravianReport (simplified for mockup) */
+.troop-band{
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  overflow:hidden;margin-bottom:12px;
+}
+.troop-band-header{
+  padding:8px 14px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border);
+}
+.troop-band-header.attacker{background:rgba(201,53,44,.08);}
+.troop-band-header.defender{background:rgba(10,111,204,.08);}
+.troop-band-header .band-icon{font-size:15px;}
+.troop-band-header .band-title{
+  font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.troop-band-header.attacker .band-title{color:var(--danger);}
+.troop-band-header.defender .band-title{color:var(--accent-text);}
+.troop-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.troop-table th{
+  padding:6px 8px;background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;
+  letter-spacing:.04em;text-align:center;
+}
+.troop-table th:first-child{text-align:start;width:100px;}
+.troop-table td{
+  padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+}
+.troop-table td:first-child{text-align:start;font-family:var(--font-sans);font-size:12px;color:var(--text-secondary);}
+.row-sent{color:var(--text);}
+.row-lost{color:var(--danger);}
+.row-survived{color:var(--success);font-weight:600;}
+.stats-band{
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;
+}
+.stats-header{
+  padding:8px 14px;background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text);
+}
+.stats-row{display:flex;border-bottom:1px solid var(--border);}
+.stats-label{width:160px;padding:8px 12px;font-size:12px;color:var(--text-secondary);background:var(--surface-2);flex-shrink:0;}
+.stats-val{flex:1;padding:8px 12px;font-size:13px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+.stats-val.success{color:var(--success);}
+.stats-val.danger{color:var(--danger);}
+.stats-val.bold{font-weight:700;}
+
+/* Preview actions */
+.preview-actions{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding:12px 16px;border-top:1px solid var(--border);background:var(--surface-2);
+}
+
+/* ===== HISTORY TAB ===== */
+.filters-strip{
+  display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;
+  padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);
+}
+.filter-group{display:flex;flex-direction:column;gap:4px;}
+.filter-group label{font-size:11px;color:var(--text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.filter-input{
+  height:30px;padding:0 8px;font:inherit;font-size:13px;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);color:var(--text);width:90px;
+  transition:border-color var(--dur-fast);
+}
+.filter-input:focus{border-color:var(--accent);outline:none;}
+.filter-input.date-input{width:140px;}
+.filters-actions{display:flex;gap:6px;align-items:flex-end;margin-inline-start:auto;}
+
+.table-caption{
+  font-size:12px;color:var(--text-secondary);
+  padding:8px 16px;background:var(--surface);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;
+}
+.table-wrap{overflow-x:auto;}
+.hist-table{width:100%;border-collapse:collapse;text-align:start;}
+.hist-table thead th{
+  background:var(--surface-2);border-bottom:1px solid var(--border);
+  padding:0 14px;height:34px;text-align:start;
+  font-size:11px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--text-secondary);white-space:nowrap;
+}
+.hist-table tbody tr{cursor:pointer;transition:background var(--dur-fast);}
+.hist-table tbody tr:hover td{background:var(--surface-2);}
+.hist-table tbody td{
+  height:40px;padding:0 14px;border-bottom:1px solid var(--border);
+  vertical-align:middle;font-size:14px;white-space:nowrap;
+}
+.hist-table .col-date{font-family:var(--font-mono);font-size:13px;color:var(--text);}
+.hist-table .col-coords{font-family:var(--font-mono);font-size:13px;color:var(--text);font-weight:500;}
+.hist-table .col-village{font-size:13px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;}
+.hist-table .col-bounty{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--text);text-align:end;}
+.hist-table .col-losses{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;text-align:end;color:var(--text-secondary);}
+.hist-table .col-actions{text-align:end;width:80px;}
+.row-actions{display:inline-flex;gap:4px;align-items:center;}
+.row-btn{
+  width:28px;height:28px;border-radius:var(--radius-sm);
+  background:transparent;border:1px solid transparent;
+  display:grid;place-items:center;cursor:pointer;
+  font-size:14px;color:var(--text-secondary);
+  transition:background var(--dur-fast),color var(--dur-fast),border-color var(--dur-fast);
+}
+.row-btn:hover{background:var(--surface-2);border-color:var(--border);color:var(--text);}
+.row-btn.danger:hover{background:var(--danger-subtle);border-color:var(--danger);color:var(--danger);}
+.row-btn.accent{color:var(--accent-text);}
+.hist-total{
+  padding:10px 16px;background:var(--surface-2);border-top:1px solid var(--border);
+  font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;
+}
+.hist-total strong{font-family:var(--font-mono);color:var(--text);font-variant-numeric:tabular-nums;}
+
+/* Pagination */
+.pagination{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:12px;background:var(--surface);border-top:1px solid var(--border);
+}
+.page-info{font-size:12px;color:var(--text-secondary);}
+.page-btn{
+  height:28px;padding:0 10px;border-radius:var(--radius-sm);
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.page-btn:hover{background:var(--surface-2);color:var(--text);}
+.page-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+/* Empty state */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:64px 24px;text-align:center;
+}
+.empty-icon{
+  width:52px;height:52px;border-radius:var(--radius-full);
+  background:var(--surface-2);display:grid;place-items:center;
+  color:var(--text-tertiary);font-size:26px;
+}
+.empty-title{font-size:16px;font-weight:600;color:var(--text);}
+.empty-desc{font-size:14px;color:var(--text-secondary);max-width:300px;line-height:1.5;}
+
+/* ===== STATS TAB ===== */
+.stats-coords-strip{
+  display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;
+  margin-bottom:20px;
+}
+.stat-summary-bar{
+  padding:10px 16px;background:var(--surface-2);border-radius:var(--radius-md);
+  border:1px solid var(--border);margin-bottom:16px;
+  font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;
+}
+.stat-summary-bar strong{color:var(--text);}
+
+.stat-section-title{
+  font-size:17px;font-weight:600;color:var(--text);
+  margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);
+}
+.animal-table,.repop-table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+.animal-table thead th,.repop-table thead th{
+  background:var(--surface-2);border-bottom:1px solid var(--border);
+  padding:0 12px;height:34px;text-align:start;
+  font-size:11px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.04em;color:var(--text-secondary);
+}
+.animal-table thead th:not(:first-child),.repop-table thead th:not(:first-child){text-align:end;}
+.animal-table tbody td,.repop-table tbody td{
+  height:38px;padding:0 12px;border-bottom:1px solid var(--border);
+  font-size:13px;vertical-align:middle;
+}
+.animal-table tbody td:not(:first-child),.repop-table tbody td:not(:first-child){
+  text-align:end;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+}
+.val-null{color:var(--text-tertiary);}
+.val-success{color:var(--success);font-weight:500;}
+.val-danger{color:var(--danger);font-weight:500;}
+.interval-cell{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);}
+.first-attack-cell{font-size:11px;color:var(--text-disabled);font-style:italic;}
+
+/* ===== DRAWER ===== */
+.drawer-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:300;
+  display:none;
+}
+.drawer-overlay.open{display:block;}
+.drawer{
+  position:fixed;inset-block:0;inset-inline-end:0;
+  width:480px;background:var(--surface);
+  border-inline-start:1px solid var(--border);
+  box-shadow:var(--shadow-lg);z-index:301;
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(100%);transition:transform var(--dur-base) var(--ease);
+}
+.drawer.open{transform:translateX(0);}
+.drawer-header{
+  height:52px;padding:0 16px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);background:var(--surface);
+  position:sticky;top:0;flex-shrink:0;
+}
+.drawer-title{font-size:15px;font-weight:600;color:var(--text);flex:1;}
+.drawer-close{
+  width:28px;height:28px;border-radius:var(--radius-sm);
+  background:transparent;border:none;cursor:pointer;
+  color:var(--text-secondary);font-size:18px;
+  display:grid;place-items:center;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.drawer-close:hover{background:var(--surface-2);color:var(--text);}
+.drawer-body{flex:1;overflow-y:auto;padding:16px;}
+.drawer-meta{
+  font-size:12px;color:var(--text-secondary);
+  margin-bottom:16px;display:flex;flex-direction:column;gap:4px;
+}
+.drawer-meta .dmeta-row{display:flex;align-items:center;gap:6px;}
+.drawer-meta .dmeta-coord{font-family:var(--font-mono);font-weight:600;color:var(--text);}
+.drawer-meta .dmeta-sep{color:var(--text-disabled);}
+.drawer-footer{
+  padding:12px 16px;border-top:1px solid var(--border);
+  background:var(--surface-2);display:flex;justify-content:flex-end;
+}
+.drawer-hero{
+  margin-top:12px;padding:10px 12px;background:var(--surface-2);
+  border-radius:var(--radius-sm);border:1px solid var(--border);
+  font-size:12px;color:var(--text-secondary);
+}
+.drawer-hero strong{color:var(--text);}
+
+/* Popover confirm */
+.popover-confirm{
+  position:absolute;inset-block-start:100%;inset-inline-end:0;
+  margin-block-start:4px;z-index:400;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
+  padding:12px;min-width:200px;display:none;
+}
+.popover-confirm.open{display:block;}
+.popover-text{font-size:13px;color:var(--text);margin-bottom:10px;}
+.popover-actions{display:flex;justify-content:flex-end;gap:6px;}
+
+/* Toast */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;
+  width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  padding:10px 16px;border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-lg);font-size:13px;z-index:500;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  display:flex;align-items:center;gap:8px;
+}
+.toast.visible{opacity:1;transform:translateY(0);}
+
+/* SVG icon helper */
+svg.icon{display:inline-block;vertical-align:middle;flex-shrink:0;}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR PLAYGROUND ===== -->
+<div class="toolbar">
+  <label>Vista:</label>
+  <select id="viewSelect" onchange="switchView(this.value)">
+    <option value="1">1 · Ingresar — vacío</option>
+    <option value="2">2 · Ingresar — cargando</option>
+    <option value="3">3 · Ingresar — preview (sin dup.)</option>
+    <option value="4">4 · Ingresar — preview (con dup.)</option>
+    <option value="5">5 · Ingresar — error parseo</option>
+    <option value="6">6 · Historial — con datos</option>
+    <option value="7">7 · Historial — vacío</option>
+    <option value="8">8 · Historial — vacío con filtros</option>
+    <option value="9">9 · Estadísticas — sin coords</option>
+    <option value="10">10 · Estadísticas — con datos</option>
+    <option value="11">11 · Estadísticas — 1 ataque</option>
+    <option value="12">12 · Estadísticas — sin reportes</option>
+    <option value="13">13 · Drawer detalle</option>
+  </select>
+  <div class="tb-sep"></div>
+  <label>Tema:</label>
+  <button id="themeBtn" onclick="toggleTheme()">🌙 Oscuro</button>
+  <div class="tb-sep"></div>
+  <button id="editBtn" onclick="toggleEdit()">✏️ Modo editar</button>
+  <button id="saveBtn" onclick="saveLayout()" style="display:none">💾 Guardar</button>
+  <button id="resetBtn" onclick="resetLayout()" style="display:none">↺ Restablecer</button>
+  <button id="exportBtn" onclick="exportLayout()" style="display:none">⬇ Exportar JSON</button>
+</div>
+
+<!-- ===== SHELL ===== -->
+<div class="shell" id="appShell">
+
+  <!-- Topbar -->
+  <div style="position:absolute;top:0;left:0;right:0;height:var(--topbar-h);display:none;" id="topbar">
+    <!-- Topbar está integrada en la shell visual abajo -->
+  </div>
+
+  <!-- Layout completo como columna -->
+  <div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;">
+
+    <!-- Topbar real -->
+    <div class="topbar">
+      <div class="tb-logo">
+        <div class="tb-square">TB</div>
+        TravianBot
+      </div>
+      <div class="topbar-end">
+        <span style="font-size:12px;color:var(--text-tertiary)">🌙</span>
+        <span style="font-size:12px;color:var(--text-tertiary)">🌐</span>
+      </div>
+    </div>
+
+    <!-- Body (sidebar + content) -->
+    <div style="display:flex;flex:1;overflow:hidden;min-height:0;">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <nav>
+          <button class="nav-item">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Cuentas
+          </button>
+          <button class="nav-item">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="m9 11 3-3 3 3"/></svg>
+            Calculadora
+          </button>
+          <button class="nav-item active">
+            <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Reportes de oasis
+          </button>
+        </nav>
+        <div class="sidebar-footer">v0.1.0</div>
+      </div>
+
+      <!-- Main content -->
+      <div class="content" id="mainContent">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <h1>Reportes de oasis</h1>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tab-bar" id="tabBar">
+          <button class="tab-item" id="tabIngresar" onclick="switchTab('ingresar')">Ingresar</button>
+          <button class="tab-item" id="tabHistorial" onclick="switchTab('historial')">Historial</button>
+          <button class="tab-item" id="tabEstadisticas" onclick="switchTab('estadisticas')">Estadísticas</button>
+        </div>
+
+        <!-- Tab content container -->
+        <div id="tabContent"></div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer overlay + panel -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="detailDrawer">
+  <div class="drawer-header">
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Cerrar">×</button>
+    <div class="drawer-title">Reporte #42</div>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-meta">
+      <div class="dmeta-row">
+        <span class="dmeta-coord">(−32|−45)</span>
+        <span class="dmeta-sep">·</span>
+        <span>30.05.26, 16:28:53</span>
+        <span class="dmeta-sep">·</span>
+        <span>desde <strong>"00"</strong></span>
+      </div>
+      <div class="dmeta-row" style="color:var(--text-tertiary);font-size:11px;">
+        Guardado: 30.05.26, 17:00:02
+      </div>
+    </div>
+
+    <!-- TravianReport simplificado -->
+    <div class="troop-band">
+      <div class="troop-band-header attacker">
+        <span class="band-icon">⚔</span>
+        <span class="band-title">TÚ</span>
+      </div>
+      <table class="troop-table">
+        <thead><tr><th>Tropa</th><th>Leg.</th><th>Praet.</th></tr></thead>
+        <tbody>
+          <tr class="row-sent"><td>Enviadas</td><td>100</td><td>50</td></tr>
+          <tr class="row-lost"><td>Pérdidas</td><td>−5</td><td>0</td></tr>
+          <tr class="row-survived"><td>Superviv.</td><td>95</td><td>50</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="troop-band">
+      <div class="troop-band-header defender">
+        <span class="band-icon">🛡</span>
+        <span class="band-title">DEFENSOR</span>
+      </div>
+      <table class="troop-table">
+        <thead><tr><th>Animal</th><th>Rata</th><th>Araña</th><th>Oso</th></tr></thead>
+        <tbody>
+          <tr class="row-sent"><td>Presentes</td><td>12</td><td>8</td><td>3</td></tr>
+          <tr class="row-lost"><td>Muertos</td><td>−12</td><td>−8</td><td>−3</td></tr>
+          <tr class="row-survived"><td>Superviv.</td><td>0</td><td>0</td><td>0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stats-band">
+      <div class="stats-header">ESTADÍSTICAS</div>
+      <div class="stats-row"><div class="stats-label">Botín animales</div><div class="stats-val success">480 · 480 · 480 · 480</div></div>
+      <div class="stats-row"><div class="stats-label">Coste bajas</div><div class="stats-val danger">−120 · −0 · −0 · −0</div></div>
+      <div class="stats-row"><div class="stats-label">Neto</div><div class="stats-val bold success">+1.800</div></div>
+    </div>
+
+    <!-- Inventario héroe -->
+    <div class="drawer-hero">
+      <strong>Inventario del héroe:</strong>
+      200 🪵 &nbsp;·&nbsp; 300 🧱 &nbsp;·&nbsp; 100 ⛏ &nbsp;·&nbsp; 50 🌾
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-danger" onclick="closeDrawer()">Borrar reporte</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span>✓</span>
+  <span id="toastText">Reporte guardado</span>
+</div>
+
+<script>
+// ===== STATE =====
+let currentView = '1';
+let currentTab = 'ingresar';
+let editMode = false;
+let dragEl = null, dragOffX = 0, dragOffY = 0;
+
+// ===== THEME =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  document.getElementById('themeBtn').textContent = isDark ? '🌙 Oscuro' : '☀️ Claro';
+  localStorage.setItem('pg-theme', html.dataset.theme);
+}
+(function initTheme() {
+  const t = localStorage.getItem('pg-theme');
+  if (t) { document.documentElement.dataset.theme = t; document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️ Claro' : '🌙 Oscuro'; }
+})();
+
+// ===== VIEWS & TABS =====
+const VIEW_TO_TAB = {
+  '1':'ingresar','2':'ingresar','3':'ingresar','4':'ingresar','5':'ingresar',
+  '6':'historial','7':'historial','8':'historial',
+  '9':'estadisticas','10':'estadisticas','11':'estadisticas','12':'estadisticas',
+  '13':'ingresar'
+};
+
+function switchView(v) {
+  currentView = v;
+  const tab = VIEW_TO_TAB[v] || 'ingresar';
+  // update tab bar
+  ['ingresar','historial','estadisticas'].forEach(t => {
+    document.getElementById('tab'+capitalize(t)).classList.toggle('active', t === tab);
+  });
+  currentTab = tab;
+  renderContent();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['ingresar','historial','estadisticas'].forEach(t => {
+    document.getElementById('tab'+capitalize(t)).classList.toggle('active', t === tab);
+  });
+  // Switch to appropriate default view for the tab
+  const defaults = {ingresar:'1', historial:'6', estadisticas:'9'};
+  if (VIEW_TO_TAB[currentView] !== tab) {
+    currentView = defaults[tab];
+    document.getElementById('viewSelect').value = currentView;
+  }
+  renderContent();
+}
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ===== RENDER =====
+function renderContent() {
+  const el = document.getElementById('tabContent');
+  el.innerHTML = '';
+
+  switch (currentView) {
+    case '1': el.innerHTML = viewIngestEmpty(); break;
+    case '2': el.innerHTML = viewIngestLoading(); break;
+    case '3': el.innerHTML = viewIngestPreview(false); break;
+    case '4': el.innerHTML = viewIngestPreview(true); break;
+    case '5': el.innerHTML = viewIngestError(); break;
+    case '6': el.innerHTML = viewHistoryData(); break;
+    case '7': el.innerHTML = viewHistoryEmpty(false); break;
+    case '8': el.innerHTML = viewHistoryEmpty(true); break;
+    case '9': el.innerHTML = viewStatsEmpty(); break;
+    case '10': el.innerHTML = viewStatsData(true); break;
+    case '11': el.innerHTML = viewStatsData(false); break;
+    case '12': el.innerHTML = viewStatsNoReports(); break;
+    case '13': el.innerHTML = viewIngestPreview(false); openDrawer(); break;
+  }
+
+  if (editMode) { makeBlocksDraggable(); }
+}
+
+// === INGEST TAB VIEWS ===
+
+function blockWrap(id, label, content) {
+  return `<div class="block" id="${id}" data-block="${id}">
+    <div class="block-label"><span class="drag-handle" title="Arrastrar">⠿</span> <span style="letter-spacing:.04em">${label}</span></div>
+    <div style="padding:16px;">${content}</div>
+  </div>`;
+}
+
+function viewIngestEmpty() {
+  const textarea = `
+    <div class="ingest-label">Pega aquí el texto de tu reporte de Travian:</div>
+    <textarea class="report-textarea" placeholder="Server time: 12:34:56 (UTC +1:00)&#10;&#10;30.05.26, 16:28:53&#10;Oasis (−32|−45)&#10;..."></textarea>
+    <div class="ingest-actions">
+      <span class="kbd-hint">⌘↵ para analizar</span>
+      <button class="btn-primary" disabled>Analizar</button>
+    </div>
+  `;
+  return `<div class="blocks-container">
+    ${blockWrap('block-textarea','A · Textarea de reporte',textarea)}
+  </div>`;
+}
+
+function viewIngestLoading() {
+  const textarea = `
+    <div class="ingest-label">Pega aquí el texto de tu reporte de Travian:</div>
+    <textarea class="report-textarea readonly-look" readonly>Server time: 12:34:56 (UTC +1:00)
+
+30.05.26, 16:28:53
+Oasis (−32|−45)
+Aldea origen: "00" (−30|−40)
+...</textarea>
+    <div class="parse-progress"><div class="parse-progress-inner"></div></div>
+    <div class="ingest-actions">
+      <span class="kbd-hint">⌘↵ para analizar</span>
+      <button class="btn-primary" disabled><span class="spinner"></span> Analizando...</button>
+    </div>
+  `;
+  return `<div class="blocks-container">
+    ${blockWrap('block-textarea','A · Textarea (readonly — cargando)',textarea)}
+  </div>`;
+}
+
+function viewIngestPreview(hasDuplicate) {
+  const textareaCollapsed = `
+    <div class="textarea-collapsed">
+      <span class="text-snippet">Server time: 12:34:56 (UTC +1:00)  30.05.26, 16:28:53  Oasis (−32|−45)...</span>
+      <button class="expand-btn">ver texto completo ▾</button>
+    </div>
+    <button class="btn-secondary" style="font-size:12px;height:28px;padding:0 10px;">Analizar otro</button>
+  `;
+
+  const dupBanner = hasDuplicate ? `
+    <div class="dup-banner">
+      <span class="dup-icon">⚠</span>
+      <span class="dup-text">Este reporte ya está guardado.</span>
+      <a href="#" class="dup-link" onclick="openDrawer();return false;">Ver reporte #42 →</a>
+    </div>
+  ` : '';
+
+  const previewMeta = `
+    <div class="preview-meta">
+      <span class="coord">(−32|−45)</span>
+      <span class="sep">·</span>
+      <span class="date">30.05.26, 16:28:53 UTC+1</span>
+      <span class="sep">·</span>
+      <span class="village">desde <strong>"00"</strong></span>
+    </div>
+  `;
+
+  const report = `
+    <div class="preview-body">
+      <div class="troop-band">
+        <div class="troop-band-header attacker">
+          <span class="band-icon">⚔</span><span class="band-title">TÚ</span>
+        </div>
+        <table class="troop-table">
+          <thead><tr><th>Tropa</th><th>Legionario</th><th>Pretoriano</th></tr></thead>
+          <tbody>
+            <tr class="row-sent"><td>Enviadas</td><td>100</td><td>50</td></tr>
+            <tr class="row-lost"><td>Pérdidas</td><td>−5</td><td>0</td></tr>
+            <tr class="row-survived"><td>Superviv.</td><td>95</td><td>50</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="troop-band">
+        <div class="troop-band-header defender">
+          <span class="band-icon">🛡</span><span class="band-title">DEFENSOR (Nature)</span>
+        </div>
+        <table class="troop-table">
+          <thead><tr><th>Animal</th><th>Rata</th><th>Araña</th><th>Oso</th></tr></thead>
+          <tbody>
+            <tr class="row-sent"><td>Presentes</td><td>12</td><td>8</td><td>3</td></tr>
+            <tr class="row-lost"><td>Muertos</td><td>−12</td><td>−8</td><td>−3</td></tr>
+            <tr class="row-survived"><td>Superviv.</td><td>0</td><td>0</td><td>0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="stats-band">
+        <div class="stats-header">ESTADÍSTICAS</div>
+        <div class="stats-row"><div class="stats-label">Botín animales</div><div class="stats-val success">480 · 480 · 480 · 480 = 1.920</div></div>
+        <div class="stats-row"><div class="stats-label">Coste bajas atac.</div><div class="stats-val danger">−120 · −0 · −0 · −0</div></div>
+        <div class="stats-row"><div class="stats-label" style="font-weight:700;color:var(--text);">Neto</div><div class="stats-val bold success">+1.800</div></div>
+      </div>
+    </div>
+  `;
+
+  const actions = `
+    <div class="preview-actions">
+      <button class="btn-ghost">Descartar</button>
+      <button class="btn-primary" onclick="showToast('Reporte guardado')">${hasDuplicate ? 'Guardar de todos modos' : 'Guardar'}</button>
+    </div>
+  `;
+
+  const textareaBlock = blockWrap('block-textarea', 'A · Textarea (colapsada)', textareaBlock_inner(textareaCollapsed));
+  const previewBlock = `<div class="block" id="block-preview" data-block="block-preview">
+    <div class="block-label"><span class="drag-handle">⠿</span> ${hasDuplicate ? 'D · Preview con duplicado' : 'C · Preview del reporte'}</div>
+    ${dupBanner}
+    ${previewMeta}
+    ${report}
+    ${actions}
+  </div>`;
+
+  return `<div class="blocks-container">
+    ${textareaBlock}
+    ${previewBlock}
+  </div>`;
+}
+
+function textareaBlock_inner(content) {
+  return `<div style="padding:16px;">${content}</div>`;
+}
+
+function blockWrap2(id, label, content) {
+  return `<div class="block" id="${id}" data-block="${id}">
+    <div class="block-label"><span class="drag-handle">⠿</span> ${label}</div>
+    ${content}
+  </div>`;
+}
+
+function viewIngestError() {
+  const content = `
+    <div class="ingest-label">Pega aquí el texto de tu reporte de Travian:</div>
+    <textarea class="report-textarea">Server time: 12:34:56 (UTC +1:00)
+
+30.05.26, 16:28:53
+Oasis (−32|−45)
+Defensor
+Lobezno  Dragón
+Presentes   4      2
+Pérdidas    4      2</textarea>
+    <div class="error-inline">
+      <span class="err-icon">✕</span>
+      <span class="err-text">Nombres de animales no reconocidos: ['Lobezno', 'Dragón']. Revisa el texto pegado.</span>
+    </div>
+    <div class="ingest-actions">
+      <span class="kbd-hint">⌘↵ para analizar</span>
+      <button class="btn-primary">Analizar</button>
+    </div>
+  `;
+  return `<div class="blocks-container">
+    ${blockWrap('block-textarea','E · Textarea + error de parseo',content)}
+  </div>`;
+}
+
+// === HISTORY TAB ===
+function viewHistoryData() {
+  const filters = `<div class="block" id="block-filters" data-block="block-filters">
+    <div class="block-label"><span class="drag-handle">⠿</span> G · Filtros del historial</div>
+    <div class="filters-strip">
+      <div class="filter-group">
+        <label>Oasis X</label>
+        <input class="filter-input" type="number" placeholder="−32" value="−32">
+      </div>
+      <div class="filter-group">
+        <label>Oasis Y</label>
+        <input class="filter-input" type="number" placeholder="−45" value="−45">
+      </div>
+      <div class="filter-group">
+        <label>Desde</label>
+        <input class="filter-input date-input" type="date">
+      </div>
+      <div class="filter-group">
+        <label>Hasta</label>
+        <input class="filter-input date-input" type="date">
+      </div>
+      <div class="filters-actions">
+        <button class="btn-secondary" style="height:30px;font-size:12px;">Aplicar</button>
+        <button class="btn-ghost" style="height:30px;font-size:12px;">Limpiar</button>
+      </div>
+    </div>
+  </div>`;
+
+  const rows = [
+    ['30.05.26, 16:28','(−32|−45)','00','1.920','5'],
+    ['28.05.26, 09:14','(−32|−45)','00','1.440','12'],
+    ['25.05.26, 14:02','(−32|−45)','Granero','960','0'],
+    ['22.05.26, 11:30','(10|12)','Colonia','2.400','3'],
+    ['19.05.26, 08:00','(10|12)','Colonia','1.920','8'],
+  ].map((r, i) => `<tr>
+    <td class="col-date">${r[0]}</td>
+    <td class="col-coords">${r[1]}</td>
+    <td class="col-village">${r[2]}</td>
+    <td class="col-bounty">${r[3]}</td>
+    <td class="col-losses">${r[4]}</td>
+    <td class="col-actions">
+      <div class="row-actions" style="position:relative;">
+        <button class="row-btn danger" title="Borrar reporte" onclick="event.stopPropagation()">🗑</button>
+        <button class="row-btn accent" title="Ver detalle" onclick="openDrawer();event.stopPropagation()">▶</button>
+      </div>
+    </td>
+  </tr>`).join('');
+
+  const table = `<div class="block" id="block-table" data-block="block-table">
+    <div class="block-label"><span class="drag-handle">⠿</span> H · Tabla del historial</div>
+    <div class="table-caption">
+      <span>143 reportes</span>
+      <span style="color:var(--text-disabled)">·</span>
+      <span>filtro activo: Oasis (−32|−45)</span>
+    </div>
+    <div class="table-wrap">
+      <table class="hist-table">
+        <thead><tr>
+          <th>Fecha</th><th>Oasis</th><th>Desde</th><th style="text-align:end">Botín</th><th style="text-align:end">Bajas</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="hist-total">
+      Botín acumulado en este filtro: <strong>8.640</strong>
+    </div>
+    <div class="pagination">
+      <button class="page-btn" disabled>← Anterior</button>
+      <span class="page-info">1–5 de 143</span>
+      <button class="page-btn">Siguiente →</button>
+    </div>
+  </div>`;
+
+  return `<div class="blocks-container">${filters}${table}</div>`;
+}
+
+function viewHistoryEmpty(withFilters) {
+  const filters = `<div class="block" id="block-filters" data-block="block-filters">
+    <div class="block-label"><span class="drag-handle">⠿</span> G · Filtros del historial</div>
+    <div class="filters-strip">
+      <div class="filter-group"><label>Oasis X</label><input class="filter-input" type="number" placeholder="−32" ${withFilters?'value="-32"':''}></div>
+      <div class="filter-group"><label>Oasis Y</label><input class="filter-input" type="number" placeholder="−45" ${withFilters?'value="-45"':''}></div>
+      <div class="filter-group"><label>Desde</label><input class="filter-input date-input" type="date"></div>
+      <div class="filter-group"><label>Hasta</label><input class="filter-input date-input" type="date"></div>
+      <div class="filters-actions">
+        <button class="btn-secondary" style="height:30px;font-size:12px;">Aplicar</button>
+        <button class="btn-ghost" style="height:30px;font-size:12px;">Limpiar</button>
+      </div>
+    </div>
+  </div>`;
+
+  const emptyBlock = `<div class="block" id="block-empty" data-block="block-empty">
+    <div class="block-label"><span class="drag-handle">⠿</span> H · Estado vacío</div>
+    <div class="empty-state">
+      <div class="empty-icon">🐀</div>
+      <p class="empty-title">${withFilters ? 'No hay reportes para estos filtros.' : 'Aún no hay reportes de oasis.'}</p>
+      <p class="empty-desc">${withFilters ? 'Prueba a cambiar o limpiar los filtros.' : 'Pega tu primer reporte en la tab Ingresar.'}</p>
+      ${withFilters
+        ? '<button class="btn-secondary">Limpiar filtros</button>'
+        : '<button class="btn-secondary" onclick="switchView(\'1\');switchTab(\'ingresar\')">Ir a Ingresar →</button>'
+      }
+    </div>
+  </div>`;
+
+  return `<div class="blocks-container">${filters}${emptyBlock}</div>`;
+}
+
+// === STATS TAB ===
+function viewStatsEmpty() {
+  const coordsBlock = `<div class="block" id="block-stats-coords" data-block="block-stats-coords">
+    <div class="block-label"><span class="drag-handle">⠿</span> I · Coordenadas del oasis</div>
+    <div style="padding:16px;">
+      <div class="stats-coords-strip">
+        <div class="filter-group"><label>X</label><input class="filter-input" type="number" placeholder="−32"></div>
+        <div class="filter-group"><label>Y</label><input class="filter-input" type="number" placeholder="−45"></div>
+        <button class="btn-primary" style="align-self:flex-end;">Ver estadísticas</button>
+      </div>
+      <div class="empty-state" style="padding:40px 24px;">
+        <div class="empty-icon" style="font-size:20px;">📊</div>
+        <p class="empty-desc">Introduce las coordenadas de un oasis para ver su historial de animales y repoblación.</p>
+      </div>
+    </div>
+  </div>`;
+  return `<div class="blocks-container">${coordsBlock}</div>`;
+}
+
+function viewStatsData(multiAttack) {
+  const coordsStrip = `
+    <div class="stats-coords-strip">
+      <div class="filter-group"><label>X</label><input class="filter-input" type="number" value="-32"></div>
+      <div class="filter-group"><label>Y</label><input class="filter-input" type="number" value="-45"></div>
+      <button class="btn-primary" style="align-self:flex-end;">Ver estadísticas</button>
+    </div>
+  `;
+
+  const summary = `<div class="stat-summary-bar">
+    <strong>7 ataques</strong>
+    <span style="color:var(--text-disabled)">·</span>
+    <span>primero: 01.05.26</span>
+    <span style="color:var(--text-disabled)">·</span>
+    <span>último: 30.05.26</span>
+  </div>`;
+
+  const animalRows = [
+    ['Rata','6/7','10.3','15','6'],
+    ['Araña','4/7','8.0','12','5'],
+    ['Oso','3/7','5.3','9','3'],
+  ].map(r => `<tr>
+    <td>${r[0]}</td>
+    <td class="${multiAttack?'':'val-null'}">${r[1]}</td>
+    <td>${r[2]}</td>
+    <td>${r[3]}</td>
+    <td>${r[4]}</td>
+  </tr>`).join('');
+
+  const animalsTable = `<div class="block" id="block-animals" data-block="block-animals">
+    <div class="block-label"><span class="drag-handle">⠿</span> J · Animales observados</div>
+    <div style="padding:16px;">
+      <div class="stat-section-title">Animales observados</div>
+      <table class="animal-table">
+        <thead><tr><th>Animal</th><th>Apariciones</th><th>Prom.</th><th>Máx</th><th>Mín</th></tr></thead>
+        <tbody>${animalRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  const repopRows = multiAttack ? [
+    ['30.05.26, 16:28','6 h 14 min','+9','+3','—'],
+    ['28.05.26, 09:14','3 h 02 min','+5','—','—'],
+    ['25.05.26, 14:02','2 d 1 h','+7','+2','+1'],
+    ['22.05.26, 11:30','— (primer ataque)','—','—','—'],
+  ] : [
+    ['30.05.26, 16:28','— (primer ataque)','—','—','—'],
+  ];
+
+  const repopRowsHtml = repopRows.map(r => `<tr>
+    <td style="font-family:var(--font-mono);font-size:12px;">${r[0]}</td>
+    <td class="${r[1].includes('primer') ? 'first-attack-cell' : 'interval-cell'}">${r[1]}</td>
+    <td class="${r[2]==='—' ? 'val-null' : 'val-success'}">${r[2]}</td>
+    <td class="${r[3]==='—' ? 'val-null' : 'val-success'}">${r[3]}</td>
+    <td class="${r[4]==='—' ? 'val-null' : 'val-success'}">${r[4]}</td>
+  </tr>`).join('');
+
+  const repopTable = `<div class="block" id="block-repop" data-block="block-repop">
+    <div class="block-label"><span class="drag-handle">⠿</span> K · Repoblación y regeneración</div>
+    <div style="padding:16px;">
+      <div class="stat-section-title">Repoblación y regeneración</div>
+      <div style="overflow-x:auto;">
+        <table class="repop-table">
+          <thead><tr>
+            <th>Ataque</th><th>Intervalo</th>
+            <th>Ratas regen.</th><th>Arañas regen.</th><th>Osos regen.</th>
+          </tr></thead>
+          <tbody>${repopRowsHtml}</tbody>
+        </table>
+      </div>
+      ${!multiAttack ? '<p style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">Solo hay un ataque registrado para este oasis. La regeneración se calcula a partir del segundo ataque.</p>' : ''}
+    </div>
+  </div>`;
+
+  return `<div class="block" id="block-stats-coords" data-block="block-stats-coords">
+    <div class="block-label"><span class="drag-handle">⠿</span> I · Coordenadas del oasis</div>
+    <div style="padding:16px;">${coordsStrip}${summary}</div>
+  </div>
+  <div class="blocks-container">${animalsTable}${repopTable}</div>`;
+}
+
+function viewStatsNoReports() {
+  return `<div class="block" id="block-stats-coords" data-block="block-stats-coords">
+    <div class="block-label"><span class="drag-handle">⠿</span> I · Coordenadas + sin reportes</div>
+    <div style="padding:16px;">
+      <div class="stats-coords-strip">
+        <div class="filter-group"><label>X</label><input class="filter-input" type="number" value="-99"></div>
+        <div class="filter-group"><label>Y</label><input class="filter-input" type="number" value="200"></div>
+        <button class="btn-primary" style="align-self:flex-end;">Ver estadísticas</button>
+      </div>
+      <div class="empty-state" style="padding:40px 24px;">
+        <div class="empty-icon">🐀</div>
+        <p class="empty-title">No hay reportes para (−99|200).</p>
+        <p class="empty-desc">Añade el primero desde la tab Ingresar.</p>
+        <button class="btn-secondary" onclick="switchView('1');switchTab('ingresar')">Ir a Ingresar →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ===== DRAWER =====
+function openDrawer() {
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('detailDrawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('detailDrawer').classList.remove('open');
+}
+
+// ===== TOAST =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 3000);
+}
+
+// ===== EDIT MODE / DRAG & DROP =====
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('editBtn');
+  btn.classList.toggle('active', editMode);
+  btn.textContent = editMode ? '✏️ Editando…' : '✏️ Modo editar';
+  ['saveBtn','resetBtn','exportBtn'].forEach(id => {
+    document.getElementById(id).style.display = editMode ? '' : 'none';
+  });
+  if (editMode) makeBlocksDraggable();
+  else removeBlocksDraggable();
+}
+
+const SNAP = 8;
+function snap(v) { return Math.round(v / SNAP) * SNAP; }
+
+function makeBlocksDraggable() {
+  document.querySelectorAll('.block').forEach(b => {
+    b.style.cursor = 'grab';
+    b.addEventListener('mousedown', onBlockDown, {passive:false});
+  });
+}
+function removeBlocksDraggable() {
+  document.querySelectorAll('.block').forEach(b => {
+    b.style.cursor = '';
+    b.removeEventListener('mousedown', onBlockDown);
+  });
+}
+
+function onBlockDown(e) {
+  if (!editMode) return;
+  if (e.target.closest('button,input,textarea,select,a')) return;
+  dragEl = e.currentTarget;
+  const rect = dragEl.getBoundingClientRect();
+  dragOffX = e.clientX - rect.left;
+  dragOffY = e.clientY - rect.top;
+  dragEl.style.position = 'relative';
+  dragEl.classList.add('dragging');
+  document.addEventListener('mousemove', onDocMove);
+  document.addEventListener('mouseup', onDocUp);
+  e.preventDefault();
+}
+
+let positions = {};
+function onDocMove(e) {
+  if (!dragEl) return;
+  const container = dragEl.parentElement.getBoundingClientRect();
+  let x = snap(e.clientX - container.left - dragOffX);
+  let y = snap(e.clientY - container.top - dragOffY);
+  dragEl.style.transform = `translate(${x}px, ${y}px)`;
+  positions[dragEl.dataset.block] = {x, y};
+}
+function onDocUp() {
+  if (dragEl) {
+    dragEl.classList.remove('dragging');
+    dragEl = null;
+  }
+  document.removeEventListener('mousemove', onDocMove);
+  document.removeEventListener('mouseup', onDocUp);
+}
+
+// ===== SAVE / RESET / EXPORT =====
+const STORAGE_KEY = 'pg-bd-ataques-layout';
+function saveLayout() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({view: currentView, positions, tab: currentTab}));
+  showToast('Layout guardado');
+}
+function resetLayout() {
+  localStorage.removeItem(STORAGE_KEY);
+  positions = {};
+  document.querySelectorAll('.block').forEach(b => { b.style.transform = ''; b.style.position = ''; });
+  showToast('Layout restablecido');
+}
+function exportLayout() {
+  const data = JSON.stringify({view: currentView, tab: currentTab, positions}, null, 2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json,' + encodeURIComponent(data);
+  a.download = 'bd-ataques-oasis-layout.json';
+  a.click();
+}
+function loadSavedLayout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.view) { currentView = saved.view; document.getElementById('viewSelect').value = saved.view; }
+    positions = saved.positions || {};
+    renderContent();
+    // Apply saved positions
+    setTimeout(() => {
+      Object.entries(positions).forEach(([id, pos]) => {
+        const el = document.querySelector(`[data-block="${id}"]`);
+        if (el) { el.style.transform = `translate(${pos.x}px,${pos.y}px)`; el.style.position = 'relative'; }
+      });
+    }, 50);
+  } catch {}
+}
+
+// ===== INIT =====
+(function init() {
+  switchView('1');
+  loadSavedLayout();
+})();
+</script>
+</body>
+</html>

@@ -236,6 +236,35 @@ export const api = {
     return request('GET', `/catalog/icons?${params}`)
   },
 
+  // ── Human Sessions ────────────────────────────────────────────────────────
+  // OJO: estos endpoints son DISTINTOS de getSession/startSession/stopSession
+  // que gestionan la sesión de login bajo /accounts/:id/worlds/:worldId/session.
+  // Estos son /worlds/:worldId/session (Human Sessions — calendario de actividad).
+
+  /** GET /worlds/:worldId/session → estado actual de Human Sessions */
+  getWorldSession: (worldId) =>
+    request('GET', `/worlds/${worldId}/session`),
+
+  /** GET /worlds/:worldId/session/timeline → 7 días de timeline */
+  getWorldTimeline: (worldId) =>
+    request('GET', `/worlds/${worldId}/session/timeline`),
+
+  /** GET /worlds/:worldId/session/timeline/:weekday → timeline de un día (0=lun..6=dom) */
+  getWorldTimelineDay: (worldId, weekday) =>
+    request('GET', `/worlds/${worldId}/session/timeline/${weekday}`),
+
+  /** PUT /worlds/:worldId/session/timeline/:weekday → { blocks, jitter_minutes? } */
+  putWorldTimelineDay: (worldId, weekday, body) =>
+    request('PUT', `/worlds/${worldId}/session/timeline/${weekday}`, body),
+
+  /** PUT /worlds/:worldId/session/mode → { mode } */
+  putWorldMode: (worldId, mode) =>
+    request('PUT', `/worlds/${worldId}/session/mode`, { mode }),
+
+  /** DELETE /worlds/:worldId/session/override → cancela el override manual (204, idempotente) */
+  deleteWorldOverride: (worldId) =>
+    request('DELETE', `/worlds/${worldId}/session/override`),
+
   // TODO: endpoint pendiente — POST /farm/schedulers/:schedulerId/toggle (pausar/activar)
   // No existe aún en el backend. El frontend llama a updateScheduler para toggle.
 
@@ -257,59 +286,65 @@ export const api = {
   runSchedulerNow: (worldId, schedulerId) =>
     request('POST', `/farm/worlds/${worldId}/schedulers/${schedulerId}/run-now`),
 
-  // ── Reportes de ataques a oasis ─────────────────────────────────────────────
+  // ── Reportes de ataque / oasis ────────────────────────────────────────────
 
   /**
-   * POST /attack-reports/parse
-   * Body: { raw_text }
-   * Response: { attacked_at, utc_offset, coord_x_dest, coord_y_dest,
-   *             origin_village_name, attacker_troops[], animals[], bounty{...},
-   *             hero_inventory (null | {wood,clay,iron,crop}),
-   *             already_exists, existing_id }
-   * Throws ApiError (status 422 con detail legible si parse falla)
+   * GET /attack-reports/oasis → { total, items: [...] }
+   * EP-08: Lista todos los oasis con reportes ordenados por último ataque DESC.
+   * Cada item: { coord_x_dest, coord_y_dest, attack_count, last_attack, total_bounty }
    */
-  parseAttackReport: (raw_text) =>
-    request('POST', '/attack-reports/parse', { raw_text }),
+  listOasisSummaries: () =>
+    request('GET', '/attack-reports/oasis'),
 
   /**
-   * POST /attack-reports
-   * Body: { raw_text }
-   * Response: 201 { id, attacked_at, utc_offset, coord_x_dest, coord_y_dest, origin_village_name }
-   * Throws ApiError (status 409 si duplicado)
+   * GET /attack-reports/stats/oasis?x=<int>&y=<int>
+   * EP-06: Estadísticas de un oasis (apariciones, repoblación, animal_regen_rates).
    */
-  saveAttackReport: (raw_text) =>
-    request('POST', '/attack-reports', { raw_text }),
+  getOasisStats: (x, y) =>
+    request('GET', `/attack-reports/stats/oasis?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}`),
 
   /**
-   * GET /attack-reports?x=&y=&from_date=&to_date=&limit=&offset=
-   * Response: { items: [...], total, cumulative_bounty }
+   * GET /attack-reports → lista paginada de reportes
+   * Parámetros opcionales: x, y, fromDt, toDt, page, pageSize.
    */
-  getAttackReports: (queryString = '') =>
-    request('GET', `/attack-reports${queryString ? '?' + queryString : ''}`),
+  getAttackReports: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.x != null)  qs.set('x', params.x)
+    if (params.y != null)  qs.set('y', params.y)
+    if (params.fromDt)     qs.set('from_dt', params.fromDt)
+    if (params.toDt)       qs.set('to_dt', params.toDt)
+    if (params.page)       qs.set('page', params.page)
+    if (params.pageSize)   qs.set('page_size', params.pageSize)
+    const q = qs.toString()
+    return request('GET', `/attack-reports${q ? '?' + q : ''}`)
+  },
 
   /**
-   * GET /attack-reports/{id}
-   * Response: detalle completo (misma shape que parse)
+   * GET /attack-reports/:id → detalle completo de un reporte.
    */
   getAttackReport: (id) =>
     request('GET', `/attack-reports/${id}`),
 
   /**
-   * DELETE /attack-reports/{id} → 204
+   * POST /attack-reports/parse → parsear texto de reporte.
+   */
+  parseAttackReport: (raw_text) =>
+    request('POST', '/attack-reports/parse', { raw_text }),
+
+  /**
+   * POST /attack-reports → guardar reporte parseado.
+   */
+  saveAttackReport: (data) =>
+    request('POST', '/attack-reports', data),
+
+  /**
+   * DELETE /attack-reports/:id → 204.
    */
   deleteAttackReport: (id) =>
     request('DELETE', `/attack-reports/${id}`),
 
-  /**
-   * GET /attack-reports/stats/oasis?x=&y=
-   * Response: { coord_x_dest, coord_y_dest, total_attacks, first_attack, last_attack,
-   *             animal_appearances[], repopulation_gaps[] }
-   * Si sin datos → total_attacks 0 y listas vacías
-   */
-  getOasisStats: (x, y) =>
-    request('GET', `/attack-reports/stats/oasis?x=${x}&y=${y}`),
-
   // ── Combate ───────────────────────────────────────────────────────────────
+  // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 
   combat: {
     /**
