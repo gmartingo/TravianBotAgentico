@@ -5,7 +5,7 @@ metadata:
   type: project
 ---
 
-Spec simulador/optimizador A+B: `docs/specs/simulador-combate.md`. Estado actual: **`draft`** — pendiente de revisión v4 de `desarrollador-apis` por dos cambios breaking en el response (2026-05-29). Después de la revisión, volver a `ready-for-impl`.
+Spec simulador/optimizador A+B: `docs/specs/simulador-combate.md`. Estado actual: **`implemented`** (2026-05-29, 850 tests pasan). Addendum "Modificadores visibles" añadido el 2026-05-30, estado del addendum: **`ready-for-impl`**.
 
 Spec Modo C (multi-raid): `docs/specs/optimizador-multi-raid.md`. Estado: **`ready-for-impl`** (2026-05-29). Pendiente validación formal de contrato por `desarrollador-apis` (campo `apis_validadas_por_desarrollador_apis: false`). El analista hizo revisión manual.
 
@@ -51,6 +51,28 @@ Recomendada: **`pymoo`** (NSGA-II). Fallback: búsqueda por muestreo discreto (p
 - Tabla `WALL_GID_BY_TRIBE`: en `core/use_cases/combat_engine.py` (dict estático)
 - Tabla inf/cav/catapultas/arietes por tribu: en `core/use_cases/combat_engine.py` (dict estático)
 - `GameDataPort.get_building_defense_bonus(gid, level)` y `get_building_stats(gid, level)`: verificar existencia en `core/ports/game_data_port.py`
+
+## Addendum 2026-05-30 — Modificadores visibles (estado: ready-for-impl)
+
+### Campos de request que el frontend NO enviaba (ya en Pydantic, solo faltaba el frontend)
+`attacker.morale` (ge=30, le=100), `attacker.artifacts.diet`, `defenders[].artifacts.strong_buildings`, `wall.wall_tribe`, `attacker.rams`, `attacker.catapult_targets`, `config.distance_fields`, `config.server_speed`.
+- TODOS ya están en los DTOs Pydantic — NO hace falta cambiar el backend para recibirlos.
+- Excepción: `morale` se valida con 422 (no se clampea — desviación documentada).
+
+### Campos NUEVOS en CombatResult (intermedias de la cadena de cálculo)
+Atacante: `attacker_attack_base` (A_base L572), `attacker_attack_with_hero` (A_con_heroe L576), `attacker_attack_with_alliance` (A_total L579), `morale_factor` (moral/100, L590), `attacker_cavalry_ratio` (prop_cav L605).
+Defensor: `defender_defense_base` (D_base L648), `hero_defense_bonus_avg_pct` (hero_def_bonus_pct L661), `defender_defense_with_hero` (D_con_heroe L664), `wall_multiplier` (L671), `stonemason_multiplier` (1+0.05×nivel — calcular en simulate_combat tras resolve_wall_multiplier, no modificar la firma del helper).
+Combate: `combat_factor_k` (K L682), `total_units_on_field` (total_units L679), `attacker_loss_pct` (float|null), `defender_loss_pct` (float|null) — null en EC-01.
+Ya implementados (2026-05-29, documentar formalmente): `attacker_infantry_power`, `attacker_cavalry_power`, `defender_infantry_power`, `defender_cavalry_power`.
+
+### Campos por tropa (TroopResult)
+`smithy_multiplier_attack` (float|null — para atacante), `smithy_multiplier_def_inf` (float|null — para defensor), `smithy_multiplier_def_cav` (float|null — para defensor). Ratio eff/base; 1.0 si smithy=0; null si stat_base==0.
+
+### Reglas de UI (sin diseño visual, solo lógica)
+- Mini-tarjeta "Modificadores activos": reactiva (sin API), calculada sobre estado del form. Muestra solo los modificadores no-default. Si todos en default → "Sin modificadores activos" en gris (no se oculta).
+- Cadena de cálculo: colapsable por defecto en V3. Una línea por paso de cálculo; omite pasos con valor default. Sub-bloque "Smithy por tropa" solo si alguna tropa tiene smithy > 0.
+- Catapultas/arietes ocultos en modo raid. Arietes deshabilitados si wall_level=0.
+- Degradación silenciosa si falta campo intermedio (versión vieja de server).
 
 [[project-arch-conventions]]
 [[project-kirilloid-scraper]]

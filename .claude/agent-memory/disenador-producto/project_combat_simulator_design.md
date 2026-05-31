@@ -6,40 +6,70 @@ metadata:
 ---
 
 Spec de diseño: docs/design/simulador-combate-ui.md (estado: ready-for-impl).
-Mockup editable: frontend/mockups/simulador-combate.playground.html (pendiente aprobación usuario).
+Mockup editable: frontend/mockups/simulador-combate.playground.html (pendiente aprobación usuario — vista 7 resincronizada 2026-05-30).
 Spec funcional relacionado: docs/specs/simulador-combate.md.
 
 La pestaña "Calculadora" vive en WorldSpacePage como nav item 'calc'. Para activarla:
 quitar `disabled: true` y `soon: true` del nav item 'calc' en WorldSpacePage.jsx (líneas ~356-359).
 
-Estructura de la pestaña:
-- Segmento superior: "Simulador" / "Optimizador" (mismo patrón que mode-toggle de farm lists).
-- Layout desktop (≥ lg): split horizontal — formulario fijo 420px izquierda / resultado flex:1 derecha.
-- Layout móvil (< md): formulario arriba, resultado abajo. Cuando hay resultado, el formulario se colapsa en banner colapsable.
+**LAYOUT REAL DEL CÓDIGO (actualizado 2026-05-30):**
+El código real usa columna única (maxWidth:720px, margin:0 auto, flexDirection:'column').
+NO hay split formulario/resultado de 2 columnas. El spec original describía ese layout pero el
+código implementó columna única. El mockup vista 7 ya refleja esto.
 
-Decisiones clave de diseño:
-- Todas las tropas de la tribu siempre visibles (nunca añadir/quitar) — tropas con qty=0 atenuadas al 45%.
-- Tribu NATURE como defensor por defecto (caso oasis, job principal del usuario).
-- Toggle Saqueo/Ataque: modo Saqueo por defecto (RN-13); los campos de catapultas/arietes aparecen solo en modo Ataque.
-- Configuración avanzada (exponente, artefactos, pesos) en paneles colapsables cerrados por defecto.
-- Badge de resultado como primer elemento visual P1: color (verde/rojo) + icono + texto (accesibilidad — nunca solo color).
-- Recursos de animales muertos: desglose por tipo (madera/arcilla/hierro/trigo) con iconos de recurso. Nunca un total único.
-- Pérdidas en recursos: panel colapsable P2, arranca cerrado.
-- Daño estructural: solo visible cuando `structural_damage !== null` (solo modo Ataque).
+Estructura real de CombatCalculator.jsx:
+- Cabecera: h2 "Calculadora de combate" + div[role=tablist] con 2 botones (Simulador/Optimizador)
+  inline al lado del título — NO es un segmento separado.
+- Modo simulador: ArmyPanel atacante → ArmyPanel defensor → ArmyPanel refuerzo(s) → btn "Añadir
+  refuerzo" (dashed full-width) → btn "Simular" (primario full-width 40px) → CombatResult.
+- Modo optimizador: OptimizerPanel → OptimizerResult.
 
-Optimizador:
-- Modo A (tipos libres): lista de tropas con checkbox + smithy (deshabilitado si no marcado).
-- Modo B (tropas con cantidades): misma lista con input de disponible + smithy.
-- 10 animales NATURE siempre fijos como defensa del oasis (sin añadir/quitar).
-- Pesos de optimización: sliders min=0 max=2 step=0.1, colapsados P3.
-- Tabla de alternativas: iconos de tropas apilados (máx 4 + "+N más"), badge gana/no gana, números mono.
-- Detalle de alternativa: inline debajo de la tabla al hacer clic en fila (no modal).
-- Banner "Sin combinación ganadora": solo cuando `has_winning_combination: false`.
+**ArmyPanel.jsx — estructura real:**
+- Header: icon SVG de rol (espada/escudo) + label UPPERCASE 13px + btn colapsar (chevron).
+  Refuerzo añade btn papelera antes del chevron.
+- Body: fila controles inline → bloque héroe expandible (opcional) → mods-card (ADD) →
+  TribeBar (chips) → TroopGrid (horizontal).
+- Controles atacante inline: AttackTypeToggle (pill Saqueo/Ataque, height 26px) +
+  AllianceBonusSelect (select 26px) + ArtifactSelect (select 26px) + btn Héroe (expand).
+- Controles defensor inline: escudo SVG + NumInput muro 42px + ⚒ + NumInput cantero 42px +
+  AllianceBonusSelect + btn Héroe (expand).
+- Héroe expandido (inline, no bloque aparte): flex-wrap con campos "Pts. ataque/defensa héroe"
+  (70px) y "Bonus % héroe" (60px), fondo surface-2 padding 10px 12px.
 
-Componentes nuevos principales a crear: CalcTab, ModeSegment, TribeSelector, TroopInputList, TroopResultTable, LootPanel, ResourceLossPanel, StructuralDamagePanel, WarningChips, AlternativeTable, AlternativeDetail, NatureDefenseInput, OptimizationWeightsPanel.
+**TribeBar.jsx — chips 44px:**
+Chips circulares `width:44px height:44px border-radius:full`. Iniciales 2 letras mayúsculas.
+Activo: border+outline 2px accent + fondo TRIBE_COLORS por tribu. NO dropdown.
+Atacante: 7 tribus (sin Nature). Defensor/refuerzo: 8 tribus (Nature primero).
 
-Componentes reutilizados: Spinner, showToast, ErrorBoundary, useI18n, api.getCatalogIcons, patrón FormField/inputBase.
+**TroopGrid.jsx — grid horizontal:**
+overflow-x:auto. Columna de etiquetas (escudo SVG 14px + yunque SVG 14px) + N columnas tropa.
+Cada columna: icono 28px / input qty 52×28px / input smithy 52×24px (transparent border).
+qty=0 → opacity:0.45. Defensor no usa smithy (showSmithy siempre true en el código actual).
 
-**Why:** La Calculadora es una herramienta de decisión pre-ataque. El usuario llega con una pregunta concreta y necesita el resultado rápido. El split formulario/resultado en desktop permite iterar sin perder contexto.
+**TravianReport.jsx — resultado real:**
+- Pill badge (winner) + ratio string font-mono.
+- TroopBand "Tú": tabla table-layout:fixed, col "Tropa" 104px fixed + cols tropa reparto.
+  thead: iconos. tbody: 3 filas (Enviadas / Pérdidas / Supervivientes). Scroll horizontal en overflow-x:auto.
+- TroopBand "Defensor" (y refuerzos si los hay): misma estructura.
+- StatsTable: tabla fuerza (inf/cav con GameIcon png + % col) + sub-tabla recursos
+  (col lbl 180px + W/C/I/C + Σ 88px). Filas: Botín animales (verde) + Coste tropas (rojo) +
+  Neto (verde/rojo/grey, negrita). Neto tiene background surface-2.
+- Warnings: pills accent-subtle si result.warnings.length > 0.
+- NO hay "Botín potencial", "Consumo trigo", ni "Pérdidas en recursos" colapsable.
 
-**How to apply:** Al implementar, respetar el split 420px/flex. Las tablas de resultado usan el mismo patrón de tablas densas establecido en DESIGN.md §12 (hairline, sin zebra, font-mono tabular-nums). El resultado tiene `role="status" aria-live="polite"`.
+**Addendum pendiente de implementar (no en código real):**
+- morale% en héroe atacante.
+- artifacts.diet (el bloque "Artefactos" no existe en ArmyPanel — ArtifactSelect solo maneja fast_troops).
+- wall_tribe select en defensor (debajo de muro/cantero).
+- strong_buildings en sub-bloque "Artefactos defensor".
+- Bloque "Configuración" colapsable P3: server_speed + distance_fields.
+- Bloque "Catapultas y arietes" colapsable (solo modo Ataque): rams + catapult_targets.
+- mods-card reactiva debajo de controles en cada ArmyPanel.
+- Bloque "Cadena de cálculo" colapsable en el resultado (entre TroopBands y StatsTable).
+
+**Why:** La Calculadora es una herramienta de decisión pre-ataque. El usuario llega con pregunta
+concreta y necesita el resultado rápido. El código optó por columna única (más simple, más responsive).
+
+**How to apply:** Al implementar el addendum, respetar la composición real: los inputs nuevos van
+dentro de la fila de controles inline de ArmyPanel o en los bloques específicos del panel.
+No añadir secciones ni colapsables propios — aprovechar la estructura ya existente.

@@ -9,3 +9,4 @@
 - [patterns-world-space](patterns-world-space.md) — S9 WorldSpacePage: shell sidebar+world-header+bottom-bar, FarmListsTab, FarmListDrawer, ProbeMenu inline, huecos API conocidos
 - [patterns-farm-feedback](patterns-farm-feedback.md) — S10 feedback UI: SchedulerSubPanel accordion, SchedulerDashboard drill-down, SendFeedback, StatsPanel, huecos API toggle/timestamp
 - [patterns-combat-calculator](patterns-combat-calculator.md) — S11 CombatCalculator: estructura componentes, estado, contrato API simulate/optimize, huecos backend pendientes
+- [patterns-attack-reports](patterns-attack-reports.md) — S12 AttackReportsPage: TabBar, IngestTab parse→preview→save, HistoryTab, ReportDetailDrawer, OasisStatsPanel, endpoints client.js
