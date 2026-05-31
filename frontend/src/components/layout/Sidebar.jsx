@@ -10,17 +10,34 @@
  * Ítems disabled: text-disabled + cursor not-allowed + tooltip "Próximamente".
  */
 import { NavLink } from 'react-router-dom'
-import { Users } from 'lucide-react'
+import { Users, Calculator, Swords } from 'lucide-react'
 import { useI18n } from '../../i18n/index.jsx'
 
-// Solo "Cuentas" vive en el shell de gestión. Recursos/Tropas/Construcción
-// dependen de un mundo concreto → viven dentro del Espacio del mundo, no aquí.
+// "Cuentas" y la "Calculadora" viven en el shell de gestión.
+// La calculadora es una herramienta independiente del mundo (no necesita login
+// ni mundo activo), por eso es accesible desde el sidebar global. Recursos/
+// Tropas/Construcción dependen de un mundo concreto → viven dentro del
+// Espacio del mundo, no aquí.
 const NAV_ITEMS = [
   {
     key: 'accounts',
     to: '/cuentas',
     icon: Users,
     labelKey: 'nav.accounts',
+    disabled: false,
+  },
+  {
+    key: 'calculator',
+    to: '/calculadora',
+    icon: Calculator,
+    labelKey: 'worldnav.calculator',
+    disabled: false,
+  },
+  {
+    key: 'attack-reports',
+    to: '/reportes-oasis',
+    icon: Swords,
+    labelKey: 'nav.attackReports',
     disabled: false,
   },
 ]

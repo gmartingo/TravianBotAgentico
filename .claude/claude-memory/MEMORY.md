@@ -17,3 +17,4 @@
 - [branch-hygiene-one-feature-per-branch](branch-hygiene-one-feature-per-branch.md) — una feature = una rama bien nombrada; git-flow-advisor debe avisar si el contenido no encaja con la rama activa (pasó: kirilloid-buildings acabó de cajón de sastre)
 - [feedback-palantir-always-first](feedback-palantir-always-first.md) — palantir SIEMPRE primero, sin excepción, aunque la tarea llegue completamente especificada
 - [feedback-no-gitignore-icons-graphify](feedback-no-gitignore-icons-graphify.md) — no añadir all_icons_dump.json ni archivos graphify al .gitignore; el usuario quiere que estén trackeados
+- [bd-ataques-oasis-feature](bd-ataques-oasis-feature.md) — feature pegar reporte Travian→parsear→BD+stats animales, full-stack hecha, pendiente prueba manual + commit (rama no encaja, usar feature/bd-ataques-oasis)

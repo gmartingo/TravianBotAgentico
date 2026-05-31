@@ -20,7 +20,9 @@ from fastapi.staticfiles import StaticFiles
 
 from adapters.api.error_codes import DEFAULT_ERROR_STATUS, ERROR_HTTP_MAP
 from adapters.api.routes.accounts import router as accounts_router
+from adapters.api.routes.attack_reports import router as attack_reports_router
 from adapters.api.routes.catalog import router as catalog_router
+from adapters.api.routes.combat import router as combat_router
 from adapters.api.routes.farm import router as farm_router
 from adapters.api.routes.game_data import router as game_data_router
 from adapters.api.routes.game_culture_points import router as game_culture_points_router
@@ -32,6 +34,7 @@ from adapters.browser.live_farm_list_adapter import LiveFarmListAdapter
 from adapters.browser.live_overview_adapter import LiveOverviewAdapter
 from adapters.browser.session_registry import SessionRegistry
 from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
+from adapters.db.attack_report_sqlite_adapter import AttackReportSQLiteAdapter
 from adapters.db.database import get_connection
 from adapters.db.farm_list_sqlite_adapter import FarmListSQLiteAdapter
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
@@ -198,6 +201,13 @@ async def lifespan(application: FastAPI):
         session_registry.set_live_adapter(html_source_port)
     # En modo 'fixture', session_registry no necesita referencia a html_source_port
     # (FixtureOverviewAdapter no tiene caché que invalidar).
+
+    # -----------------------------------------------------------------------
+    # Attack Reports — AttackReportSQLiteAdapter (comparte la misma conexión SQLite)
+    # -----------------------------------------------------------------------
+    attack_report_adapter = AttackReportSQLiteAdapter(conn)
+    await attack_report_adapter.ensure_tables()
+    application.state.attack_report_port = attack_report_adapter
 
     # -----------------------------------------------------------------------
     # Farm Lists — FarmListSQLiteAdapter (comparte la misma conexión SQLite)
@@ -380,7 +390,9 @@ app.mount(
 # ---------------------------------------------------------------------------
 
 app.include_router(accounts_router)
+app.include_router(attack_reports_router)
 app.include_router(catalog_router)
+app.include_router(combat_router)
 app.include_router(farm_router)
 app.include_router(game_data_router)
 app.include_router(game_overview_router)

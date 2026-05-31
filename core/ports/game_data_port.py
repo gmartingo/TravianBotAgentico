@@ -185,6 +185,25 @@ class GameDataPort(ABC):
         Útil para poblar el endpoint GET /catalog/buildings sin N queries individuales.
         """
 
+    @abstractmethod
+    async def get_building_defense_bonus(
+        self,
+        gid: int,
+        level: int,
+        server_version: str = "1.45",
+    ) -> float | None:
+        """
+        Devuelve el bonus de defensa (como fracción decimal) de un edificio de muro
+        para el nivel indicado, o None si no hay datos en BD.
+
+        El valor se obtiene de building_stats.effect_value para ese gid/level.
+        Kirilloid almacena el bonus de muro como porcentaje entero (ej: 30 → 0.30).
+        El llamador usa el valor como multiplicador: D × (1 + bonus).
+
+        Devuelve None si el gid o level no están en building_stats.
+        Añadido para la feature simulador-combate (2026-05-29).
+        """
+
     # ------------------------------------------------------------------
     # Gate de seed — métodos añadidos para la feature seed-datos-juego-tropas
     # (extendidos para edificios el 2026-05-27)

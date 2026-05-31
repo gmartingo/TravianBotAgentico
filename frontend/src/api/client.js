@@ -256,4 +256,76 @@ export const api = {
   /** POST /farm/worlds/:worldId/schedulers/:schedulerId/run-now */
   runSchedulerNow: (worldId, schedulerId) =>
     request('POST', `/farm/worlds/${worldId}/schedulers/${schedulerId}/run-now`),
+
+  // ── Reportes de ataques a oasis ─────────────────────────────────────────────
+
+  /**
+   * POST /attack-reports/parse
+   * Body: { raw_text }
+   * Response: { attacked_at, utc_offset, coord_x_dest, coord_y_dest,
+   *             origin_village_name, attacker_troops[], animals[], bounty{...},
+   *             hero_inventory (null | {wood,clay,iron,crop}),
+   *             already_exists, existing_id }
+   * Throws ApiError (status 422 con detail legible si parse falla)
+   */
+  parseAttackReport: (raw_text) =>
+    request('POST', '/attack-reports/parse', { raw_text }),
+
+  /**
+   * POST /attack-reports
+   * Body: { raw_text }
+   * Response: 201 { id, attacked_at, utc_offset, coord_x_dest, coord_y_dest, origin_village_name }
+   * Throws ApiError (status 409 si duplicado)
+   */
+  saveAttackReport: (raw_text) =>
+    request('POST', '/attack-reports', { raw_text }),
+
+  /**
+   * GET /attack-reports?x=&y=&from_date=&to_date=&limit=&offset=
+   * Response: { items: [...], total, cumulative_bounty }
+   */
+  getAttackReports: (queryString = '') =>
+    request('GET', `/attack-reports${queryString ? '?' + queryString : ''}`),
+
+  /**
+   * GET /attack-reports/{id}
+   * Response: detalle completo (misma shape que parse)
+   */
+  getAttackReport: (id) =>
+    request('GET', `/attack-reports/${id}`),
+
+  /**
+   * DELETE /attack-reports/{id} → 204
+   */
+  deleteAttackReport: (id) =>
+    request('DELETE', `/attack-reports/${id}`),
+
+  /**
+   * GET /attack-reports/stats/oasis?x=&y=
+   * Response: { coord_x_dest, coord_y_dest, total_attacks, first_attack, last_attack,
+   *             animal_appearances[], repopulation_gaps[] }
+   * Si sin datos → total_attacks 0 y listas vacías
+   */
+  getOasisStats: (x, y) =>
+    request('GET', `/attack-reports/stats/oasis?x=${x}&y=${y}`),
+
+  // ── Combate ───────────────────────────────────────────────────────────────
+
+  combat: {
+    /**
+     * POST /combat/simulate
+     * Body: { attacker: AttackerInput, defenders: DefenderInput[] }
+     * Response: CombatSimulationResponse
+     */
+    simulate: (body) =>
+      request('POST', '/combat/simulate', body),
+
+    /**
+     * POST /combat/optimize
+     * Body: { attacker: AttackerInput, defenders: DefenderInput[], ... }
+     * Response: CombatOptimizeResponse
+     */
+    optimize: (body) =>
+      request('POST', '/combat/optimize', body),
+  },
 }
