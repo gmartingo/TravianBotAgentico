@@ -2058,3 +2058,327 @@ flowchart TD
 2. **`morale` validada por Pydantic en ge=30 en lugar de clampearse silenciosamente**: El spec indica clamping con warning, pero el handler Pydantic rechaza valores < 30 con 422. IT-09 verifica esto y confirma 422 (comportamiento correcto para API REST: la validación de entrada es responsabilidad de Pydantic; el clamping con warning se aplica en el motor para valores que llegan por otras vías, como llamadas directas al use case).
 
 3. **`defender_troops` en el optimizador cuando `has_winning_combination = false`**: el spec §8 dice que debe mostrar `quantity_survived = quantity_initial, quantity_lost = 0`. El optimizador mantiene la lista provisional inicializada con los animales intactos y la usa directamente cuando no hay ganadoras, en lugar de tomar el resultado del combate de la mejor alternativa no-ganadora. Fiel al spec.
+
+---
+
+## ADDENDUM 2026-05-30 — Modificadores visibles
+
+**Estado**: `ready-for-impl`
+**Motivación**: El usuario quiere ver en el frontal los modificadores que aplica la calculadora. Esto implica tres cambios coordinados: (1) que el frontend envíe todos los campos de modificadores ya presentes en el backend pero nunca enviados; (2) que el backend devuelva las variables intermedias de la cadena de cálculo; (3) que la UI muestre una mini-tarjeta de modificadores activos por panel y un bloque "cadena de cálculo" en el resultado.
+
+**Contexto de entrada (palantir)**:
+- Backend REQUEST: completo. `morale`, `AttackerArtifacts.diet`, `DefenderArtifacts.strong_buildings`, `CombatConfig.distance_fields/server_speed`, `WallConfig.wall_tribe`, `RamSpec`, `CatapultTarget` ya existen como campos Pydantic en `adapters/api/routes/combat.py` y como entidades en `core/entities/combat.py`.
+- Backend RESPONSE: `CombatResult` ya expone `attacker_infantry_power`, `attacker_cavalry_power`, `defender_infantry_power`, `defender_cavalry_power` (implementados en 2026-05-29, no documentados en el spec original). Faltan las restantes intermedias.
+- Frontend: hardcodea `morale=100`, `diet=1.0`; nunca envía `strong_buildings`, `wall_tribe`, `rams`, `catapult_targets`, `distance_fields`, `server_speed`. `ArmyPanel.jsx` no tiene props para esos campos.
+
+---
+
+### ADD-1. Inputs que el frontend debe enviar y hoy NO envía
+
+Para cada campo se indica: nombre exacto en el JSON del request (coincide con el DTO Pydantic de `AttackerRequest` / `DefenderRequest` / `WallRequest` / `CombatConfigRequest`), rango válido, cuándo es visible en la UI y comportamiento por defecto.
+
+#### ADD-1.1 `attacker.morale`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `attacker.morale` |
+| Tipo | `float` |
+| Rango Pydantic | `ge=30.0, le=100.0` |
+| Default | `100.0` |
+| Error fuera de rango | `422` — Pydantic rechaza en el handler (no se clampea silenciosamente; ver desviación §18.2) |
+| Visible en UI | Siempre (dentro del bloque colapsable "Héroe y bonus" del atacante) |
+| Default en UI | `100` — idéntico al comportamiento actual del frontend hardcodeado; no hay regresión |
+| Nota | Solo es relevante en servidores speed > x1. En servidores normales (speed=1) la moral no existe en Travian, pero el campo sigue enviándose a `100` sin efecto sobre el resultado |
+
+#### ADD-1.2 `attacker.artifacts.diet`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `attacker.artifacts.diet` |
+| Tipo | `float` |
+| Rango Pydantic | `ge=0.01, le=10.0` |
+| Default | `1.0` |
+| Error fuera de rango | `422` |
+| Visible en UI | Siempre en el bloque colapsable "Artefactos" del atacante |
+| Default en UI | `1.0` — idéntico al hardcodeado actual; no hay regresión |
+| Semántica UI | Formato "x 0.50" (multiplicador). Ejemplo: artefacto de dieta = 0.5 = consume la mitad de crop en el viaje |
+
+#### ADD-1.3 `defenders[].artifacts.strong_buildings`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `defenders[i].artifacts.strong_buildings` |
+| Tipo | `float` |
+| Rango Pydantic | `ge=0.01, le=10.0` |
+| Default | `1.0` |
+| Error fuera de rango | `422` |
+| Visible en UI | Bloque colapsable "Artefactos defensor" dentro del panel de cada defensor |
+| Default en UI | `1.0` — en MVP no afecta a la fórmula de tropas (solo arietes vs muro); se muestra igualmente para no crear deuda de UX cuando v2 lo active |
+| Nota de MVP | El campo está validado pero su efecto solo aplica al cálculo de `wall_damage` (arietes). El motor lo consume en `_compute_structural_damage`. Si `attack_type='raid'`, el campo se envía pero no tiene efecto visible |
+
+#### ADD-1.4 `wall.wall_tribe`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `wall.wall_tribe` |
+| Tipo | `string` enum `Tribe` o `null` |
+| Rango Pydantic | Valor en enum `Tribe` o `null` |
+| Default | `null` |
+| Error fuera de rango | `422` si el string no es un valor válido de `Tribe` |
+| Visible en UI | Siempre visible en el panel de muro del defensor (selector dropdown, mismo patrón que `TribeSelector`) |
+| Default en UI | `null` — el dropdown muestra "Sin especificar" — el motor usa fallback `0.03 x nivel_muro` con warning (comportamiento actual) |
+| Cuándo enviarlo | Siempre. Si el usuario elige tribu, enviar el valor; si no, enviar `null` |
+
+#### ADD-1.5 `attacker.rams` (cantidad + smithy)
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `attacker.rams` — objeto `{quantity: int, smithy_level: int}` o `null` |
+| Tipo | `RamSpecRequest | null` |
+| Rango Pydantic | `quantity`: `ge=0, le=1_000_000`; `smithy_level`: `ge=0, le=20` |
+| Default | `null` (sin arietes) |
+| Error fuera de rango | `422` |
+| Visible en UI | Solo cuando `attack_type = "attack"` — aparece dentro del bloque "Catapultas y arietes" (ya especificado en el spec de UI §6.2) |
+| Oculto cuando | `attack_type = "raid"` — el bloque entero de catapultas/arietes no se muestra (el motor ignora `rams` en modo raid aunque llegara) |
+| Default en UI | `null` — equivale a enviar `rams: null`; si el usuario activa modo ataque y no rellena arietes, se envía `null` |
+
+#### ADD-1.6 `attacker.catapult_targets` (lista de edificios objetivo)
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `attacker.catapult_targets` — lista de `{building_gid: int, current_level: int}` |
+| Tipo | `list[CatapultTargetRequest]` |
+| Rango Pydantic | Lista vacía por defecto; cada item: `building_gid > 0`, `current_level: ge=0, le=20` |
+| Default | `[]` (lista vacía) |
+| Error fuera de rango | `422` si algún item tiene `building_gid <= 0` o `current_level` fuera de rango |
+| Visible en UI | Solo cuando `attack_type = "attack"`. El bloque permite añadir objetivos (selector de edificio por gid + input de nivel actual) |
+| Oculto cuando | `attack_type = "raid"` — si el usuario cambia a raid después de haber añadido objetivos, la UI los oculta pero los mantiene en estado (no los borra, por si vuelve a modo attack). Se envía lista vacía `[]` en el request de raid |
+| Edge case | Si se envían catapult_targets en modo raid, el motor los ignora con warning (EC-22). La UI previene esta situación ocultando el bloque, pero si llegan (bug de frontend), el motor los descarta igualmente |
+
+#### ADD-1.7 `config.distance_fields`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `config.distance_fields` |
+| Tipo | `float | null` |
+| Rango Pydantic | `gt=0` si presente; `null` omite el cálculo de crop |
+| Default | `null` |
+| Error fuera de rango | `422` si se envía `<= 0` |
+| Visible en UI | Siempre en el bloque colapsable "Config" (ya en el wireframe §6.2 del spec de UI) |
+| Default en UI | Vacío = `null` — equivale al comportamiento actual; `crop_consumption` en el resultado sera `null` |
+
+#### ADD-1.8 `config.server_speed`
+
+| Atributo | Valor |
+|---|---|
+| Campo JSON | `config.server_speed` |
+| Tipo | `float` |
+| Rango Pydantic | `ge=1.0, le=10.0` |
+| Default | `1.0` |
+| Error fuera de rango | `422` |
+| Visible en UI | Siempre en el bloque colapsable "Config" (dropdown de velocidad, ya en el wireframe §6.2) |
+| Default en UI | `1` — idéntico al hardcodeado actual; no hay regresión |
+| Semántica UI | Dropdown con valores enteros 1x, 2x, 3x, 5x, 10x (o input numérico libre). Afecta solo a `crop_consumption` y al `travel_time_h` del optimizador |
+
+---
+
+### ADD-2. Campos NUEVOS en `CombatResult` (intermedias de la cadena de cálculo)
+
+Se añaden al dataclass `CombatResult` en `core/entities/combat.py` y al DTO de respuesta Pydantic en `adapters/api/routes/combat.py`.
+
+**Nota previa sobre campos YA implementados**: `CombatResult` ya expone `attacker_infantry_power`, `attacker_cavalry_power`, `defender_infantry_power`, `defender_cavalry_power` (desglose infantería/caballería implementado el 2026-05-29 aunque no estaba en el spec original). Estos se documentan aquí formalmente para que el frontend los consuma.
+
+#### ADD-2.1 Intermedias del atacante
+
+| Campo en response | Tipo | Origen en `combat_engine.py` | Descripción |
+|---|---|---|---|
+| `attacker_attack_base` | `float` | Variable local `A_base` (línea 572) | `Suma(attack_eff_i x quantity_i)` — suma del ataque efectivo de todas las tropas atacantes con smithy aplicado, antes del héroe |
+| `attacker_attack_with_hero` | `float` | Variable local `A_con_heroe` (línea 576) | `(A_base + hero_attack_points) x (1 + hero_attack_bonus_percent/100)` |
+| `attacker_attack_with_alliance` | `float` | Variable local `A_total` (línea 579) | `A_con_heroe x (1 + alliance_bonus/100)` — antes de aplicar moral |
+| `morale_factor` | `float` | `moral / 100.0` donde `moral` se calcula en líneas 581-590 | Valor real aplicado (tras clamping a 30-100). Ejemplo: moral=75 → `morale_factor=0.75`. Rango: 0.30–1.00 |
+| `attacker_cavalry_ratio` | `float` | Variable local `prop_cav` (línea 605) | Proporción de ataque proveniente de caballería. 0.0 = todo infantería, 1.0 = todo caballería |
+| `attacker_infantry_power` | `float` | Variable local `A_inf` (línea 596, ya en dataclass) | Ataque efectivo total hecho por tropas de infantería (ya implementado) |
+| `attacker_cavalry_power` | `float` | Variable local `A_cav` (línea 600, ya en dataclass) | Ataque efectivo total hecho por tropas de caballería (ya implementado) |
+
+**Nota de diseño** — por qué `attacker_attack_with_alliance` y no `A_total`: el campo del dataclass sigue snake_case consistente con `attacker_power`. `A_total` es el nombre de la variable local en el motor; el campo del response se renombra para ser autodescriptivo sin depender de que el lector conozca la nomenclatura interna.
+
+#### ADD-2.2 Intermedias del defensor
+
+| Campo en response | Tipo | Origen en `combat_engine.py` | Descripción |
+|---|---|---|---|
+| `defender_defense_base` | `float` | Variable local `D_base` (línea 648) | `Suma(quantity_j x [def_inf_j x (1-prop_cav) + def_cav_j x prop_cav])` con smithy ya aplicado |
+| `hero_defense_bonus_avg_pct` | `float` | Variable local `hero_def_bonus_pct` (línea 661) | Promedio simple de `hero_defense_bonus_percent` de cada formación defensora. Rango 0–100. En formato "porcentaje real" (25.0 = +25%) |
+| `defender_defense_with_hero` | `float` | Variable local `D_con_heroe` (línea 664) | `(D_base + Suma(hero_defense_points)) x (1 + hero_def_bonus_pct/100)` |
+| `wall_multiplier` | `float` | Variable local `wall_multiplier` (línea 671) | Multiplicador completo del muro: `(1 + bonus_muro) x stonemason_mult`. Incluye stonemason. Valor mínimo: `1.0` (nivel 0 sin stonemason) |
+| `stonemason_multiplier` | `float` | `1.0 + 0.05 x wall.stonemason_level` — calculado dentro de `resolve_wall_multiplier` (línea 220) | Componente stonemason del wall_multiplier. Se desglosa para que la UI pueda mostrar ambos factores por separado |
+| `defender_infantry_power` | `float` | Variable local `D_inf_total` (línea 818, ya en dataclass) | `Suma(quantity_j x def_inf_j)` — defensa bruta contra infantería (ya implementado) |
+| `defender_cavalry_power` | `float` | Variable local `D_cav_total` (línea 819, ya en dataclass) | `Suma(quantity_j x def_cav_j)` — defensa bruta contra caballería (ya implementado) |
+
+**Nota sobre `stonemason_multiplier`**: `resolve_wall_multiplier` calcula `stonemason_mult` internamente pero no lo retorna por separado (solo retorna el producto). El implementador tiene dos opciones: (A) modificar `resolve_wall_multiplier` para que devuelva una tupla `(wall_multiplier, stonemason_mult)`, o (B) calcular `stonemason_mult = 1.0 + 0.05 x wall.stonemason_level` directamente en `simulate_combat` tras la llamada a `resolve_wall_multiplier`. La opción B es menos disruptiva (no cambia la firma del helper). Se recomienda la opción B.
+
+#### ADD-2.3 Intermedias del combate
+
+| Campo en response | Tipo | Origen en `combat_engine.py` | Descripción |
+|---|---|---|---|
+| `combat_factor_k` | `float` | Variable local `K` (línea 682), resultado de `compute_k(total_units)` | Factor K de la fórmula Travian T4.5. Rango: 1.2578–1.50. K=1.5 cuando N<=1000 |
+| `total_units_on_field` | `int` | Variable local `total_units` (línea 679) | `Suma_atacante(quantity_i) + Suma_defensor(quantity_j)` — total de tropas en el campo. Determina K |
+| `attacker_loss_pct` | `float | null` | Variable local `atk_loss_pct` (líneas 718-720) | Porcentaje de bajas del atacante (0.0–1.0). Ejemplo: 0.27 = 27% de bajas. `null` si EC-01 (defensa vacía, sin combate) |
+| `defender_loss_pct` | `float | null` | Variable local `def_loss_pct` (líneas 718-720) | Porcentaje de bajas del defensor (0.0–1.0). `null` si EC-01 |
+
+**Nota sobre `attacker_loss_pct` / `defender_loss_pct`**: cuando `D_efectiva == 0` (EC-01), el combate es inmediato y estas variables no se calculan. En ese caso se devuelven como `null`. El frontend debe manejar `null` mostrando "—" o "0%" según contexto.
+
+#### ADD-2.4 Intermedias por tropa (dentro de `TroopResult`)
+
+Se añaden campos opcionales a `TroopResult` para exponer el multiplicador de smithy aplicado a cada tropa individual.
+
+| Campo en `TroopResult` | Tipo | Descripción |
+|---|---|---|
+| `smithy_multiplier_attack` | `float | null` | Para tropas atacantes: `attack_eff / attack_base`. Si `smithy_level=0`, el valor es `1.0`. `null` si la tropa es defensora o si `attack_base == 0` |
+| `smithy_multiplier_def_inf` | `float | null` | Para tropas defensoras: `def_inf_eff / def_inf_base`. `1.0` si smithy=0. `null` para tropas atacantes o si `def_inf_base == 0` |
+| `smithy_multiplier_def_cav` | `float | null` | Para tropas defensoras: `def_cav_eff / def_cav_base`. `1.0` si smithy=0. `null` para tropas atacantes o si `def_cav_base == 0` |
+
+**Cómo calcular estos valores en `build_troop_results`**: el dict `enriched[i]` ya contiene `attack_eff` y `stats["attack"]` para atacantes, y `def_inf` / `def_cav` junto con los valores base en `stats["def_infantry"]` / `stats["def_cavalry"]` para defensores. El multiplicador es simplemente `eff / base` (guardando el caso `base == 0 → null`).
+
+**Nota de implementación**: el dict `enriched` para defensores no tiene la clave `"attack_eff"` (solo `"def_inf"`, `"def_cav"`), y el dict para atacantes no tiene `"def_inf"` ni `"def_cav"`. El implementador puede discriminar por contexto (atacante vs defensor) pasando un parámetro `side: Literal["attacker", "defender"]` a `build_troop_results`, o calculando los multiplicadores directamente antes de la llamada y pasándolos como lista adicional.
+
+**Cuándo mostrar en UI**: si `smithy_level == 0`, el multiplicador es `1.0` y la UI lo trata como "sin modificador activo" (se muestra en gris o se omite del desglose por tropa, ver ADD-3.1).
+
+---
+
+### ADD-3. Reglas de UI sobre las intermedias
+
+#### ADD-3.1 Mini-tarjeta "Modificadores activos" por panel
+
+Aparece dentro del panel del atacante (y del defensor) mientras el usuario edita el formulario, **antes de pulsar Simular**. Se actualiza en tiempo real (sin llamar a la API) a partir del estado del formulario local.
+
+**Qué muestra** (por panel):
+
+Panel atacante (orden de presentación):
+
+| Modificador | Condición de activación | Formato |
+|---|---|---|
+| Héroe ataque | `hero_attack_points > 0` | `+ {hero_attack_points} pts` |
+| Bonus héroe % | `hero_attack_bonus_percent > 0` | `+ {hero_attack_bonus_percent} %` |
+| Bonus alianza | `alliance_bonus > 0` | `+ {alliance_bonus} %` |
+| Moral | `morale < 100` | `x {morale/100}` (ej: `x 0.75`) |
+| Artefacto dieta | `artifacts.diet != 1.0` | `x {diet}` crop |
+| Smithy (por tropa) | Al menos una tropa con `smithy_level > 0` | `Herr. activa` (badge compacto; el detalle va en la cadena de cálculo) |
+
+Panel defensor:
+
+| Modificador | Condición de activación | Formato |
+|---|---|---|
+| Héroe defensa | `hero_defense_points > 0` | `+ {hero_defense_points} pts` |
+| Bonus héroe def % | `hero_defense_bonus_percent > 0` | `+ {hero_defense_bonus_percent} %` |
+| Muro | `wall_level > 0` | `Nivel {wall_level}` |
+| Stonemason | `stonemason_level > 0` | `x 1.{05*nivel}` (ej: `x 1.10`) |
+| Edif. resistentes | `artifacts.strong_buildings != 1.0` | `x {strong_buildings}` edif. |
+
+**Comportamiento si todos están en default**: la tarjeta muestra el texto "Sin modificadores activos" en `var(--text-tertiary)`. No se oculta — el espacio siempre está reservado para evitar saltos de layout.
+
+**Justificación de esta decisión**: mostrar en gris en lugar de ocultar reduce el ruido para usuarios avanzados (saben lo que hay activo de un vistazo) y no sorprende a usuarios nuevos (la tarjeta siempre está ahí, educando sobre qué modificadores existen).
+
+**Cálculo local (sin API)**: la mini-tarjeta usa solo los valores del formulario. No requiere llamar a la API ni esperar a la simulación. Es puro cálculo en el frontend sobre el estado del form.
+
+#### ADD-3.2 Bloque "Cadena de cálculo" en el resultado
+
+Aparece en V3 (Resultado del Simulador), debajo de la tabla de tropas y encima del panel de botín. Es **colapsable por defecto** (cerrado al recibir el resultado).
+
+**Estructura (orden de líneas)**:
+
+```
+CADENA DE CALCULO  (colapsable, cerrado por defecto)
+
+  ATACANTE
+  A_base        =  {attacker_attack_base}
+  + Hero        =  {attacker_attack_with_hero}     (solo si hero_attack_points > 0 o hero_attack_bonus_percent > 0)
+  + Alianza     =  {attacker_attack_with_alliance}  (solo si alliance_bonus > 0)
+  x Moral       =  {attacker_power}  (moral = {morale_factor x 100}%)  (solo si morale_factor < 1.0)
+  A efectivo    =  {attacker_power}
+
+  DEFENSOR
+  D_base        =  {defender_defense_base}
+  Prop. cav.    =  {attacker_cavalry_ratio x 100} %   (solo si attacker_cavalry_ratio no es 0.0 ni 1.0)
+  + Hero        =  {defender_defense_with_hero}        (solo si hay hero_defense_points o hero_defense_bonus_percent)
+  x Muro        =  {wall_multiplier}                   (muro: {wall_multiplier - stonemason_multiplier}, stonemason: {stonemason_multiplier})
+  D efectiva    =  {defender_power}
+
+  RESULTADO
+  N en campo    =  {total_units_on_field} tropas -> K = {combat_factor_k}
+  Ratio A/D     =  {ratio}
+  Bajas atacante=  {attacker_loss_pct x 100} %
+  Bajas defensor=  {defender_loss_pct x 100} %
+```
+
+**Granularidad**: una línea por paso de cálculo, no una por modificador. La cadena debe leerse como un flujo secuencial (primero A, luego D, luego resultado). No se muestran pasos intermedios con valor idéntico al anterior (ejemplo: si `alliance_bonus = 0`, la línea `+ Alianza` se omite).
+
+**Desglose por tropa** (sub-bloque colapsable dentro de la cadena): si alguna tropa tiene `smithy_level > 0`, aparece una sub-sección "Smithy por tropa" con una línea por tropa que tiene modificador activo: `[icono] {nombre}: x {smithy_multiplier_attack}` (atacante) o `x {smithy_multiplier_def_inf} / x {smithy_multiplier_def_cav}` (defensor). Las tropas con `smithy_level = 0` (multiplicador = 1.00) se omiten de esta sub-sección.
+
+**Colapsable por defecto**: la cadena de cálculo es información avanzada. El usuario medio que quiere saber "¿gana mi ejército?" no la necesita. La cadena está para el usuario que quiere entender el porqué, o para depurar por qué el resultado no es el esperado. La primera vez que aparece el resultado la cadena está cerrada; si el usuario la abre, su estado se mantiene durante la sesión (estado local React, no localStorage).
+
+---
+
+### ADD-4. Edge cases nuevos
+
+| ID | Descripción | Tratamiento |
+|---|---|---|
+| EC-30 | El backend no devuelve alguna intermedia (versión vieja del server sin el addendum implementado) | El frontend debe verificar la presencia de cada campo antes de renderizarlo. Si un campo intermedio falta en el response (`undefined` o `null`), la mini-tarjeta y la cadena de cálculo omiten esa línea sin romper. No es error visible para el usuario — la UI degrada silenciosamente. El campo `attacker_power` siempre existirá (implementado desde el inicio), por lo que el resultado principal nunca falla |
+| EC-31 | `wall_level = 0` con `stonemason_level > 0` | `wall_multiplier = stonemason_multiplier = 1.0 + 0.05 x stonemason_level`. El muro es `x 1.0` pero el stonemason sigue aplicando. La UI muestra en la cadena: "x Muro: 1.00 (muro nivel 0, stonemason: x {stonemason_multiplier})". No se oculta la línea aunque el muro no aporte bonus |
+| EC-32 | Tropa con `smithy_level = 0` | `smithy_multiplier_attack = 1.0` / `smithy_multiplier_def_inf = 1.0` / etc. La UI omite esta tropa del sub-bloque "Smithy por tropa" (multiplicador 1.00 = sin modificador activo). Si todas las tropas tienen smithy=0, el sub-bloque no aparece |
+| EC-33 | `attack_type = "raid"` con `catapult_targets` en el formulario | La UI oculta el bloque de catapultas/arietes cuando el modo es "Saqueo". Si el usuario tiene datos en catapult_targets y cambia a modo Saqueo, los datos se mantienen en estado React pero no se incluyen en el request (se envía lista vacía `[]`). Si cambia de vuelta a "Ataque", los datos previos reaparecen |
+| EC-34 | `attack_type = "raid"` con `rams.quantity > 0` (llegara por bug) | El motor no calcula daño de arietes en modo raid (no se llama a `_compute_structural_damage`). `structural_damage = null`. La UI oculta el campo de arietes en modo saqueo, previniendo el caso; si llegara por error al backend, el comportamiento es silent-ignore |
+| EC-35 | `wall_level = 0` con arietes activos (`rams.quantity > 0`) | El motor comprueba `if attacker.rams and attacker.rams.quantity > 0 and wall.wall_level > 0` — con `wall_level = 0` la condición es falsa y el cálculo de arietes se salta. `wall_after = wall_before = 0`. La UI debe ocultar el campo de arietes o deshabilitarlo con tooltip "No hay muro que dañar" cuando `wall_level = 0` |
+| EC-36 | `attacker_loss_pct` / `defender_loss_pct` son `null` (EC-01 — defensa vacía) | La cadena de cálculo muestra "Victoria sin combate" en lugar de las líneas de bajas. Los porcentajes de bajas no se muestran |
+| EC-37 | `morale_factor = 1.0` (moral = 100, default) | La línea "x Moral" se omite de la cadena de cálculo (no aporta información — el factor neutro no tiene interés para el usuario). Igualmente, en la mini-tarjeta la moral no aparece si está a 100 |
+
+---
+
+### ADD-5. Criterios de aceptación (extensión del §15 original)
+
+Los siguientes criterios se añaden al checklist del §15:
+
+#### ADD-5.1 Tests de API (backend)
+
+- [ ] **ADD-IT-01**: `POST /combat/simulate` con todos los modificadores activos (morale=75, alliance_bonus=3, hero_attack_points=500, hero_attack_bonus_percent=20, smithy_level=10 en alguna tropa, wall_level=10, stonemason_level=2, wall_tribe="gauls") devuelve `200` con los nuevos campos intermedios presentes y numéricos: `attacker_attack_base`, `attacker_attack_with_hero`, `attacker_attack_with_alliance`, `morale_factor`, `attacker_cavalry_ratio`, `defender_defense_base`, `hero_defense_bonus_avg_pct`, `defender_defense_with_hero`, `wall_multiplier`, `stonemason_multiplier`, `combat_factor_k`, `total_units_on_field`, `attacker_loss_pct`, `defender_loss_pct`.
+- [ ] **ADD-IT-02**: `POST /combat/simulate` con request mínimo (sin ningún modificador explícito — todos en default) devuelve los mismos valores de `attacker_power`, `defender_power` y `ratio` que el endpoint antes del addendum (no regresión). Los campos intermedios están presentes y reflejan los defaults: `morale_factor = 1.0`, `attacker_cavalry_ratio` entre 0 y 1, `wall_multiplier = 1.0`, `stonemason_multiplier = 1.0`.
+- [ ] **ADD-IT-03**: `attacker_attack_base` es estrictamente menor que `attacker_attack_with_hero` cuando `hero_attack_points > 0`.
+- [ ] **ADD-IT-04**: `attacker_attack_with_hero` es estrictamente menor que `attacker_attack_with_alliance` cuando `alliance_bonus > 0`.
+- [ ] **ADD-IT-05**: `attacker_power = attacker_attack_with_alliance x morale_factor` (con tolerancia `1e-4` por redondeo de float).
+- [ ] **ADD-IT-06**: `wall_multiplier = stonemason_multiplier` cuando `wall_level = 0` (muro no aporta; solo stonemason).
+- [ ] **ADD-IT-07**: `wall_multiplier > stonemason_multiplier` cuando `wall_level > 0` (muro contribuye positivamente).
+- [ ] **ADD-IT-08**: `combat_factor_k = 1.5` cuando `total_units_on_field <= 1000`.
+- [ ] **ADD-IT-09**: `combat_factor_k < 1.5` cuando `total_units_on_field > 1000`.
+- [ ] **ADD-IT-10**: `attacker_loss_pct` y `defender_loss_pct` son `null` cuando la defensa es vacía (EC-01, defensa 0 tropas).
+- [ ] **ADD-IT-11**: En `attacker_troops`, cada `TroopResult` para tropas con `smithy_level > 0` tiene `smithy_multiplier_attack > 1.0`. En `defender_troops`, tropas con `smithy_level > 0` tienen `smithy_multiplier_def_inf >= 1.0` o `smithy_multiplier_def_cav >= 1.0`.
+- [ ] **ADD-IT-12**: Tropa con `smithy_level = 0` tiene `smithy_multiplier_attack = 1.0` (no `null`, no ausente, no omitido).
+
+#### ADD-5.2 Reglas UI
+
+- [ ] Al cambiar cualquier modificador en el formulario (moral, smithy, héroe, alianza, muro, artefactos), la mini-tarjeta de modificadores del panel correspondiente se actualiza **sin pulsar Simular** (actualización reactiva en el frontend sobre el estado del form).
+- [ ] La cadena de cálculo está colapsada por defecto al recibir el resultado y mantiene su estado (abierta/cerrada) mientras el resultado está visible.
+- [ ] Si el response no incluye un campo intermedio (degradación por versión antigua del server), la mini-tarjeta y la cadena de cálculo omiten esa línea sin lanzar error en consola ni romper el render.
+- [ ] Las líneas de la cadena de cálculo con valor default (moral = 100%, alianza = 0, héroe = 0) se omiten — la cadena muestra solo lo que modifica el resultado.
+- [ ] Tropas con `smithy_level = 0` no aparecen en el sub-bloque "Smithy por tropa" de la cadena.
+- [ ] El bloque de catapultas/arietes (incluidos los campos de `rams` y `catapult_targets`) está oculto cuando `attack_type = "raid"`.
+- [ ] Los campos de arietes se deshabilitan o se ocultan con tooltip cuando `wall_level = 0` y `attack_type = "attack"`.
+
+---
+
+### ADD-6. Trazabilidad del addendum
+
+| Decisión | Justificación |
+|---|---|
+| Mini-tarjeta reactiva sin API (ADD-3.1) | Actualizar mientras el usuario edita requiere cálculo local inmediato. Esperar a la API para mostrar modificadores rompería la experiencia. Los valores de la tarjeta son una proyección del formulario, no el resultado del combate |
+| Cadena de cálculo colapsada por defecto (ADD-3.2) | El usuario habitual quiere el resultado (quién gana, botín). La cadena es para depuración/curiosidad. Colapsada por defecto no contamina el P1 |
+| Omitir líneas con valor default en la cadena (ADD-3.2) | Una cadena con 12 líneas de "x 1.0" no comunica nada útil. Solo las líneas que modifican el resultado son informativamente relevantes |
+| `stonemason_multiplier` como campo separado (ADD-2.2) | `wall_multiplier` mezcla muro y stonemason. La UI necesita mostrar ambos por separado ("muro nivel 10 contribuye x 1.40, stonemason nivel 2 contribuye x 1.10"). Sin el campo separado, la UI tendría que recalcular `1 + 0.05 x stonemason_level` desde el request, acoplando la UI a la fórmula del backend |
+| `morale_factor` como fracción (0.75) no como porcentaje (75) (ADD-2.1) | Consistente con cómo se usa internamente (`A_efectivo = A_total x morale_factor`). La UI puede mostrar "%" multiplicando por 100 ella misma |
+| Degradación silenciosa si falta campo intermedio (ADD-4 EC-30) | Sigue el principio de robustez: ser liberal en lo que se acepta. El usuario no debe ver errores de rendering por una diferencia de versión entre frontend y backend |
+| Ocultar arietes si `wall_level = 0` (ADD-4 EC-35) | Los arietes sin muro no tienen efecto. Mostrarlos activos confunde al usuario. La UI previene el caso; si llegan al backend, el motor los ignora por la condición `wall.wall_level > 0` |
+| `smithy_multiplier_*` como `float | null` (ADD-2.4) | `null` diferencia "la tropa no tiene este stat" (ej: tropa con `def_cavalry = null`) de "smithy=0, multiplicador = 1.0". La UI omite las tropas con `null` del sub-bloque smithy porque no hay stat aplicable |
+| Reutilizar `hero_defense_bonus_avg_pct` del motor (ADD-2.2) | El motor ya calcula `hero_def_bonus_pct` como promedio simple. Exponer ese valor exacto en el response permite que la UI muestre el promedio real sin recalcular |
+| Ningún componente nuevo de backend es necesario (ADD-6) | Todos los cálculos intermedios ya existen como variables locales en `simulate_combat()`. El cambio consiste en: (1) capturar esas variables donde aún son anónimas en sub-expresiones, (2) añadirlas a `CombatResult`, (3) serializarlas en el DTO de respuesta. No se crea ningún módulo nuevo |
+
+---
+
+🔖 Última revisión: 2026-05-30 (addendum modificadores visibles — inputs no enviados por el frontend, intermedias de la cadena de cálculo en CombatResult, mini-tarjeta reactiva y cadena de cálculo en UI)

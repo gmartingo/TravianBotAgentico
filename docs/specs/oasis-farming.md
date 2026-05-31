@@ -2,11 +2,12 @@
 id: oasis-farming
 titulo: Oasis Farming Automatizado
 estado: ready-for-impl
-fecha: 2026-05-29
+fecha: 2026-05-30
 autor: analista
 apis_validadas_por_desarrollador_apis: n-a
 revisiones:
   - 2026-05-29: Refactorización — ciclo de fases global (HARDCORE/MAINTENANCE a nivel de WorldAgent) extraído al spec human-sessions.md. Oasis-farming.md queda reducido a su lógica interna de grupos, intervalos y máquina de estados. Se añade dependencia explícita a human-sessions.md.
+  - 2026-05-30: Parche mínimo — §1b y RN-O09 actualizados para referir al modelo v2 de human-sessions (tres modos: HARDCORE/IDLE/DISCONNECTED; timeline-based). "REST_SESSION" reemplazado por "cualquier modo distinto de HARDCORE". Referencia a HumanSessionState/HARDCORE_SESSION eliminadas.
 ---
 
 # Oasis Farming Automatizado
@@ -30,17 +31,29 @@ Esta feature es exclusivamente de backend/lógica de negocio + BD. **No expone n
 
 ## 1b. Dependencias de otros specs
 
-**Este spec presupone que `docs/specs/human-sessions.md` está implementado.**
+**Este spec presupone que `docs/specs/human-sessions.md` (v2, timeline-based) está implementado.**
 
-El WorldAgent solo encola tareas `SEND_OASIS_RAID` (para cualquier rol OASIS_*) cuando la sesión activa es `HARDCORE_SESSION`, según el estado gestionado por `HumanSessionState` en `human-sessions.md`.
+El WorldAgent solo encola tareas `SEND_OASIS_RAID` (para cualquier rol OASIS_*) cuando el
+modo activo es `HARDCORE`, según el estado gestionado por `_active_mode` en `human-sessions.md`.
+Cualquier modo distinto de `HARDCORE` (es decir, `IDLE` o `DISCONNECTED`) supone que el
+WorldAgent NO encola ni reencola tareas OASIS.
 
-El algoritmo de oasis definido en este spec **no necesita saber en qué sesión está**: simplemente no recibe ticks durante `REST_SESSION`, porque el WorldAgent no encola nuevas tareas OASIS fuera de HARDCORE. Al reactivarse (`REST → HARDCORE`), el WorldAgent llama a `seed_oasis_groups_from_db()` (definido en §9.4 de este spec) para recuperar el estado de los grupos desde BD y reencolar según las bandas de wake-up.
+El algoritmo de oasis definido en este spec **no necesita saber en qué modo está**: simplemente
+no recibe ticks durante `IDLE` o `DISCONNECTED`, porque el WorldAgent no encola nuevas tareas
+OASIS fuera de `HARDCORE`. Al reactivarse (cualquier modo → `HARDCORE`), el WorldAgent llama
+a `seed_oasis_groups_from_db()` (definido en §9.4 de este spec) para recuperar el estado de
+los grupos desde BD y reencolar según las bandas de wake-up.
 
-El arranque conservador (warmup 20-30 min en REST antes del primer HARDCORE) también es responsabilidad de `human-sessions.md`, no de este spec.
+**Nota sobre el modelo de sesiones (v2):** el spec v2 de `human-sessions.md` introduce tres
+modos (`HARDCORE`, `IDLE`, `DISCONNECTED`) basados en un timeline horario configurable por
+día de la semana, reemplazando el modelo anterior de dos modos (`HARDCORE_SESSION`,
+`REST_SESSION`) con duraciones min/max. Esta referencia se actualiza en consecuencia.
 
 **Orden de implementación:**
-1. `human-sessions.md` — define `SessionMode`, `HumanSessionState`, `_init_human_session()`, `_check_and_transition_session()`.
-2. Este spec (`oasis-farming.md`) — define las entidades, grupos, máquina de estados y los métodos del WorldAgent para oasis, que dependen de que `session_mode` exista.
+1. `human-sessions.md` — define `SessionMode` (3 valores), `_active_mode`, `_jitter_fin`,
+   `_check_mode_transition()`, `SessionTimeline`, `SessionBlock`, `SessionOverride`.
+2. Este spec (`oasis-farming.md`) — define las entidades, grupos, máquina de estados y los
+   métodos del WorldAgent para oasis, que dependen de que `_active_mode` exista.
 
 ---
 
@@ -134,9 +147,18 @@ Después de llamar a `send_farm_list(hardcore_list_id)`, el WorldAgent lee el es
 
 ### RN-O09 — Dependencia del ciclo de sesiones global
 
-El WorldAgent solo encola tareas `SEND_OASIS_RAID` (para cualquier rol OASIS_*) cuando la sesión activa es `HARDCORE_SESSION`, según el estado gestionado por `human-sessions.md`. Durante `REST_SESSION`, ninguna tarea de oasis se encola ni reencola.
+El WorldAgent solo encola tareas `SEND_OASIS_RAID` (para cualquier rol OASIS_*) cuando el
+modo activo es `HARDCORE`, según el estado gestionado por `human-sessions.md` (v2, modelo
+timeline-based). Durante cualquier modo distinto de `HARDCORE` (`IDLE` o `DISCONNECTED`),
+ninguna tarea de oasis se encola ni reencola.
 
-El algoritmo de oasis no necesita conocer en qué sesión está: simplemente no recibe ticks durante `REST_SESSION` porque el WorldAgent no encola nuevas tareas OASIS. Al reactivarse (`REST → HARDCORE`), el WorldAgent llama a `seed_oasis_groups_from_db()` para recuperar el estado de los grupos y reencolar según las bandas de wake-up (§9.4).
+El algoritmo de oasis no necesita conocer en qué modo está: simplemente no recibe ticks
+fuera de `HARDCORE` porque el WorldAgent no encola nuevas tareas OASIS. Al reactivarse
+(cualquier modo → `HARDCORE`), el WorldAgent llama a `seed_oasis_groups_from_db()` para
+recuperar el estado de los grupos y reencolar según las bandas de wake-up (§9.4).
+
+**Referencia:** Ver spec `docs/specs/human-sessions.md` (v2) para la lógica de modos,
+timeline horario, jitter de bordes de bloque y override manual.
 
 **Referencia:** Ver spec `docs/specs/human-sessions.md` para la lógica de alternancia HARDCORE_SESSION / REST_SESSION, duración de sesiones y multiplicadores de intervalo.
 

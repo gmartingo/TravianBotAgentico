@@ -2,7 +2,7 @@
 id: simulador-combate-ui
 titulo: Calculadora — Simulador y Optimizador de Combate
 estado: ready-for-impl
-fecha: 2026-05-29
+fecha: 2026-05-30
 autor: disenador-producto
 spec_funcional_relacionado: docs/specs/simulador-combate.md
 mockup_editable: frontend/mockups/simulador-combate.playground.html
@@ -132,172 +132,229 @@ flowchart TD
 
 ## 6. Wireframes de baja fidelidad por pantalla
 
-### 6.1 Estructura general de la pestaña (desktop ≥ lg)
+### 6.1 Estructura general de la pestaña (estado real del código — 2026-05-30)
+
+> **NOTA DE RESINCRONIZACIÓN (2026-05-30)**: el wireframe original describía un layout de 2 columnas
+> (formulario 420px + resultado). El código real usa `maxWidth: 720px, flexDirection: 'column'`
+> — todo en **columna única** con scroll. El formulario y el resultado están apilados verticalmente,
+> no en paralelo. Este wireframe refleja el estado real.
 
 ```
-┌── Sidebar (180px) ──┬── CalcTab ─────────────────────────────────────────────┐
-│  Dashboard          │  ┌─────────────────────────────────────────────────┐   │
-│  Agentes            │  │  [  Simulador  ] [  Optimizador  ]   ← segmento │   │
-│  Listas de vacas    │  └─────────────────────────────────────────────────┘   │
-│  ▶ Calculadora      │                                                         │
-│                     │  ┌── Formulario (420px) ──┬── Resultado ─────────────┐ │
-│                     │  │  panel atacante        │  (vacío / loading /      │ │
-│                     │  │  panel defensor(es)    │   resultado)              │ │
-│                     │  │  panel config          │                           │ │
-│                     │  │  [Simular]             │                           │ │
-│                     │  └────────────────────────┴──────────────────────────┘ │
-└─────────────────────┴──────────────────────────────────────────────────────────┘
+┌── Sidebar (180px) ──┬── CalcTab (columna única, max-width 720px, centrada) ─────┐
+│  Dashboard          │                                                             │
+│  Agentes            │  Calculadora de combate        [ Simulador | Optimizador ] │
+│  Listas de vacas    │  ─────────────────────────────────────────────────────────  │
+│  ▶ Calculadora      │  ┌── ArmyPanel — ATACANTE ──────────────────────────────┐  │
+│                     │  │  header: icono espada + ATACANTE + btn colapsar      │  │
+│                     │  │  body: fila controles + TribeBar + TroopGrid         │  │
+│                     │  └──────────────────────────────────────────────────────┘  │
+│                     │  ┌── ArmyPanel — DEFENSOR ──────────────────────────────┐  │
+│                     │  │  header: icono escudo + DEFENSOR + btn colapsar      │  │
+│                     │  │  body: fila controles + TribeBar + TroopGrid         │  │
+│                     │  └──────────────────────────────────────────────────────┘  │
+│                     │  ┌── ArmyPanel — REFUERZO n (si existen) ──────────────┐  │
+│                     │  └──────────────────────────────────────────────────────┘  │
+│                     │  [ + Añadir refuerzo ]  (botón dashed, full-width 32px)    │
+│                     │  [ SIMULAR ]  (botón primario full-width 40px)              │
+│                     │  ─── resultado (TravianReport) apilado debajo ────────────  │
+│                     │  badge ganador + ratio                                      │
+│                     │  TroopBand Tú + TroopBand Defensor                         │
+│                     │  StatsTable (inf/cav + recursos W/C/I/C/Σ)                 │
+└─────────────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-**En móvil (< md)**: formulario full-width arriba, resultado debajo. Cuando hay resultado, el formulario se colapsa en un banner colapsable "Formulario · clic para editar" con el botón Simular visible.
+**Responsive**: el contenedor ya es de columna única y `maxWidth: 720px` — en móvil simplemente
+estrecha el contenedor. `TroopGrid` usa `overflow-x: auto` para scroll horizontal cuando no
+caben todas las columnas de tropas. Las columnas de tropas con qty=0 tienen opacity 0.45.
 
 ---
 
-### 6.2 V2 — Formulario Simulador
+### 6.2 V2 — Formulario Simulador (estado real del código — 2026-05-30)
+
+> **NOTA DE RESINCRONIZACIÓN (2026-05-30)**: el wireframe original usaba listas verticales de tropas
+> y un dropdown de tribu. El código real usa `TribeBar` (chips circulares 44px) y `TroopGrid`
+> (grid horizontal con scroll, 3 filas: iconos / qty / smithy). Este wireframe refleja el estado real.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  ATACANTE                                               │
-│  Tribu: [ Romans ▾ ]    Modo: [ Saqueo ◉ ] [ Ataque ○ ]│
-│                                                         │
-│  Tropas:                                                │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ [icono] Legionario          [____qty] [s:__lv]  │   │
-│  │ [icono] Pretoriano           [____qty] [s:__lv]  │   │
-│  │ [icono] Imperano             [____qty] [s:__lv]  │   │
-│  │  … (todas las tropas de la tribu)               │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                         │
-│  ▼ Héroe y bonus (colapsable)                           │
-│    Pts ataque: [____]   Bonus %: [____]                 │
-│    Alianza %: [__]   Moral %: [___]                     │
-│                                                         │
-│  ▼ Artefactos (colapsable)                              │
-│    Velocidad tropa: [__]x   Dieta crop: [__]x           │
-│                                                         │
-│  ── solo si modo = Ataque ──────────────────────────────│
-│  Catapultas: objetivo [ edificio ▾ ] nivel [__]        │
-│  Arietes: qty [____] smithy [__]                        │
-│  ─────────────────────────────────────────────────────  │
-│                                                         │
-│  DEFENSOR(ES)                          [+ Añadir]       │
-│                                                         │
-│  Defensor 1     [Tribu: Nature ▾]   [ × Quitar ]       │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ [icono] Rata          [____qty]                 │   │
-│  │ [icono] Araña         [____qty]                 │   │
-│  │  … (tropas de la tribu seleccionada)            │   │
-│  └──────────────────────────────────────────────────┘   │
-│  Muro: [__lv]   Stonemason: [__lv]   Trib. muro: [▾]  │
-│  Rec. aldea: [________] (opcional)                      │
-│  ▼ Héroe defensor (colapsable)                          │
-│  ▼ Artefactos defensor (colapsable)                     │
-│                                                         │
-│  CONFIG (colapsable — P3)                               │
-│  Exponente: [0.5]  Velocidad servidor: [1x ▾]           │
-│  Distancia campos: [____]                               │
-│                                                         │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │              [  Simular  ]                       │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌── CombatCalculator (maxWidth 720px, columna única) ─────────────────────────┐
+│  Calculadora de combate              [ Simulador | Optimizador ] ← tablist  │
+│                                                                               │
+│  ┌── ArmyPanel — ATACANTE ──────────────────────────────────────────────┐    │
+│  │ header: [espada] ATACANTE                             [colapsar ▾]  │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ ctrls: [Saqueo|Ataque] [0% ▾] [Sin artefacto ▾] [Héroe ▾]         │    │
+│  │ ── bloque Héroe (colapsable inline, expandido) ──────────────────── │    │
+│  │   Pts. ataque héroe [____]   Bonus ataque héroe % [____]            │    │
+│  │   [ADD] Moral % [___]  ← pendiente implementar                      │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ [ADD] mods-card: +1 200 pts | +30 % | +3 % | [Herr.]               │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ TribeBar: (RO) TE  GA  EG  HU  ES  VI    ← chips circulares 44px  │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ TroopGrid (scroll horizontal):                                       │    │
+│  │  ┌─────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐  │    │
+│  │  │     │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │  │    │
+│  │  │ 🛡  │[qty] │[qty] │[qty] │[qty] │[qty] │[qty] │[qty] │[qty] │  │    │
+│  │  │ ⚒   │[smy] │[smy] │[smy] │[smy] │[smy] │[smy] │[smy] │[smy] │  │    │
+│  │  └─────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘  │    │
+│  │  (columnas qty=0 → opacity 0.45; scroll horizontal si no caben)   │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  ┌── ArmyPanel — DEFENSOR ──────────────────────────────────────────────┐    │
+│  │ header: [escudo] DEFENSOR                             [colapsar ▾]  │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ ctrls: [🛡 10] [⚒ 2] [0% ▾] [Héroe ▾]                             │    │
+│  │   (escudo + NumInput muro 42px + ⚒ + NumInput cantero 42px)        │    │
+│  │ [ADD] mods-card: Sin modificadores activos                           │    │
+│  │ TribeBar: (NA) RO  TE  GA  EG  HU  ES  VI                           │    │
+│  │ TroopGrid (scroll horizontal, sin fila smithy)                       │    │
+│  │ ─────────────────────────────────────────────────────────────────── │    │
+│  │ [ADD] Tribu muro: [Sin especificar ▾]  ← pendiente implementar     │    │
+│  │ [ADD] Artefactos defensor ▾  → Edif. resistentes × [___]           │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  [ + Añadir refuerzo ]  ← botón dashed full-width 32px                       │
+│                                                                               │
+│  [ADD] ┌── Configuración (colapsable P3) ─────────────────────────────┐      │
+│        │ Velocidad: [x1 ▾]   Distancia: [____] campos                 │      │
+│        └─────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  [ SIMULAR ]  ← btn primario monocromo full-width 40px                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Detalle del panel de tropas**:
-- Columna icono: 24×24px, cargado de `api.getCatalogIcons`.
-- Columna nombre: flex:1, texto 13px, `var(--text)`.
-- Input cantidad: 72px, `font-mono`, `tabular-nums`, placeholder "0". Mínimo 0.
-- Input smithy: 48px, label "S:", 0–20, placeholder "0". Se muestra siempre pero en menor jerarquía (caption, `var(--text-secondary)`).
-- Tropas con cantidad = 0: opacity 0.5 en el nombre e icono (no en el input). No se eliminan.
-- Tropas con cantidad > 0: aparecen destacadas (sin cambio de color — el peso de la cifra en font-mono es suficiente).
+**Detalles del ArmyPanel real (ArmyPanel.jsx)**:
 
-**Selector de tribu**: dropdown con nombre de tribu + pequeño icono (si existe). Lista completa de tribus jugables (no NATURE en el atacante; NATURE y todas las jugables en el defensor). NATURE es el valor por defecto del defensor para el caso oasis.
+- **Header**: icon de rol (SVG espada/escudo) coloreado con `--danger`/`--info` + label UPPERCASE
+  `font-size:13px font-weight:600 letter-spacing:.04em` + btn colapsar (chevron).
+  Refuerzo añade btn papelera antes del chevron.
+- **Fila de controles (atacante)**: inline-flex, gap 8px. Orden: `AttackTypeToggle` (pill
+  raid/attack, height 26px) → `AllianceBonusSelect` (select 26px, 0–5%) → `ArtifactSelect`
+  (select 26px: sin artefacto / ×1.5 / ×2) → btn "Héroe" (toggle expand, 26px).
+- **Fila de controles (defensor)**: icono escudo + `NumInput` muro 42px + ⚒ + `NumInput`
+  cantero 42px + `AllianceBonusSelect` + btn "Héroe".
+- **Bloque Héroe** (atacante o defensor): aparece expandido inline debajo de la fila de controles
+  cuando se activa el toggle. Contenedor `surface-2 border-radius-sm padding 10px 12px`. Dos campos
+  en flex-wrap: "Pts. ataque/defensa héroe" (70px) + "Bonus ataque/defensa héroe %" (60px).
+  [ADD] en atacante: campo adicional "Moral %" (60px, rango 30–100).
+- **`mods-card` [ADD]**: debajo de la fila de controles (antes del TribeBar). Mini-tarjeta
+  `surface-2 border padding 6px 10px`. Chips `surface border radius-full` con valores de
+  modificadores activos. Estado vacío: texto centrado "Sin modificadores activos".
+- **TribeBar**: chips circulares `width:44px height:44px border-radius:full`. Iniciales 2 letras
+  en mayúsculas. Chip activo: `border 2px accent + outline 2px accent offset 2px` + color de
+  fondo propio por tribu (definido en `TRIBE_COLORS`). Atacante: 7 tribus (sin Nature).
+  Defensor/refuerzo: 8 tribus (Nature primero).
+- **TroopGrid**: grid horizontal con `overflow-x:auto`. Columna de etiquetas (icon escudo 14px +
+  icon yunque 14px) + columnas por tropa. Cada columna: icono tropa 28px / input qty 52×28px /
+  input smithy 52×24px (smithy `background:transparent border border`). Columnas con qty=0 →
+  `opacity:0.45`. Defensor: smithy visible pero no requerido (animales no tienen smithy).
+- **Selector de tribu**: NO es dropdown — es `TribeBar` con chips. El dropdown del wireframe
+  original era el spec inicial; el código real usa chips.
+- **Toggle Modo**: pill `AttackTypeToggle` (Saqueo/Ataque) inline en la fila de controles del
+  atacante. NO un segmento separado.
+- **Botón "Añadir refuerzo"**: `border:1px dashed border-strong`, full-width, height 32px.
+  `margin-bottom:12px`. Hover: border y text cambian a `--accent`.
+- **Botón "Simular"**: `height:40px`, full-width, `background:btn-primary-bg`, `font-size:15px`.
 
-**Toggle Modo**: segmento inline "Saqueo / Ataque". Por defecto "Saqueo". Al cambiar a "Ataque" aparecen los campos de catapultas y arietes con transición suave.
-
-**Botón "+ Añadir defensor"**: secundario, al lado del header "DEFENSOR(ES)". Máximo 20 defensores (según spec funcional). Si se alcanza el límite, el botón queda deshabilitado con tooltip "Máximo 20 defensores".
-
-**Botón "Simular"**: primario monocromo, ancho completo del panel de formulario. Deshabilitado si no hay ninguna tropa atacante con cantidad > 0.
+**[ADD] Inputs pendientes de implementar en el código**:
+- `morale` en el bloque Héroe del atacante.
+- `artifacts.diet` en un bloque "Artefactos" colapsable del atacante (hoy no existe ese bloque en el código — `ArtifactSelect` solo controla `fast_troops`).
+- `wall_tribe` debajo de los inputs muro/cantero del defensor.
+- `strong_buildings` en un sub-bloque "Artefactos defensor" colapsable.
+- `server_speed` y `distance_fields` en un bloque "Configuración" colapsable P3 (pendiente).
+- `rams` y `catapult_targets` en un bloque "Catapultas y arietes" colapsable (visible solo en modo Ataque).
 
 ---
 
-### 6.3 V3 — Resultado del Simulador
+### 6.3 V3 — Resultado del Simulador (estado real del código — 2026-05-30)
+
+> **NOTA DE RESINCRONIZACIÓN (2026-05-30)**: el wireframe original describía un panel "Botín" con
+> capacidad/potencial/recursos, "Pérdidas en recursos" colapsable, y "Consumo de trigo". El código
+> real usa `TravianReport` con una `StatsTable` que integra Botín+Coste+Neto en una sola tabla de
+> recursos. No hay "Consumo de trigo" ni "Botín potencial" ni "Pérdidas" colapsable en el código.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  ┌────────────────────────────────────────────────────────────┐   │
-│  │  ● ATACANTE GANA    ratio 2.37   Fuerza: 47650 vs 20110   │   │
-│  └────────────────────────────────────────────────────────────┘   │
-│                                                                    │
-│  TROPAS ATACANTE                                                   │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │ Tropa          Enviadas   Supervivientes   Bajas             │ │
-│  │──────────────────────────────────────────────────────────────│ │
-│  │ [ic] Legionario    500         364          136              │ │
-│  │ [ic] Imperano      200         146           54              │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-│                                                                    │
-│  TROPAS DEFENSOR                                                   │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │ Tropa          Enviadas   Supervivientes   Bajas             │ │
-│  │──────────────────────────────────────────────────────────────│ │
-│  │ [ic] Araña         100           0          100              │ │
-│  │ [ic] Jabalí         40           0           40              │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-│                                                                    │
-│  BOTÍN                                                             │
-│  Capacidad de carga: 54 600     Botín potencial: 27 300            │
-│  Recursos de animales:                                             │
-│  [🪵] Madera: 4 000  [🧱] Arcilla: 4 000                         │
-│  [⚙] Hierro: 4 000  [🌾] Trigo: 4 000  Total: 16 000            │
-│                                                                    │
-│  PÉRDIDAS EN RECURSOS   ▼ (colapsable P2)                          │
-│  Atacante: 45 200 recursos    Defensor: 0                          │
-│  [desglose por tropa en tabla colapsada]                           │
-│                                                                    │
-│  DAÑO ESTRUCTURAL   ▼ (colapsable P2, solo si attack_type=attack)  │
-│  Edificio gid 15: nivel 10 → 7  (24 impactos)                      │
-│  Muro: 10 → 8                                                      │
-│                                                                    │
-│  Consumo de trigo (viaje): 1 240                                   │
-│                                                                    │
-│  [!] Advertencias (si las hay en chips/badges)                     │
-└──────────────────────────────────────────────────────────────────┘
+┌── TravianReport (columna única, mismo max-width 720px) ─────────────────────┐
+│                                                                               │
+│  [⚔ Atacante gana]  Ratio: 2.09  ← badge pill + texto ratio (font-mono)    │
+│                                                                               │
+│  ┌── TroopBand "Tú" ─────────────────────────────────────────────────────┐  │
+│  │ ⚔ TÚ  (header rojo/danger + borde rojo)                               │  │
+│  │ ┌───────────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐ │  │
+│  │ │ Tropa     │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │[ico] │ │  │
+│  │ │ Enviadas  │ 500  │  0   │ 200  │  0   │  0   │  0   │  0   │  0   │ │  │
+│  │ │ Pérdidas  │−136  │  0   │ −54  │  0   │  0   │  0   │  0   │  0   │ │  │
+│  │ │ Superv.   │ 364  │  0   │ 146  │  0   │  0   │  0   │  0   │  0   │ │  │
+│  │ └───────────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘ │  │
+│  │   (col Tropa 104px fixed + cols por tropa iguales; scroll horizontal)  │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌── TroopBand "Defensor" ────────────────────────────────────────────────┐  │
+│  │ 🛡 DEFENSOR  (header azul/info + borde azul)                           │  │
+│  │ [misma estructura — cols con icono por tropa]                          │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  [ADD] ▶ Ver desglose de cálculo  (colapsable chain, inicialmente cerrado)  │
+│                                                                               │
+│  ┌── StatsTable "Estadísticas" ────────────────────────────────────────────┐ │
+│  │ header: ESTADÍSTICAS                                                    │ │
+│  │ ┌────────────────┬──────────────────┬──────────────────┬──────────┐    │ │
+│  │ │                │ Atacante         │ Defensor         │    %     │    │ │
+│  │ │ Infantería     │ [icon] 47 650    │ [icon] 27 800    │   100%   │    │ │
+│  │ │ Caballería     │ [icon]  —        │ [icon]  —        │     0%   │    │ │
+│  │ └────────────────┴──────────────────┴──────────────────┴──────────┘    │ │
+│  │                                                                         │ │
+│  │ ┌────────────┬──────────┬──────────┬──────────┬──────────┬──────────┐  │ │
+│  │ │            │   🪵     │   🧱     │    ⚙    │    🌾   │    Σ    │  │ │
+│  │ │ Botín anim.│  5 200   │  5 200   │  5 200   │  5 200  │  20 800  │  │ │
+│  │ │ Coste trops│−16 320   │−13 600   │−20 400   │ −4 080  │ −54 400  │  │ │
+│  │ │ Neto       │−11 120   │ −8 400   │−15 200   │ +1 120  │ −33 600  │  │ │
+│  │ └────────────┴──────────┴──────────┴──────────┴──────────┴──────────┘  │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                               │
+│  [!] Avisos  ← chips pill accent-subtle si hay warnings en el response       │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Badge de resultado (P1 — siempre visible)**:
-- Atacante gana: fondo `var(--success)` suave (`rgba(36,138,61,.12)`) + borde 1px `var(--success)` + texto "Atacante gana" en `var(--success)` / font-size 15px / weight 600. Icono escudo (Lucide `ShieldCheck` o similar).
-- Defensor gana: mismo patrón con `var(--danger)`. Icono escudo roto.
-- Ratio como número mono prominente al lado. Fuerza de ataque vs defensa en caption debajo.
-- Victoria sin combate (defensa vacía): texto "Victoria sin combate" en `var(--text-secondary)` + ratio omitido.
+- Pill `border-radius:full` con icono ⚔ o 🛡 + texto "Atacante gana" / "Defensor gana".
+- Atacante gana: `rgba(36,138,61,.12)` + borde 1px `var(--success)` + texto `var(--success)`.
+- Defensor gana: `rgba(201,53,44,.12)` + borde 1px `var(--danger)` + texto `var(--danger)`.
+- Ratio: texto `font-mono` color `--text-secondary` al lado ("Ratio: 2.09").
 
-**Tablas de tropas**:
-- Siguen el patrón de tablas densas de DESIGN.md §12: filas 36px, hairline, sin zebra.
-- Cabecera: superficie `var(--surface-2)`, texto micro-caps 11px.
-- Columna icono: 28px. Columna nombre: flex:1. Columnas numéricas: `font-mono tabular-nums`, alineadas a la derecha, 72px.
-- Fila de baja total (si hay): fila de total al pie con peso 500, separador hairline.
-- Las bajas se muestran en `var(--danger)` (con icono, no solo color — accesibilidad).
-- Los supervivientes se muestran en `var(--success)` cuando > 0.
-- Cuando supervivientes = 0: `var(--text-disabled)`.
+**TroopBand — estructura real (TroopBand en TravianReport.jsx)**:
+- Contenedor `surface border border-radius-md overflow-hidden margin-bottom 14px`.
+- Header banner: fondo `rgba(201,53,44,.12)` atacante / `rgba(40,84,166,.12)` defensor +
+  borde inferior del color correspondiente. Icono emoji + texto UPPERCASE `font-size:13px`.
+- Interior: tabla HTML con `table-layout:fixed`. Primera columna 104px (label "Tropa" + filas:
+  "Enviadas" / "Pérdidas" / "Supervivientes"). Resto de columnas: reparto equitativo del espacio.
+- Fila de iconos (thead): icono de tropa 22px por columna.
+- Filas (tbody): Enviadas (color `--text`) / Pérdidas (`--danger`, prefijo "−") /
+  Supervivientes (`--success` bold si > 0, `--text-tertiary` si = 0).
+- Tropas con qty_initial=0 se muestran de todas formas si pasa el catálogo completo (las columnas
+  muestran 0 en todas las filas).
+- Scroll horizontal en `div(overflow-x:auto)` envolviendo la tabla.
 
-**Panel botín**:
-- Tres líneas: capacidad de carga (siempre), botín potencial (si no es null), desglose de animales (si no es null).
-- Recursos de animales en fila horizontal con icono de recurso (madera/arcilla/hierro/trigo) usando los iconos de recursos del catálogo (`api.getCatalogIcons({icon_type: 'resource'})`).
-- Los números en `font-mono tabular-nums`.
-- Si `resources_gained_from_animals` es null: se muestra "Sin animales muertos" en `var(--text-tertiary)`.
+**StatsTable — estructura real (StatsTable en TravianReport.jsx)**:
+- Sección de fuerza (inf/cav): tabla 4 col (label 180px / Atacante / Defensor / % 64px).
+  Cada celda de valor: `inline-flex align-center gap 6px` con `GameIcon` (img 16px de `/static/icons/`) + número `font-mono`.
+  La columna % muestra la proporción inf/cav del atacante.
+- Sección de recursos: tabla `table-layout:fixed` con `colgroup` (col lbl 180px + 4 recursos + Σ 88px).
+  Header: iconos de recurso reales desde `/api/static/icons/stat_*.png` (no emojis).
+  Filas: Botín animales (verde) / Coste tropas perdidas (rojo, prefijo "−") / Neto (verde/rojo/grey bold). Fila Neto con `background:surface-2`.
+- Los iconos de recursos son imágenes reales del juego (`stat_wood.png`, `stat_clay.png`, etc.),
+  NO emojis. En el playground se usan emojis como fallback visual.
 
-**Pérdidas en recursos (P2)**:
-- Colapsable con `<details>/<summary>`. Sumario muestra el total del atacante en bold.
-- Interior: tabla compacta con tropa / bajas / coste total por tipo de recurso.
+**Refuerzos en el resultado**: si hay refuerzos, el TravianReport muestra N TroopBands defensoras
+(una por formación: defensor principal + cada refuerzo). Cada banda lleva su propio título
+("Defensor" para la primera, "Refuerzos en defensa" para las siguientes).
 
-**Daño estructural (P2, solo modo ataque)**:
-- Colapsable. Solo visible cuando `structural_damage` no es null.
-- Lista de edificios afectados con nivel antes → nivel después.
-- Muro: "nivel antes → nivel después" con indicador visual (si bajó → en `var(--danger)`).
+**Warnings**: `div` con label "AVISOS" micro-caps + pills `accent-subtle / accent-text / border accent /
+border-radius-full / padding 4px 10px`. Icono ⚠ + texto del warning. Se muestran si
+`result.warnings.length > 0`.
 
-**Consumo de trigo**: línea de caption si `crop_consumption` no es null.
-
-**Warnings**: chips/badges en acento oro (`var(--accent-subtle)` con texto `var(--accent-text)`) con icono de advertencia. Uno por warning.
+**[ADD] Cadena de cálculo**: bloque `<details>` colapsable insertado después de las TroopBands
+y antes de la StatsTable. Ver ADD-UI-3 del addendum.
 
 ---
 
@@ -469,17 +526,41 @@ flowchart TD
 
 Ruta del mockup: `frontend/mockups/simulador-combate.playground.html`
 
-**Estado**: pendiente de aprobación por el usuario. El mockup incluye:
-- Vista 1: Formulario Simulador + estado vacío (desktop split)
-- Vista 2: Formulario Simulador + Resultado completo (atacante gana)
+**Estado**: pendiente de aprobación por el usuario.
+
+**Resincronización 2026-05-30**: la vista 7 del playground se ha reescrito para reflejar fielmente
+el estado real del código. Cambios principales:
+- Layout de columna única (maxWidth 720px) — ya no hay 2 columnas (formulario+resultado).
+- ArmyPanel real: header con icon SVG + label UPPERCASE + btn colapsar. Body: fila controles
+  inline → mods-card → TribeBar (chips 44px) → TroopGrid (grid horizontal con scroll).
+- TribeBar: chips circulares 44px con iniciales 2 letras. El dropdown del spec original
+  no corresponde al código.
+- TroopGrid: 3 filas (icono / qty / smithy), scroll horizontal. Columnas dim-col (opacity 0.45)
+  cuando qty=0.
+- Controles atacante: AttackTypeToggle (pill) + AllianceBonusSelect (select) + ArtifactSelect
+  (select) + btn Héroe expand — todos inline en una fila.
+- Controles defensor: icon escudo + NumInput muro 42px + ⚒ + NumInput cantero 42px +
+  AllianceBonusSelect + btn Héroe — todos inline en una fila.
+- Héroe: bloque inline expandible (NO colapsable separado). Dos campos: pts + bonus%.
+- TravianReport real: badge pill (winner) + ratio + TroopBand Tú (tabla fixed) +
+  TroopBand Defensor (tabla fixed) + [ADD] cadena cálculo + StatsTable (inf/cav + W/C/I/C/Σ).
+- StatsTable incluye ahora icono de GameIcon (imagen) + col % inf/cav + sub-tabla
+  Botín/Coste/Neto con 4 recursos + Σ. NO hay "Botín potencial", "Consumo trigo" ni
+  "Pérdidas en recursos" colapsable en el código real.
+
+**Vistas del mockup**:
+- Vista 1: Formulario Simulador + estado vacío
+- Vista 2: Formulario Simulador + Resultado (atacante gana)
 - Vista 3: Formulario Simulador + Resultado (defensor gana)
 - Vista 4: Formulario Optimizador + estado vacío
 - Vista 5: Resultado Optimizador (con detalle de alternativa)
 - Vista 6: Estado error
+- Vista 7: Baseline RESINCRONIZADO + bloques ADD (columna única, TribeBar+TroopGrid+TravianReport reales)
 - Toggle de tema claro/oscuro
 - Drag & drop de bloques para reordenar
 
-**Layout aprobado**: pendiente (el usuario debe abrir el playground, reordenar bloques y exportar el JSON).
+**Layout aprobado**: pendiente (el usuario debe abrir el playground, seleccionar vista 7,
+reordenar bloques si lo desea y exportar el JSON).
 
 ---
 
@@ -824,3 +905,505 @@ Ruta del mockup: `frontend/mockups/simulador-combate.playground.html`
 | Nav item 'calc' pierde `disabled` y `soon` | La pestaña ya tiene contenido implementable | WorldSpacePage.jsx líneas 356-359 |
 | UI: reutiliza `Spinner`, `showToast`, `ErrorBoundary`, `useI18n`, `api.getCatalogIcons`, patrón `FormField`/`inputBase` | palantir confirmó disponibilidad de todos estos primitivos | Contexto de entrada (resultado palantir) |
 | UI: crea `CalcTab`, `TroopInputList`, `TroopResultTable`, `LootPanel`, etc. | No existen en el código — feature completamente nueva | palantir: no hay UI de combate existente |
+
+---
+
+## ADDENDUM 2026-05-30 — Modificadores visibles
+
+> **Estado**: `ready-for-impl`
+> **Rama activa**: `feature/optimizador-balance-multiraid`
+> **Spec funcional relacionado**: `docs/specs/simulador-combate.md` → sección `ADDENDUM 2026-05-30`
+> **Motivación**: el frontend actualmente hardcodea `morale=100` y `diet=1.0`, y nunca envía `strong_buildings`, `wall_tribe`, `rams`, `catapult_targets`, `distance_fields` ni `server_speed`. El backend ya tiene todos esos campos en sus DTOs Pydantic; solo falta que la UI los presente y los envíe. Además, el backend devolverá intermedias nuevas de la cadena de cálculo que la UI mostrará en dos lugares: (1) mini-tarjeta reactiva en cada `ArmyPanel` y (2) bloque colapsable "Cadena de cálculo" en el resultado.
+
+---
+
+### ADD-UI-1. Nuevos inputs en `ArmyPanel` (atacante y defensor)
+
+#### ADD-UI-1.1 Inputs del panel atacante
+
+Los campos de héroe (`hero_attack_points`, `hero_attack_bonus_percent`) y alianza (`alliance_bonus`) ya existen. Se añaden:
+
+**`morale` (rango 30–100, default 100)**
+
+- Ubicación: dentro del bloque colapsable "Héroe y bonus" del atacante, debajo del campo "Alianza %", en la misma fila que una etiqueta "Moral".
+- Presentación: `NumInput` compacto (mismo patrón que los de smithy en `ArmyPanel.jsx`) de 60px de ancho, con etiqueta "Moral" + unidad "%" a la derecha. Rango 30–100.
+- Pre-sets rápidos: NO. El valor es continuo y específico del servidor; un slider añadiría anchura innecesaria. El input numérico es suficiente.
+- Cuándo es relevante: solo en servidores speed > x1. La UI NO oculta el campo en speed=1 (simplifica la implementación; el backend aplica moral=100 sin efecto en speed=1 de todas formas). Se puede añadir un tooltip `title="Solo aplica en servidores speed > x1"` al label.
+- Valor en default: `100` — sin cambio de comportamiento respecto al hardcodeado actual.
+
+**`artifacts.diet` (rango 0.01–10.0, default 1.0)**
+
+- Ubicación: dentro del bloque colapsable "Artefactos" del atacante, primera fila, etiqueta "Dieta crop".
+- Presentación: `NumInput` de 60px, etiqueta "Dieta crop" + `"×"` a la izquierda. El artefacto de dieta es un multiplicador (0.5 = consume la mitad); se muestra con formato `× {valor}`.
+- Valor en default: `1.0` (sin cambio respecto al hardcodeado).
+- El bloque "Artefactos" ya existe como colapsable. Este campo va al inicio de ese bloque.
+
+**`artifacts.fast_troops` (rango 0.01–10.0, default 1.0)**
+
+- Situación previa: palantir indica que en `CombatCalculator.jsx` ya hay un control "artifact" que afecta a `fast_troops`. Ese control vive en el nivel de `CombatCalculator`, no en `ArmyPanel`.
+- Decisión de diseño: mantenerlo donde está, dentro del bloque colapsable "Artefactos" del atacante en el panel atacante (consolidar todo en un mismo lugar). Si el control actual de `fast_troops` en `CombatCalculator.jsx` está fuera del panel del atacante, moverlo al bloque "Artefactos" del atacante para mantener coherencia de layout. No duplicar el control.
+- Presentación: mismo patrón que `artifacts.diet` — `NumInput` de 60px, etiqueta "Veloc. tropa" + `"×"`.
+
+#### ADD-UI-1.2 Inputs del panel defensor (por cada `DefenderPanel`)
+
+**`artifacts.strong_buildings` (rango 0.01–10.0, default 1.0)**
+
+- Ubicación: dentro del bloque colapsable "Artefactos defensor", primera fila, etiqueta "Edif. resistentes".
+- Presentación: `NumInput` de 60px + etiqueta "Edif. resistentes" + `"×"`. Nota en caption: "(afecta a arietes)".
+- En MVP solo afecta al cálculo de daño de arietes. El bloque colapsable "Artefactos defensor" ya existe como `<details>` en el panel del defensor; añadir este campo como primer item.
+
+**`wall.wall_tribe` (tribu del muro)**
+
+- Ubicación: en la sección de muro del `DefenderPanel`, en la misma fila que `wall_level` y `stonemason_level`, como dropdown `TribeSelector` con label "Tribu muro".
+- Decisión de autocomplete: cuando el defensor tiene **una sola tribu** seleccionada, la UI autocompleta `wall_tribe` con esa tribu y deshabilita el dropdown (con tooltip "Tribu del muro inferida de la tribu del defensor"). Esta regla ahorra un selector redundante en el 90% de los casos. Solo cuando el defensor tiene múltiples formaciones de distintas tribus (situación PvP avanzada con refuerzos), el campo queda habilitado y el usuario elige.
+- Default en UI: `null` — dropdown muestra "Sin especificar" → el backend usa fallback `0.03 × nivel_muro` con warning. Cuando se autocompleta, el valor pasa directamente.
+- Justificación del autocomplete: la tribu del muro casi siempre coincide con la del dueño de la aldea. Pedir dos selects para la misma información viola "Menos es más" de `DESIGN.md §1`. El autocomplete es la decisión correcta para el caso mayoritario, con escape manual para el edge case.
+
+**`attacker.rams` (cantidad + smithy_level)**
+
+- Visibilidad: SOLO cuando `attack_type = "attack"`. El bloque "Catapultas y arietes" ya está especificado en el wireframe §6.2. Este addendum confirma los inputs exactos: `NumInput` de 80px para cantidad (rango 0–1 000 000) + `NumInput` de 40px para smithy (rango 0–20), con etiquetas "Arietes" y "S:" respectivamente.
+- Oculto en raid: se mantiene el dato en estado React pero no se envía (se envía `rams: null`). Al volver a modo ataque, el dato reaparece.
+- Estado disabled con tooltip: cuando `wall_level = 0` y `attack_type = "attack"`, los inputs de arietes aparecen deshabilitados con tooltip "No hay muro que dañar (nivel 0)". Esto implementa EC-35 del spec funcional ADD-4.
+
+**`attacker.catapult_targets` (lista de edificio + nivel)**
+
+- Visibilidad: SOLO cuando `attack_type = "attack"`. Ya especificado en §6.2. Este addendum confirma: un dropdown de edificio (por gid, con nombre localizado) + `NumInput` de 40px para nivel actual (0–20). Botón "+ Objetivo" para añadir más (sin límite de UI — el backend acepta la lista entera). Botón "×" para quitar.
+- Si `attack_type` cambia a "raid", la lista se oculta pero se conserva en estado React.
+
+**`config.distance_fields` y `config.server_speed`**
+
+- Ubicación: bloque colapsable "Configuración" (P3), ya existente en §6.2. Estos campos ya están en el wireframe. Este addendum confirma que son inputs reales que se envían al backend (no hardcodeados). El bloque "Configuración" se separa del formulario de atacante/defensor — vive al pie del formulario completo, antes del botón "Simular". No va dentro de `ArmyPanel`.
+- `server_speed`: dropdown con valores 1×, 2×, 3×, 5×, 10× (enteros más frecuentes en Travian). Default 1.
+- `distance_fields`: `NumInput` libre (float), placeholder "Campos". Vacío = `null` → crop_consumption no se calcula.
+
+---
+
+### ADD-UI-2. Mini-tarjeta "Modificadores activos" en cada panel
+
+#### ADD-UI-2.1 Posición
+
+La mini-tarjeta se sitúa **dentro del panel del atacante/defensor, inmediatamente debajo de la lista de tropas y encima del bloque "Héroe y bonus" colapsable**. Esta posición:
+
+- Separa visualmente la lista de tropas (input primario) de los modificadores de estado (inputs secundarios/colapsados).
+- Queda siempre visible sin scroll en el panel en su estado compacto.
+- No requiere espacio extra: ocupa el hueco entre la lista y los colapsables.
+
+NO es colapsable. El espacio está siempre reservado. Esto evita saltos de layout cuando los modificadores aparecen/desaparecen al editar el formulario.
+
+#### ADD-UI-2.2 Comportamiento cuando no hay modificadores activos
+
+Cuando todos los valores están en default (sin modificadores), la tarjeta muestra el texto:
+
+> "Sin modificadores activos"
+
+en `var(--text-tertiary)`, font-size 11px, alineado al centro. La tarjeta no desaparece.
+
+Justificación: mantener el espacio reservado evita saltos de layout. Mostrar el estado vacío en lugar de ocultarlo educa al usuario sobre qué modificadores existen — sabe que hay una tarjeta aquí que se llena cuando activa algo.
+
+#### ADD-UI-2.3 Chips de modificadores activos
+
+Cuando hay al menos un modificador activo, la tarjeta muestra chips inline separados por hairline vertical (o simplemente en fila con gap). Cada chip:
+
+- Fondo: `var(--surface-2)`. Borde: `1px solid var(--border)`. Border-radius: `var(--radius-full)`. Padding: `2px 8px`. Font-size: `11px`.
+- Tooltip (`title=""`) con la descripción completa del modificador (i18n key: `calc.mod.<nombre>.tooltip`).
+
+**Formato por tipo de modificador (panel atacante):**
+
+| Modificador | Condición de activación | Formato del chip |
+|---|---|---|
+| Héroe ataque | `hero_attack_points > 0` | `+ {n} pts` |
+| Bonus héroe % | `hero_attack_bonus_percent > 0` | `+ {n} %` |
+| Bonus alianza | `alliance_bonus > 0` | `+ {n} %` |
+| Moral | `morale < 100` | `× {morale/100 redondeado a 2 dec}` (ej: `× 0.75`) |
+| Artefacto dieta | `artifacts.diet !== 1.0` | `× {diet} crop` |
+| Artefacto velocidad | `artifacts.fast_troops !== 1.0` | `× {fast_troops} vel.` |
+| Smithy activo | Al menos 1 tropa con `smithy_level > 0` | badge `Herr.` en `var(--accent-subtle)` / `var(--accent-text)` (sin detalle — el desglose está en la cadena de cálculo) |
+
+**Formato por tipo de modificador (panel defensor):**
+
+| Modificador | Condición de activación | Formato del chip |
+|---|---|---|
+| Héroe defensa | `hero_defense_points > 0` | `+ {n} pts` |
+| Bonus héroe def % | `hero_defense_bonus_percent > 0` | `+ {n} %` |
+| Muro | `wall_level > 0` | `Muro N.{n}` |
+| Stonemason | `stonemason_level > 0` | `× 1.{05*n padded}` (ej: `× 1.10`) |
+| Edif. resistentes | `artifacts.strong_buildings !== 1.0` | `× {strong_buildings} edif.` |
+
+#### ADD-UI-2.4 Reactividad
+
+La mini-tarjeta se actualiza en tiempo real al cambiar cualquier input del formulario, sin llamar a la API. Es cálculo puro sobre el estado del formulario React (estado local del componente `ArmyPanel` o del padre `CombatCalculator` si los modificadores son props). No depende del response del backend.
+
+#### ADD-UI-2.5 Estilo visual
+
+```
+┌─────────────────────────────────────────┐
+│ [+ 1200 pts] [+ 30 %] [+ 3 %] [Herr.]  │  ← chips en fila
+└─────────────────────────────────────────┘
+```
+
+Cuando está en default (sin modificadores):
+```
+┌─────────────────────────────────────────┐
+│          Sin modificadores activos      │  ← text-tertiary centrado
+└─────────────────────────────────────────┘
+```
+
+La tarjeta tiene borde `1px solid var(--border)`, `border-radius: var(--radius-sm)`, padding `6px 10px`, fondo `var(--surface-2)`. No tiene título/header propio — su posición en el panel la contextualiza.
+
+---
+
+### ADD-UI-3. Bloque "Cadena de cálculo" en `CombatResult` (V3)
+
+#### ADD-UI-3.1 Posición
+
+Debajo de las tablas de tropas (atacante y defensor) y **encima del panel de botín**. Orden actualizado en V3:
+
+1. Badge de resultado (atacante/defensor gana) — P1
+2. Tabla tropas atacante — P1
+3. Tabla tropas defensor — P1
+4. **[NUEVO] Cadena de cálculo** — P2, colapsable por defecto
+5. Panel botín — P1
+6. Pérdidas en recursos — P2, colapsable
+7. Daño estructural — P2, colapsable, solo modo ataque
+8. Consumo de trigo — P2
+9. Warnings
+
+Justificación de la posición (entre tropas y botín): la cadena de cálculo explica por qué se llegó a esas bajas. El usuario que quiere entenderlo lo hace antes de ver el botín. El botín es P1 para el farmero; la cadena es P2 para el que quiere entender la fórmula. Separarlos por la cadena (colapsada) evita que el botín quede enterrado.
+
+#### ADD-UI-3.2 Estructura colapsable
+
+El bloque es un `<details>/<summary>` nativo (patrón ya usado en el mockup para "Pérdidas en recursos"). Summary: `"Ver desglose de cálculo ▾"` / `"Ocultar desglose ▴"` al abrir. Cerrado por defecto.
+
+Estado de apertura: local en React (no en localStorage). Si el usuario abre la cadena y re-simula, la cadena se muestra cerrada en el nuevo resultado (el resultado nuevo es diferente — no preservar el estado entre simulaciones distintas reduce la confusión).
+
+#### ADD-UI-3.3 Layout interno: una sola columna
+
+Decisión: una sola columna (no dos columnas atacante/defensor). Justificación:
+
+- El contenedor de resultado tiene `flex:1; min-width:0`. En desktop puede tener ≥ 720px, pero en tablet (768-1023px) y móvil el contenedor es full-width. Diseñar para una sola columna garantiza legibilidad en todos los breakpoints sin duplicar el CSS de responsive.
+- La secuencia A → D → Resultado ya tiene una narrativa lógica en una columna: primero el atacante construye su fuerza, luego el defensor la suya, luego el combate los pone frente a frente.
+- Dos columnas en paralelo requieren que el usuario lea en paralelo — la cadena de cálculo es secuencial por naturaleza.
+
+```
+▾ Ver desglose de cálculo
+
+  ATACANTE
+  A base        47 650       ← sum(attack_eff × qty) con smithy
+  + Héroe       54 798       ← +1 200 pts × (1 + 30%) aplicado
+  + Alianza     56 442       ← × 1.03
+  A efectivo    56 442       ← moral = 100 (omitida al ser 1.0)
+
+  DEFENSOR
+  D base        20 110       ← suma ponderada inf/cav con smithy
+  Prop. cav.       28 %      ← solo si cav > 0 y < 100%
+  + Héroe       21 719       ← hero_defense_points + bonus %
+  × Muro        1.28         ← wall_level=10 (1.18) × stonemason=2 (1.10)
+  D efectiva    27 800
+
+  RESULTADO
+  Tropas en campo  1 200  →  K 1.50
+  Ratio A/D        2.03
+  Bajas atacante   18 %
+  Bajas defensor  100 %
+
+  ── SMITHY POR TROPA ────────────────────────
+  [ic] Legionario    ×  1.18  (smithy 10)
+  [ic] Imperano      ×  1.14  (smithy 8)
+```
+
+Las líneas con valor default se omiten (ej: si `alliance_bonus = 0`, la línea `+ Alianza` no aparece). Si `D_efectiva = 0` (EC-01), la sección RESULTADO muestra `"Victoria sin combate"` en lugar de ratio y porcentajes.
+
+#### ADD-UI-3.4 Estilo de cada línea
+
+- Etiqueta del paso: `font-size: 13px; color: var(--text-secondary)`. Ancho fijo 140px (alineación de columnas). Propiedad lógica `width: 140px; display: inline-block`.
+- Valor: `font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text)`. Alineado a la izquierda (los valores son de distinta magnitud — no tiene sentido alinearlos a la derecha como en una tabla de bajas).
+- Línea final destacada (A efectivo, D efectiva, Ratio): `font-weight: 600; color: var(--text)`.
+- Separador entre secciones ATACANTE / DEFENSOR / RESULTADO: hairline `var(--border)`, margin `8px 0`.
+- Sub-sección "Smithy por tropa": separador `var(--border)` + texto `"SMITHY POR TROPA"` en `font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary)`. Solo aparece cuando al menos una tropa tiene `smithy_level > 0`. Las tropas con smithy=0 (multiplicador=1.00) se omiten.
+
+#### ADD-UI-3.5 Degradación silenciosa (EC-30)
+
+Si el backend no devuelve un campo intermedio (versión anterior del servidor), la línea correspondiente simplemente no se renderiza. El componente verifica `campo !== undefined && campo !== null` antes de renderizar cada línea. No se lanza error, no hay placeholder, no se interrumpe el render del bloque.
+
+#### ADD-UI-3.6 Accesibilidad y RTL
+
+- `<details>/<summary>` nativo: accesible de serie. El estado abierto/cerrado es anunciado por lectores de pantalla.
+- Propiedades lógicas CSS en todo el bloque: `padding-inline`, `margin-inline`. No usar `padding-left`/`right`.
+- Los números son `tabular-nums` y `font-mono` — listos para RTL (los números no se invierten).
+- El bloque sub-sección Smithy usa flex con `flex-direction: row; align-items: center; gap: 8px` — se espeja correctamente en RTL.
+
+---
+
+### ADD-UI-4. Wireframes de los nuevos elementos
+
+#### ADD-UI-4.1 Mini-tarjeta en panel atacante (con modificadores activos)
+
+```
+┌── ATACANTE ─────────────────────────────────────────────────┐
+│  Tribu: [ Romans ▾ ]    Modo: [Saqueo◉] [Ataque○]          │
+│                                                             │
+│  [ic] Legionario    [__500__] [S:10]                        │
+│  [ic] Imperano      [__200__] [S: 8]                        │
+│  [ic] Explorador    [______] [S: 0]  (dim)                 │
+│  ...                                                        │
+│                                                             │
+│ ┌─ MODIFICADORES ACTIVOS ───────────────────────────────┐   │
+│ │ [+ 1200 pts] [+ 30 %] [+ 3 %] [Herr.]                │   │
+│ └───────────────────────────────────────────────────────┘   │
+│                                                             │
+│ ▼ Héroe y bonus   ▼ Artefactos                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### ADD-UI-4.2 Mini-tarjeta en estado vacío (sin modificadores)
+
+```
+│ ┌─────────────────────────────────────────────────────┐   │
+│ │         Sin modificadores activos                   │   │  ← text-tertiary centrado
+│ └─────────────────────────────────────────────────────┘   │
+```
+
+#### ADD-UI-4.3 Bloque colapsable "Héroe y bonus" con morale
+
+```
+▼ Héroe y bonus
+┌──────────────────────────────────────────────┐
+│ Pts ataque: [______]   Bonus %: [______]     │
+│ Alianza %:  [____]     Moral:   [___] %      │  ← nuevo: morale
+└──────────────────────────────────────────────┘
+```
+
+#### ADD-UI-4.4 Bloque colapsable "Artefactos" del atacante
+
+```
+▼ Artefactos
+┌──────────────────────────────────────────────┐
+│ Dieta crop:  × [___]    Veloc. tropa: × [___]│  ← diet + fast_troops
+└──────────────────────────────────────────────┘
+```
+
+#### ADD-UI-4.5 Bloque arietes (visible solo en modo Ataque, dentro de "Catapultas y arietes")
+
+```
+▼ Catapultas y arietes
+┌──────────────────────────────────────────────┐
+│ Arietes:  [_qty___] [S: __]                  │  ← disabled si wall_level=0
+│ Catapultas objetivo:                         │
+│   [Edificio ▾] Nivel: [__]  [× quitar]       │
+│   [+ Añadir objetivo]                        │
+└──────────────────────────────────────────────┘
+```
+
+#### ADD-UI-4.6 Sección muro del defensor (con wall_tribe)
+
+```
+Muro: [__lv]  Stonemason: [__lv]  Tribu muro: [Romans ▾]
+                                              ↑ autocomplete si una sola tribu defensor
+```
+
+#### ADD-UI-4.7 Cadena de cálculo en resultado (colapsada por defecto)
+
+```
+▶ Ver desglose de cálculo
+
+──────────────────────────────────────────────
+[abierta]
+
+  ATACANTE
+  A base              47 650
+  + Héroe             54 798
+  + Alianza           56 442
+  A efectivo          56 442
+
+  DEFENSOR
+  D base              20 110
+  Prop. cav.             28 %
+  + Héroe             21 719
+  × Muro               1.28
+  D efectiva          27 800
+
+  RESULTADO
+  N en campo   1 200  →  K 1.50
+  Ratio A/D            2.03
+  Bajas atacante       18 %
+  Bajas defensor      100 %
+
+  SMITHY POR TROPA
+  [ic] Legionario      × 1.18
+  [ic] Imperano        × 1.14
+```
+
+---
+
+### ADD-UI-5. Estados nuevos y edge cases de UI
+
+| ID | Descripción | Tratamiento en UI |
+|---|---|---|
+| EC-30 | Backend sin campos intermedios (versión antigua) | Mini-tarjeta no renderiza chips sin datos; cadena de cálculo no renderiza líneas sin datos. Sin error visible. |
+| EC-31 | `wall_level=0` con `stonemason_level > 0` | Chip de stonemason aparece en la tarjeta del defensor aunque el muro sea nivel 0. En la cadena: línea `× Muro 1.00` + `× Stonemason {n}` siempre visible cuando stonemason > 0. |
+| EC-32 | Tropa con `smithy_level=0` | No aparece en sub-bloque "Smithy por tropa". Si todas las tropas tienen smithy=0, el sub-bloque no se renderiza. |
+| EC-33 | Cambiar `attack_type` a "raid" con datos en catapult_targets | La UI oculta el bloque; los datos se preservan en estado React. Al volver a "ataque" reaparecen. En la mini-tarjeta, el chip de smithy sigue visible si hay smithy activo. |
+| EC-35 | `wall_level=0` con arietes activos | Inputs de arietes deshabilitados con tooltip "No hay muro que dañar (nivel 0)". |
+| EC-36 | `attacker_loss_pct`/`defender_loss_pct` = null (defensa vacía) | Cadena muestra "Victoria sin combate" en lugar de líneas de bajas. |
+| EC-37 | `morale_factor = 1.0` (moral 100) | La línea "× Moral" se omite de la cadena. En la mini-tarjeta, el chip de moral no aparece. |
+| ADD-EC-01 | Panel atacante con `alliance_bonus=0`, `hero_attack_points=0`, `hero_attack_bonus_percent=0`, `morale=100`, `artifacts` en default, sin smithy | Mini-tarjeta muestra "Sin modificadores activos". |
+| ADD-EC-02 | Sub-bloque "Smithy por tropa" cuando solo algunas tropas tienen smithy activo | Solo aparecen las tropas con `smithy_level > 0`. Las que tienen 0 se omiten sin indicación. |
+| ADD-EC-03 | `wall_tribe` con un solo defensor (caso mayoría) | Dropdown `wall_tribe` se autocompleta con la tribu del defensor y se deshabilita. El valor se envía en el request. Tooltip: "Tribu del muro inferida". |
+| ADD-EC-04 | `wall_tribe` con múltiples defensores de distintas tribus | Dropdown habilitado, default "Sin especificar" (`null`). |
+
+---
+
+### ADD-UI-6. Inventario de componentes — delta del addendum
+
+Solo se listan los componentes que cambian o se añaden respecto al inventario de §8:
+
+#### Componentes MODIFICAR (ya existen, reciben nuevas props)
+
+| Componente | Cambio |
+|---|---|
+| `ArmyPanel.jsx` | Añadir: (1) `NumInput` para `morale` dentro de `HeroBonusPanel`; (2) `ActiveModifiersCard` (nuevo, ver abajo) entre la lista de tropas y los colapsables; (3) props para pasar los valores de modificadores hacia arriba (o leer del contexto del form). |
+| `HeroBonusPanel` | Añadir fila "Moral" con `NumInput` rango 30–100, default 100. |
+| `ArtifactPanel` (atacante) | Añadir fila "Dieta crop" (diet) y confirmar fila "Veloc. tropa" (fast_troops). |
+| `ArtifactPanel` (defensor) | Añadir fila "Edif. resistentes" (strong_buildings). |
+| `DefenderPanel` | Añadir dropdown `TribeSelector` para `wall_tribe` en la sección de muro. Lógica de autocomplete con la tribu del defensor. |
+| `CatapultRamPanel` | Confirmar presencia de `NumInput` para arietes cantidad + smithy_level. Añadir lógica de disabled cuando `wall_level=0`. |
+| `ConfigPanel` | Confirmar que `distance_fields` y `server_speed` son inputs reales (no hardcodeados). |
+| `CombatResult.jsx` | Añadir bloque `<details>` colapsable "Cadena de cálculo" entre las tablas de tropas y el panel de botín. |
+
+#### Componentes CREAR (nuevos)
+
+| Componente | Descripción |
+|---|---|
+| `ActiveModifiersCard` | Mini-tarjeta de modificadores activos. Props: objeto con todos los valores de modificadores del panel (morale, hero_attack_points, etc.). Estado interno: calcula los chips a mostrar. Reactivo al cambio de props. Muestra "Sin modificadores activos" cuando no hay ninguno. |
+| `CalcChain` | Bloque "Cadena de cálculo" en el resultado. Props: `CombatResult` completo (solo consume los campos intermedios si existen). Colapsable con `<details>`. Renderiza solo las líneas con valor no-default. Sub-sección "Smithy por tropa" condicional. |
+
+---
+
+### ADD-UI-7. Contenido y microcopy — extensión del §9
+
+| Clave i18n | Texto ES | Contexto |
+|---|---|---|
+| `calc.attacker.morale` | Moral | Label input |
+| `calc.attacker.morale.tooltip` | Solo aplica en servidores speed > x1 | Tooltip |
+| `calc.attacker.diet` | Dieta crop | Label artefacto |
+| `calc.attacker.fastTroops` | Veloc. tropa | Label artefacto |
+| `calc.defender.strongBuildings` | Edif. resistentes | Label artefacto defensor |
+| `calc.defender.strongBuildings.note` | (afecta a arietes) | Caption en el campo |
+| `calc.wall.tribe` | Tribu muro | Label dropdown |
+| `calc.wall.tribe.auto` | Tribu del muro inferida | Tooltip cuando está autocompleto |
+| `calc.wall.tribe.none` | Sin especificar | Opción default del dropdown |
+| `calc.mods.active` | Modificadores activos | Aria-label de la tarjeta |
+| `calc.mods.none` | Sin modificadores activos | Estado vacío |
+| `calc.mods.heroAtk` | + {n} pts ataque héroe | Tooltip chip |
+| `calc.mods.heroBonusPct` | + {n} % bonus héroe | Tooltip chip |
+| `calc.mods.alliance` | + {n} % alianza | Tooltip chip |
+| `calc.mods.morale` | × {n} moral ({pct}%) | Tooltip chip |
+| `calc.mods.diet` | × {n} consumo crop | Tooltip chip |
+| `calc.mods.fastTroops` | × {n} velocidad tropa | Tooltip chip |
+| `calc.mods.smithy` | Herrería activa | Badge chip |
+| `calc.mods.heroDef` | + {n} pts defensa héroe | Tooltip chip |
+| `calc.mods.heroDefBonusPct` | + {n} % bonus héroe def | Tooltip chip |
+| `calc.mods.wall` | Muro nivel {n} | Tooltip chip |
+| `calc.mods.stonemason` | × {n} stonemason | Tooltip chip |
+| `calc.mods.strongBuildings` | × {n} edif. resistentes | Tooltip chip |
+| `calc.chain.title` | Ver desglose de cálculo | Summary colapsable |
+| `calc.chain.close` | Ocultar desglose | Summary cuando está abierto |
+| `calc.chain.attacker` | ATACANTE | Header subsección |
+| `calc.chain.defender` | DEFENSOR | Header subsección |
+| `calc.chain.result` | RESULTADO | Header subsección |
+| `calc.chain.smithyByTroop` | SMITHY POR TROPA | Header sub-bloque |
+| `calc.chain.aBase` | A base | Etiqueta línea |
+| `calc.chain.aHero` | + Héroe | Etiqueta línea |
+| `calc.chain.aAlliance` | + Alianza | Etiqueta línea |
+| `calc.chain.aMorale` | × Moral ({pct}%) | Etiqueta línea |
+| `calc.chain.aEffective` | A efectivo | Etiqueta línea |
+| `calc.chain.dBase` | D base | Etiqueta línea |
+| `calc.chain.cavRatio` | Prop. cav. | Etiqueta línea |
+| `calc.chain.dHero` | + Héroe | Etiqueta línea |
+| `calc.chain.dWall` | × Muro | Etiqueta línea |
+| `calc.chain.dEffective` | D efectiva | Etiqueta línea |
+| `calc.chain.nField` | N en campo | Etiqueta línea |
+| `calc.chain.kFactor` | K | Etiqueta valor K |
+| `calc.chain.ratio` | Ratio A/D | Etiqueta línea |
+| `calc.chain.atkLoss` | Bajas atacante | Etiqueta línea |
+| `calc.chain.defLoss` | Bajas defensor | Etiqueta línea |
+| `calc.chain.noCombat` | Victoria sin combate | Texto en lugar de ratio (EC-01) |
+| `calc.rams` | Arietes | Label input |
+| `calc.rams.disabled` | No hay muro que dañar (nivel 0) | Tooltip disabled |
+| `calc.catapult.addTarget` | + Añadir objetivo | Botón |
+| `calc.serverSpeed` | Velocidad servidor | Label config |
+| `calc.distance` | Distancia (campos) | Label config |
+
+---
+
+### ADD-UI-8. Accesibilidad — extensión del §10
+
+- `ActiveModifiersCard`: `aria-label="Modificadores activos"` en el contenedor. Los chips no son interactivos (son de solo lectura). No tienen `role="button"` — solo tienen `title` para el tooltip nativo.
+- `CalcChain`: `<details>/<summary>` nativo — accesible de serie. `aria-label` en `<details>`: `"Desglose de cálculo"`.
+- Input `morale`: `aria-label="Moral del atacante"`. Tooltip en el label (nativo `title`).
+- Input `diet`: `aria-label="Multiplicador de consumo de crop"`.
+- Input `fast_troops`: `aria-label="Multiplicador de velocidad de tropa"`.
+- Input `strong_buildings`: `aria-label="Multiplicador de edificios resistentes"`.
+- Dropdown `wall_tribe`: `aria-label="Tribu del muro"`. Cuando está autocompleto y deshabilitado: `aria-disabled="true"` + tooltip informativo.
+- Inputs de arietes deshabilitados (EC-35): `disabled` nativo + `aria-disabled="true"` + `title` con el texto de la razón.
+- Sub-bloque "Smithy por tropa" en `CalcChain`: `aria-label="Desglose de modificadores de herrería por tropa"`.
+- Touch targets: inputs `morale`, `diet`, `fast_troops`, `strong_buildings` tienen altura mínima 36px en desktop, 44px en móvil. El dropdown `wall_tribe` sigue el mismo patrón que `TribeSelector`.
+
+---
+
+### ADD-UI-9. Responsive — extensión del §11
+
+| Elemento nuevo | Desktop | Tablet | Móvil |
+|---|---|---|---|
+| `ActiveModifiersCard` | Visible siempre en el panel | Visible | Visible (P2 — colapsable como parte del panel, que está colapsado con resultado) |
+| `CalcChain` | P2, colapsable, una columna | P2, colapsable | P2, colapsable, una columna (igual) |
+| Sub-bloque Smithy | Listado simple debajo del resultado | Igual | Igual (pocas líneas) |
+| Inputs morale/diet/fast_troops | En fila dentro del colapsable | En fila | En columna (stack vertical dentro del colapsable) |
+| Dropdown wall_tribe | En fila con wall_level y stonemason | En fila | Stack vertical debajo de wall_level |
+| Inputs arietes (qty + smithy) | En fila | En fila | En fila (ambos caben en < 180px) |
+
+---
+
+### ADD-UI-10. Criterios de aceptación de diseño — extensión del §13
+
+- [ ] La mini-tarjeta "Modificadores activos" muestra "Sin modificadores activos" cuando todos los valores están en default.
+- [ ] Al cambiar `morale` a 75, la mini-tarjeta del atacante muestra el chip `× 0.75` sin necesidad de pulsar Simular.
+- [ ] Al cambiar `hero_attack_points` a 500, la mini-tarjeta muestra `+ 500 pts` reactivamente.
+- [ ] Al cambiar `smithy_level` de cualquier tropa a > 0, aparece el badge `Herr.` en la mini-tarjeta.
+- [ ] Al desactivar todos los modificadores (volver a defaults), la mini-tarjeta vuelve a "Sin modificadores activos".
+- [ ] El bloque "Cadena de cálculo" está colapsado por defecto al recibir un resultado.
+- [ ] Al abrir el bloque, se muestran solo las líneas con valor no-default (si `alliance_bonus=0`, la línea `+ Alianza` no aparece).
+- [ ] Si el response no incluye `attacker_attack_base` (EC-30), la cadena no renderiza esa línea y no lanza error en consola.
+- [ ] Cuando hay tropas con `smithy_level > 0`, el sub-bloque "Smithy por tropa" aparece con una línea por cada tropa con smithy activo.
+- [ ] Tropas con `smithy_level = 0` no aparecen en el sub-bloque "Smithy por tropa".
+- [ ] Si la defensa es vacía (EC-01), la cadena muestra "Victoria sin combate" en lugar de ratio y porcentajes de bajas.
+- [ ] El dropdown `wall_tribe` se autocompleta y deshabilita cuando hay un solo defensor con tribu seleccionada.
+- [ ] Los inputs de arietes están deshabilitados con tooltip cuando `wall_level = 0` y `attack_type = "attack"`.
+- [ ] Los inputs nuevos (morale, diet, fast_troops, strong_buildings, wall_tribe, rams, catapult_targets, distance_fields, server_speed) se incluyen en el request JSON al pulsar Simular.
+- [ ] Todos los controles nuevos tienen targets táctiles ≥ 44px en móvil.
+- [ ] Los chips de la mini-tarjeta tienen tooltip (nativo `title`) con descripción del modificador.
+- [ ] El bloque "Cadena de cálculo" usa propiedades lógicas CSS (no `left`/`right`); se renderiza correctamente en RTL.
+- [ ] Los valores numéricos de la cadena usan `font-mono` y `tabular-nums`.
+- [ ] Los números en la cadena de cálculo son legibles en modo claro y oscuro (usan tokens CSS, no hex hardcodeados).
+
+---
+
+### ADD-UI-11. Trazabilidad del addendum
+
+| Decisión de diseño | Justificación |
+|---|---|
+| Mini-tarjeta siempre visible (no colapsable) | Evitar saltos de layout cuando aparecen/desaparecen chips. El espacio reservado también educa al usuario nuevo sobre qué modificadores existen — ADD-3.1 del spec funcional. |
+| "Sin modificadores activos" en lugar de ocultar tarjeta | ADD-3.1 spec funcional: "el espacio siempre está reservado para evitar saltos de layout". Texto en text-tertiary = visualmente suave, no invasivo. |
+| Mini-tarjeta reactiva (sin API) | ADD-3.1 spec funcional: "Cálculo local sin API". Actualizar mientras el usuario edita requiere cálculo inmediato — esperar a la API rompería la experiencia. |
+| Cadena de cálculo: una sola columna (no dos en paralelo) | La cadena es narrativa secuencial (A → D → ratio). Dos columnas obligan a lectura en paralelo incompatible con el flujo lógico. Una columna funciona bien en todos los breakpoints sin CSS extra. |
+| Cadena colapsada por defecto | ADD-3.2 spec funcional: "el usuario habitual quiere el resultado; la cadena es para depuración/curiosidad". Colapsada no contamina P1. |
+| Posición de la cadena: entre tropas y botín | El botín es P1 (siempre visible). La cadena es P2. Situar la cadena colapsada entre las dos secciones P1 no interrumpe el flujo visual cuando está cerrada; cuando se abre, explica las tropas que el usuario acaba de ver antes de pasar al botín. |
+| `wall_tribe` con autocomplete desde tribu del defensor | "Menos es más" — DESIGN.md §1. En el 90% de los casos la tribu del muro = tribu del defensor. Pedir la misma información dos veces es un error de UX clásico. El autocomplete resuelve el caso mayoritario; el escape manual cubre el edge case. |
+| Inputs morale/diet/fast_troops dentro de los colapsables existentes (no en sección nueva) | Los colapsables "Héroe y bonus" y "Artefactos" ya existen y agrupan información del mismo tipo. Añadir una sección nueva sería ruido visual innecesario — "Divulgación progresiva" DESIGN.md §1. |
+| `config.distance_fields` y `config.server_speed` en bloque "Configuración" (P3), no en ArmyPanel | Esos inputs afectan al crop del viaje (global a la misión), no a la fuerza del ejército. Conceptualmente van en el bloque de configuración, no en el panel del atacante o defensor. |
+| Chips de mini-tarjeta sin color propio (solo `surface-2`/`border`) excepto el badge Herr. | "Neutro primero, color al final" — DESIGN.md §1. Los chips son informativos, no accionables. Solo el badge de herrería usa `accent-subtle` porque es el único que marca un estado cualitativamente diferente (no es un número sino una categoría). |
+| Sub-bloque Smithy dentro de la cadena (no en la mini-tarjeta) | El detalle de smithy por tropa es información técnica avanzada. La mini-tarjeta muestra el badge resumido `Herr.` — suficiente para el usuario habitual. El desglose exacto está en la cadena, colapsada, para quien quiere profundizar. |
+
+---
+
+🔖 Última revisión: 2026-05-30 — resincronización baseline real: layout columna única (maxWidth 720px), TribeBar chips 44px, TroopGrid horizontal, controles inline en ArmyPanel, TravianReport real (StatsTable inf/cav + W/C/I/C/Σ). Vista 7 del playground reescrita. Addendum de inputs pendientes (morale/diet/fast_troops/strong_buildings/wall_tribe/rams/catapult_targets/config/cadena-cálculo) sin cambios.
