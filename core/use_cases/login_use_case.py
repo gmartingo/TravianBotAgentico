@@ -26,7 +26,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from core.crypto import decrypt_password
 from core.entities.account import Account
 from core.entities.world import World
-from core.exceptions import AccountNotFoundError, LoginFailedError, WorldNotFoundError
+from core.exceptions import AccountNotFoundError, FernetDecryptionError, LoginFailedError, WorldNotFoundError
 from core.ports.db_port import DbPort
 from core.ports.world_runtime_port import WorldRuntimePort
 
@@ -63,13 +63,16 @@ class LoginUseCase:
             account.password = decrypt_password(self.fernet, cipher)
         except InvalidToken:
             # La clave Fernet activa no coincide con la usada al cifrar.
+            # Es un error de configuración (no transitorio): se lanza
+            # FernetDecryptionError para que el WorldAgent pueda distinguirlo
+            # de un error de red y NO aplique backoff (EC-HS15, RN-HS13).
             # No loguear el token ni la clave. Solo account_id.
             logger.error(
                 "InvalidToken al descifrar contraseña para account_id=%s "
                 "— la clave Fernet puede haber rotado",
                 account_id,
             )
-            raise LoginFailedError(account.username)
+            raise FernetDecryptionError(account_id)
 
         # 4. Localizar el mundo dentro de la cuenta
         world = self._find_world(account, world_id)

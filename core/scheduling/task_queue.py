@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from core.entities.task import Task
+from core.entities.task import Task, TaskType
 
 
 class TaskQueue:
@@ -39,6 +39,19 @@ class TaskQueue:
         """
         if self._tasks and self._tasks[0].execute_at <= now:
             return self._tasks.pop(0)
+        return None
+
+    def pop_farm_ready(self, now: datetime) -> Task | None:
+        """
+        Extrae y devuelve la primera tarea SEND_FARM_LIST_GROUP cuyo execute_at <= now.
+        Devuelve None si no hay ninguna lista para ejecutar de ese tipo.
+        Usado en modo PASIVO: solo procesa farm lists, ignora el resto.
+        """
+        for i, task in enumerate(self._tasks):
+            if task.execute_at > now:
+                break
+            if task.task_type == TaskType.SEND_FARM_LIST_GROUP:
+                return self._tasks.pop(i)
         return None
 
     def peek_next(self) -> Task | None:

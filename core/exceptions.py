@@ -243,6 +243,29 @@ class LoginFailedError(TravianBotError):
         self.params = {"username": username}
 
 
+# --- Excepción añadida en la feature human-sessions ---
+
+class FernetDecryptionError(TravianBotError):
+    """
+    No se pudo descifrar la contraseña de una cuenta: la clave Fernet falta,
+    está mal configurada o no coincide con la usada al cifrar.
+
+    Es un error de CONFIGURACIÓN (no transitorio): el WorldAgent entra en
+    estado DISCONNECTED-error y no reintenta con backoff (EC-HS15, RN-HS13).
+    El usuario debe corregir TRAVIAN_BOT_SECRET_KEY y reiniciar.
+    """
+
+    error_code = "FERNET_DECRYPTION_ERROR"
+
+    def __init__(self, account_id: int) -> None:
+        super().__init__(
+            f"No se pudo descifrar la contraseña de la cuenta {account_id}. "
+            "Verifica TRAVIAN_BOT_SECRET_KEY."
+        )
+        self.account_id = account_id
+        self.params = {"account_id": account_id}
+
+
 # --- Excepciones añadidas en la feature farm-lists ---
 
 class SchedulerNotFoundError(TravianBotError):

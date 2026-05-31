@@ -70,6 +70,7 @@
 | [`api/catalogo.md`](api/catalogo.md) | `GET /catalog/buildings`, `GET /catalog/troops/{tribe}`, exception handler global con traducciones |
 | [`api/cuentas-mundos.md`](api/cuentas-mundos.md) | `POST/GET/PUT/DELETE /accounts`, `POST/GET/DELETE /accounts/{id}/worlds` — CRUD de cuentas y mundos |
 | [`api/sesion.md`](api/sesion.md) | `POST`, `DELETE`, `GET /accounts/{id}/worlds/{id}/session` — login, logout y estado de sesión del bot |
+| [`api/human-sessions.md`](api/human-sessions.md) | `GET/PUT /worlds/{id}/session/...` — timeline horario, override de modo y cancelación de override (Human Sessions) |
 
 ---
 
@@ -88,4 +89,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-05-28 (añadidos: backend/farm-lists.md, funcionalidades/farm-lists.md, manual-usuario/farm-lists.html — feature farm lists + farm stats completa con 7 capturas reales)
+🔖 Última revisión: 2026-05-31 (añadido api/human-sessions.md — endpoints Human Sessions incluyendo nuevo DELETE /worlds/{id}/session/override)

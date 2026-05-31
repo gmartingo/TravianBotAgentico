@@ -29,6 +29,7 @@ from adapters.api.routes.game_culture_points import router as game_culture_point
 from adapters.api.routes.game_overview import router as game_overview_router
 from adapters.api.routes.game_resources import router as game_resources_router
 from adapters.api.routes.game_troops import router as game_troops_router
+from adapters.api.routes.session import router as session_router
 from adapters.browser.fixture_overview_adapter import FixtureOverviewAdapter
 from adapters.browser.live_farm_list_adapter import LiveFarmListAdapter
 from adapters.browser.live_overview_adapter import LiveOverviewAdapter
@@ -39,6 +40,7 @@ from adapters.db.database import get_connection
 from adapters.db.farm_list_sqlite_adapter import FarmListSQLiteAdapter
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.db.seed_loader import load_if_empty
+from adapters.db.session_sqlite_adapter import SessionSQLiteAdapter
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
 from core.crypto import load_fernet_key
 from core.exceptions import TravianBotError
@@ -164,6 +166,11 @@ async def lifespan(application: FastAPI):
     await account_adapter.ensure_tables()
     application.state.db_port = account_adapter
 
+    # AttackReportSQLiteAdapter — reportes de ataque a oasis
+    attack_report_adapter = AttackReportSQLiteAdapter(conn)
+    await attack_report_adapter.ensure_tables()
+    application.state.attack_report_port = attack_report_adapter
+
     # OverviewHtmlSourcePort — selección por variable de entorno OVERVIEW_SOURCE
     # 'fixture' (default): devuelve HTML desde tests/fixtures/overview/ (sin Chrome)
     # 'live':              navega Travian con Chrome autenticado
@@ -215,6 +222,13 @@ async def lifespan(application: FastAPI):
     farm_db_adapter = FarmListSQLiteAdapter(conn)
     await farm_db_adapter.ensure_tables()
     application.state.farm_db_port = farm_db_adapter
+
+    # -----------------------------------------------------------------------
+    # Human Sessions — SessionSQLiteAdapter (comparte la misma conexión SQLite)
+    # -----------------------------------------------------------------------
+    session_db_adapter = SessionSQLiteAdapter(conn)
+    await session_db_adapter.ensure_tables()
+    application.state.session_db_port = session_db_adapter
 
     # Dict de LiveFarmListAdapter por world_id.
     # Se puebla on-demand cuando el usuario arranca el WorldAgent para un mundo
@@ -399,6 +413,7 @@ app.include_router(game_overview_router)
 app.include_router(game_resources_router)
 app.include_router(game_culture_points_router)
 app.include_router(game_troops_router)
+app.include_router(session_router)
 
 
 @app.get("/health")

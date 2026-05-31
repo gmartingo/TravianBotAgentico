@@ -133,6 +133,13 @@ a:hover {
   animation: skeleton-pulse 1.2s ease-in-out infinite;
 }
 
+/* Ocultar elementos de prioridad P3 en móvil (DESIGN.md §17.1 · breakpoint sm = 640px) */
+@media (max-width: 639px) {
+  .hidden-mobile {
+    display: none !important;
+  }
+}
+
 /* Farm list row highlight (navegación desde scheduler) */
 tr[data-highlight="1"] td {
   background: var(--accent-subtle) !important;
