@@ -7,7 +7,8 @@
  * /cuentas                → ManagementShell > AccountsListPage   (S2)
  * /cuentas/nueva          → ManagementShell > NewAccountPage      (S3 wizard sobre S2)
  * /cuentas/:id            → ManagementShell > AccountDetailPage  (S4)
- * /calculadora            → ManagementShell > CalculatorPage      (acceso global, sin mundo)
+ * /calculadora            → ManagementShell > CalculatorPage      (herramienta global, sin mundo)
+ * /reportes-oasis         → ManagementShell > AttackReportsPage   (análisis de oasis, sin mundo)
  * /mundos/:worldId        → WorldSpacePage                       (S9, sin sidebar)
  * *                       → NotFound
  *

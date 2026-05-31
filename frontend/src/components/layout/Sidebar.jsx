@@ -13,11 +13,10 @@ import { NavLink } from 'react-router-dom'
 import { Users, Calculator, Swords } from 'lucide-react'
 import { useI18n } from '../../i18n/index.jsx'
 
-// "Cuentas" y la "Calculadora" viven en el shell de gestión.
-// La calculadora es una herramienta independiente del mundo (no necesita login
-// ni mundo activo), por eso es accesible desde el sidebar global. Recursos/
-// Tropas/Construcción dependen de un mundo concreto → viven dentro del
-// Espacio del mundo, no aquí.
+// "Cuentas", la "Calculadora" y los "Reportes de oasis" viven en el shell de
+// gestión: son herramientas independientes del mundo (no necesitan login ni mundo
+// activo), por eso son accesibles desde el sidebar global. Recursos/Tropas/
+// Construcción dependen de un mundo concreto → viven dentro del Espacio del mundo.
 const NAV_ITEMS = [
   {
     key: 'accounts',

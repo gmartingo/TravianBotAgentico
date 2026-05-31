@@ -16,6 +16,7 @@ const es = {
   'nav.troops':       'Tropas',
   'nav.construction': 'Construcción',
   'nav.comingSoon':   'Próximamente',
+  'nav.attackReports': 'Reportes de oasis',
 
   // ── Topbar ─────────────────────────────────────────────
   'topbar.toggleTheme':    'Cambiar tema',
@@ -433,6 +434,186 @@ const es = {
   'stats.empty.title':            'Sin datos de rendimiento',
   'stats.empty.subtitle':         'Los datos aparecerán tras el primer envío.',
 
+  // ── Human Sessions (pestaña "Sesión" en WorldSpacePage) ──────────────────
+  'worldnav.session':                   'Sesión',
+
+  // Panel de estado
+  'session.status.title':               'Estado actual',
+  'session.status.mode.hardcore':       'HARDCORE',
+  'session.status.mode.idle':           'IDLE',
+  'session.status.mode.disconnected':   'DESCANSO TOTAL',
+  'session.status.block':               'Bloque: {start} – {end}',
+  'session.status.jitter':              'Jitter: ±{n} min',
+  'session.status.nextChange':          'Próximo cambio',
+  'session.status.approxTime':          'aprox. a las {time}',
+  'session.status.loadingError':        'No se pudo cargar el estado. Reintenta.',
+  'session.status.retry':               'Reintentar',
+
+  // Override
+  'session.override.title':             'Forzar modo',
+  'session.override.subtitle':          'Activo hasta el próximo borde de bloque',
+  'session.override.active':            'Override activo: {mode}',
+  'session.override.expiresIn':         'Expira en',
+  'session.override.cancel':            'Cancelar override',
+  'session.override.alreadyActive':     'El bot ya está en modo {mode}.',
+  'session.override.applied':           'Override aplicado. Modo {mode} hasta ~{time}.',
+
+  // Timeline / calendario
+  'session.timeline.title':             'Calendario semanal',
+  'session.timeline.hint':              'Configura el horario del bot por día de la semana.',
+  'session.timeline.antiDetectionHint': 'Incluir períodos de descanso reduce el riesgo de detección.',
+  'session.timeline.default':           'Por defecto',
+  'session.timeline.loadingError':      'No se pudo cargar el calendario. Reintenta.',
+
+  // Editor de bloques
+  'session.editor.title':               'Editar — {day}',
+  'session.editor.defaultHint':         'Usando configuración por defecto. Edita para personalizar.',
+  'session.editor.from':                'Desde',
+  'session.editor.to':                  'Hasta',
+  'session.editor.mode':                'Modo',
+  'session.editor.addBlock':            'Añadir bloque',
+  'session.editor.save':                'Guardar',
+  'session.editor.saving':              'Guardando…',
+  'session.editor.saved':               '{day} guardado.',
+  'session.editor.saveError':           'Error al guardar. Reintenta.',
+  'session.editor.coverage.ok':         'Cobertura: 24h ✓',
+  'session.editor.coverage.gap':        'Falta cubrir: {from} – {to}',
+  'session.editor.coverage.overlap':    'Solape: {from} – {to}',
+  'session.editor.removeBlock':         'Eliminar bloque',
+  'session.editor.noDay':               'Selecciona un día para editar su calendario.',
+
+  // Modos en el selector del editor
+  'session.mode.hardcore':              'HARDCORE',
+  'session.mode.idle':                  'IDLE',
+  'session.mode.disconnected':          'Descanso total',
+
+  // Aria labels
+  'session.timeline.ariaLabel':         'Barra de 24h del día {day}',
+  'session.day.today':                  'Hoy',
+
+  // ── Módulo: Reportes de ataque (ar.*) ─────────────────
+  // Compartidos / acciones genéricas
+  'ar.delete.question':    '¿Borrar este reporte?',
+  'ar.delete.confirm':     'Borrar',
+  'ar.delete.cancel':      'Cancelar',
+
+  // Ingresar
+  'ar.ingest.label':             'Pega aquí el reporte de Travian',
+  'ar.ingest.placeholder':       'Copia el texto completo del reporte de ataque a un oasis…',
+  'ar.ingest.analyze':           'Analizar',
+  'ar.ingest.shortcut':          'Ctrl + Enter',
+  'ar.ingest.save':              'Guardar',
+  'ar.ingest.saving':            'Guardando…',
+  'ar.ingest.discard':           'Descartar',
+  'ar.ingest.analyzeAnother':    'Analizar otro',
+  'ar.ingest.saveAnyway':        'Guardar de todos modos',
+  'ar.ingest.viewFullText':      'Ver texto completo',
+  'ar.ingest.error.parse':       'No se pudo parsear el reporte. Revisa el formato.',
+  'ar.ingest.error.save409':     'Este reporte ya existe en la base de datos.',
+  'ar.ingest.error.saveRetry':   'Error al guardar el reporte. Reintenta.',
+  'ar.ingest.toast.saved':       'Reporte guardado',
+
+  // Preview
+  'ar.preview.from':   'desde',
+  'ar.dup.title':      'Este reporte ya está registrado.',
+  'ar.dup.link':       'Ver reporte #{id}',
+
+  // Historial
+  'ar.history.count':        '{n} reporte',
+  'ar.history.count.pl':     '{n} reportes',
+  'ar.history.col.date':     'Fecha',
+  'ar.history.col.oasis':    'Oasis',
+  'ar.history.col.from':     'Desde',
+  'ar.history.col.bounty':   'Botín',
+  'ar.history.col.losses':   'Bajas',
+  'ar.history.col.actions':  '',
+  'ar.history.delete.aria':  'Borrar reporte',
+  'ar.history.detail.aria':  'Ver detalle',
+  'ar.history.prev':         '← Anterior',
+  'ar.history.next':         'Siguiente →',
+  'ar.history.page':         '{from}–{to} de {total}',
+  'ar.history.accum':        'Botín acumulado: {n}',
+  'ar.history.empty.title':  'Sin reportes aún',
+  'ar.history.empty.desc':   'Los reportes guardados aparecerán aquí.',
+  'ar.history.empty.cta':    'Ir a Ingresar →',
+  'ar.history.error':        'No se pudieron cargar los reportes.',
+  'ar.history.retry':        'Reintentar',
+  'ar.history.filter.coords': 'Coordenadas',
+  'ar.history.filter.x':     'x',
+  'ar.history.filter.y':     'y',
+  'ar.history.filter.dates':  'Fechas',
+  'ar.history.filter.from':   'Desde',
+  'ar.history.filter.to':     'Hasta',
+  'ar.history.filter.apply':  'Aplicar',
+  'ar.history.filter.clear':  'Limpiar',
+  'ar.history.filtered.empty': 'Ningún reporte con esos filtros.',
+  'ar.history.filtered.clear': 'Quitar filtros',
+
+  // Drawer de detalle
+  'ar.drawer.title':     'Reporte #{id}',
+  'ar.drawer.close':     'Cerrar',
+  'ar.drawer.loading':   'Cargando reporte…',
+  'ar.drawer.error':     'Error al cargar el reporte.',
+  'ar.drawer.retry':     'Reintentar',
+  'ar.drawer.delete':    'Borrar reporte',
+  'ar.drawer.savedAt':   'Guardado: {date}',
+  'ar.drawer.hero.title': 'Héroe:',
+  'ar.drawer.hero.none':  'Sin inventario del héroe.',
+
+  // Estadísticas — título y sección de título
+  'ar.stats.title':       'Estadísticas de oasis',
+
+  // Estadísticas — lista de oasis (nuevo: EP-08)
+  'ar.stats.list.count.one':           '1 oasis con reportes',
+  'ar.stats.list.count.pl':            '{n} oasis con reportes',
+  'ar.stats.list.count.filtered.one':  '1 resultado',
+  'ar.stats.list.count.filtered.pl':   '{n} resultados',
+  'ar.stats.list.col.oasis':           'Oasis',
+  'ar.stats.list.col.attacks':         'Ataques',
+  'ar.stats.list.col.lastAttack':      'Último ataque',
+  'ar.stats.list.col.bounty':          'Botín total',
+  'ar.stats.list.error':               'No se pudieron cargar los oasis. Comprueba la conexión con el servidor.',
+  'ar.stats.list.retry':               'Reintentar',
+  'ar.stats.list.empty.title':         'Aún no hay oasis con reportes.',
+  'ar.stats.list.empty.sub':           'Añade tu primer reporte en la pestaña Ingresar.',
+  'ar.stats.list.empty.cta':           'Ir a Ingresar →',
+  'ar.stats.list.filter.legend':       'Filtrar por coordenadas',
+  'ar.stats.list.filter.clear':        'Limpiar',
+  'ar.stats.list.filter.clearAll':     'Limpiar filtro',
+  'ar.stats.list.filter.hint':         'Introduce también y',
+  'ar.stats.list.filter.noResults':    'Ningún oasis con coordenadas ({x}|{y}).',
+
+  // Estadísticas — panel de detalle (expand-in-place)
+  'ar.stats.detail.loading':   'Cargando estadísticas…',
+  'ar.stats.detail.error':     'Error al cargar las estadísticas.',
+  'ar.stats.detail.retry':     'Reintentar',
+  'ar.stats.detail.region':    'Detalle del oasis',
+
+  // Estadísticas — ritmo de regeneración (nuevo: RegenRatesSection)
+  'ar.stats.regen.title':         'Ritmo de regeneración',
+  'ar.stats.regen.col.animal':    'Animal',
+  'ar.stats.regen.col.ratio':     'Ratio /h',
+  'ar.stats.regen.col.confidence':'Confianza',
+  'ar.stats.regen.interval.one':  '≈ {n} intervalo',
+  'ar.stats.regen.interval.pl':   '≈ {n} intervalos',
+  'ar.stats.regen.warn.title':    'Aún no hay suficientes ataques para calcular el ritmo de repoblación.',
+  'ar.stats.regen.warn.sub':      'Se necesitan al menos 2 ataques al mismo oasis.',
+
+  // Estadísticas — animales observados
+  'ar.stats.animals.title':              'Animales observados',
+  'ar.stats.animals.col.animal':         'Animal',
+  'ar.stats.animals.col.appearances':    'Apariciones',
+  'ar.stats.animals.col.avg':            'Prom.',
+  'ar.stats.animals.col.max':            'Máx',
+  'ar.stats.animals.col.min':            'Mín',
+
+  // Estadísticas — repoblación
+  'ar.stats.repop.title':          'Repoblación y regeneración',
+  'ar.stats.repop.col.attack':     'Ataque',
+  'ar.stats.repop.col.interval':   'Intervalo',
+  'ar.stats.repop.first':          '(primer ataque)',
+
+  // ── Calculadora de combate (S11) ── restaurado desde feature/optimizador-balance-multiraid
   // ── Calculadora de combate (S11) ──────────────────────────────────────────
   'calc.title':                   'Calculadora de combate',
   'calc.attacker':                'Atacante',
