@@ -30,6 +30,7 @@ from core.entities.combat import (
     CombatConfig,
     DefenderArtifacts,
     DefenderFormation,
+    MultiRaidAggregate,
     OptimizationConfig,
     OptimizationWeights,
     RamSpec,
@@ -240,6 +241,7 @@ class OptimizationWeightsRequest(BaseModel):
     total_losses: float = Field(default=1.0, ge=0.0)
     troops_sent: float = Field(default=0.5, ge=0.0)
     travel_time: float = Field(default=0.0, ge=0.0)
+    balance: float = Field(default=0.0, ge=0.0)  # 0.0 = sin efecto (default retrocompatible)
 
 
 class OptimizationConfigRequest(BaseModel):
@@ -251,6 +253,17 @@ class OptimizationConfigRequest(BaseModel):
     optimization_weights: OptimizationWeightsRequest = Field(
         default_factory=OptimizationWeightsRequest
     )
+    # RN-04: "single" (default, comportamiento previo) | "aggregate" (Modo C).
+    scoring_mode: Literal["single", "aggregate"] = "single"
+    # RN-05: rango de raids opcional. Solo aplica en aggregate.
+    n_min: int | None = Field(default=None, ge=1)
+    n_max: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _check_n_range(self) -> "OptimizationConfigRequest":
+        if self.n_min is not None and self.n_max is not None and self.n_min > self.n_max:
+            raise ValueError("n_min cannot be greater than n_max")
+        return self
 
 
 class OptimizeRequest(BaseModel):
@@ -352,6 +365,11 @@ class SimulateResponse(BaseModel):
     ratio: float | None
     attacker_power: float
     defender_power: float
+    # Desglose infantería/caballería para "Fuerza de combate" partida en 2 en UI.
+    attacker_infantry_power: float = 0.0
+    attacker_cavalry_power: float = 0.0
+    defender_infantry_power: float = 0.0
+    defender_cavalry_power: float = 0.0
     attacker_troops: list[TroopResultResponse]
     defender_troops: list[TroopResultResponse]
     loot: LootResponse
@@ -364,6 +382,16 @@ class SimulateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # DTOs de RESPONSE — optimize
 # ---------------------------------------------------------------------------
+
+
+class MultiRaidAggregateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    n_raids: int
+    total_resources_gained: AnimalResourceDropResponse
+    total_resource_losses: int
+    total_troops_sent: int
+    total_travel_time_h: float | None
 
 
 class OptimizationAlternativeResponse(BaseModel):
@@ -381,6 +409,18 @@ class OptimizationAlternativeResponse(BaseModel):
     resources_gained: AnimalResourceDropResponse | None
     loot: LootResponse | None
     travel_time_h: float | None
+    raids_possible: int | None = None
+    remaining_troops: list[TroopResultResponse] | None = None
+    aggregate: MultiRaidAggregateResponse | None = None
+    # Desglose por recurso del coste de las bajas del atacante (por-raid).
+    # Permite a la UI computar el neto madera/barro/hierro/cereal vs botín animal.
+    resource_losses_breakdown: AnimalResourceDropResponse | None = None
+    # Desglose de potencia infantería/caballería para fila "Fuerza de combate"
+    # partida en 2 en UI (paridad con SimulateResponse).
+    attacker_infantry_power: float = 0.0
+    attacker_cavalry_power: float = 0.0
+    defender_infantry_power: float = 0.0
+    defender_cavalry_power: float = 0.0
 
 
 class OptimizeResponse(BaseModel):
@@ -429,6 +469,24 @@ def _loot_to_response(loot) -> LootResponse:
         resources_gained_from_animals=_animal_drop_to_response(
             loot.resources_gained_from_animals
         ),
+    )
+
+
+def _aggregate_to_response(agg: MultiRaidAggregate | None) -> MultiRaidAggregateResponse | None:
+    if agg is None:
+        return None
+    return MultiRaidAggregateResponse(
+        n_raids=agg.n_raids,
+        total_resources_gained=AnimalResourceDropResponse(
+            wood=agg.total_resources_gained.wood,
+            clay=agg.total_resources_gained.clay,
+            iron=agg.total_resources_gained.iron,
+            crop=agg.total_resources_gained.crop,
+            total=agg.total_resources_gained.total,
+        ),
+        total_resource_losses=agg.total_resource_losses,
+        total_troops_sent=agg.total_troops_sent,
+        total_travel_time_h=agg.total_travel_time_h,
     )
 
 
@@ -592,6 +650,10 @@ async def post_combat_simulate(
         ratio=result.ratio,
         attacker_power=result.attacker_power,
         defender_power=result.defender_power,
+        attacker_infantry_power=result.attacker_infantry_power,
+        attacker_cavalry_power=result.attacker_cavalry_power,
+        defender_infantry_power=result.defender_infantry_power,
+        defender_cavalry_power=result.defender_cavalry_power,
         attacker_troops=[_troop_result_to_response(t) for t in result.attacker_troops],
         defender_troops=[_troop_result_to_response(t) for t in result.defender_troops],
         loot=_loot_to_response(result.loot),
@@ -696,7 +758,11 @@ async def post_combat_optimize(
             total_losses=body.config.optimization_weights.total_losses,
             troops_sent=body.config.optimization_weights.troops_sent,
             travel_time=body.config.optimization_weights.travel_time,
+            balance=body.config.optimization_weights.balance,
         ),
+        scoring_mode=body.config.scoring_mode,
+        n_min=body.config.n_min,
+        n_max=body.config.n_max,
     )
 
     artifacts = AttackerArtifacts(
@@ -743,6 +809,20 @@ async def post_combat_optimize(
                     _loot_to_response(alt.loot) if alt.loot is not None else None
                 ),
                 travel_time_h=alt.travel_time_h,
+                raids_possible=alt.raids_possible,
+                remaining_troops=(
+                    [_troop_result_to_response(t) for t in alt.remaining_troops]
+                    if alt.remaining_troops is not None
+                    else None
+                ),
+                aggregate=_aggregate_to_response(alt.aggregate),
+                resource_losses_breakdown=_animal_drop_to_response(
+                    alt.resource_losses_breakdown
+                ),
+                attacker_infantry_power=alt.attacker_infantry_power,
+                attacker_cavalry_power=alt.attacker_cavalry_power,
+                defender_infantry_power=alt.defender_infantry_power,
+                defender_cavalry_power=alt.defender_cavalry_power,
             )
             for alt in result.alternatives
         ],
