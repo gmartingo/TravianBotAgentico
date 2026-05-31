@@ -428,6 +428,381 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);
 input[type=range]{flex:1;accent-color:var(--accent);}
 .slider-val{font-family:var(--font-mono);font-size:12px;color:var(--text);min-width:28px;text-align:end;}
 
+/* ===== ACTIVE MODIFIERS CARD ===== */
+.mods-card{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:6px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-height:32px;
+}
+.mods-card-empty{
+  width:100%;text-align:center;font-size:11px;color:var(--text-tertiary);font-style:italic;
+}
+.mod-chip{
+  display:inline-flex;align-items:center;gap:3px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);
+  padding:2px 8px;font-size:11px;color:var(--text-secondary);
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  cursor:default;
+}
+.mod-chip.smithy{
+  background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent);
+  font-family:var(--font-sans);font-variant-numeric:normal;
+}
+
+/* ===== CALC CHAIN ===== */
+.chain-details{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  overflow:hidden;
+}
+.chain-summary{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;cursor:pointer;
+  font-size:12px;font-weight:500;color:var(--text-secondary);
+  background:var(--surface-2);user-select:none;list-style:none;
+}
+.chain-summary::-webkit-details-marker{display:none;}
+.chain-summary:hover{background:var(--border);}
+.chain-body{padding:14px 16px;display:flex;flex-direction:column;gap:2px;}
+.chain-section{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-tertiary);margin-block:8px 4px;}
+.chain-section:first-child{margin-block-start:0;}
+.chain-row{display:flex;align-items:baseline;gap:8px;padding:2px 0;}
+.chain-label{font-size:13px;color:var(--text-secondary);min-width:140px;flex-shrink:0;}
+.chain-value{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--text);}
+.chain-row.final .chain-label,.chain-row.final .chain-value{font-weight:600;color:var(--text);}
+.chain-divider{border:none;border-top:1px solid var(--border);margin-block:6px;}
+.chain-smithy-row{display:flex;align-items:center;gap:6px;padding:2px 0;}
+.chain-smithy-icon{width:18px;height:18px;border-radius:3px;background:var(--surface-2);
+  display:grid;place-items:center;font-size:8px;font-weight:700;color:var(--text-tertiary);flex-shrink:0;}
+.chain-smithy-name{font-size:12px;color:var(--text-secondary);flex:1;}
+.chain-smithy-val{font-family:var(--font-mono);font-size:12px;color:var(--text);font-variant-numeric:tabular-nums;}
+
+/* ===== DISABLED INPUT ===== */
+input:disabled{opacity:.45;cursor:not-allowed;background:var(--surface-2);}
+
+/* ===== CALC SINGLE-COLUMN LAYOUT (layout real del código) ===== */
+/* El código usa maxWidth:720px, flex-direction:column — NO 2 columnas */
+/* .calc-single es el scroll container directo dentro de view-container */
+.calc-single{
+  max-width:720px;margin:0 auto;padding:24px;
+  display:flex;flex-direction:column;gap:0;
+  overflow-y:auto;width:100%;height:100%;box-sizing:border-box;
+  /* view-container tiene overflow:hidden; calc-single hace scroll internamente */
+}
+
+/* ===== ARMY PANEL (reflejo de ArmyPanel.jsx) ===== */
+.army-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;margin-bottom:8px;
+}
+.army-panel-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  border-bottom:1px solid var(--border);background:var(--surface-2);
+}
+.army-panel-icon{display:flex;align-items:center;flex-shrink:0;}
+.army-panel-icon.atk{color:var(--danger);}
+.army-panel-icon.def{color:var(--info);}
+.army-panel-icon.reinf{color:var(--text-secondary);}
+.army-panel-label{
+  flex:1;font-size:13px;font-weight:600;color:var(--text);
+  text-transform:uppercase;letter-spacing:.04em;
+}
+.army-panel-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border:none;background:transparent;
+  cursor:pointer;color:var(--text-secondary);border-radius:var(--radius-sm);
+  font-size:12px;
+}
+.army-panel-btn.danger{color:var(--danger);}
+.army-panel-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
+
+/* ===== CONTROLS ROW (fila inline en ArmyPanel — atacante / defensor) ===== */
+.ctrl-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+
+/* AttackTypeToggle (pill raid/attack) */
+.atk-toggle{
+  display:flex;border-radius:var(--radius-sm);overflow:hidden;
+  border:1px solid var(--border-strong);
+}
+.atk-toggle-btn{
+  height:26px;padding:0 10px;border:none;
+  background:var(--surface-2);color:var(--text-secondary);
+  font-size:12px;font-weight:400;cursor:pointer;font-family:inherit;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.atk-toggle-btn.active{
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);font-weight:600;
+}
+
+/* AllianceBonusSelect y ArtifactSelect */
+.ctrl-select{
+  height:26px;padding:0 6px;background:var(--surface-2);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:12px;color:var(--text);cursor:pointer;font-family:inherit;
+}
+
+/* NumInput (muro / cantero) */
+.num-input-sm{
+  width:42px;height:26px;padding:0 4px;background:var(--surface-2);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:13px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  color:var(--text);text-align:center;box-sizing:border-box;
+}
+.ctrl-icon{
+  display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);
+}
+
+/* Héroe expand button */
+.hero-expand-btn{
+  height:26px;padding:0 8px;border:1px solid var(--border-strong);
+  background:var(--surface-2);color:var(--text-secondary);
+  border-radius:var(--radius-sm);font-size:12px;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;gap:4px;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.hero-expand-btn.open{
+  background:var(--accent-subtle);color:var(--accent-text);
+  border-color:var(--accent);
+}
+
+/* Hero inputs expanded block */
+.hero-expanded-block{
+  display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
+  background:var(--surface-2);border-radius:var(--radius-sm);
+}
+.hero-field{display:flex;flex-direction:column;gap:3px;}
+.hero-field-label{font-size:11px;color:var(--text-secondary);}
+.hero-field-input{
+  width:70px;height:26px;padding:0 4px;background:var(--surface-2);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:13px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  color:var(--text);text-align:center;box-sizing:border-box;
+}
+.hero-field-input.narrow{width:60px;}
+
+/* ===== TRIBE BAR (chips circulares 44px — TribeBar.jsx) ===== */
+.tribe-bar{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;}
+.tribe-chip{
+  width:44px;height:44px;border-radius:var(--radius-full);
+  border:2px solid var(--border);outline:none;
+  background:var(--surface-2);color:var(--text-secondary);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;font-family:inherit;letter-spacing:.01em;
+  transition:border-color var(--dur-fast),background var(--dur-fast),color var(--dur-fast);
+  flex-shrink:0;user-select:none;
+}
+.tribe-chip.active-ro{background:#E8E0F0;color:#5B3A8A;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-te{background:#E8EAD8;color:#4A5230;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-ga{background:#D8EEE0;color:#1E6040;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-eg{background:#F0E8D0;color:#7A5010;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-hu{background:#F0D8D8;color:#7A1E1E;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-sp{background:#D8E4F0;color:#1E3E7A;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-vi{background:#D8ECF0;color:#1E5E6A;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+.tribe-chip.active-na{background:#E4F0D8;color:#2E6020;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ===== TROOP GRID (horizontal — TroopGrid.jsx) ===== */
+.troop-grid-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.troop-grid{
+  display:flex;align-items:flex-start;gap:6px;min-width:max-content;
+}
+/* Columna de etiquetas de fila */
+.troop-grid-labels{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  flex-shrink:0;padding-top:32px; /* alinear con los inputs (icono 28px + 4px gap) */
+}
+.troop-grid-label-spacer{height:28px;}
+.troop-grid-label-icon{
+  height:28px;display:flex;align-items:center;justify-content:center;
+  color:var(--text-tertiary);
+}
+.troop-grid-label-smithy{
+  height:24px;display:flex;align-items:center;justify-content:center;
+  color:var(--text-tertiary);
+}
+/* Celda de tropa (columna vertical) */
+.troop-cell-col{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  flex-shrink:0;transition:opacity var(--dur-fast);
+}
+.troop-cell-col.dim-col{opacity:.45;}
+.troop-cell-icon{
+  width:52px;height:28px;display:flex;align-items:center;justify-content:center;
+}
+.troop-cell-icon-badge{
+  width:24px;height:24px;border-radius:3px;background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;color:var(--text-tertiary);
+}
+.troop-qty-input{
+  width:52px;height:28px;padding:0 4px;background:var(--surface-2);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:13px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  color:var(--text);text-align:center;box-sizing:border-box;
+}
+.troop-smithy-input{
+  width:52px;height:24px;padding:0 4px;background:transparent;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  color:var(--text);text-align:center;box-sizing:border-box;
+}
+
+/* ===== TRAVIAN REPORT (TravianReport.jsx — resultado real) ===== */
+.tr-report{display:flex;flex-direction:column;gap:0;margin-top:16px;}
+
+/* Badge ganador */
+.tr-winner-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 14px;border-radius:var(--radius-full);
+  font-size:14px;font-weight:600;
+}
+.tr-winner-badge.atk-wins{
+  background:rgba(36,138,61,.12);border:1px solid var(--success);color:var(--success);
+}
+.tr-winner-badge.def-wins{
+  background:rgba(201,53,44,.12);border:1px solid var(--danger);color:var(--danger);
+}
+.tr-badge-row{
+  display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;
+}
+.tr-ratio{font-size:13px;color:var(--text-secondary);font-family:var(--font-mono);}
+
+/* TroopBand (sección Tú / Defensor) */
+.tr-band{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;margin-bottom:14px;
+}
+.tr-band-header{
+  padding:8px 14px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid;
+}
+.tr-band-header.atk{
+  background:rgba(201,53,44,.12);border-bottom-color:var(--danger);
+}
+.tr-band-header.def{
+  background:rgba(40,84,166,.12);border-bottom-color:var(--accent);
+}
+.tr-band-title{
+  font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.tr-band-header.atk .tr-band-title{color:var(--danger);}
+.tr-band-header.def .tr-band-title{color:var(--accent-text);}
+
+/* Tabla interior de TroopBand */
+.tr-table{
+  border-collapse:collapse;table-layout:fixed;width:100%;
+}
+.tr-table th{
+  padding:8px 10px;background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:500;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;text-align:start;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.tr-table th.tc{text-align:center;}
+.tr-table td{
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.tr-table td.label-td{
+  text-align:start;background:var(--surface-2);font-family:var(--font-sans);
+  color:var(--text-secondary);white-space:nowrap;
+}
+.tr-table td.r-sent{color:var(--text);}
+.tr-table td.r-lost{color:var(--danger);}
+.tr-table td.r-surv{color:var(--success);font-weight:600;}
+.tr-table tr:last-child td{border-bottom:none;}
+
+/* StatsTable */
+.tr-stats{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+}
+.tr-stats-header{
+  background:var(--surface-2);padding:8px 14px;
+  border-bottom:1px solid var(--border);
+}
+.tr-stats-title{
+  font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text);
+}
+.tr-stats-table{width:100%;border-collapse:collapse;}
+.tr-stats-table th{
+  padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);
+  text-align:start;
+}
+.tr-stats-table th.pct-th{text-align:end;width:64px;}
+.tr-stats-table td.lbl{
+  padding:8px 12px;font-size:12px;color:var(--text-secondary);
+  background:var(--surface-2);white-space:nowrap;width:180px;
+}
+.tr-stats-table td.val{
+  padding:8px 12px;font-size:13px;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text);
+}
+.tr-stats-table td.val-icon{padding:8px 12px;}
+.tr-stats-table td.pct{
+  padding:8px 6px;text-align:end;color:var(--text-tertiary);
+  font-family:var(--font-mono);font-size:12px;font-weight:600;width:64px;
+}
+.tr-stats-table tr{border-bottom:1px solid var(--border);}
+
+/* Sub-tabla de recursos (botín/coste/neto) */
+.tr-res-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.tr-res-table th{
+  padding:8px 6px;font-size:11px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);
+  text-align:center;background:var(--surface-2);box-sizing:border-box;
+}
+.tr-res-table th.lbl-th{text-align:start;padding:8px 12px;width:180px;}
+.tr-res-table th.sum-th{text-align:center;width:88px;}
+.tr-res-table td{
+  padding:8px 6px;text-align:center;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;
+  border-bottom:1px solid var(--border);
+}
+.tr-res-table td.lbl{
+  padding:8px 12px;font-size:12px;color:var(--text-secondary);
+  background:var(--surface-2);text-align:start;width:180px;
+}
+.tr-res-table td.sum{text-align:end;padding:8px 10px;font-weight:600;width:88px;}
+.tr-res-table td.gain{color:var(--success);}
+.tr-res-table td.cost{color:var(--danger);}
+.tr-res-table td.net-pos{color:var(--success);font-weight:700;}
+.tr-res-table td.net-neg{color:var(--danger);font-weight:700;}
+.tr-res-table td.net-zero{color:var(--text-tertiary);font-weight:700;}
+.tr-res-table tr.net-row{background:var(--surface-2);}
+.tr-res-table tr.net-row td.lbl{font-weight:700;color:var(--text);}
+
+/* Warnings del simulador */
+.tr-warnings{display:flex;flex-direction:column;gap:4px;margin-top:14px;}
+.tr-warning-label{
+  font-size:12px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;
+}
+.tr-warning-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;background:var(--accent-subtle);color:var(--accent-text);
+  border-radius:var(--radius-full);font-size:12px;
+}
+
+/* Botón "Añadir refuerzo" */
+.add-reinf-btn{
+  height:32px;width:100%;padding:0 14px;background:transparent;
+  border:1px dashed var(--border-strong);border-radius:var(--radius-sm);
+  font-size:13px;color:var(--text-secondary);cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;gap:6px;justify-content:center;
+  margin-bottom:12px;
+  transition:border-color var(--dur-fast),color var(--dur-fast);
+}
+.add-reinf-btn:hover{border-color:var(--accent);color:var(--accent-text);}
+
+/* Botón Simular (40px, full-width, monocromo) */
+.simulate-btn{
+  height:40px;width:100%;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;
+  cursor:pointer;font-family:inherit;display:flex;align-items:center;
+  justify-content:center;gap:8px;letter-spacing:-0.01em;
+}
+
 /* ===== RADIO ===== */
 .radio-group{display:flex;flex-direction:column;gap:6px;}
 .radio-item{
@@ -491,6 +866,7 @@ hr.hairline{border:none;border-top:1px solid var(--border);margin:4px 0;}
     <option value="4">4 · Optimizador — formulario</option>
     <option value="5">5 · Optimizador — resultados</option>
     <option value="6">6 · Estado error</option>
+    <option value="7">7 · RESYNC — Baseline real + ADD (columna única)</option>
   </select>
   <span class="toolbar-sep"></span>
   <button onclick="toggleTheme()" id="theme-btn">🌙 Oscuro</button>
@@ -529,7 +905,7 @@ hr.hairline{border:none;border-top:1px solid var(--border);margin:4px 0;}
   <!-- MAIN CONTENT -->
   <div class="main-content">
     <!-- ===== VISTAS ===== -->
-    <div id="view-container" style="flex:1;display:flex;min-height:0;overflow:hidden;"></div>
+    <div id="view-container" style="flex:1;display:flex;min-height:0;overflow:hidden;width:100%;"></div>
   </div>
 </div>
 
@@ -602,6 +978,16 @@ function formPanel_simulator(){
       </div>
     </div>
 
+    <!-- MODIFICADORES ACTIVOS atacante -->
+    <div class="draggable" data-block="attacker-mods">
+      <div class="mods-card" aria-label="Modificadores activos del atacante">
+        <span class="mod-chip" title="+ 1200 pts ataque héroe">+ 1 200 pts</span>
+        <span class="mod-chip" title="+ 30 % bonus héroe">+ 30 %</span>
+        <span class="mod-chip" title="+ 3 % alianza">+ 3 %</span>
+        <span class="mod-chip smithy" title="Herrería activa en al menos una tropa">Herr.</span>
+      </div>
+    </div>
+
     <!-- HÉROE (colapsable) -->
     <div class="draggable collapsible" data-block="hero">
       <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
@@ -618,9 +1004,60 @@ function formPanel_simulator(){
         <div class="input-row">
           <span class="input-label">Alianza %:</span>
           <input class="input-field input-xs" type="number" value="3" min="0" max="5"/>
-          <span class="input-label">Moral %:</span>
-          <input class="input-field input-xs" type="number" value="100" min="30" max="100"/>
+          <span class="input-label" title="Solo aplica en servidores speed > x1">Moral:</span>
+          <input class="input-field input-xs" type="number" value="100" min="30" max="100" aria-label="Moral del atacante"/>
+          <span style="font-size:12px;color:var(--text-tertiary);">%</span>
         </div>
+      </div>
+    </div>
+
+    <!-- ARTEFACTOS atacante (colapsable) -->
+    <div class="draggable collapsible" data-block="artifacts-atk">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Artefactos</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Dieta crop:</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">×</span>
+          <input class="input-field input-xs" type="number" value="1.0" step="0.1" min="0.01" max="10" aria-label="Multiplicador de consumo de crop"/>
+          <span class="input-label" style="margin-inline-start:8px;">Veloc. tropa:</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">×</span>
+          <input class="input-field input-xs" type="number" value="1.0" step="0.1" min="0.01" max="10" aria-label="Multiplicador de velocidad de tropa"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATAPULTAS Y ARIETES (colapsable, solo modo Ataque) -->
+    <div class="draggable collapsible" data-block="catapult-ram">
+      <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Catapultas y arietes</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Arietes:</span>
+          <input class="input-field" style="width:80px;" type="number" value="50" min="0" max="1000000" aria-label="Cantidad de arietes"/>
+          <span class="input-label">S:</span>
+          <input class="troop-smithy" type="number" value="10" min="0" max="20" aria-label="Smithy de arietes"/>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-block-start:2px;padding-inline-start:2px;">
+          Arietes deshabilitados cuando muro nivel 0 (EC-35)
+        </div>
+        <hr class="hairline" style="margin-block:8px;"/>
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">Catapultas — objetivos:</div>
+        <div class="input-row">
+          <select class="form-select" style="flex:1;font-size:12px;" aria-label="Edificio objetivo catapulta">
+            <option>Ayuntamiento (gid 15)</option>
+            <option>Herrería (gid 13)</option>
+            <option>Academia (gid 22)</option>
+          </select>
+          <span class="input-label">N.:</span>
+          <input class="input-field input-xs" type="number" value="10" min="0" max="20" aria-label="Nivel actual del edificio"/>
+          <button class="btn-ghost" type="button" title="Quitar objetivo">×</button>
+        </div>
+        <button class="btn-secondary" type="button" style="margin-block-start:6px;font-size:12px;">+ Añadir objetivo</button>
       </div>
     </div>
 
@@ -641,6 +1078,10 @@ function formPanel_simulator(){
           <div class="troop-list">
             ${TROOPS_NATURE.map(t=>renderTroopRow(t,false)).join('')}
           </div>
+          <!-- MODIFICADORES ACTIVOS defensor -->
+          <div class="mods-card" style="margin-block:6px;" aria-label="Modificadores activos del defensor">
+            <span class="mods-card-empty">Sin modificadores activos</span>
+          </div>
           <hr class="hairline"/>
           <div class="input-row">
             <span class="input-label">Muro:</span>
@@ -648,7 +1089,29 @@ function formPanel_simulator(){
             <span class="input-label">Stonemason:</span>
             <input class="input-field input-xs" type="number" value="0" min="0" max="5"/>
           </div>
-          <div class="input-row">
+          <div class="input-row" style="margin-block-start:4px;">
+            <span class="input-label" style="white-space:nowrap;">Tribu muro:</span>
+            <select class="form-select" style="font-size:12px;" aria-label="Tribu del muro">
+              <option value="">Sin especificar</option>
+              <option>Romanos</option><option>Teutones</option><option>Galos</option>
+              <option>Egipcios</option><option>Hunos</option>
+            </select>
+          </div>
+          <!-- ARTEFACTOS defensor (colapsable) -->
+          <details style="margin-block-start:4px;">
+            <summary style="font-size:12px;color:var(--text-secondary);cursor:pointer;padding:4px 0;list-style:none;">
+              Artefactos defensor ▾
+            </summary>
+            <div style="padding:8px 0 0;display:flex;flex-direction:column;gap:6px;">
+              <div class="input-row">
+                <span class="input-label" style="white-space:nowrap;">Edif. resistentes:</span>
+                <span style="font-size:12px;color:var(--text-tertiary);">×</span>
+                <input class="input-field input-xs" type="number" value="1.0" step="0.5" min="0.01" max="10" aria-label="Multiplicador de edificios resistentes"/>
+                <span style="font-size:11px;color:var(--text-tertiary);">(arietes)</span>
+              </div>
+            </div>
+          </details>
+          <div class="input-row" style="margin-block-start:4px;">
             <span class="input-label">Rec. aldea:</span>
             <input class="input-field" type="number" placeholder="Opcional" min="0"/>
           </div>
@@ -659,21 +1122,17 @@ function formPanel_simulator(){
     <!-- CONFIG (colapsable P3) -->
     <div class="draggable collapsible" data-block="config">
       <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
-        <span>Configuración avanzada</span>
+        <span>Configuración</span>
         <span class="chevron">▾</span>
       </div>
       <div class="collapsible-body" style="display:none;">
         <div class="input-row">
-          <span class="input-label">Exponente:</span>
-          <input class="input-field input-xs" type="number" value="0.5" step="0.05" min="0.4" max="0.6"/>
           <span class="input-label">Velocidad:</span>
-          <select class="form-select" style="max-width:80px;">
-            <option>x1</option><option>x3</option><option>x5</option><option>x10</option>
+          <select class="form-select" style="max-width:80px;" aria-label="Velocidad del servidor">
+            <option>x1</option><option>x2</option><option>x3</option><option>x5</option><option>x10</option>
           </select>
-        </div>
-        <div class="input-row">
           <span class="input-label">Distancia:</span>
-          <input class="input-field input-sm" type="number" placeholder="campos" min="0"/>
+          <input class="input-field input-sm" type="number" placeholder="campos" min="0" aria-label="Distancia en campos"/>
         </div>
       </div>
     </div>
@@ -758,6 +1217,99 @@ function resultPanel_simulator(attackerWins=true){
       <div class="result-section-title">Tropas defensor</div>
       ${troopTable(defRows)}
     </div>
+
+    <!-- CADENA DE CÁLCULO (colapsable P2, añadido en addendum 2026-05-30) -->
+    <details class="draggable chain-details" data-block="calc-chain" open>
+      <summary class="chain-summary">
+        <span>Ver desglose de cálculo</span>
+        <span style="font-size:10px;">▾</span>
+      </summary>
+      <div class="chain-body">
+
+        <div class="chain-section">Atacante</div>
+        <div class="chain-row">
+          <span class="chain-label">A base</span>
+          <span class="chain-value">${attackerWins?'47 650':'8 210'}</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Héroe</span>
+          <span class="chain-value">${attackerWins?'56 442':'9 800'}</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(+1 200 pts × 1.30)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Alianza</span>
+          <span class="chain-value">${attackerWins?'58 135':'10 094'}</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(× 1.03)</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">A efectivo</span>
+          <span class="chain-value">${attackerWins?'58 135':'10 094'}</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(moral 100% omitida)</span>
+        </div>
+
+        <hr class="chain-divider"/>
+
+        <div class="chain-section">Defensor</div>
+        <div class="chain-row">
+          <span class="chain-label">D base</span>
+          <span class="chain-value">${attackerWins?'20 110':'19 100'}</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Prop. cav.</span>
+          <span class="chain-value">0 %</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(todo infantería)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Héroe</span>
+          <span class="chain-value">${attackerWins?'20 110':'19 100'}</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(sin héroe)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">× Muro</span>
+          <span class="chain-value">1.00</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(nivel 0)</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">D efectiva</span>
+          <span class="chain-value">${attackerWins?'20 110':'19 100'}</span>
+        </div>
+
+        <hr class="chain-divider"/>
+
+        <div class="chain-section">Resultado</div>
+        <div class="chain-row">
+          <span class="chain-label">N en campo</span>
+          <span class="chain-value">891 tropas → K 1.50</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">Ratio A/D</span>
+          <span class="chain-value">${attackerWins?'2.89':'0.53'}</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Bajas atacante</span>
+          <span class="chain-value">${attackerWins?'27 %':'100 %'}</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Bajas defensor</span>
+          <span class="chain-value">${attackerWins?'100 %':'46 %'}</span>
+        </div>
+
+        <!-- Smithy por tropa (sub-bloque condicional) -->
+        <hr class="chain-divider"/>
+        <div class="chain-section">Smithy por tropa</div>
+        <div class="chain-smithy-row">
+          <div class="chain-smithy-icon">LE</div>
+          <span class="chain-smithy-name">Legionario</span>
+          <span class="chain-smithy-val">× 1.18 <span style="color:var(--text-tertiary);font-size:11px;">(smithy 10)</span></span>
+        </div>
+        <div class="chain-smithy-row">
+          <div class="chain-smithy-icon">IM</div>
+          <span class="chain-smithy-name">Imperano</span>
+          <span class="chain-smithy-val">× 1.14 <span style="color:var(--text-tertiary);font-size:11px;">(smithy 8)</span></span>
+        </div>
+
+      </div>
+    </details>
 
     <!-- BOTÍN -->
     <div class="draggable section-block" data-block="loot">
@@ -1064,6 +1616,721 @@ function viewError(){
   </div>`;
 }
 
+/* ===== VISTA 7 — RESINCRONIZADA: baseline real + addendum ===== */
+/*
+  Layout REAL del código (CombatCalculator.jsx):
+    maxWidth:720px, margin:0 auto, flex-direction:column
+  NO hay 2 columnas. Todo en columna única con scroll propio del tab-content.
+
+  ArmyPanel.jsx:
+    - <section> con header (icono rol + label UPPERCASE + btn colapsar)
+    - Body: fila de controles inline → TribeBar (chips 44px) → TroopGrid (horizontal)
+    - Atacante: AttackTypeToggle + AllianceBonusSelect + ArtifactSelect + btn Héroe
+    - Defensor: escudo + NumInput muro + ⚒ + NumInput cantero + AllianceBonusSelect + btn Héroe
+    - Héroe: bloque colapsable inline con 2 campos (pts + bonus%)
+    - Refuerzo: igual que defensor + btn eliminar (papelera)
+
+  TribeBar.jsx:
+    - Chips circulares 44px con iniciales 2 letras. NO select.
+
+  TroopGrid.jsx:
+    - Grid horizontal con scroll. Columna etiquetas (escudo + yunque) + columnas de tropa.
+    - Cada columna: icono 28px / input qty 52×28px / input smithy 52×24px.
+    - Columnas con qty=0 → opacity 0.45.
+
+  TravianReport.jsx (resultado):
+    - Badge winner (pill) + ratio string.
+    - TroopBand "Tú": tabla fixed con col "Tropa" (104px) + cols por tropa.
+      Filas: [iconos en header] / Enviadas / Pérdidas / Supervivientes.
+    - TroopBand "Defensor": misma estructura.
+    - StatsTable: tabla Infantería/Caballería (icon+valor, col Atacante, col Defensor, col %)
+      + sub-tabla recursos (col lbl 180px + Wood/Clay/Iron/Crop + Σ): Botín/Coste/Neto.
+    - Warnings: lista de pills debajo.
+
+  ADDENDUM (pendiente de implementar, encajado en la composición real):
+    - Mini-tarjeta "modificadores activos" debajo de los controles de cada ArmyPanel.
+    - Inputs nuevos en el body del atacante: morale%, diet× (en la sección héroe/artefactos).
+    - Inputs nuevos en el body del defensor: wall_tribe select, artefacto strong_buildings.
+    - Bloque Configuración (colapsable, P3): server_speed + distance_fields.
+    - Bloque "Cadena de cálculo" (colapsable, en el resultado, debajo de TroopBands).
+*/
+function view7_addendum(){
+  /* ── Helper: chip de tribu ── */
+  function tribeChip(initials, label, activeClass){
+    return `<button class="tribe-chip ${activeClass}" type="button"
+      role="radio" aria-checked="${activeClass!==''}" aria-label="${label}" title="${label}">
+      ${initials}
+    </button>`;
+  }
+
+  /* ── Helper: columna de tropa en TroopGrid ── */
+  function troopCol(initials, qty, smithy){
+    const dim = qty === 0 ? 'dim-col' : '';
+    return `<div class="troop-cell-col ${dim}">
+      <div class="troop-cell-icon">
+        <div class="troop-cell-icon-badge">${initials}</div>
+      </div>
+      <input class="troop-qty-input" type="text" inputmode="numeric"
+        value="${qty>0?qty:''}" placeholder="0"
+        aria-label="${initials} — Cantidad"/>
+      <input class="troop-smithy-input" type="text" inputmode="numeric"
+        value="${smithy>0?smithy:''}" placeholder=""
+        aria-label="${initials} — Herrería"/>
+    </div>`;
+  }
+
+  /* ── TroopGrid horizontal ── */
+  function troopGrid(troops, showSmithy=true){
+    return `<div class="troop-grid-wrap">
+      <div class="troop-grid">
+        <!-- Etiquetas de fila -->
+        <div class="troop-grid-labels">
+          <div class="troop-grid-label-spacer"></div>
+          <div class="troop-grid-label-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              style="width:14px;height:14px;" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          ${showSmithy?`<div class="troop-grid-label-smithy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              style="width:14px;height:14px;" aria-hidden="true">
+              <rect x="2" y="14" width="20" height="4" rx="1"/>
+              <path d="M6 14V9a6 6 0 0 1 12 0v5"/>
+              <line x1="9" y1="18" x2="9" y2="22"/><line x1="15" y1="18" x2="15" y2="22"/>
+            </svg>
+          </div>`:''}
+        </div>
+        <!-- Columnas de tropa -->
+        ${troops.map(t=>troopCol(INITIALS(t.name), t.qty, t.smithy||0)).join('')}
+      </div>
+    </div>`;
+  }
+
+  /* ── ArmyPanel real ── */
+  function armyPanel({role, label, iconClass, controls, tribeChips, troopsGrid, heroBlock, modsCard, defenderExtras}){
+    return `<section class="army-panel draggable" data-block="army-${role}" role="region" aria-label="${label}">
+      <!-- Header -->
+      <div class="army-panel-header">
+        <div class="army-panel-icon ${iconClass}">
+          ${iconClass==='atk'
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                style="width:16px;height:16px;" aria-hidden="true">
+                <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/>
+                <line x1="13" y1="19" x2="19" y2="13"/>
+                <line x1="16" y1="16" x2="20" y2="20"/>
+                <line x1="19" y1="21" x2="21" y2="19"/>
+              </svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                style="width:16px;height:16px;" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>`
+          }
+        </div>
+        <span class="army-panel-label">${label}</span>
+        ${role==='reinforcement' ? `<button class="army-panel-btn danger" type="button"
+          aria-label="Eliminar refuerzo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            style="width:14px;height:14px;" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>` : ''}
+        <button class="army-panel-btn" type="button"
+          aria-label="Colapsar" aria-expanded="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            style="width:14px;height:14px;transform:rotate(180deg);" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Body -->
+      <div class="army-panel-body">
+        <!-- Fila de controles inline -->
+        <div class="ctrl-row">${controls}</div>
+        ${modsCard}
+        ${heroBlock}
+        <!-- TribeBar (chips circulares) -->
+        <div class="tribe-bar">${tribeChips}</div>
+        <!-- TroopGrid (horizontal, scroll) -->
+        ${troopsGrid}
+        ${defenderExtras || ''}
+      </div>
+    </section>`;
+  }
+
+  /* ── TroopBand (tabla TravianReport) ── */
+  function troopBand(accentClass, iconEmoji, title, troops){
+    // troops = [{initials, sent, lost, surv}]
+    const cols = troops.length;
+    return `<div class="tr-band draggable" data-block="tr-band-${accentClass}">
+      <div class="tr-band-header ${accentClass}">
+        <span style="font-size:15px;" aria-hidden="true">${iconEmoji}</span>
+        <span class="tr-band-title">${title}</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="tr-table" style="min-width:${104+cols*60}px;">
+          <colgroup>
+            <col style="width:104px;"/>
+            ${troops.map(()=>'<col/>').join('')}
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Tropa</th>
+              ${troops.map(t=>`<th class="tc" title="${t.name||t.initials}">
+                <div class="troop-cell-icon-badge" style="margin:0 auto;">${t.initials}</div>
+              </th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="label-td">Enviadas</td>
+              ${troops.map(t=>`<td class="r-sent">${t.sent.toLocaleString('es')}</td>`).join('')}
+            </tr>
+            <tr>
+              <td class="label-td">Pérdidas</td>
+              ${troops.map(t=>`<td class="r-lost">${t.lost>0?'−'+t.lost.toLocaleString('es'):'0'}</td>`).join('')}
+            </tr>
+            <tr>
+              <td class="label-td">Supervivientes</td>
+              ${troops.map(t=>`<td class="r-surv">${t.surv.toLocaleString('es')}</td>`).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  /* ── StatsTable (TravianReport) ── */
+  function statsTable(){
+    return `<div class="tr-stats draggable" data-block="tr-stats">
+      <div class="tr-stats-header">
+        <span class="tr-stats-title">Estadísticas</span>
+      </div>
+      <!-- Tabla inf/cav -->
+      <table class="tr-stats-table">
+        <thead>
+          <tr>
+            <th style="width:180px;"></th>
+            <th>Atacante</th>
+            <th>Defensor</th>
+            <th class="pct-th" title="Proporción inf/cav del atacante (regula la mezcla de defensa inf/cav)">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="lbl">Infantería</td>
+            <td class="val-icon">
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="width:16px;height:16px;background:var(--surface-2);border-radius:2px;display:inline-block;flex-shrink:0;"
+                  title="Fuerza de ataque"></span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;">47 650</span>
+              </span>
+            </td>
+            <td class="val-icon">
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="width:16px;height:16px;background:var(--surface-2);border-radius:2px;display:inline-block;flex-shrink:0;"
+                  title="Def. infantería"></span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;">27 800</span>
+              </span>
+            </td>
+            <td class="pct">100%</td>
+          </tr>
+          <tr>
+            <td class="lbl">Caballería</td>
+            <td class="val-icon">
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="width:16px;height:16px;background:var(--surface-2);border-radius:2px;display:inline-block;flex-shrink:0;"
+                  title="Fuerza de ataque"></span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;">—</span>
+              </span>
+            </td>
+            <td class="val-icon">
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <span style="width:16px;height:16px;background:var(--surface-2);border-radius:2px;display:inline-block;flex-shrink:0;"
+                  title="Def. caballería"></span>
+                <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;">—</span>
+              </span>
+            </td>
+            <td class="pct">0%</td>
+          </tr>
+        </tbody>
+      </table>
+      <!-- Sub-tabla recursos -->
+      <div style="border-top:1px solid var(--border);">
+        <table class="tr-res-table">
+          <colgroup>
+            <col style="width:180px;"/>
+            <col/><col/><col/><col/>
+            <col style="width:88px;"/>
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="lbl-th"></th>
+              <th>🪵</th><th>🧱</th><th>⚙</th><th>🌾</th>
+              <th class="sum-th">Σ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="lbl">Botín de animales</td>
+              <td class="gain">5 200</td><td class="gain">5 200</td>
+              <td class="gain">5 200</td><td class="gain">5 200</td>
+              <td class="sum gain">20 800</td>
+            </tr>
+            <tr>
+              <td class="lbl">Coste tropas perdidas</td>
+              <td class="cost">−16 320</td><td class="cost">−13 600</td>
+              <td class="cost">−20 400</td><td class="cost">−4 080</td>
+              <td class="sum cost">−54 400</td>
+            </tr>
+            <tr class="net-row">
+              <td class="lbl">Neto</td>
+              <td class="net-neg">−11 120</td><td class="net-neg">−8 400</td>
+              <td class="net-neg">−15 200</td><td class="net-pos">+1 120</td>
+              <td class="sum net-neg">−33 600</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  /* ── Cadena de cálculo (bloque addendum, en el resultado) ── */
+  function calcChain(){
+    return `<details class="draggable chain-details" data-block="calc-chain" open>
+      <summary class="chain-summary">
+        <span>Ver desglose de cálculo</span>
+        <span style="font-size:10px;">▾</span>
+      </summary>
+      <div class="chain-body">
+
+        <div class="chain-section">Atacante</div>
+        <div class="chain-row">
+          <span class="chain-label">A base</span>
+          <span class="chain-value">47 650</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">× Smithy (ponderado)</span>
+          <span class="chain-value">52 345</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(LE ×1.18, IM ×1.14)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Héroe</span>
+          <span class="chain-value">56 442</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(+1 200 pts × 1.30)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Alianza</span>
+          <span class="chain-value">58 135</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(× 1.03)</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">A efectivo</span>
+          <span class="chain-value">58 135</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(moral 100% omitida)</span>
+        </div>
+
+        <hr class="chain-divider"/>
+
+        <div class="chain-section">Defensor</div>
+        <div class="chain-row">
+          <span class="chain-label">D base</span>
+          <span class="chain-value">19 444</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Prop. cav.</span>
+          <span class="chain-value">0 %</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(todo infantería)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">+ Héroe</span>
+          <span class="chain-value">19 444</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(sin héroe)</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">× Muro</span>
+          <span class="chain-value">1.28</span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:4px;">(N.10 × stonemason N.2)</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">D efectiva</span>
+          <span class="chain-value">27 800</span>
+        </div>
+
+        <hr class="chain-divider"/>
+
+        <div class="chain-section">Resultado</div>
+        <div class="chain-row">
+          <span class="chain-label">N en campo</span>
+          <span class="chain-value">765 tropas → K 1.50</span>
+        </div>
+        <div class="chain-row final">
+          <span class="chain-label">Ratio A/D</span>
+          <span class="chain-value">2.09</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Bajas atacante</span>
+          <span class="chain-value">27 %</span>
+        </div>
+        <div class="chain-row">
+          <span class="chain-label">Bajas defensor</span>
+          <span class="chain-value">100 %</span>
+        </div>
+
+        <!-- Smithy por tropa (sub-bloque) -->
+        <hr class="chain-divider"/>
+        <div class="chain-section">Smithy por tropa</div>
+        <div class="chain-smithy-row">
+          <div class="chain-smithy-icon">LE</div>
+          <span class="chain-smithy-name">Legionario</span>
+          <span class="chain-smithy-val">× 1.18 <span style="color:var(--text-tertiary);font-size:11px;">(smithy 10)</span></span>
+        </div>
+        <div class="chain-smithy-row">
+          <div class="chain-smithy-icon">IM</div>
+          <span class="chain-smithy-name">Imperano</span>
+          <span class="chain-smithy-val">× 1.14 <span style="color:var(--text-tertiary);font-size:11px;">(smithy 8)</span></span>
+        </div>
+
+      </div>
+    </details>`;
+  }
+
+  /* ── Datos de muestra ── */
+  const atkTroops = [
+    {name:'Legionario',qty:500,smithy:10},
+    {name:'Pretoriano',qty:0,smithy:0},
+    {name:'Imperano',qty:200,smithy:8},
+    {name:'Explorador',qty:0,smithy:0},
+    {name:'Equitario',qty:0,smithy:0},
+    {name:'Catafrasto',qty:0,smithy:0},
+    {name:'Ariete',qty:0,smithy:0},
+    {name:'Catapulta',qty:0,smithy:0},
+    {name:'Senador',qty:0,smithy:0},
+  ];
+  const defTroops = [
+    {name:'Rata',qty:20,smithy:0},{name:'Araña',qty:0,smithy:0},
+    {name:'Serpiente',qty:15,smithy:0},{name:'Murciélago',qty:0,smithy:0},
+    {name:'Jabalí',qty:40,smithy:0},{name:'Lobo',qty:0,smithy:0},
+    {name:'Oso',qty:10,smithy:0},{name:'Cocodrilo',qty:0,smithy:0},
+    {name:'Tigre',qty:0,smithy:0},{name:'Elefante',qty:5,smithy:0},
+  ];
+
+  /* ── Tribus atacante (7 chips, RO activo) ── */
+  const atkTribes = `
+    ${tribeChip('RO','Romanos','active-ro')}
+    ${tribeChip('TE','Teutones','')}
+    ${tribeChip('GA','Galos','')}
+    ${tribeChip('EG','Egipcios','')}
+    ${tribeChip('HU','Hunos','')}
+    ${tribeChip('ES','Espartanos','')}
+    ${tribeChip('VI','Vikingos','')}
+  `;
+
+  /* ── Tribus defensor (Nature + 7, NA activo) ── */
+  const defTribes = `
+    ${tribeChip('NA','Naturaleza','active-na')}
+    ${tribeChip('RO','Romanos','')}
+    ${tribeChip('TE','Teutones','')}
+    ${tribeChip('GA','Galos','')}
+    ${tribeChip('EG','Egipcios','')}
+    ${tribeChip('HU','Hunos','')}
+    ${tribeChip('ES','Espartanos','')}
+    ${tribeChip('VI','Vikingos','')}
+  `;
+
+  /* ── Controles atacante ── */
+  const atkControls = `
+    <div class="atk-toggle">
+      <button class="atk-toggle-btn active" type="button">Saqueo</button>
+      <button class="atk-toggle-btn" type="button">Ataque</button>
+    </div>
+    <select class="ctrl-select" aria-label="Bonus alianza">
+      <option>0%</option><option>1%</option><option>2%</option>
+      <option selected>3%</option><option>4%</option><option>5%</option>
+    </select>
+    <select class="ctrl-select" aria-label="Artefacto">
+      <option>Sin artefacto</option>
+      <option>Tropas rápidas ×1.5</option>
+      <option selected>Tropas rápidas ×2</option>
+    </select>
+    <button class="hero-expand-btn open" type="button"
+      aria-expanded="true">
+      Héroe
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        style="width:12px;height:12px;transform:rotate(180deg);" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+  `;
+
+  /* ── Controles defensor ── */
+  const defControls = `
+    <label class="ctrl-icon" title="Muro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+        style="width:16px;height:16px;" aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <input class="num-input-sm" type="text" inputmode="numeric" value="10"
+        aria-label="Muro" style="margin-inline-start:4px;"/>
+    </label>
+    <label class="ctrl-icon" title="Cantero">
+      <span style="font-size:11px;color:var(--text-tertiary);">⚒</span>
+      <input class="num-input-sm" type="text" inputmode="numeric" value="2"
+        aria-label="Cantero" style="margin-inline-start:4px;"/>
+    </label>
+    <select class="ctrl-select" aria-label="Bonus alianza">
+      <option selected>0%</option><option>1%</option><option>2%</option>
+      <option>3%</option><option>4%</option><option>5%</option>
+    </select>
+    <button class="hero-expand-btn" type="button"
+      aria-expanded="false">
+      Héroe
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        style="width:12px;height:12px;" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+  `;
+
+  /* ── Bloque héroe expandido (atacante) ── */
+  const heroBlockAtk = `
+    <div class="hero-expanded-block draggable" data-block="hero-atk">
+      <div class="hero-field">
+        <span class="hero-field-label">Pts. ataque héroe</span>
+        <input class="hero-field-input" type="text" inputmode="numeric" value="1200"
+          aria-label="Pts. ataque héroe"/>
+      </div>
+      <div class="hero-field">
+        <span class="hero-field-label">Bonus ataque héroe %</span>
+        <input class="hero-field-input narrow" type="text" inputmode="numeric" value="30"
+          aria-label="Bonus ataque héroe %"/>
+      </div>
+      <!-- [ADD] Moral — pendiente de implementar en código -->
+      <div class="hero-field" title="[ADD] Pendiente: input morale">
+        <span class="hero-field-label" style="color:var(--accent-text);">Moral %
+          <span style="font-size:10px;opacity:.7;">(ADD)</span></span>
+        <input class="hero-field-input narrow" type="text" inputmode="numeric"
+          value="100" min="30" max="100"
+          aria-label="Moral del atacante (pendiente implementar)"
+          style="border-color:var(--accent-subtle);"/>
+      </div>
+    </div>
+  `;
+
+  /* ── Modificadores activos atacante ── */
+  const modsAtk = `
+    <div class="mods-card draggable" data-block="mods-atk"
+      aria-label="Modificadores activos del atacante">
+      <span class="mod-chip" title="+1 200 pts ataque héroe">+1 200 pts</span>
+      <span class="mod-chip" title="+30% bonus héroe">+30 %</span>
+      <span class="mod-chip" title="+3% alianza">+3 %</span>
+      <span class="mod-chip smithy" title="Herrería activa en al menos una tropa">Herr.</span>
+    </div>
+  `;
+
+  /* ── Modificadores activos defensor (vacío) ── */
+  const modsDef = `
+    <div class="mods-card draggable" data-block="mods-def"
+      aria-label="Modificadores activos del defensor">
+      <span class="mods-card-empty">Sin modificadores activos</span>
+    </div>
+  `;
+
+  /* ── Extras defensor: wall_tribe + artefacto strong_buildings ── */
+  const defExtras = `
+    <hr class="hairline"/>
+    <!-- [ADD] wall_tribe — pendiente implementar en código -->
+    <div class="input-row" style="margin-block-start:4px;">
+      <span class="input-label" style="white-space:nowrap;color:var(--accent-text);">
+        Tribu muro <span style="font-size:10px;opacity:.7;">(ADD)</span>:
+      </span>
+      <select class="form-select" style="font-size:12px;border-color:var(--accent-subtle);"
+        aria-label="Tribu del muro"
+        title="[ADD] Autocompleta con la tribu del defensor. Pendiente de implementar.">
+        <option value="">Sin especificar</option>
+        <option selected>Romanos</option><option>Teutones</option>
+        <option>Galos</option><option>Egipcios</option><option>Hunos</option>
+      </select>
+    </div>
+    <!-- [ADD] Artefacto defensor: strong_buildings — pendiente implementar -->
+    <details style="margin-block-start:4px;">
+      <summary style="font-size:12px;color:var(--accent-text);cursor:pointer;
+        padding:4px 0;list-style:none;">
+        Artefactos defensor (ADD) ▾
+      </summary>
+      <div style="padding:8px 0 0;display:flex;flex-direction:column;gap:6px;">
+        <div class="input-row">
+          <span class="input-label" style="white-space:nowrap;">Edif. resistentes:</span>
+          <span style="font-size:12px;color:var(--text-tertiary);">×</span>
+          <input class="input-field input-xs" type="number" value="1.0"
+            step="0.5" min="0.01" max="10"
+            aria-label="Multiplicador de edificios resistentes (add)"/>
+          <span style="font-size:11px;color:var(--text-tertiary);">(arietes)</span>
+        </div>
+      </div>
+    </details>
+  `;
+
+  return `<div class="calc-single" id="view7-container">
+
+    <!-- ── Cabecera: título + toggle modo ── -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <h2 style="font-size:17px;font-weight:600;color:var(--text);letter-spacing:-0.01em;
+        margin:0;flex:1;min-width:160px;">
+        Calculadora de combate
+      </h2>
+      <!-- Toggle Simulador/Optimizador — div[role=tablist] inline al título -->
+      <div role="tablist" aria-label="Modo de calculadora"
+        style="display:flex;border-radius:var(--radius-sm);overflow:hidden;
+          border:1px solid var(--border-strong);flex-shrink:0;">
+        <button type="button" role="tab" aria-selected="true"
+          style="height:32px;padding:0 14px;border:none;
+            background:var(--btn-primary-bg);color:var(--btn-primary-text);
+            font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+            letter-spacing:-0.01em;">
+          Simulador
+        </button>
+        <button type="button" role="tab" aria-selected="false"
+          style="height:32px;padding:0 14px;border:none;
+            background:var(--surface-2);color:var(--text-secondary);
+            font-size:13px;font-weight:400;cursor:pointer;font-family:inherit;
+            letter-spacing:-0.01em;">
+          Optimizador
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Panel ATACANTE ── -->
+    ${armyPanel({
+      role:'attacker',
+      label:'Atacante',
+      iconClass:'atk',
+      controls: atkControls,
+      tribeChips: atkTribes,
+      troopsGrid: troopGrid(atkTroops, true),
+      heroBlock: heroBlockAtk,
+      modsCard: modsAtk,
+      defenderExtras: '',
+    })}
+
+    <!-- ── Panel DEFENSOR ── -->
+    ${armyPanel({
+      role:'defender',
+      label:'Defensor',
+      iconClass:'def',
+      controls: defControls,
+      tribeChips: defTribes,
+      troopsGrid: troopGrid(defTroops, false),
+      heroBlock: ``,
+      modsCard: modsDef,
+      defenderExtras: defExtras,
+    })}
+
+    <!-- ── Botón "Añadir refuerzo" (dashed, full-width) ── -->
+    <button class="add-reinf-btn draggable" data-block="add-reinf-btn" type="button">
+      <span aria-hidden="true">+</span>
+      Añadir refuerzo
+    </button>
+
+    <!-- ── [ADD] Configuración (colapsable P3 — pendiente implementar) ── -->
+    <div class="draggable collapsible" data-block="config-add"
+      style="margin-bottom:12px;">
+      <div class="collapsible-header" onclick="toggleCollapsible(this)">
+        <span style="color:var(--accent-text);">
+          Configuración
+          <span style="font-size:10px;opacity:.7;">(ADD)</span>
+        </span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="collapsible-body" style="display:none;">
+        <div class="input-row">
+          <span class="input-label">Velocidad:</span>
+          <select class="form-select" style="max-width:80px;"
+            aria-label="Velocidad del servidor">
+            <option>x1</option><option>x2</option><option>x3</option>
+            <option>x5</option><option>x10</option>
+          </select>
+          <span class="input-label">Distancia:</span>
+          <input class="input-field input-sm" type="number"
+            placeholder="campos" min="0"
+            aria-label="Distancia en campos"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Botón SIMULAR ── -->
+    <button class="simulate-btn draggable" data-block="simulate-btn" type="button">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+      Simular
+    </button>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!-- RESULTADO — TravianReport fiel al código real      -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="tr-report" role="region" aria-label="Informe de combate">
+
+      <!-- Badge ganador + ratio (pill) -->
+      <div class="tr-badge-row draggable" data-block="tr-winner">
+        <div class="tr-winner-badge atk-wins">
+          <span>⚔</span>
+          Atacante gana
+        </div>
+        <span class="tr-ratio">Ratio: 2.09</span>
+      </div>
+
+      <!-- TroopBand "Tú" (atacante) -->
+      ${troopBand('atk','⚔','Tú',[
+        {initials:'LE',name:'Legionario',sent:500,lost:136,surv:364},
+        {initials:'PR',name:'Pretoriano',sent:0,lost:0,surv:0},
+        {initials:'IM',name:'Imperano',sent:200,lost:54,surv:146},
+        {initials:'EX',name:'Explorador',sent:0,lost:0,surv:0},
+        {initials:'EQ',name:'Equitario',sent:0,lost:0,surv:0},
+        {initials:'CA',name:'Catafrasto',sent:0,lost:0,surv:0},
+        {initials:'AR',name:'Ariete',sent:0,lost:0,surv:0},
+        {initials:'CF',name:'Catapulta',sent:0,lost:0,surv:0},
+        {initials:'SE',name:'Senador',sent:0,lost:0,surv:0},
+      ])}
+
+      <!-- TroopBand "Defensor" -->
+      ${troopBand('def','🛡','Defensor',[
+        {initials:'RA',name:'Rata',sent:20,lost:20,surv:0},
+        {initials:'AR',name:'Araña',sent:0,lost:0,surv:0},
+        {initials:'SE',name:'Serpiente',sent:15,lost:15,surv:0},
+        {initials:'MU',name:'Murciélago',sent:0,lost:0,surv:0},
+        {initials:'JA',name:'Jabalí',sent:40,lost:40,surv:0},
+        {initials:'LO',name:'Lobo',sent:0,lost:0,surv:0},
+        {initials:'OS',name:'Oso',sent:10,lost:10,surv:0},
+        {initials:'CO',name:'Cocodrilo',sent:0,lost:0,surv:0},
+        {initials:'TI',name:'Tigre',sent:0,lost:0,surv:0},
+        {initials:'EL',name:'Elefante',sent:5,lost:5,surv:0},
+      ])}
+
+      <!-- [ADD] Cadena de cálculo (colapsable, en el resultado) -->
+      ${calcChain()}
+
+      <!-- StatsTable (fiel a TravianReport) -->
+      ${statsTable()}
+
+      <!-- Warnings -->
+      <div class="tr-warnings draggable" data-block="tr-warnings">
+        <div class="tr-warning-label">Avisos</div>
+        <div class="tr-warning-pill">
+          <span aria-hidden="true">⚠</span>
+          wall_tribe no especificado — usando fallback 3% por nivel
+        </div>
+      </div>
+
+    </div><!-- /tr-report -->
+
+  </div><!-- /calc-single -->`;
+}
+
 /* ===== RENDER VIEWS ===== */
 const views = {
   '1': () => `<div class="calc-layout">${formPanel_simulator()}${resultPanel_empty()}</div>`,
@@ -1072,6 +2339,7 @@ const views = {
   '4': () => `<div class="calc-layout">${formPanel_optimizer()}<div class="calc-result-panel"><div class="state-area"><div class="state-icon">🎯</div><div class="state-title">Sin optimización</div><p class="state-desc">Selecciona tropas y la defensa del oasis, luego pulsa <strong>Optimizar</strong>.</p></div></div></div>`,
   '5': () => `<div class="calc-layout">${formPanel_optimizer()}${resultPanel_optimizer()}</div>`,
   '6': () => viewError(),
+  '7': () => view7_addendum(),
 };
 
 function setView(v){

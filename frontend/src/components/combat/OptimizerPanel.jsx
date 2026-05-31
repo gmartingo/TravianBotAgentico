@@ -43,6 +43,21 @@ function IconChevronDown({ size = 14, rotated = false }) {
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
+const MODES = [
+  { id: 'A', labelKey: 'calc.optimizer.modeA' },
+  { id: 'B', labelKey: 'calc.optimizer.modeB' },
+  { id: 'C', labelKey: 'calc.optimizer.mode.tabC' },
+]
+
+// Preset de pesos para Modo C
+const MODE_C_PRESET = {
+  resources_gained: 1.0,
+  total_losses: 1.5,
+  troops_sent: 0.5,
+  travel_time: 0.0,
+  balance: 1.5,
+}
+
 const ATTACKER_TRIBES = [
   { id: 'romans',    labelKey: 'calc.tribe.romans' },
   { id: 'teutons',   labelKey: 'calc.tribe.teutons' },
@@ -448,11 +463,14 @@ export function OptimizerPanel({
   natureTroops,     // tropas de NATURE para la defensa
   onOptimize,
   optimizing,
+  onInputModeChange,  // callback opcional para notificar al padre del cambio de modo
 }) {
   const { t } = useI18n()
 
-  // ── Modo A/B ───────────────────────────────────────────────────────────────
-  const [inputMode, setInputMode] = useState('A') // 'A' | 'B'
+  // ── Modo A/B/C ────────────────────────────────────────────────────────────
+  const [inputMode, setInputMode] = useState('A') // 'A' | 'B' | 'C'
+  // Rastrea si el usuario ha tocado los pesos en esta sesión (para no pisar sus cambios)
+  const [weightsUserTouched, setWeightsUserTouched] = useState(false)
 
   // ── Modo A: set de ordinales marcados + smithy por tipo ────────────────────
   const [checkedOrdinals, setCheckedOrdinals] = useState(new Set())
@@ -489,12 +507,40 @@ export function OptimizerPanel({
   }
 
   // ── Configuración ──────────────────────────────────────────────────────────
-  const [configExpanded, setConfigExpanded] = useState(true)
+  // Sección de configuración colapsada por defecto — los pesos y artefactos
+  // son ajuste fino, no input frecuente. El usuario los despliega cuando los
+  // necesita (regla del usuario 2026-05-29).
+  const [configExpanded, setConfigExpanded] = useState(false)
   const [topN, setTopN] = useState(3)
   const [wResources, setWResources] = useState(1.0)
   const [wLosses, setWLosses] = useState(1.0)
   const [wTroops, setWTroops] = useState(0.5)
   const [wTravel, setWTravel] = useState(0.0)
+  const [wBalance, setWBalance] = useState(0.0)
+  // Modo C: rango opcional de vacas a atracar. null = el optimizador decide.
+  const [nMin, setNMin] = useState(null)
+  const [nMax, setNMax] = useState(null)
+
+  // Handler de cambio de modo: aplica preset al entrar al Modo C si el usuario
+  // no ha tocado los sliders en esta sesión. Notifica al padre si hay callback.
+  function handleModeChange(mode) {
+    setInputMode(mode)
+    onInputModeChange?.(mode)
+    if (mode === 'C' && !weightsUserTouched) {
+      setWResources(MODE_C_PRESET.resources_gained)
+      setWLosses(MODE_C_PRESET.total_losses)
+      setWTroops(MODE_C_PRESET.troops_sent)
+      setWTravel(MODE_C_PRESET.travel_time)
+      setWBalance(MODE_C_PRESET.balance)
+    }
+  }
+
+  // Wrappers que marcan weightsUserTouched al primer cambio manual
+  function handleWResources(v) { setWeightsUserTouched(true); setWResources(v) }
+  function handleWLosses(v)    { setWeightsUserTouched(true); setWLosses(v) }
+  function handleWTroops(v)    { setWeightsUserTouched(true); setWTroops(v) }
+  function handleWTravel(v)    { setWeightsUserTouched(true); setWTravel(v) }
+  function handleWBalance(v)   { setWeightsUserTouched(true); setWBalance(v) }
 
   // ── Construir body ─────────────────────────────────────────────────────────
   function buildBody() {
@@ -510,7 +556,14 @@ export function OptimizerPanel({
         total_losses: wLosses,
         troops_sent: wTroops,
         travel_time: wTravel,
+        balance: wBalance,
       },
+      // Modo C optimiza por agregado (N × por-raid). Modos A y B mantienen
+      // el comportamiento per-raid clásico (no-regresión vs antes del fix).
+      scoring_mode: inputMode === 'C' ? 'aggregate' : 'single',
+      // Rango de N solo se envía en Modo C cuando el usuario lo ha rellenado.
+      ...(inputMode === 'C' && nMin != null ? { n_min: nMin } : {}),
+      ...(inputMode === 'C' && nMax != null ? { n_max: nMax } : {}),
     }
 
     if (inputMode === 'A') {
@@ -533,6 +586,7 @@ export function OptimizerPanel({
         config: baseConfig,
       }
     } else {
+      // Modo B y Modo C usan village_troops (mismo formulario)
       const village_troops = troops
         .filter(t => Number(troopValues[t.ordinal]?.qty ?? 0) > 0)
         .map(t => ({
@@ -570,11 +624,18 @@ export function OptimizerPanel({
         return
       }
     } else {
+      // Modo B y Modo C
       const hasVillage = troops.some(t => Number(troopValues[t.ordinal]?.qty ?? 0) > 0)
       if (!hasVillage) {
         showToast(t('calc.optimizer.errorNoVillageTroops'))
         return
       }
+    }
+
+    // Modo C: validar rango n_min/n_max
+    if (inputMode === 'C' && nMin != null && nMax != null && nMin > nMax) {
+      showToast(t('calc.optimizer.nRange.invalid'))
+      return
     }
 
     onOptimize(buildBody())
@@ -600,7 +661,7 @@ export function OptimizerPanel({
         }}
       >
         <SectionHeader icon="⚔" titleKey="calc.attacker">
-          {/* Toggle Modo A / Modo B */}
+          {/* Toggle Modo A / Modo B / Modo C */}
           <div
             role="radiogroup"
             aria-label={t('calc.optimizer.inputMode')}
@@ -611,15 +672,15 @@ export function OptimizerPanel({
               border: '1px solid var(--border-strong)',
             }}
           >
-            {['A', 'B'].map(mode => {
-              const isActive = inputMode === mode
+            {MODES.map(({ id, labelKey }) => {
+              const isActive = inputMode === id
               return (
                 <button
-                  key={mode}
+                  key={id}
                   type="button"
                   role="radio"
                   aria-checked={isActive}
-                  onClick={() => setInputMode(mode)}
+                  onClick={() => handleModeChange(id)}
                   style={{
                     height: '26px',
                     padding: '0 12px',
@@ -633,7 +694,7 @@ export function OptimizerPanel({
                     transition: 'background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease)',
                   }}
                 >
-                  {t(`calc.optimizer.mode${mode}`)}
+                  {t(labelKey)}
                 </button>
               )
             })}
@@ -648,6 +709,21 @@ export function OptimizerPanel({
             onSelect={onAtkTribeChange}
             label={t('calc.tribe.select')}
           />
+
+          {/* Hint de modo C */}
+          {inputMode === 'C' && (
+            <div style={{
+              fontSize: '12px',
+              color: 'var(--accent-text)',
+              fontStyle: 'italic',
+              padding: '4px 8px',
+              background: 'var(--accent-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--accent)',
+            }}>
+              {t('calc.optimizer.modeCHint')}
+            </div>
+          )}
 
           {/* Modo A — checkboxes de tipos de tropa */}
           {inputMode === 'A' && (
@@ -672,11 +748,11 @@ export function OptimizerPanel({
             </div>
           )}
 
-          {/* Modo B — cantidades disponibles */}
-          {inputMode === 'B' && (
+          {/* Modo B / Modo C — cantidades disponibles (mismo formulario) */}
+          {(inputMode === 'B' || inputMode === 'C') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                {t('calc.optimizer.modeBHint')}
+                {t(inputMode === 'C' ? 'calc.optimizer.modeBHint' : 'calc.optimizer.modeBHint')}
               </div>
               <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <div style={{ display: 'flex', gap: '6px', minWidth: 'max-content' }}>
@@ -693,6 +769,85 @@ export function OptimizerPanel({
                     )
                   })}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modo C — rango opcional de vacas a atracar (n_min / n_max) */}
+          {inputMode === 'C' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              padding: '8px 10px',
+              background: 'var(--surface-2)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                {t('calc.optimizer.nRange.title')}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                {t('calc.optimizer.nRange.hint')}
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)' }}>
+                  <span>{t('calc.optimizer.nRange.min')}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={nMin == null ? '' : nMin}
+                    placeholder={t('calc.optimizer.nRange.placeholder')}
+                    aria-label={t('calc.optimizer.nRange.min')}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\D/g, '')
+                      setNMin(raw === '' ? null : Math.max(1, Number(raw)))
+                    }}
+                    style={{
+                      width: '64px', height: '26px', padding: '0 6px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '12px', fontFamily: 'var(--font-mono)',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: 'var(--text)', textAlign: 'center',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)' }}>
+                  <span>{t('calc.optimizer.nRange.max')}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={nMax == null ? '' : nMax}
+                    placeholder={t('calc.optimizer.nRange.placeholder')}
+                    aria-label={t('calc.optimizer.nRange.max')}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\D/g, '')
+                      setNMax(raw === '' ? null : Math.max(1, Number(raw)))
+                    }}
+                    style={{
+                      width: '64px', height: '26px', padding: '0 6px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '12px', fontFamily: 'var(--font-mono)',
+                      fontVariantNumeric: 'tabular-nums',
+                      color: 'var(--text)', textAlign: 'center',
+                      outline: 'none', boxSizing: 'border-box',
+                    }}
+                  />
+                </label>
+                {nMin != null && nMax != null && nMin > nMax && (
+                  <span style={{ fontSize: '11px', color: 'var(--danger)' }}>
+                    {t('calc.optimizer.nRange.invalid')}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -814,26 +969,35 @@ export function OptimizerPanel({
                   labelKey="calc.optimizer.weight.resources"
                   hintKey="calc.optimizer.weight.resources.hint"
                   value={wResources}
-                  onChange={setWResources}
+                  onChange={handleWResources}
                 />
                 <WeightSlider
                   labelKey="calc.optimizer.weight.losses"
                   hintKey="calc.optimizer.weight.losses.hint"
                   value={wLosses}
-                  onChange={setWLosses}
+                  onChange={handleWLosses}
                 />
                 <WeightSlider
                   labelKey="calc.optimizer.weight.troops"
                   hintKey="calc.optimizer.weight.troops.hint"
                   value={wTroops}
-                  onChange={setWTroops}
+                  onChange={handleWTroops}
                 />
                 <WeightSlider
                   labelKey="calc.optimizer.weight.travel"
                   hintKey="calc.optimizer.weight.travel.hint"
                   value={wTravel}
-                  onChange={setWTravel}
+                  onChange={handleWTravel}
                 />
+                {/* Slider balance — solo visible en Modo C */}
+                {inputMode === 'C' && (
+                  <WeightSlider
+                    labelKey="calc.optimizer.weight.balance"
+                    hintKey="calc.optimizer.weight.balance.hint"
+                    value={wBalance}
+                    onChange={handleWBalance}
+                  />
+                )}
               </div>
             </div>
           </div>

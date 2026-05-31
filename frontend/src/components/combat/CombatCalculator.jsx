@@ -161,6 +161,7 @@ export function CombatCalculator() {
   // ── Optimizador ─────────────────────────────────────────────────────────────
   const [optimizing, setOptimizing] = useState(false)
   const [optResult, setOptResult] = useState(null)
+  const [optimizerInputMode, setOptimizerInputMode] = useState('A') // 'A' | 'B' | 'C'
   // Tribu del atacante compartida entre simulador y optimizador
   // (el optimizador usa atkTribe y puede cambiarlo con onAtkTribeChange)
 
@@ -298,7 +299,17 @@ export function CombatCalculator() {
     try {
       const body = buildRequestBody()
       const res = await api.combat.simulate(body)
-      setResult(res)
+      // Capturamos qué formaciones envió el usuario y cuántos tipos de tropa
+      // tiene cada una. El backend devuelve defender_troops aplanado en el
+      // mismo orden que el request, así podemos volver a partirlo por
+      // formación para renderizar la tabla principal y una por refuerzo.
+      const formations = body.defenders.map((d, i) => ({
+        role: i === 0 ? 'defender' : 'reinforcement',
+        tribe: d.tribe,
+        catalog: troopsMap[d.tribe] ?? [],
+        troopCount: d.troops.length,
+      }))
+      setResult({ response: res, defenderFormations: formations })
     } catch (e) {
       if (e instanceof ApiError) {
         const d = e.detail
@@ -313,16 +324,6 @@ export function CombatCalculator() {
     } finally {
       setSimulating(false)
     }
-  }
-
-  // ── Meta de tropas para CombatResult (iconos + nombres) ───────────────────
-
-  const troopMeta = {
-    attacker: troopsMap[atkTribe] ?? [],
-    defenders: [
-      troopsMap[defState.tribe] ?? [],
-      ...reinforcements.map(r => troopsMap[r.tribe] ?? []),
-    ],
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -566,7 +567,11 @@ export function CombatCalculator() {
           </button>
 
           {/* ── Resultado simulador ── */}
-          <CombatResult result={result} troopMeta={troopMeta} />
+          <CombatResult
+            result={result?.response ?? null}
+            attackerTribeTroops={troopsMap[atkTribe] ?? []}
+            defenderFormations={result?.defenderFormations ?? null}
+          />
         </>
       )}
 
@@ -583,10 +588,13 @@ export function CombatCalculator() {
             natureTroops={troopsMap['nature'] ?? []}
             onOptimize={handleOptimize}
             optimizing={optimizing}
+            onInputModeChange={setOptimizerInputMode}
           />
           <OptimizerResult
             result={optResult}
             troopMeta={troopsMap[atkTribe] ?? []}
+            natureTroops={troopsMap['nature'] ?? []}
+            inputMode={optimizerInputMode}
           />
         </>
       )}

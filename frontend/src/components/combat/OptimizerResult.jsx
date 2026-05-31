@@ -15,6 +15,7 @@
  */
 import { useState } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
+import { TravianReport, ResIcon } from './TravianReport.jsx'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -23,17 +24,15 @@ function fmt(n, lang = 'es') {
   return new Intl.NumberFormat(lang).format(Math.round(n))
 }
 
-const RES_ICONS = { wood: '🪵', clay: '🧱', iron: '⚙', crop: '🌾' }
-
 function ResourceLine({ resources, lang }) {
   if (!resources || typeof resources !== 'object') return <span style={{ color: 'var(--text-tertiary)' }}>—</span>
-  const entries = Object.entries(resources).filter(([, v]) => v > 0)
+  const entries = Object.entries(resources).filter(([k, v]) => k !== 'total' && v > 0)
   if (entries.length === 0) return <span style={{ color: 'var(--text-tertiary)' }}>—</span>
   return (
     <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center' }}>
       {entries.map(([key, val]) => (
-        <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontSize: '12px' }}>
-          <span>{RES_ICONS[key] ?? key}</span>
+        <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px' }}>
+          <ResIcon res={key} size={14} />
           <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
             {fmt(val, lang)}
           </span>
@@ -180,9 +179,194 @@ function TroopsTable({ title, troops, troopMeta, lang, t, footnote }) {
   )
 }
 
+// ── Bloque Multi-Raid (solo Modo C) ──────────────────────────────────────────
+
+function MultiRaidBlock({ alternative, troopMeta, lang, t }) {
+  const { raids_possible, remaining_troops, aggregate } = alternative
+  if (raids_possible == null) return null
+
+  // Mapa de metadatos de tropas atacantes para iconos
+  const metaMap = {}
+  for (const m of (troopMeta ?? [])) metaMap[m.ordinal] = m
+
+  function resolveIconUrl(iconUrl) {
+    if (!iconUrl) return null
+    if (iconUrl.startsWith('http')) return iconUrl
+    return `/api${iconUrl}`
+  }
+
+  const thStyle = {
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: 'var(--text-secondary)',
+    textTransform: 'uppercase',
+    letterSpacing: '.04em',
+    textAlign: 'end',
+    background: 'var(--surface-2)',
+    borderBottom: '1px solid var(--border)',
+    whiteSpace: 'nowrap',
+  }
+  const tdStyle = {
+    padding: '4px 8px',
+    fontSize: '12px',
+    fontFamily: 'var(--font-mono)',
+    fontVariantNumeric: 'tabular-nums',
+    color: 'var(--text)',
+    textAlign: 'end',
+    borderBottom: '1px solid var(--border)',
+  }
+
+  return (
+    <div style={{
+      marginTop: '10px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      padding: '10px 12px',
+      background: 'var(--accent-subtle)',
+      border: '1px solid var(--accent)',
+      borderRadius: 'var(--radius-sm)',
+    }}>
+      {/* Línea destacada: "Puedes hacer esto N veces" */}
+      <div style={{
+        fontSize: '14px',
+        fontWeight: 700,
+        color: 'var(--accent-text)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+      }}>
+        <span>⟳</span>
+        <span>
+          {t('calc.optimizer.multiRaid.raidsPossible', { n: raids_possible })}
+        </span>
+      </div>
+
+      {/* Tabla sobrantes */}
+      {remaining_troops && remaining_troops.length > 0 && (
+        <div>
+          <div style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '.04em',
+            marginBottom: '4px',
+          }}>
+            {t('calc.optimizer.multiRaid.remaining')}
+          </div>
+          <div style={{
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '260px' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, textAlign: 'start' }}>{t('calc.result.col.troop')}</th>
+                  <th style={thStyle}>{t('calc.result.col.survived')}</th>
+                  <th style={thStyle}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {remaining_troops.map((tr, idx) => {
+                  const meta = metaMap[tr.ordinal]
+                  const iconUrl = meta?.iconUrl ?? resolveIconUrl(tr.icon_url)
+                  const pct = tr.quantity_initial > 0
+                    ? Math.round((tr.quantity_survived / tr.quantity_initial) * 100)
+                    : 0
+                  return (
+                    <tr key={`${tr.ordinal}_${idx}`}
+                      style={{ background: idx % 2 === 0 ? 'var(--surface)' : 'transparent' }}>
+                      <td style={{ ...tdStyle, textAlign: 'start', fontFamily: 'inherit' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          {iconUrl
+                            ? <img src={iconUrl} alt="" style={{ width: '16px', height: '16px', objectFit: 'contain', imageRendering: 'pixelated', flexShrink: 0 }} />
+                            : <span style={{ width: '16px', fontSize: '10px', color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>T{tr.ordinal}</span>
+                          }
+                          <span style={{ fontSize: '12px' }}>{meta?.name ?? tr.name ?? `T${tr.ordinal}`}</span>
+                        </div>
+                      </td>
+                      <td style={{ ...tdStyle, color: tr.quantity_survived > 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+                        {fmt(tr.quantity_survived, lang)}
+                      </td>
+                      <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontSize: '11px' }}>
+                        {pct}%
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Cuadro agregado */}
+      {aggregate && (
+        <div>
+          <div style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '.04em',
+            marginBottom: '4px',
+          }}>
+            {t('calc.optimizer.multiRaid.aggregate', { n: aggregate.n_raids })}
+          </div>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '12px',
+            padding: '8px 10px',
+            background: 'var(--surface-2)',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+            fontSize: '12px',
+          }}>
+            {/* Recursos totales ganados */}
+            {aggregate.total_resources_gained && aggregate.total_resources_gained.total > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ResourceLine resources={aggregate.total_resources_gained} lang={lang} />
+              </div>
+            )}
+            {/* Bajas totales en recursos */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--danger)' }}>
+              <span style={{ fontWeight: 500 }}>−</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                {fmt(aggregate.total_resource_losses, lang)} R
+              </span>
+            </div>
+            {/* Tropas totales enviadas */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)' }}>
+              <span>⚔</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+                {fmt(aggregate.total_troops_sent, lang)}
+              </span>
+            </div>
+            {/* Tiempo total (si hay) */}
+            {aggregate.total_travel_time_h != null && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)' }}>
+                <span>⏱</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
+                  {Number(aggregate.total_travel_time_h).toFixed(2)} h
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 // ── Panel de detalle inline (datos por-alternativa) ──────────────────────────
 
-function DetailPanel({ alternative, defenderTroops, troopMeta, lang, t }) {
+function DetailPanel({ alternative, defenderTroops, troopMeta, natureTroops, lang, t, inputMode }) {
   if (!alternative) {
     return (
       <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
@@ -191,120 +375,85 @@ function DetailPanel({ alternative, defenderTroops, troopMeta, lang, t }) {
     )
   }
 
-  const attackerWins = !!alternative.is_winning
-
-  const atkTroops = alternative.troops_sent ?? []
-  // defenderTroops es el campo top-level del response — los animales del oasis.
-  // El backend lo computa a partir del MEJOR resultado ganador, así que para
-  // alternativas no-ganadoras (o ganadoras de menor rank) refleja un escenario
-  // distinto. Se muestra como referencia y se anota debajo.
-  const defTroops = defenderTroops ?? []
+  // Normalizar attackerTroops para que TravianReport vea icon_url, name, etc.
+  // troopMeta es el array [{ ordinal, name, iconUrl }] del atacante;
+  // alternative.troops_sent ya trae icon_url pero a veces no name traducido.
+  const metaMap = {}
+  for (const m of (troopMeta ?? [])) metaMap[m.ordinal] = m
+  const enrichedAtk = (alternative.troops_sent ?? []).map(t => {
+    const meta = metaMap[t.ordinal]
+    return {
+      ordinal: t.ordinal,
+      name: t.name ?? meta?.name ?? `T${t.ordinal}`,
+      icon_url: t.icon_url ?? (meta?.iconUrl
+        ? meta.iconUrl.replace(/^\/api/, '') // TravianReport vuelve a anteponer /api
+        : null),
+      quantity_initial: t.quantity_initial ?? 0,
+      quantity_lost: t.quantity_lost ?? 0,
+      quantity_survived: t.quantity_survived ?? 0,
+    }
+  })
 
   return (
     <div style={{
       padding: '12px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
       background: 'var(--surface-2)',
       borderTop: '1px solid var(--border)',
     }}>
-      {/* Badge ganador + ratio + fuerzas de combate (paridad con el simulador) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: '5px',
-          padding: '3px 10px',
-          borderRadius: 'var(--radius-full)',
-          background: attackerWins ? 'rgba(36,138,61,.10)' : 'rgba(201,53,44,.10)',
-          border: `1px solid ${attackerWins ? 'var(--success)' : 'var(--danger)'}`,
-        }}>
-          <span style={{ fontSize: '13px' }}>{attackerWins ? '⚔' : '🛡'}</span>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: attackerWins ? 'var(--success)' : 'var(--danger)' }}>
-            {attackerWins ? t('calc.result.attackerWins') : t('calc.result.defenderWins')}
-          </span>
-        </div>
-        {alternative.ratio != null && (
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {t('calc.result.ratio', { ratio: Number(alternative.ratio).toFixed(2) })}
-          </span>
-        )}
-        {(alternative.attacker_power != null || alternative.defender_power != null) && (
-          <div style={{ display: 'flex', gap: '14px', marginLeft: 'auto', flexWrap: 'wrap' }}>
-            {alternative.attacker_power != null && (
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                ⚔ <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                  {fmt(alternative.attacker_power, lang)}
-                </span>
-              </span>
-            )}
-            {alternative.defender_power != null && (
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                🛡 <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                  {fmt(alternative.defender_power, lang)}
-                </span>
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Tabla atacante: tropas enviadas con bajas y supervivientes por tipo */}
-      <TroopsTable
-        title={t('calc.result.attacker')}
-        troops={atkTroops}
-        troopMeta={troopMeta}
-        lang={lang}
-        t={t}
+      <TravianReport
+        attackerWins={!!alternative.is_winning}
+        ratio={alternative.ratio}
+        attackerPower={alternative.attacker_power}
+        defenderPower={alternative.defender_power}
+        attackerInfantryPower={alternative.attacker_infantry_power}
+        attackerCavalryPower={alternative.attacker_cavalry_power}
+        defenderInfantryPower={alternative.defender_infantry_power}
+        defenderCavalryPower={alternative.defender_cavalry_power}
+        attackerTroops={enrichedAtk}
+        defenderTroops={defenderTroops ?? []}
+        attackerTribeTroops={troopMeta}
+        defenderTribeTroops={natureTroops}
+        animalLoot={alternative.resources_gained ?? null}
+        attackerCostLoss={alternative.resource_losses_breakdown ?? null}
+        raidsCount={inputMode === 'C' ? alternative.raids_possible : null}
       />
 
-      {/* Tabla defensor: animales del oasis con bajas y supervivientes.
-          Nota: el backend solo devuelve un snapshot de defensores (el de la
-          mejor combinación ganadora), por lo que la columna de bajas es
-          orientativa para alternativas distintas a la #1. */}
-      <TroopsTable
-        title={t('calc.result.defender')}
-        troops={defTroops}
-        troopMeta={null}
-        lang={lang}
-        t={t}
-        footnote={alternative.rank > 1 ? t('calc.optimizer.defenderNote') : null}
-      />
-
-      {/* Recursos ganados de animales */}
-      {alternative.resources_gained && alternative.resources_gained.total > 0 && (
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontWeight: 500 }}>{t('calc.result.loot.title')}:</span>
-          <ResourceLine resources={alternative.resources_gained} lang={lang} />
-        </div>
-      )}
-
-      {/* Pérdidas atacante (coste en recursos de las bajas) */}
-      {alternative.total_resource_losses != null && (
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <span style={{ fontWeight: 500 }}>{t('calc.result.losses.attacker')}:</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--danger)', fontWeight: 600 }}>
-            {fmt(alternative.total_resource_losses, lang)}
-          </span>
-        </div>
-      )}
-
-      {/* Tiempo de marcha */}
+      {/* Tiempo de marcha (no encaja en el report, lo dejamos como anotación) */}
       {alternative.travel_time_h != null && (
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <span style={{ fontWeight: 500 }}>⏱</span>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)',
+          display: 'flex', gap: '6px', alignItems: 'center', marginTop: '10px' }}>
+          <span aria-hidden="true">⏱</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
             {Number(alternative.travel_time_h).toFixed(2)} h
           </span>
         </div>
       )}
 
+      {/* Nota del defensor compartido entre alternativas (snapshot del mejor combate) */}
+      {alternative.rank > 1 && (defenderTroops?.length ?? 0) > 0 && (
+        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '6px', fontStyle: 'italic' }}>
+          {t('calc.optimizer.defenderNote')}
+        </div>
+      )}
+
+      {/* Multi-raid block (totales agregados N raids) — solo en Modo C */}
+      {inputMode === 'C' && alternative.raids_possible != null && (
+        <div style={{ marginTop: '14px' }}>
+          <MultiRaidBlock
+            alternative={alternative}
+            troopMeta={troopMeta}
+            lang={lang}
+            t={t}
+          />
+        </div>
+      )}
     </div>
   )
 }
 
 // ── OptimizerResult ────────────────────────────────────────────────────────────
 
-export function OptimizerResult({ result, troopMeta }) {
+export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = 'A' }) {
   const { t, lang } = useI18n()
   const [expandedRank, setExpandedRank] = useState(null)
 
@@ -375,14 +524,19 @@ export function OptimizerResult({ result, troopMeta }) {
       </div>
 
       {/* ── Tabla de ranking ── */}
-      {/* Se pinta SIEMPRE que haya alternatives, aunque ninguna gane. */}
+      {/* Se pinta SIEMPRE que haya alternatives, aunque ninguna gane.
+          Columnas:
+            # | tropas enviadas (chips) | pérdidas (R) | saqueo (R) | NETO (R) | (Modo C: N raids)
+          Click en una fila → expande con el informe Travian completo. */}
       {hasAlternatives && (
         <div>
-          {/* Cabecera de la tabla */}
+          {/* Cabecera de la tabla — añadimos columna NETO (siempre) y N raids (solo Modo C) */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '32px 1fr auto auto',
-            gap: '8px',
+            gridTemplateColumns: inputMode === 'C'
+              ? '36px 1fr auto auto auto auto'
+              : '36px 1fr auto auto auto',
+            gap: '10px',
             padding: '7px 14px',
             background: 'var(--surface-2)',
             borderBottom: '1px solid var(--border)',
@@ -397,6 +551,14 @@ export function OptimizerResult({ result, troopMeta }) {
             <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '80px' }}>
               {t('calc.optimizer.result.col.gained')}
             </span>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '60px' }}>
+              {t('calc.optimizer.result.col.net')}
+            </span>
+            {inputMode === 'C' && (
+              <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '52px' }}>
+                {t('calc.optimizer.result.col.raids')}
+              </span>
+            )}
           </div>
 
           {/* Filas */}
@@ -415,8 +577,10 @@ export function OptimizerResult({ result, troopMeta }) {
                   onBlur={e => { e.currentTarget.style.outline = 'none' }}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '32px 1fr auto auto',
-                    gap: '8px',
+                    gridTemplateColumns: inputMode === 'C'
+                      ? '36px 1fr auto auto auto auto'
+                      : '36px 1fr auto auto auto',
+                    gap: '10px',
                     padding: '9px 14px',
                     cursor: 'pointer',
                     background: isExpanded ? 'var(--accent-subtle)' : (idx % 2 === 0 ? 'var(--surface)' : 'transparent'),
@@ -446,7 +610,7 @@ export function OptimizerResult({ result, troopMeta }) {
                   {/* Tropas enviadas */}
                   <TroopsSentLine troopsSent={combo.troops_sent} troopMeta={troopMeta} lang={lang} />
 
-                  {/* Bajas en recursos */}
+                  {/* Bajas en recursos (coste tropas perdidas) */}
                   <span style={{
                     fontFamily: 'var(--font-mono)',
                     fontVariantNumeric: 'tabular-nums',
@@ -455,13 +619,51 @@ export function OptimizerResult({ result, troopMeta }) {
                     textAlign: 'end',
                     whiteSpace: 'nowrap',
                   }}>
-                    {combo.total_resource_losses != null ? `${fmt(combo.total_resource_losses, lang)} R` : '—'}
+                    {combo.total_resource_losses != null ? `−${fmt(combo.total_resource_losses, lang)} R` : '—'}
                   </span>
 
-                  {/* Recursos ganados */}
+                  {/* Recursos ganados (botín animal) */}
                   <span style={{ textAlign: 'end', minWidth: '80px' }}>
                     <ResourceLine resources={combo.resources_gained} lang={lang} />
                   </span>
+
+                  {/* Neto = botín − coste */}
+                  {(() => {
+                    const loot = combo.resources_gained?.total ?? 0
+                    const cost = combo.total_resource_losses ?? 0
+                    const net = loot - cost
+                    const color = net > 0 ? 'var(--success)' : net < 0 ? 'var(--danger)' : 'var(--text-tertiary)'
+                    return (
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        color,
+                        textAlign: 'end',
+                        whiteSpace: 'nowrap',
+                        minWidth: '60px',
+                      }}>
+                        {net === 0 ? '0' : (net > 0 ? '+' : '−') + fmt(Math.abs(net), lang)}
+                      </span>
+                    )
+                  })()}
+
+                  {/* N raids (solo en Modo C) */}
+                  {inputMode === 'C' && (
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: 'var(--accent-text)',
+                      textAlign: 'end',
+                      whiteSpace: 'nowrap',
+                      minWidth: '52px',
+                    }} title={t('calc.optimizer.result.col.raids')}>
+                      {combo.raids_possible != null ? `×${fmt(combo.raids_possible, lang)}` : '—'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Detalle inline expandido */}
@@ -470,8 +672,10 @@ export function OptimizerResult({ result, troopMeta }) {
                     alternative={combo}
                     defenderTroops={result.defender_troops}
                     troopMeta={troopMeta}
+                    natureTroops={natureTroops}
                     lang={lang}
                     t={t}
+                    inputMode={inputMode}
                   />
                 )}
               </div>
