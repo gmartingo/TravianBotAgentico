@@ -34,7 +34,7 @@ import { SchedulerDashboard } from '../components/world/SchedulerDashboard.jsx'
 import { FarmListsTab }   from '../components/world/FarmListsTab.jsx'
 import { FarmListDrawer } from '../components/world/FarmListDrawer.jsx'
 import { AgentBottomBar } from '../components/world/AgentBottomBar.jsx'
-import { CombatCalculator } from '../components/combat/CombatCalculator.jsx'
+import { SessionTab }     from '../components/session/SessionTab.jsx'
 
 // ── Iconos sidebar ────────────────────────────────────────────────────────────
 
@@ -88,6 +88,17 @@ function IconCalc() {
       <line x1="14" y1="12" x2="16" y2="12" />
       <line x1="8" y1="16" x2="10" y2="16" />
       <line x1="14" y1="16" x2="16" y2="16" />
+    </svg>
+  )
+}
+
+function IconSession() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+      style={{ width: '16px', height: '16px', flexShrink: 0 }} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 15" />
     </svg>
   )
 }
@@ -351,11 +362,18 @@ export function WorldSpacePage() {
       soon: false,
     },
     {
+      id: 'session',
+      label: t('worldnav.session'),
+      icon: <IconSession />,
+      disabled: false,
+      soon: false,
+    },
+    {
       id: 'calc',
       label: t('worldnav.calculator'),
       icon: <IconCalc />,
-      disabled: false,
-      soon: false,
+      disabled: true,
+      soon: true,
     },
   ]
 
@@ -601,6 +619,13 @@ export function WorldSpacePage() {
               />
             )}
 
+            {/* Pestaña: Sesión (Human Sessions) */}
+            {activeTab === 'session' && (
+              <ErrorBoundary onReset={() => setActiveTab('agents')} title={t('error.loadDetail')} closeLabel={t('topbar.backToWorlds')}>
+                <SessionTab worldId={worldId} />
+              </ErrorBoundary>
+            )}
+
             {/* Pestaña: Dashboard (próximamente) */}
             {activeTab === 'dashboard' && (
               <div style={{
@@ -617,9 +642,17 @@ export function WorldSpacePage() {
               </div>
             )}
 
-            {/* Pestaña: Calculadora de combate */}
+            {/* Pestaña: Calculadora (próximamente) */}
             {activeTab === 'calc' && (
-              <CombatCalculator />
+              <div style={{
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                padding: '64px 24px', textAlign: 'center', gap: '8px',
+              }}>
+                <p style={{ fontSize: '17px', fontWeight: 600 }}>
+                  {t('world.config.comingSoonTitle')}
+                </p>
+              </div>
             )}
 
           </div>

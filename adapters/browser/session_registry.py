@@ -125,6 +125,23 @@ class SessionRegistry(WorldRuntimePort):
         """Devuelve True si hay una sesión activa para world_id."""
         return world_id in self._sessions
 
+    async def close_session(self, world_id: int) -> None:
+        """
+        Alias de logout(world_id) con la nomenclatura usada por WorldAgent.
+        Cierra limpiamente el Chrome del mundo concreto sin afectar otros mundos.
+        Idempotente: no lanza excepción si no hay sesión activa.
+        Usado en la transición hacia DISCONNECTED (RN-HS13).
+        """
+        await self.logout(world_id)
+
+    def has_active_session(self, world_id: int) -> bool:
+        """
+        Alias de is_active(world_id) con la nomenclatura usada por WorldAgent.
+        Devuelve True si Chrome está abierto y la sesión activa para el mundo.
+        Usado en el arranque del WorldAgent (§9.5) para decidir si hay que relogear.
+        """
+        return self.is_active(world_id)
+
     # ------------------------------------------------------------------
     # Métodos adicionales para LiveOverviewAdapter (NO en WorldRuntimePort)
     # ------------------------------------------------------------------

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -29,6 +30,7 @@ from adapters.api.routes.game_culture_points import router as game_culture_point
 from adapters.api.routes.game_overview import router as game_overview_router
 from adapters.api.routes.game_resources import router as game_resources_router
 from adapters.api.routes.game_troops import router as game_troops_router
+from adapters.api.routes.session import router as session_router
 from adapters.browser.fixture_overview_adapter import FixtureOverviewAdapter
 from adapters.browser.live_farm_list_adapter import LiveFarmListAdapter
 from adapters.browser.live_overview_adapter import LiveOverviewAdapter
@@ -39,6 +41,7 @@ from adapters.db.database import get_connection
 from adapters.db.farm_list_sqlite_adapter import FarmListSQLiteAdapter
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.db.seed_loader import load_if_empty
+from adapters.db.session_sqlite_adapter import SessionSQLiteAdapter
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
 from core.crypto import load_fernet_key
 from core.exceptions import TravianBotError
@@ -164,6 +167,11 @@ async def lifespan(application: FastAPI):
     await account_adapter.ensure_tables()
     application.state.db_port = account_adapter
 
+    # AttackReportSQLiteAdapter — reportes de ataque a oasis
+    attack_report_adapter = AttackReportSQLiteAdapter(conn)
+    await attack_report_adapter.ensure_tables()
+    application.state.attack_report_port = attack_report_adapter
+
     # OverviewHtmlSourcePort — selección por variable de entorno OVERVIEW_SOURCE
     # 'fixture' (default): devuelve HTML desde tests/fixtures/overview/ (sin Chrome)
     # 'live':              navega Travian con Chrome autenticado
@@ -216,6 +224,13 @@ async def lifespan(application: FastAPI):
     await farm_db_adapter.ensure_tables()
     application.state.farm_db_port = farm_db_adapter
 
+    # -----------------------------------------------------------------------
+    # Human Sessions — SessionSQLiteAdapter (comparte la misma conexión SQLite)
+    # -----------------------------------------------------------------------
+    session_db_adapter = SessionSQLiteAdapter(conn)
+    await session_db_adapter.ensure_tables()
+    application.state.session_db_port = session_db_adapter
+
     # Dict de LiveFarmListAdapter por world_id.
     # Se puebla on-demand cuando el usuario arranca el WorldAgent para un mundo
     # (endpoint POST /farm/worlds/{world_id}/agent/start).
@@ -261,6 +276,41 @@ app = FastAPI(
     description="API de control del bot de Travian. Requiere Accept-Language en cada endpoint.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+
+# ---------------------------------------------------------------------------
+# CORS — permite peticiones de la extensión Chrome y del dashboard local
+#
+# Por qué allow_credentials=False:
+#   La extensión Chrome no envía cookies cross-origin (usa solo JSON + Bearer
+#   si aplica). El dashboard local tampoco usa cookies cross-origin. Con
+#   allow_credentials=True habría que fijar allow_origins exactos (no regex),
+#   lo que rompería el soporte para IDs de extensión variables en desarrollo.
+#   False es la opción correcta y más segura aquí.
+#
+# Orígenes permitidos (allow_origin_regex, anclado con ^ y $):
+#   - chrome-extension://.*          → extensión Chrome (cualquier ID de instalación)
+#   - http://localhost(:\d+)?        → dashboard Vite en desarrollo (localhost)
+#   - http://127\.0\.0\.1(:\d+)?    → alternativa loopback
+#   - http://192\.168\.\d+\.\d+(:\d+)? → LAN privada (escenario Raspberry Pi)
+#
+# No se usa allow_origins=["*"] para no exponer la API a cualquier origen de internet.
+# ---------------------------------------------------------------------------
+
+_CORS_ORIGIN_REGEX = (
+    r"^(chrome-extension://.*"
+    r"|http://localhost(:\d+)?"
+    r"|http://127\.0\.0\.1(:\d+)?"
+    r"|http://192\.168\.\d+\.\d+(:\d+)?)$"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept-Language", "X-Request-ID", "X-Verbose", "Authorization"],
 )
 
 
@@ -399,6 +449,7 @@ app.include_router(game_overview_router)
 app.include_router(game_resources_router)
 app.include_router(game_culture_points_router)
 app.include_router(game_troops_router)
+app.include_router(session_router)
 
 
 @app.get("/health")

@@ -1,0 +1,78 @@
+{
+  "manifest_version": 3,
+  "name": "TravianBot — Captura de Reportes",
+  "version": "1.0.0",
+  "description": "Captura reportes de ataques a oasis directamente desde Travian y los envía al backend local.",
+
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "*://*.travian.com/*",
+    "*://*.travian.es/*",
+    "*://*.travian.de/*",
+    "*://*.travian.fr/*",
+    "*://*.travian.it/*",
+    "*://*.travian.ru/*",
+    "*://*.travian.net/*",
+    "*://*.travian.pl/*",
+    "*://*.travian.com.br/*",
+    "*://*.travian.pt/*",
+    "*://*.travian.nl/*",
+    "*://*.travian.tr/*",
+    "*://*.travian.ro/*",
+    "*://*.travian.cz/*",
+    "*://*.travian.sk/*",
+    "*://*.travian.hu/*",
+    "*://*.travian.ae/*",
+    "*://*.travian.us/*",
+    "*://*.travian.cn/*",
+    "http://localhost/*",
+    "http://192.168.*.*/*"
+  ],
+
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.travian.com/*",
+        "*://*.travian.es/*",
+        "*://*.travian.de/*",
+        "*://*.travian.fr/*",
+        "*://*.travian.it/*",
+        "*://*.travian.ru/*",
+        "*://*.travian.net/*",
+        "*://*.travian.pl/*",
+        "*://*.travian.com.br/*",
+        "*://*.travian.pt/*",
+        "*://*.travian.nl/*",
+        "*://*.travian.tr/*",
+        "*://*.travian.ro/*",
+        "*://*.travian.cz/*",
+        "*://*.travian.sk/*",
+        "*://*.travian.hu/*",
+        "*://*.travian.ae/*",
+        "*://*.travian.us/*",
+        "*://*.travian.cn/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "options_page": "options.html",
+
+  "action": {
+    "default_title": "TravianBot — Captura de Reportes",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}
