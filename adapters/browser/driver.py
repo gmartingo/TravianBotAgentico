@@ -15,6 +15,7 @@ Cuándo usar ZendriverAdapter vs funciones standalone:
     el objeto zd.Browser vivo entre use cases (login, sesión larga).
 """
 import asyncio
+import math
 import os
 import platform
 import random
@@ -24,7 +25,7 @@ from typing import Optional
 
 import zendriver as zd
 
-from core.exceptions import BrowserError
+from core.exceptions import BrowserError, ElementNotClickableError
 from core.ports.browser_port import BrowserPort
 
 # ---------------------------------------------------------------------------
@@ -253,6 +254,278 @@ async def human_type(element: object, text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Human click — posición gaussiana + Bézier path + mousedown/up separados
+# RN-HC01..RN-HC11 (spec human-click v2.2.1, guardian OK 2026-06-01)
+# ---------------------------------------------------------------------------
+
+# Última posición conocida del cursor por tab, keyed por id(tab).
+# Permite que el siguiente click parta del punto donde quedó el anterior
+# en vez de teletransportarse siempre desde el mismo origen (RN-HC05).
+_CURSOR_POS: dict[int, tuple[float, float]] = {}
+
+
+def _bezier_path(
+    origin: tuple[float, float],
+    target: tuple[float, float],
+    n_points: int,
+) -> list[tuple[float, float]]:
+    """
+    Genera n_points waypoints siguiendo una Bézier cuadrática con un punto
+    de control perpendicular a la recta origen-target desplazado por ruido
+    gaussiano (RN-HC04, spec §7).
+
+    El primer punto es ligeramente distinto al origen (la curva arranca
+    ya desplazada). El último punto es el target exacto para que el click
+    aterrice en las coordenadas calculadas.
+    """
+    ox, oy = origin
+    tx, ty = target
+    mx, my = (ox + tx) / 2, (oy + ty) / 2
+    dx, dy = tx - ox, ty - oy
+    length = math.hypot(dx, dy) or 1.0
+    # Vector perpendicular normalizado
+    px_, py_ = -dy / length, dx / length
+    # Desviación entre 5-20% de la longitud, con signo aleatorio
+    offset = random.uniform(0.05, 0.20) * length * random.choice([-1, 1])
+    cx, cy = mx + px_ * offset, my + py_ * offset
+    points: list[tuple[float, float]] = []
+    for i in range(1, n_points + 1):
+        t = i / n_points
+        u = 1 - t
+        # Bézier cuadrática B(t) = (1-t)²·P0 + 2(1-t)t·C + t²·P1
+        x = u * u * ox + 2 * u * t * cx + t * t * tx
+        y = u * u * oy + 2 * u * t * cy + t * t * ty
+        # Micro-ruido de tembleque humano (±0.5 px)
+        x += random.gauss(0, 0.5)
+        y += random.gauss(0, 0.5)
+        points.append((x, y))
+    # Forzar último waypoint al target exacto
+    points[-1] = (tx, ty)
+    return points
+
+
+def _sample_click_point(
+    rect: dict,
+    jitter: float,
+) -> tuple[float, float]:
+    """
+    Calcula el punto de click con distribución gaussiana truncada al inner
+    80% del rect (margen 10% por lado). Rejection sampling con cap en 20
+    intentos; fallback al centro geométrico si todos son rechazados (RN-HC03).
+
+    Función pura (sin IO) para facilitar el testing unitario.
+    """
+    x = rect["x"]
+    y = rect["y"]
+    w = rect["width"]
+    h = rect["height"]
+    cx = x + w / 2
+    cy = y + h / 2
+    sigma_x = jitter * w
+    sigma_y = jitter * h
+    clip_x_lo = x + 0.1 * w
+    clip_x_hi = x + 0.9 * w
+    clip_y_lo = y + 0.1 * h
+    clip_y_hi = y + 0.9 * h
+    px, py = cx, cy  # fallback si todos los intentos son rechazados
+    for _ in range(20):
+        px = random.gauss(cx, sigma_x)
+        py = random.gauss(cy, sigma_y)
+        if clip_x_lo <= px <= clip_x_hi and clip_y_lo <= py <= clip_y_hi:
+            break
+    else:
+        px, py = cx, cy
+    return px, py
+
+
+async def _dispatch_mouse_move(tab: zd.Tab, x: float, y: float) -> None:
+    """Emite un único evento mouseMoved al punto (x, y) via CDP."""
+    await tab.send(
+        zd.cdp.input_.dispatch_mouse_event("mouseMoved", x=x, y=y)
+    )
+
+
+async def _dispatch_mouse_down(tab: zd.Tab, x: float, y: float) -> None:
+    """Emite mousePressed (botón izquierdo) en (x, y) via CDP."""
+    await tab.send(
+        zd.cdp.input_.dispatch_mouse_event(
+            "mousePressed",
+            x=x,
+            y=y,
+            button=zd.cdp.input_.MouseButton("left"),
+            buttons=1,
+            click_count=1,
+        )
+    )
+
+
+async def _dispatch_mouse_up(tab: zd.Tab, x: float, y: float) -> None:
+    """Emite mouseReleased (botón izquierdo) en (x, y) via CDP."""
+    await tab.send(
+        zd.cdp.input_.dispatch_mouse_event(
+            "mouseReleased",
+            x=x,
+            y=y,
+            button=zd.cdp.input_.MouseButton("left"),
+            buttons=0,
+            click_count=1,
+        )
+    )
+
+
+async def _perform_human_click(
+    tab: zd.Tab,
+    rect: dict,
+    jitter: float,
+    settle_ms: tuple[int, int],
+) -> None:
+    """
+    Núcleo compartido de human_click y human_click_at_rect.
+    El rect ya ha sido validado antes de llegar aquí.
+    Ejecuta: muestreo gaussiano → Bézier path → settle → mousedown/up.
+    """
+    px, py = _sample_click_point(rect, jitter)
+
+    # Obtener última posición del cursor para este tab (RN-HC05)
+    tab_key = id(tab)
+    if tab_key in _CURSOR_POS:
+        origin = _CURSOR_POS[tab_key]
+    else:
+        # Primera llamada: arrancar del centro del viewport (no de (0,0))
+        vw = await tab.evaluate("window.innerWidth")
+        vh = await tab.evaluate("window.innerHeight")
+        vw = vw if isinstance(vw, (int, float)) else 800
+        vh = vh if isinstance(vh, (int, float)) else 600
+        origin = (float(vw) / 2, float(vh) / 2)
+
+    # Generar y recorrer waypoints Bézier (RN-HC04)
+    n_waypoints = random.randint(3, 8)
+    waypoints = _bezier_path(origin, (px, py), n_waypoints)
+    for wx, wy in waypoints:
+        await _dispatch_mouse_move(tab, round(wx), round(wy))
+        await asyncio.sleep(random.uniform(0.008, 0.025))
+
+    # Actualizar posición persistida del cursor (RN-HC05)
+    _CURSOR_POS[tab_key] = (px, py)
+
+    # Settle: tiempo de reacción motor humano antes del press (RN-HC06)
+    await asyncio.sleep(random.uniform(settle_ms[0] / 1000, settle_ms[1] / 1000))
+
+    # Click: mousedown + pausa real + mouseup (RN-HC07)
+    await _dispatch_mouse_down(tab, round(px), round(py))
+    await asyncio.sleep(random.uniform(0.035, 0.110))
+    await _dispatch_mouse_up(tab, round(px), round(py))
+
+
+def _validate_jitter_settle(jitter: float, settle_ms: tuple[int, int]) -> None:
+    """Valida los parámetros jitter y settle_ms (EC-HC07, EC-HC08)."""
+    if not (0.10 <= jitter <= 0.45):
+        raise ValueError(f"jitter must be in [0.10, 0.45], got {jitter}")
+    if len(settle_ms) != 2 or not (0 < settle_ms[0] <= settle_ms[1]):
+        raise ValueError(
+            f"settle_ms must be a tuple (min_ms, max_ms) with 0 < min_ms <= max_ms, got {settle_ms}"
+        )
+
+
+def _is_offscreen(rect: dict) -> bool:
+    """
+    Devuelve True si el rect está completamente fuera del viewport.
+    Detecta: todo el elemento a la izquierda, arriba, derecha o abajo del viewport.
+    Se considera offscreen si el borde "de salida" del elemento no supera el cero:
+      x + width < 0  → completamente a la izquierda
+      y + height < 0 → completamente arriba
+    No se comprueba el límite derecho/inferior porque no se conoce el viewport
+    sin una llamada async; esos casos se detectarán en _perform_human_click
+    cuando el punto gaussiano caiga fuera.
+    """
+    return (rect["x"] + rect["width"] < 0) or (rect["y"] + rect["height"] < 0)
+
+
+async def human_click(
+    element: zd.Element,
+    page: zd.Tab,
+    jitter: float = 0.25,
+    settle_ms: tuple[int, int] = (80, 180),
+) -> None:
+    """
+    Click anti-detección: posición gaussiana truncada dentro del inner 80%
+    del elemento, precedido de movimiento con waypoints Bézier y micro-pausa,
+    con mousedown y mouseup separados por 35-110 ms.
+
+    API de zendriver usada:
+      - element.apply() para obtener getBoundingClientRect() en coordenadas CSS
+      - tab.send(cdp.input_.dispatch_mouse_event(...)) para move/down/up
+      - element.scroll_into_view() para scrollear antes de fallar (RN-HC10)
+
+    DPR: zendriver opera en CSS pixels (los eventos CDP reciben coords CSS).
+    No se multiplica por devicePixelRatio.
+
+    Raises:
+        ElementNotClickableError: si el rect es inválido (width/height 0)
+            o el elemento sigue offscreen tras intentar scroll.
+        ValueError: si jitter o settle_ms están fuera de rango.
+    """
+    _validate_jitter_settle(jitter, settle_ms)
+
+    # Obtener bounding rect via element.apply() — CSS pixels, coords de viewport
+    rect: dict = await element.apply(
+        "(el) => { const r = el.getBoundingClientRect(); "
+        "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
+    )
+
+    tag: str = await element.apply("(el) => el.tagName") or "UNKNOWN"
+
+    # Rect inválido: width o height es 0 (display:none, no en DOM) — EC-HC01
+    if not rect or rect.get("width", 0) == 0 or rect.get("height", 0) == 0:
+        raise ElementNotClickableError(tag, "rect width/height is 0")
+
+    # Elemento offscreen: intentar scroll antes de fallar (RN-HC10, EC-HC09)
+    if _is_offscreen(rect):
+        await element.scroll_into_view()
+        await human_delay(150, 350)
+        rect = await element.apply(
+            "(el) => { const r = el.getBoundingClientRect(); "
+            "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
+        )
+        if _is_offscreen(rect):
+            raise ElementNotClickableError(
+                tag, f"element offscreen after scroll attempt: rect={rect}"
+            )
+
+    await _perform_human_click(page, rect, jitter, settle_ms)
+
+
+async def human_click_at_rect(
+    rect: dict,
+    page: zd.Tab,
+    jitter: float = 0.25,
+    settle_ms: tuple[int, int] = (80, 180),
+) -> None:
+    """
+    Variante de human_click para cuando el rect ya viene de JS evaluate().
+    No necesita element — toma las coordenadas del rect directamente.
+    rect debe ser {"x": float, "y": float, "width": float, "height": float}.
+
+    Misma lógica gaussiana, mismas validaciones de jitter/settle_ms.
+    No realiza scroll automático (el caller es responsable de que el rect
+    sea válido al pasarlo — si viene de JS, debería estarlo).
+
+    Raises:
+        ElementNotClickableError: si el rect tiene width/height 0 o es offscreen.
+        ValueError: si jitter o settle_ms están fuera de rango.
+    """
+    _validate_jitter_settle(jitter, settle_ms)
+
+    if not rect or rect.get("width", 0) == 0 or rect.get("height", 0) == 0:
+        raise ElementNotClickableError("js-rect", "rect width/height is 0")
+
+    if _is_offscreen(rect):
+        raise ElementNotClickableError("js-rect", f"element offscreen: rect={rect}")
+
+    await _perform_human_click(page, rect, jitter, settle_ms)
+
+
+# ---------------------------------------------------------------------------
 # ZendriverAdapter — implementación de BrowserPort (operaciones genéricas)
 # ---------------------------------------------------------------------------
 
@@ -315,7 +588,7 @@ class ZendriverAdapter(BrowserPort):
 
     async def click(self, selector: str) -> None:
         element = await self.find_element(selector)
-        await element.click()
+        await human_click(element, self._tab)
         await self._human_delay()
 
     async def _human_delay(self) -> None:

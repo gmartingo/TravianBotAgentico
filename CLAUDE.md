@@ -5,6 +5,17 @@ Actualízalo cuando cambien decisiones importantes.
 
 ---
 
+## APIs internas
+
+Los contratos de las APIs viven en `docs/api/`. Antes de llamar a cualquier
+endpoint interno, lee `docs/api/AGENTS.md` (cómo invocar cada endpoint) y
+`docs/api/openapi.yaml` (contrato completo de máquina).
+
+FastAPI también genera el OpenAPI automáticamente en `http://localhost:8000/docs`
+(Swagger UI) y `http://localhost:8000/openapi.json`.
+
+---
+
 ## Qué es este proyecto
 
 Bot de Travian escrito desde cero en **Python 3.14** con **zendriver**, construido **por agentes especializados** orquestados desde Claude Code.
@@ -109,6 +120,7 @@ El bot debe ser tan indetectable El agente debe:
 | Sin modo headless | Chrome visible siempre | Headless tiene diferencias de fingerprint detectables |
 | Delays humanos | 500–900 ms entre acciones | Bots tienen timing demasiado rápido o fijo |
 | Escritura humana | 80–220 ms por carácter | Travian detecta paste instantáneo |
+| Click humano | `human_click(element, jitter=0.25)` — gaussiana truncada en el rect + Bézier path 3-8 waypoints con ruido + cursor persistente entre clicks + `mouse.down`/`mouse.up` separados 35–110 ms | Clicks sintéticos van al píxel exacto sin movimiento de ratón y con `mousedown→mouseup` <1 ms → firma trivial |
 | Sin sandbox | `no_sandbox=True` en VM/VirtualBox | VirtualBox no soporta el sandbox de Chrome — no es detectable por Travian |
 
 ### Patrón de código base — `adapters/browser/driver.py`
@@ -133,6 +145,24 @@ config = zd.Config(
     no_sandbox=_no_sandbox,
 )
 ```
+
+Y el helper de click humano — obligatorio para CUALQUIER click sobre Travian. Reemplaza
+`element.click()` y `btn.click()` JS en todo el proyecto. Ver `docs/specs/human-click.md`.
+
+```python
+async def human_click(element, jitter: float = 0.25, settle_ms: tuple[int, int] = (80, 180)) -> None:
+    """
+    Click humanizado: lee bounding rect, elige punto con gaussiana truncada centrada (clip
+    al inner 80% del rect), genera Bézier path con 3-8 waypoints + ruido perpendicular
+    partiendo del último cursor conocido, recorre con micro-sleeps 8-25 ms entre waypoints,
+    espera settle_ms al llegar, hace mouse.down + sleep 35-110 ms + mouse.up por separado.
+    Scrolla al viewport si está offscreen antes de fallar.
+    """
+```
+
+Variante `human_click_at_rect(tab, rect, ...)` para cuando el rect ya viene de un JS evaluate()
+(en lugar de hacer `btn.click()` dentro del JS, el JS devuelve `getBoundingClientRect()` y
+Python hace el click real con CDP). Aplica a `farm_lists.py` y `farm_list_sender.py`.
 
 Ver sección "Entornos de despliegue" para `CHROME_PATHS` completo y lógica de `_get_user_agent()` por entorno.
 
@@ -555,4 +585,4 @@ Esto es la única forma de que el usuario sepa qué agente está activo en cada 
 11. **Documentación primero** — antes de editar, leer `documentacion/README.md`. Después de editar, actualizar lo afectado y bumpear la marca de agua.
 12. **Orquesta, no implementes solo** — delega en los agentes cuando la tarea encaje con su responsabilidad.
 
-🔖 Última revisión: 2026-05-26 (convención de ramas Git Flow: una feature = una rama propia `feature/<nombre>` desde develop; git-flow-advisor avisa si el contenido no encaja con la rama activa. + gobernanza de idioma previa: SUPPORTED_LANGUAGES 25; resolve_language ?lang= > Accept-Language > todos; Vary: Accept-Language)
+🔖 Última revisión: 2026-06-01 (añadida capa de anti-detección "Click humano": `human_click()` y `human_click_at_rect()` en `adapters/browser/driver.py` reemplazan todo `element.click()` y `btn.click()` JS — gaussiana truncada + Bézier path + cursor persistente + mousedown/up separados. Ver `docs/specs/human-click.md`. + convención previa de ramas Git Flow + gobernanza de idioma)

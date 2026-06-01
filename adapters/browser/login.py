@@ -10,6 +10,7 @@ import zendriver as zd
 
 from adapters.browser.driver import (
     create_browser,
+    human_click,
     human_delay,
     human_type,
     _kill_orphan_chrome,
@@ -52,7 +53,7 @@ async def login(account: Account, world: World) -> tuple[bool, zd.Browser | None
         await human_delay()
         submit_button = await page.find("[type='submit']")
         await human_delay(200, 500)  # pausa visual antes del click, como haría un humano
-        await submit_button.click()
+        await human_click(submit_button, page)
         await human_delay(3000, 5000)
 
         success = "dorf" in page.url or "village" in page.url

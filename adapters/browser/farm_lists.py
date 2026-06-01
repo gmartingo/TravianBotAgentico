@@ -24,7 +24,7 @@ import re
 
 import zendriver as zd
 
-from adapters.browser.driver import human_delay
+from adapters.browser.driver import human_click_at_rect, human_delay
 from adapters.browser.url_utils import build_url
 from core.entities.farm_list import FarmList, FarmSlot
 from core.exceptions import FarmListPageError, FarmListResponseError, FarmListSendError
@@ -174,15 +174,17 @@ def _js_is_expanded(list_id: int) -> str:
 """
 
 
-def _js_click_expand(list_id: int) -> str:
+def _js_get_expand_rect(list_id: int) -> str:
+    """Localiza el botón expandCollapse y devuelve su bounding rect.
+    Devuelve null si no se encuentra (RN-HC02: el JS solo localiza, Python hace el click)."""
     return f"""
 (() => {{
-    const el = document.querySelector('[data-list="{list_id}"]');
+    const el = document.querySelector('[data-list="{int(list_id)}"]');
     const wrapper = el?.closest('.farmListWrapper');
     const btn = wrapper?.querySelector('.farmListHeader a.expandCollapse');
-    if (!btn) return false;
-    btn.click();
-    return true;
+    if (!btn) return null;
+    const r = btn.getBoundingClientRect();
+    return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
 }})()
 """
 
@@ -293,43 +295,44 @@ def _js_is_disabled(slot_id: int) -> str:
     """
 
 
-def _js_open_context_menu(slot_id: int) -> str:
+def _js_get_context_menu_trigger_rect(slot_id: int) -> str:
     """
-    Pulsa el icono de menú contextual del slot. Travian inserta el menú dentro
-    del mismo <td class="openContextMenu"> tras el click.
-    Devuelve 'ok' / 'no_row' / 'no_trigger'.
+    Localiza el icono de menú contextual del slot y devuelve su bounding rect.
+    Devuelve null si no se encuentra (RN-HC02: el JS solo localiza, Python hace el click).
+    Travian inserta el menú dentro del mismo <td class="openContextMenu"> tras el click.
     """
     return f"""
     (() => {{
         const input = document.querySelector('input[data-slot-id="{int(slot_id)}"]');
-        if (!input) return 'no_row';
+        if (!input) return null;
         const row = input.closest('tr.slot');
-        if (!row) return 'no_row';
+        if (!row) return null;
         const trigger = row.querySelector('td.openContextMenu > a');
-        if (!trigger) return 'no_trigger';
-        trigger.click();
-        return 'ok';
+        if (!trigger) return null;
+        const r = trigger.getBoundingClientRect();
+        return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
     }})()
     """
 
 
-def _js_click_menu_entry(slot_id: int, entry: str) -> str:
+def _js_get_menu_entry_rect(slot_id: int, entry: str) -> str:
     """
-    Pulsa una entrada del menú contextual. `entry` = 'deactivate' | 'activate'.
-    Devuelve 'ok' / 'no_row' / 'no_menu' / 'no_entry'.
+    Localiza una entrada del menú contextual y devuelve su bounding rect.
+    `entry` = 'deactivate' | 'activate'.
+    Devuelve null si no se encuentra (RN-HC02: el JS solo localiza, Python hace el click).
     """
     return f"""
     (() => {{
         const input = document.querySelector('input[data-slot-id="{int(slot_id)}"]');
-        if (!input) return 'no_row';
+        if (!input) return null;
         const row = input.closest('tr.slot');
-        if (!row) return 'no_row';
+        if (!row) return null;
         const menu = row.querySelector('td.openContextMenu .contextMenu');
-        if (!menu) return 'no_menu';
+        if (!menu) return null;
         const btn = menu.querySelector('button.entry.{entry}');
-        if (!btn) return 'no_entry';
-        btn.click();
-        return 'ok';
+        if (!btn) return null;
+        const r = btn.getBoundingClientRect();
+        return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
     }})()
     """
 
@@ -371,7 +374,9 @@ async def ensure_farm_list_loaded(
     if expand:
         is_expanded = await page.evaluate(_js_is_expanded(farm_list_id))
         if not is_expanded:
-            await page.evaluate(_js_click_expand(farm_list_id))
+            rect = await page.evaluate(_js_get_expand_rect(farm_list_id))
+            if rect:
+                await human_click_at_rect(rect, page)
             await human_delay(800, 1200)
 
     return True
@@ -420,7 +425,9 @@ async def read_farm_lists(browser: zd.Browser, server_url: str) -> list[FarmList
 
         is_expanded = await page.evaluate(_js_is_expanded(list_id))
         if not is_expanded:
-            await page.evaluate(_js_click_expand(list_id))
+            rect = await page.evaluate(_js_get_expand_rect(list_id))
+            if rect:
+                await human_click_at_rect(rect, page)
             await human_delay(800, 1200)
 
         raw = await page.evaluate(_js_read_list(list_id))
@@ -590,23 +597,25 @@ async def _toggle_slot(
         return
 
     # Abrir menú contextual
-    opened = await page.evaluate(_js_open_context_menu(slot_id))
-    if opened != "ok":
+    trigger_rect = await page.evaluate(_js_get_context_menu_trigger_rect(slot_id))
+    if trigger_rect is None:
         raise FarmListSendError(
             farm_list_id,
-            f"no se pudo abrir el context menu del slot {slot_id}: {opened}"
+            f"no se pudo localizar el context menu trigger del slot {slot_id}"
         )
+    await human_click_at_rect(trigger_rect, page)
 
     # Pausa humana: el menú aparece y un humano tarda en llevar el cursor a la entrada
     await human_delay(400, 800)
 
     # Pulsar la entrada del menú
-    clicked = await page.evaluate(_js_click_menu_entry(slot_id, entry_class))
-    if clicked != "ok":
+    entry_rect = await page.evaluate(_js_get_menu_entry_rect(slot_id, entry_class))
+    if entry_rect is None:
         raise FarmListSendError(
             farm_list_id,
-            f"no se pudo pulsar '{entry_class}' en el slot {slot_id}: {clicked}"
+            f"no se pudo localizar la entrada '{entry_class}' del slot {slot_id}"
         )
+    await human_click_at_rect(entry_rect, page)
 
     await human_delay(500, 900)
     logger.info("Slot %d: '%s' aplicado en Travian", slot_id, action)
