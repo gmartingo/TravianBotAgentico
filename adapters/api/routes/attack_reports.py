@@ -2,18 +2,21 @@
 Endpoints de la feature "BD de ataques a oasis".
 
 Rutas (sin prefijo /api — el proxy de Vite lo retira):
-  POST   /attack-reports/parse        EP-01: parse sin guardar   (200)
-  POST   /attack-reports              EP-02: guardar reporte      (201)
-  GET    /attack-reports              EP-03: historial filtrable  (200)
-  GET    /attack-reports/oasis        EP-08: lista oasis          (200)  ← ANTES de /{id}
-  GET    /attack-reports/stats/bounty EP-07: balance recursos     (200)  ← ANTES de /{id}
-  GET    /attack-reports/stats/oasis  EP-06: estadísticas oasis   (200)  ← ANTES de /{id}
-  GET    /attack-reports/{id}         EP-04: detalle reporte      (200)
-  DELETE /attack-reports/{id}         EP-05: borrar reporte       (204)
+  POST   /attack-reports/parse         EP-01: parse sin guardar   (200)
+  POST   /attack-reports               EP-02: guardar reporte      (201)
+  GET    /attack-reports               EP-03: historial filtrable  (200)
+  GET    /attack-reports/oasis         EP-08: lista oasis          (200)  ← ANTES de /{id}
+  GET    /attack-reports/stats/bounty  EP-07: balance recursos     (200)  ← ANTES de /{id}
+  GET    /attack-reports/stats/global           EP-09: stats globales       (200)  ← ANTES de stats/oasis
+  GET    /attack-reports/stats/oasis/comparison EP-10: comparativa reapar.  (200)  ← ANTES de EP-06
+  GET    /attack-reports/stats/oasis            EP-06: estadísticas oasis   (200)  ← ANTES de /{id}
+  GET    /attack-reports/{id}                   EP-04: detalle reporte      (200)
+  DELETE /attack-reports/{id}                   EP-05: borrar reporte       (204)
 
-NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06, EP-07, EP-08)
+NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06 a EP-10)
 se declaran ANTES de EP-04/{id} para que FastAPI los resuelva como literales
 y no capturen "stats" u "oasis" como {id}. {id} está tipado int con ge=1.
+EP-10 no colisiona con EP-06: tienen paths de distinta longitud de segmentos.
 
 Sin Accept-Language obligatorio en este router: los endpoints devuelven datos
 numéricos e ISO 8601; el animal_name es texto crudo del usuario (validado por
@@ -34,6 +37,7 @@ from pydantic import BaseModel, Field
 from core.entities.tribe import Tribe
 from core.ports.attack_report_port import DuplicateReportError
 from core.use_cases.attack_report_parser import (
+    DefeatReportParseError,
     MultipleReportsError,
     NotNatureOasisError,
     ReportFormatError,
@@ -185,6 +189,12 @@ def _parse_or_422(raw_text: str) -> object:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
+        ) from exc
+    except DefeatReportParseError as exc:
+        # §17.3: reporte perdido con formato corrupto (fila mixta '?'/dígitos)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Reporte de combate perdido con formato inesperado: {exc.reason}",
         ) from exc
     except ReportFormatError as exc:
         raise HTTPException(
@@ -427,6 +437,116 @@ async def get_bounty_stats(
         )
     port = request.app.state.attack_report_port
     return await port.get_bounty_stats(x=x, y=y)
+
+
+# ---------------------------------------------------------------------------
+# EP-09 — Estadísticas globales de todos los oasis (ANTES de stats/oasis)
+# ---------------------------------------------------------------------------
+
+@router.get("/attack-reports/stats/global", status_code=status.HTTP_200_OK)
+async def get_global_oasis_stats(request: Request) -> dict:
+    """
+    Estadísticas globales de todos los oasis combinados.
+
+    Sin parámetros de entrada. Sin Accept-Language.
+    200 siempre (arrays vacíos si BD vacía).
+
+    Ver spec docs/specs/bd-ataques-oasis-stats-global.md §8 EP-09.
+    """
+    port = request.app.state.attack_report_port
+    return await port.get_global_oasis_stats()
+
+
+# ---------------------------------------------------------------------------
+# EP-balance — Cómputo global PERDIDOS vs ROBADOS (ANTES de /{id})
+# ---------------------------------------------------------------------------
+
+@router.get("/attack-reports/stats/balance", status_code=status.HTTP_200_OK)
+async def get_balance_stats(
+    request: Request,
+    x: int | None = Query(
+        default=None, ge=-400, le=400,
+        description="Coordenada X del oasis (-400..400). Si se omite junto con y, balance global.",
+    ),
+    y: int | None = Query(
+        default=None, ge=-400, le=400,
+        description="Coordenada Y del oasis (-400..400). Requiere 'x'.",
+    ),
+    from_date: str | None = Query(default=None, description="Fecha desde (ISO 8601, inclusiva, con segundos)"),
+    to_date: str | None = Query(default=None, description="Fecha hasta (ISO 8601, inclusiva, con segundos)"),
+) -> dict:
+    """
+    Balance global de recursos PERDIDOS (valor de tropas muertas) vs ROBADOS
+    (botín + inventario del héroe), con filtros opcionales.
+
+    Con x+y → balance del oasis específico. Sin x ni y → balance global.
+    Con x sin y (o viceversa) → 400. Fuera de -400..400 → 422 (FastAPI).
+    from_date/to_date no ISO 8601 → 400. from_date > to_date → 400.
+    200 con todos los totales a 0 si no hay reportes en el rango.
+
+    Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md.
+    """
+    if (x is None) != (y is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Parámetro 'x' requiere 'y' y viceversa.",
+        )
+
+    if from_date is not None:
+        try:
+            datetime.fromisoformat(from_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El parámetro 'from_date' no es una fecha ISO 8601 válida.",
+            )
+
+    if to_date is not None:
+        try:
+            datetime.fromisoformat(to_date)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El parámetro 'to_date' no es una fecha ISO 8601 válida.",
+            )
+
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El parámetro 'from_date' no puede ser posterior a 'to_date'.",
+        )
+
+    port = request.app.state.attack_report_port
+    game_data_port = getattr(request.app.state, "game_data_port", None)
+    return await port.get_balance_stats(
+        x=x, y=y, from_date=from_date, to_date=to_date,
+        game_data_port=game_data_port,
+    )
+
+
+# ---------------------------------------------------------------------------
+# EP-10 — Comparativa de reaparición por oasis (literal más larga → ANTES de EP-06)
+# ---------------------------------------------------------------------------
+
+@router.get("/attack-reports/stats/oasis/comparison", status_code=status.HTTP_200_OK)
+async def get_oasis_regen_comparison(request: Request) -> dict:
+    """
+    Comparativa de tasas de reaparición y proyección de animales para todos los oasis.
+
+    Sin parámetros de entrada. Sin Accept-Language (datos numéricos + animal_name crudo).
+    200 siempre, incluso con BD vacía (oasis:[], species_columns:[]).
+    500 ante error inesperado de BD (detail genérico, sin stack trace).
+
+    Ver spec docs/specs/reaparicion-animales-oasis.md §8 EP-10.
+    """
+    port = request.app.state.attack_report_port
+    try:
+        return await port.get_all_oasis_regen_comparison()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular la comparativa de oasis.",
+        )
 
 
 # ---------------------------------------------------------------------------

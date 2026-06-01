@@ -512,6 +512,53 @@ const lt = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Pasaulinė statistika — visos oazės',
+  'ar.stats.global.col.appearances':   'Pasirodymai',
+  'ar.stats.global.appearances.title': 'Stebimi gyvūnai (pasaulyje)',
+  'ar.stats.global.loading':           'Kraunama pasaulinė statistika…',
+  'ar.stats.global.error':             'Nepavyko įkelti pasaulinės statistikos.',
+  'ar.stats.global.retry':             'Bandyti dar kartą',
+  'ar.stats.global.empty.title':       'Duomenų dar nėra.',
+  'ar.stats.global.empty.sub':         'Pridėkite atakų ataskaitų, kad matytumėte pasaulinę statistiką.',
+  'ar.stats.global.empty.cta':         'Eiti į Įvesti →',
+
+  // Operacijų balansas (S-cierre)
+  'ar.balance.title':                    'Operacijų balansas',
+  'ar.balance.pill.noFilter':            '{n} ataskaitos · be datos filtro',
+  'ar.balance.pill.filtered':            '{n} ataskaitos · {from} — {to}',
+  'ar.balance.filter.from':              'Nuo',
+  'ar.balance.filter.to':                'Iki',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Be diapazono → rodo visas ataskaitas',
+  'ar.balance.filter.invalidDate':       'Netinkamas formatas — naudokite YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Taikyti',
+  'ar.balance.filter.clear':             'Valyti',
+  'ar.balance.col.lost':                 'Prarasta',
+  'ar.balance.col.stolen':               'Pavogta',
+  'ar.balance.row.wood':                 'Mediena',
+  'ar.balance.row.clay':                 'Molis',
+  'ar.balance.row.iron':                 'Geležis',
+  'ar.balance.row.crop':                 'Grūdai',
+  'ar.balance.row.total':                'Iš viso',
+  'ar.balance.net.label':                'Grynasis (pavogta − prarasta)',
+  'ar.balance.tribeless.note':           '{n} ataskaitos be nustatytos genties neskaičiuojamos prie „Prarasta" — nuostoliai gali būti neįvertinti.',
+  'ar.balance.empty.title':              'Nėra duomenų pasirinktame diapazone',
+  'ar.balance.empty.sub':                'Šiuo laikotarpiu nėra ataskaitų. Išplėskite diapazoną arba išvalykite filtrą.',
+  'ar.balance.empty.cta':                'Valyti filtrą →',
+  'ar.balance.error':                    'Klaida įkeliant balansą.',
+  'ar.balance.retry':                    'Bandyti dar kartą',
+
+  // Pasauliniai akordeonai (S-cierre)
+  'ar.stats.global.regen.header':        'Pasaulinis regeneracijos greitis',
+  'ar.stats.global.regen.summary':       '{n} gyvūnų · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Pasauliniai gyvūnų pasirodymai',
+  'ar.stats.global.appearances.summary': '{n} gyvūnų stebima · top: {top}',
+
+  // Datos tikrinimas Istorijoje (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Netinkamas formatas — naudokite YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default lt

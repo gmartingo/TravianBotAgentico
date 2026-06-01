@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Tabla comparativa de reaparición de animales por oasis
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador.
+
+  Bloques arrastrables:
+    A. HEADER      — título del panel + toggle Tasa/Proyección + timestamp computed_at
+    B. TABLA       — tabla comparativa (con datos reales de ejemplo: 4 oasis, 4 especies)
+    C. CARGANDO    — skeleton de carga (3 filas)
+    D. VACÍO       — estado empty con CTA
+    E. ERROR       — banner rojo + botón Reintentar
+    F. LEYENDA     — leyenda de indicadores (● ◌ — ?)
+
+  Controles:
+    - Toggle tema (claro / oscuro)
+    - Toggle modo tabla: Tasa /h ↔ Proyección
+    - Selector de estado: con datos / cargando / vacío / error
+    - Modo Editar: drag & drop con imán de 8px sobre rejilla
+    - Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec:   docs/design/oasis-comparison.md
+  Spec F: docs/specs/reaparicion-animales-oasis.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Comparativa de oasis (playground)</title>
+<style>
+/* ===== TOKENS (fuente de verdad: frontend/src/styles/tokens.css §19.16 DESIGN.md) ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--danger:#C9352C;--info:#0A6FCC;
+  --success-subtle:rgba(36,138,61,.10);--danger-subtle:rgba(201,53,44,.08);
+  --danger-border:rgba(201,53,44,.30);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --sidebar-w:200px;--topbar-h:52px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.10);--danger-border:rgba(255,69,58,.35);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.10);--danger-border:rgba(255,69,58,.35);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);font-size:12px;flex-shrink:0;
+  position:sticky;top:0;z-index:200;
+}
+.toolbar label{color:var(--text-secondary);}
+.toolbar select,.toolbar button{
+  font:inherit;font-size:12px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);
+  padding:3px 8px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.toolbar select:hover,.toolbar button:hover{background:var(--border);}
+.toolbar button.active{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent-text);}
+.tb-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== SHELL LAYOUT ===== */
+.shell{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+/* Topbar */
+.topbar{
+  height:var(--topbar-h);display:flex;align-items:center;
+  padding:0 20px;gap:12px;flex-shrink:0;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.tb-logo{
+  display:flex;align-items:center;gap:8px;
+  font-size:15px;font-weight:600;color:var(--text);text-decoration:none;
+}
+.tb-square{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-weight:700;font-size:12px;display:grid;place-items:center;
+}
+.topbar-end{margin-inline-start:auto;display:flex;align-items:center;gap:8px;}
+
+/* Sidebar */
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sidebar nav{flex:1;padding:8px;display:flex;flex-direction:column;gap:2px;}
+.nav-item{
+  position:relative;display:flex;align-items:center;gap:10px;
+  padding:8px 10px;border-radius:var(--radius-sm);
+  font-size:14px;width:100%;border:none;cursor:pointer;
+  background:transparent;color:var(--text);text-align:start;
+  transition:background var(--dur-fast);
+}
+.nav-item:hover{background:var(--surface-2);}
+.nav-item.active{
+  background:var(--accent-subtle);color:var(--accent-text);font-weight:500;
+}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.sidebar-footer{
+  border-top:1px solid var(--border);padding:12px 16px;
+  font-size:11px;font-family:var(--font-mono);color:var(--text-tertiary);
+}
+
+/* Content */
+.content{flex:1;overflow-y:auto;padding:28px 32px;}
+.page-header{margin-bottom:20px;}
+.page-header h1{font-size:28px;font-weight:600;letter-spacing:-0.02em;color:var(--text);}
+
+/* Tab bar */
+.tab-bar{
+  display:flex;gap:0;border-bottom:1px solid var(--border);
+  margin-bottom:24px;
+}
+.tab-item{
+  padding:10px 16px;font-size:14px;cursor:pointer;
+  border:none;background:transparent;color:var(--text-secondary);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color var(--dur-fast),border-color var(--dur-fast);
+}
+.tab-item:hover{color:var(--text);}
+.tab-item.active{color:var(--accent-text);border-bottom-color:var(--accent);font-weight:500;}
+
+/* ===== BLOQUES ARRASTRABLES ===== */
+.blocks-container{
+  display:flex;flex-direction:column;gap:16px;
+  min-height:200px;max-width:900px;
+}
+.block{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+  transition:box-shadow var(--dur-fast);
+}
+.block-label{
+  font-size:10px;font-family:var(--font-mono);
+  color:var(--text-tertiary);letter-spacing:.04em;text-transform:uppercase;
+  padding:6px 12px 4px;border-bottom:1px solid var(--border);
+  background:var(--surface-2);display:flex;align-items:center;gap:6px;
+}
+.block-label .drag-handle{cursor:grab;color:var(--border-strong);font-size:14px;user-select:none;}
+.edit-mode .block{cursor:grab;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.edit-mode .block:active{cursor:grabbing;}
+.block.dragging{opacity:0.4;}
+.block.drag-over{border-color:var(--accent-text);background:var(--accent-subtle);}
+
+/* ===== BOTONES ===== */
+.btn-primary{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font:inherit;font-size:13px;font-weight:500;border:none;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:6px;
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);
+  background:var(--surface);border:1px solid var(--border-strong);
+  color:var(--text);font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-secondary:hover{background:var(--surface-2);}
+.btn-ghost{
+  display:inline-flex;align-items:center;gap:6px;
+  height:28px;padding:0 10px;border-radius:var(--radius-sm);
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer;
+  transition:color var(--dur-fast),background var(--dur-fast),border-color var(--dur-fast);
+  white-space:nowrap;
+}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);border-color:var(--border-strong);}
+.btn-ghost.active{
+  background:var(--accent-subtle);border-color:var(--accent);
+  color:var(--accent-text);font-weight:500;
+}
+
+/* ===== PANEL HEADER ===== */
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:16px 20px 8px;flex-wrap:wrap;
+}
+.panel-title{
+  font-size:14px;font-weight:600;color:var(--text);
+}
+.panel-meta{
+  font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);
+  padding:0 20px 12px;
+}
+.toggle-group{
+  display:inline-flex;gap:0;border-radius:var(--radius-sm);
+  border:1px solid var(--border);overflow:hidden;
+}
+.toggle-btn{
+  padding:4px 12px;font-size:12px;font-weight:500;
+  background:var(--surface);color:var(--text-secondary);
+  border:none;cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast);
+  border-inline-end:1px solid var(--border);
+}
+.toggle-btn:last-child{border-inline-end:none;}
+.toggle-btn:hover{background:var(--surface-2);}
+.toggle-btn.active{
+  background:var(--accent-subtle);color:var(--accent-text);font-weight:600;
+}
+
+/* ===== TABLA COMPARATIVA ===== */
+.table-wrap{
+  overflow-x:auto;
+  /* Scroll horizontal solo en la tabla, no en la página (DESIGN.md §17.8) */
+}
+.comparison-table{
+  width:100%;border-collapse:collapse;font-size:13px;
+  min-width:500px; /* fuerza scroll si la tabla es estrecha */
+}
+/* Cabecera */
+.comparison-table thead th{
+  padding:8px 12px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-size:11px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;
+  white-space:nowrap;
+  vertical-align:bottom;
+}
+.comparison-table thead th.col-oasis{
+  text-align:start;min-width:160px;
+  /* sticky primera columna */
+  position:sticky;inset-inline-start:0;z-index:2;
+  background:var(--surface-2);
+}
+.comparison-table thead th.col-species{
+  text-align:end;min-width:80px;
+}
+/* Filas */
+.comparison-table tbody tr{
+  border-bottom:1px solid var(--border);
+  transition:background var(--dur-fast);
+}
+.comparison-table tbody tr:hover td{background:var(--surface-2);}
+.comparison-table tbody tr:hover td.td-sticky{background:var(--surface-2);}
+.comparison-table tbody tr.low-confidence{opacity:.75;}
+.comparison-table tbody tr.low-confidence td.td-sticky{opacity:1;} /* el sticky no se ve doble */
+/* Celda sticky de oasis */
+.comparison-table tbody td.td-sticky{
+  padding:10px 12px;
+  background:var(--surface);
+  position:sticky;inset-inline-start:0;z-index:1;
+  /* hairline derecha para separar visualmente */
+  border-inline-end:1px solid var(--border);
+  min-width:160px;
+}
+.oasis-coords{
+  font-family:var(--font-mono);font-weight:600;font-size:13px;
+  color:var(--text);font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.oasis-meta{
+  font-size:11px;color:var(--text-secondary);margin-top:2px;
+  white-space:nowrap;
+}
+.badge-low-confidence{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:10px;font-family:var(--font-mono);
+  color:var(--text-disabled);
+  margin-top:3px;
+}
+/* Celdas de especie */
+.comparison-table tbody td.td-species{
+  padding:10px 12px;text-align:end;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  font-size:13px;font-weight:500;color:var(--text);
+  white-space:nowrap;
+}
+.comparison-table tbody td.td-absent{
+  padding:10px 12px;text-align:end;
+  font-family:var(--font-mono);font-size:13px;
+  color:var(--text-disabled);
+}
+.comparison-table tbody td.td-unknown{
+  padding:10px 12px;text-align:end;
+  font-family:var(--font-mono);font-size:13px;
+  color:var(--text-tertiary);
+}
+/* Cabecera de especie con icono */
+.species-th-inner{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  text-align:center;
+}
+.species-icon{
+  width:18px;height:18px;border-radius:3px;
+  background:var(--surface);border:1px solid var(--border);
+  display:grid;place-items:center;font-size:12px;
+  color:var(--text-secondary);flex-shrink:0;
+}
+.species-name{text-align:center;display:block;}
+.rate-unit{
+  font-size:10px;color:var(--text-tertiary);font-weight:400;
+  text-transform:none;letter-spacing:0;
+}
+
+/* ===== LEYENDA ===== */
+.legend-block{
+  padding:12px 20px;
+  display:flex;flex-wrap:wrap;gap:12px 20px;
+  border-top:1px solid var(--border);
+}
+.legend-item{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--text-secondary);
+}
+.legend-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+.legend-sym{
+  font-family:var(--font-mono);font-size:12px;font-weight:600;width:12px;text-align:center;
+}
+
+/* ===== SKELETON (loading) ===== */
+.skeleton-wrap{padding:16px 20px;display:flex;flex-direction:column;gap:12px;}
+.skeleton-row{display:flex;gap:12px;align-items:center;}
+.skel-bar{
+  height:14px;border-radius:var(--radius-sm);
+  background:var(--border);
+  animation:pulse 1.5s ease-in-out infinite;
+}
+.skel-cell{
+  height:36px;border-radius:var(--radius-sm);
+  background:var(--border);
+  animation:pulse 1.5s ease-in-out infinite;
+  flex:1;
+}
+@keyframes pulse{
+  0%,100%{opacity:1;}
+  50%{opacity:.4;}
+}
+@media(prefers-reduced-motion:reduce){
+  .skel-bar,.skel-cell{animation:none;}
+}
+/* Tabla skeleton */
+.skel-table{width:100%;border-collapse:collapse;}
+.skel-table thead th{
+  padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--border);
+}
+.skel-table tbody td{padding:10px 12px;border-bottom:1px solid var(--border);}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:48px 24px;text-align:center;
+}
+.empty-icon{
+  width:52px;height:52px;border-radius:var(--radius-full);
+  background:var(--surface-2);display:grid;place-items:center;
+  color:var(--text-tertiary);font-size:26px;
+}
+.empty-title{font-size:15px;font-weight:600;color:var(--text);}
+.empty-desc{font-size:13px;color:var(--text-secondary);max-width:320px;line-height:1.5;}
+
+/* ===== ERROR BANNER ===== */
+.error-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;margin:16px 20px;
+  background:var(--danger-subtle);
+  border:1px solid var(--danger-border);
+  border-radius:var(--radius-sm);
+  font-size:13px;color:var(--danger);
+}
+.error-banner .err-msg{flex:1;}
+.btn-retry{
+  flex-shrink:0;padding:4px 12px;font-size:12px;font-weight:600;
+  color:var(--danger);background:transparent;
+  border:1px solid var(--danger-border);border-radius:var(--radius-sm);cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-retry:hover{background:var(--danger-subtle);}
+
+/* ===== TOOLTIP (nativo title — se mejora con [data-tooltip]) ===== */
+[data-tooltip]{position:relative;cursor:default;}
+/* Toast */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;
+  width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  padding:10px 16px;border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-lg);font-size:13px;z-index:500;
+  opacity:0;transform:translateY(8px);pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+}
+.toast.visible{opacity:1;transform:translateY(0);}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR ===== -->
+<div class="toolbar">
+  <label>Estado:</label>
+  <select id="stateSelect" onchange="switchState(this.value)">
+    <option value="data">Con datos</option>
+    <option value="loading">Cargando (skeleton)</option>
+    <option value="empty">Vacío</option>
+    <option value="error">Error</option>
+  </select>
+  <div class="tb-sep"></div>
+  <label>Tema:</label>
+  <button id="themeBtn" onclick="toggleTheme()">🌙 Oscuro</button>
+  <div class="tb-sep"></div>
+  <button id="editBtn" onclick="toggleEdit()">✏️ Modo editar</button>
+  <button id="saveBtn" onclick="saveLayout()" style="display:none">💾 Guardar</button>
+  <button id="resetBtn" onclick="resetLayout()" style="display:none">↺ Restablecer</button>
+  <button id="exportBtn" onclick="exportLayout()" style="display:none">⬇ Exportar JSON</button>
+</div>
+
+<!-- ===== SHELL ===== -->
+<div style="display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;">
+
+  <!-- Topbar simulada -->
+  <div class="topbar">
+    <div class="tb-logo">
+      <div class="tb-square">TB</div>
+      TravianBot
+    </div>
+    <div class="topbar-end">
+      <button class="btn-ghost" style="border:none;color:var(--text-secondary);font-size:16px;padding:0 4px;">🌙</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <!-- Sidebar simulada -->
+    <div class="sidebar">
+      <nav>
+        <button class="nav-item">
+          <span>📋</span> Reportes
+        </button>
+        <button class="nav-item active">
+          <span>📊</span> Estadísticas
+        </button>
+        <button class="nav-item">
+          <span>📜</span> Historial
+        </button>
+      </nav>
+      <div class="sidebar-footer">v0.1.0</div>
+    </div>
+
+    <!-- Contenido principal -->
+    <div class="content">
+      <div class="page-header">
+        <h1>Reportes de oasis</h1>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab-item">Ingresar</button>
+        <button class="tab-item">Historial</button>
+        <button class="tab-item active">Estadísticas</button>
+      </div>
+
+      <!-- ===== BLOQUES ARRASTRABLES ===== -->
+      <div class="blocks-container" id="blocksContainer">
+
+        <!-- BLOQUE A: HEADER del panel -->
+        <div class="block" id="block-header" data-block-id="header">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>A — HEADER</span>
+          </div>
+          <div class="panel-header">
+            <span class="panel-title">Comparativa de oasis</span>
+            <div class="toggle-group" role="group" aria-label="Modo de visualización">
+              <button class="toggle-btn active" id="toggleRate" onclick="setMode('rate')" aria-pressed="true">Tasa /h</button>
+              <button class="toggle-btn" id="toggleProjected" onclick="setMode('projected')" aria-pressed="false">Proyección</button>
+            </div>
+          </div>
+          <div class="panel-meta">Calculado: 01/06/2026, 14:32 — hace 2 min</div>
+        </div>
+
+        <!-- BLOQUE B: TABLA con datos -->
+        <div class="block" id="block-table" data-block-id="table">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>B — TABLA comparativa (4 oasis · 4 especies)</span>
+          </div>
+          <div class="table-wrap">
+            <table class="comparison-table" id="compTable" role="table"
+                   aria-label="Comparativa de reaparición de animales por oasis">
+              <thead id="tableHead">
+                <!-- Generada por JS -->
+              </thead>
+              <tbody id="tableBody">
+                <!-- Generada por JS -->
+              </tbody>
+            </table>
+          </div>
+          <!-- Leyenda integrada en la tabla -->
+          <div class="legend-block" id="legendInTable">
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--success)"></span>
+              <span>Con tasa calculada</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--border-strong)"></span>
+              <span>Datos insuficientes (1 ataque)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-sym" style="color:var(--text-disabled)">—</span>
+              <span>Especie no observada en este oasis</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-sym" style="color:var(--text-tertiary)">?</span>
+              <span>Proyección indeterminada (último reporte: derrota)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOQUE C: CARGANDO (skeleton) -->
+        <div class="block" id="block-loading" data-block-id="loading" style="display:none">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>C — CARGANDO (skeleton)</span>
+          </div>
+          <div class="panel-header">
+            <div class="skel-bar" style="width:180px;height:16px;"></div>
+            <div class="skel-bar" style="width:120px;height:24px;border-radius:var(--radius-sm);"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="skel-table">
+              <thead>
+                <tr>
+                  <th><div class="skel-bar" style="width:80px;"></div></th>
+                  <th><div class="skel-bar" style="width:50px;margin:0 auto;"></div></th>
+                  <th><div class="skel-bar" style="width:50px;margin:0 auto;"></div></th>
+                  <th><div class="skel-bar" style="width:50px;margin:0 auto;"></div></th>
+                  <th><div class="skel-bar" style="width:50px;margin:0 auto;"></div></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="skel-bar" style="width:100%;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                </tr>
+                <tr>
+                  <td><div class="skel-bar" style="width:90%;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                </tr>
+                <tr>
+                  <td><div class="skel-bar" style="width:95%;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                  <td><div class="skel-bar" style="width:40px;margin-inline-start:auto;"></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- BLOQUE D: VACÍO -->
+        <div class="block" id="block-empty" data-block-id="empty" style="display:none">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>D — VACÍO</span>
+          </div>
+          <div class="empty-state">
+            <div class="empty-icon">🏝</div>
+            <p class="empty-title">Sin oasis comparables</p>
+            <p class="empty-desc">Ingresa reportes de al menos dos ataques al mismo oasis para ver la comparativa.</p>
+            <button class="btn-secondary">Ingresar reportes</button>
+          </div>
+        </div>
+
+        <!-- BLOQUE E: ERROR -->
+        <div class="block" id="block-error" data-block-id="error" style="display:none">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>E — ERROR</span>
+          </div>
+          <div class="error-banner" role="alert">
+            <span class="err-msg">Error al cargar la comparativa de oasis</span>
+            <button class="btn-retry">Reintentar</button>
+          </div>
+        </div>
+
+        <!-- BLOQUE F: LEYENDA INDEPENDIENTE (para drag fuera de tabla) -->
+        <div class="block" id="block-legend" data-block-id="legend">
+          <div class="block-label">
+            <span class="drag-handle">⠿</span>
+            <span>F — LEYENDA (bloque separable)</span>
+          </div>
+          <div class="legend-block" style="border-top:none;">
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--success);"></span>
+              <span>● Con tasa calculada (has_rates: true)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--border-strong);border:1px solid var(--border-strong);background:transparent;"></span>
+              <span>◌ Datos insuficientes (1 ataque, has_rates: false)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-sym" style="color:var(--text-disabled);">—</span>
+              <span>Especie no observada en este oasis (ausencia semántica, no cero)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-sym" style="color:var(--text-tertiary);">?</span>
+              <span>Proyección indeterminada (último reporte fue derrota, survived=null)</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /blocks-container -->
+
+      <!-- Separador visual hacia GlobalOasisStatsPanel -->
+      <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);
+                  color:var(--text-disabled);font-size:12px;font-family:var(--font-mono);">
+        ↓ GlobalOasisStatsPanel (existente, sin cambios)
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /shell -->
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== DATOS DE EJEMPLO (modelo del EP-10 response) =====
+const MOCK_DATA = {
+  computed_at: "2026-06-01T14:32:00.000000+00:00",
+  species_columns: [
+    { animal_ordinal: 1,  animal_name: "Rata",   emoji: "🐀" },
+    { animal_ordinal: 3,  animal_name: "Araña",  emoji: "🕷" },
+    { animal_ordinal: 7,  animal_name: "Tigre",  emoji: "🐯" },
+    { animal_ordinal: 10, animal_name: "Oso",    emoji: "🐻" },
+  ],
+  oasis: [
+    // has_rates: true — grupo 1 (más reciente primero)
+    {
+      coord_x: -70, coord_y: 73,
+      total_attacks: 8,
+      hours_since: 16.32, has_rates: true,
+      species: {
+        // ordinal → { rate, valid_intervals, last_survived, projected_now }
+        7:  { rate: 1.25, valid_intervals: 6, last_survived: 3,    projected_now: 23 },
+        3:  { rate: 0.80, valid_intervals: 4, last_survived: null,  projected_now: null },  // derrota
+        10: { rate: 2.00, valid_intervals: 5, last_survived: 8,    projected_now: 40 },
+        // Rata (1) no presente en este oasis → celda "—"
+      }
+    },
+    {
+      coord_x: 12, coord_y: -45,
+      total_attacks: 5,
+      hours_since: 8.70, has_rates: true,
+      species: {
+        1:  { rate: 3.50, valid_intervals: 3, last_survived: 12,   projected_now: 42 },
+        3:  { rate: 2.10, valid_intervals: 3, last_survived: 7,    projected_now: 25 },
+        7:  { rate: 1.50, valid_intervals: 3, last_survived: 2,    projected_now: 15 },
+        // Oso (10) no presente → celda "—"
+      }
+    },
+    {
+      coord_x: -15, coord_y: -8,
+      total_attacks: 3,
+      hours_since: 47.20, has_rates: true,
+      species: {
+        10: { rate: 0.40, valid_intervals: 2, last_survived: 5,    projected_now: 23 },
+        // Rata, Araña, Tigre no presentes → celdas "—"
+      }
+    },
+    // has_rates: false — grupo 2 (baja confianza, 1 solo reporte)
+    {
+      coord_x: 5, coord_y: 22,
+      total_attacks: 1,
+      hours_since: 50.60, has_rates: false,
+      species: {}
+    },
+  ]
+};
+
+// ===== ESTADO ACTUAL =====
+let currentMode = 'rate';   // 'rate' | 'projected'
+let currentState = 'data';  // 'data' | 'loading' | 'empty' | 'error'
+
+// ===== RENDER TABLA =====
+function renderTable() {
+  const { species_columns, oasis } = MOCK_DATA;
+  const isRate = currentMode === 'rate';
+
+  // THEAD
+  const thead = document.getElementById('tableHead');
+  let headRow = '<tr>';
+  headRow += `<th class="col-oasis" scope="col">OASIS</th>`;
+  species_columns.forEach(sp => {
+    headRow += `<th class="col-species" scope="col">
+      <div class="species-th-inner">
+        <span class="species-icon" aria-hidden="true">${sp.emoji}</span>
+        <span class="species-name">${sp.animal_name.toUpperCase()}</span>
+        <span class="rate-unit">${isRate ? '/h' : 'ahora'}</span>
+      </div>
+    </th>`;
+  });
+  headRow += '</tr>';
+  thead.innerHTML = headRow;
+
+  // TBODY
+  const tbody = document.getElementById('tableBody');
+  let rows = '';
+  oasis.forEach(o => {
+    const isLow = !o.has_rates;
+    rows += `<tr class="${isLow ? 'low-confidence' : ''}">`;
+
+    // Celda sticky de oasis
+    const dot = isLow
+      ? `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                      border:1.5px solid var(--border-strong);margin-inline-end:5px;
+                      vertical-align:middle;"></span>`
+      : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;
+                      background:var(--success);margin-inline-end:5px;
+                      vertical-align:middle;"></span>`;
+    const hoursText = o.hours_since < 1
+      ? `hace ${Math.round(o.hours_since * 60)} min`
+      : `hace ${o.hours_since.toFixed(1).replace('.',',')}h`;
+    const badgeLow = isLow
+      ? `<div class="badge-low-confidence">⚠ Datos insuficientes</div>` : '';
+
+    rows += `<th class="td-sticky" scope="row">
+      <div class="oasis-coords">${dot}(${o.coord_x}&nbsp;|&nbsp;${o.coord_y})</div>
+      <div class="oasis-meta">${o.total_attacks} ataques · ${hoursText}</div>
+      ${badgeLow}
+    </th>`;
+
+    // Celdas de especie
+    species_columns.forEach(sp => {
+      const spData = o.species[sp.animal_ordinal];
+      if (!spData) {
+        // Ausencia semántica
+        rows += `<td class="td-absent" aria-label="Especie no observada en este oasis"
+                     title="Especie no observada en este oasis">—</td>`;
+        return;
+      }
+      if (isRate) {
+        const val = spData.rate.toFixed(2).replace('.', ',');
+        const intervals = spData.valid_intervals;
+        rows += `<td class="td-species" data-tooltip
+                     title="${intervals} intervalo${intervals>1?'s':''} válido${intervals>1?'s':''}">${val}</td>`;
+      } else {
+        // Modo proyección
+        if (spData.projected_now === null) {
+          rows += `<td class="td-unknown" aria-label="Proyección indeterminada: último reporte fue derrota"
+                       title="Sin dato: el último reporte fue derrota">?</td>`;
+        } else {
+          const base = spData.last_survived !== null ? spData.last_survived : '?';
+          rows += `<td class="td-species"
+                       title="Base: ${base} supervivieron en el último ataque">${spData.projected_now}</td>`;
+        }
+      }
+    });
+
+    rows += '</tr>';
+  });
+  tbody.innerHTML = rows;
+}
+
+// ===== TOGGLE MODO =====
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('toggleRate').classList.toggle('active', mode === 'rate');
+  document.getElementById('toggleRate').setAttribute('aria-pressed', mode === 'rate');
+  document.getElementById('toggleProjected').classList.toggle('active', mode === 'projected');
+  document.getElementById('toggleProjected').setAttribute('aria-pressed', mode === 'projected');
+  renderTable();
+}
+
+// ===== SELECTOR DE ESTADO =====
+function switchState(state) {
+  currentState = state;
+  const ids = ['block-table', 'block-loading', 'block-empty', 'block-error'];
+  ids.forEach(id => document.getElementById(id).style.display = 'none');
+
+  // El header siempre visible en los estados con datos o error (oculto en vacío/loading puros)
+  const headerBlock = document.getElementById('block-header');
+
+  if (state === 'data') {
+    document.getElementById('block-table').style.display = '';
+    headerBlock.style.display = '';
+  } else if (state === 'loading') {
+    document.getElementById('block-loading').style.display = '';
+    headerBlock.style.display = 'none';
+  } else if (state === 'empty') {
+    document.getElementById('block-empty').style.display = '';
+    headerBlock.style.display = 'none';
+  } else if (state === 'error') {
+    document.getElementById('block-error').style.display = '';
+    headerBlock.style.display = '';
+  }
+}
+
+// ===== TEMA =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  document.getElementById('themeBtn').textContent = isDark ? '🌙 Oscuro' : '☀️ Claro';
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+}
+// Aplicar tema guardado
+(function(){
+  const t = localStorage.getItem('theme');
+  if (t) {
+    document.documentElement.dataset.theme = t;
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '☀️ Claro' : '🌙 Oscuro';
+  }
+})();
+
+// ===== DRAG & DROP con imán de 8px =====
+let editMode = false;
+let dragEl = null, dragId = null, placeholder = null;
+let dragStartY = 0;
+
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('editBtn');
+  const container = document.getElementById('blocksContainer');
+  btn.classList.toggle('active', editMode);
+  container.classList.toggle('edit-mode', editMode);
+  btn.textContent = editMode ? '✅ Salir de editar' : '✏️ Modo editar';
+  document.getElementById('saveBtn').style.display   = editMode ? '' : 'none';
+  document.getElementById('resetBtn').style.display  = editMode ? '' : 'none';
+  document.getElementById('exportBtn').style.display = editMode ? '' : 'none';
+}
+
+function snapToGrid(v, grid = 8) {
+  return Math.round(v / grid) * grid;
+}
+
+// Drag & drop de reordenación (no posición absoluta, sino orden en el flex column)
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('blocksContainer');
+
+  container.addEventListener('dragstart', (e) => {
+    if (!editMode) return;
+    const block = e.target.closest('.block');
+    if (!block) return;
+    dragEl = block;
+    dragId = block.dataset.blockId;
+    setTimeout(() => block.classList.add('dragging'), 0);
+  });
+
+  container.addEventListener('dragend', (e) => {
+    if (dragEl) dragEl.classList.remove('dragging');
+    document.querySelectorAll('.block.drag-over').forEach(b => b.classList.remove('drag-over'));
+    dragEl = null; dragId = null;
+  });
+
+  container.addEventListener('dragover', (e) => {
+    if (!editMode || !dragEl) return;
+    e.preventDefault();
+    const target = e.target.closest('.block');
+    if (!target || target === dragEl) return;
+    document.querySelectorAll('.block.drag-over').forEach(b => b.classList.remove('drag-over'));
+    target.classList.add('drag-over');
+    // Determinar posición relativa
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      container.insertBefore(dragEl, target);
+    } else {
+      container.insertBefore(dragEl, target.nextSibling);
+    }
+  });
+
+  container.addEventListener('drop', (e) => {
+    if (!editMode) return;
+    e.preventDefault();
+    document.querySelectorAll('.block.drag-over').forEach(b => b.classList.remove('drag-over'));
+  });
+
+  // Hacer los bloques arrastrables
+  container.querySelectorAll('.block').forEach(block => {
+    block.setAttribute('draggable', 'true');
+  });
+
+  // Render inicial
+  renderTable();
+  loadLayout();
+});
+
+// ===== GUARDAR / RESTAURAR / EXPORTAR LAYOUT =====
+function getLayoutOrder() {
+  return Array.from(document.querySelectorAll('#blocksContainer .block'))
+    .map(b => ({
+      id: b.dataset.blockId,
+      visible: b.style.display !== 'none'
+    }));
+}
+
+function saveLayout() {
+  const layout = getLayoutOrder();
+  localStorage.setItem('ocpPlaygroundLayout', JSON.stringify(layout));
+  showToast('💾 Layout guardado');
+}
+
+function loadLayout() {
+  const saved = localStorage.getItem('ocpPlaygroundLayout');
+  if (!saved) return;
+  try {
+    const layout = JSON.parse(saved);
+    const container = document.getElementById('blocksContainer');
+    layout.forEach(item => {
+      const block = document.getElementById('block-' + item.id);
+      if (block) {
+        container.appendChild(block);
+        // Visibilidad controlada por estado, no restauramos aquí para no interferir
+      }
+    });
+  } catch(e) { /* ignore */ }
+}
+
+function resetLayout() {
+  localStorage.removeItem('ocpPlaygroundLayout');
+  location.reload();
+}
+
+function exportLayout() {
+  const layout = getLayoutOrder();
+  const blob = new Blob([JSON.stringify({
+    playground: 'oasis-comparison',
+    date: new Date().toISOString(),
+    mode: currentMode,
+    state: currentState,
+    blocks: layout
+  }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'oasis-comparison-layout.json';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('⬇ Layout exportado');
+}
+
+// ===== TOAST =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  setTimeout(() => t.classList.remove('visible'), 2500);
+}
+</script>
+</body>
+</html>

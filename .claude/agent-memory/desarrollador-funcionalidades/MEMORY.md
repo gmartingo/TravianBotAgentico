@@ -21,3 +21,5 @@
 - [seed-loader-pattern](seed-loader-pattern.md) — export JSON + load_if_empty en lifespan; UPSERT_MAP extensible; count_troop_stats como gate; edificios: solo añadir ficheros+entradas en UPSERT_MAP
 - [human-sessions-pattern](human-sessions-pattern.md) — timeline HARDCORE/PASIVO/DISCONNECTED: entidades puras, SessionSQLiteAdapter, FernetDecryptionError, pop_farm_ready, timezone normalization
 - [attack-reports-pattern](attack-reports-pattern.md) — BD ataques oasis: router+adaptador faltaban en main.py; attacked_at verbatim naive; _calc_regen_rates; orden EP-08>EP-07>EP-06>/{id}
+- [chrome-extension-mv3-pattern](chrome-extension-mv3-pattern.md) — CORS via SW (no content script), iconos PNG stdlib, host_permissions TLD explícitos, sin tests automáticos
+- [defeat-report-pattern](defeat-report-pattern.md) — modo perdido: AnimalEntry.present=None; _is_defeat_row/mixed_row; DDL INTEGER sin NOT NULL; TravianReport NumRow muestra '?'

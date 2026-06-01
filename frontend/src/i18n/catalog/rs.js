@@ -512,6 +512,53 @@ const rs = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Глобална статистика — све оазе',
+  'ar.stats.global.col.appearances':   'Појављивања',
+  'ar.stats.global.appearances.title': 'Посматране животиње (глобално)',
+  'ar.stats.global.loading':           'Учитавање глобалне статистике…',
+  'ar.stats.global.error':             'Глобална статистика не може да се учита.',
+  'ar.stats.global.retry':             'Покушај поново',
+  'ar.stats.global.empty.title':       'Нема података.',
+  'ar.stats.global.empty.sub':         'Додај извештаје о нападима да видиш глобалну статистику.',
+  'ar.stats.global.empty.cta':         'Иди на Унос →',
+
+  // Оперативни биланс (S-cierre)
+  'ar.balance.title':                    'Оперативни биланс',
+  'ar.balance.pill.noFilter':            '{n} извештаја · без филтера датума',
+  'ar.balance.pill.filtered':            '{n} извештаја · {from} — {to}',
+  'ar.balance.filter.from':              'Од',
+  'ar.balance.filter.to':                'До',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Без опсега → приказује све извештаје',
+  'ar.balance.filter.invalidDate':       'Неважећи формат — користи YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Примени',
+  'ar.balance.filter.clear':             'Очисти',
+  'ar.balance.col.lost':                 'Изгубљено',
+  'ar.balance.col.stolen':               'Украдено',
+  'ar.balance.row.wood':                 'Дрво',
+  'ar.balance.row.clay':                 'Глина',
+  'ar.balance.row.iron':                 'Гвожђе',
+  'ar.balance.row.crop':                 'Жито',
+  'ar.balance.row.total':                'Укупно',
+  'ar.balance.net.label':                'Нето (украдено − изгубљено)',
+  'ar.balance.tribeless.note':           '{n} извештаја без откривеног племена не рачунају се у „Изгубљено" — губици могу бити потцењени.',
+  'ar.balance.empty.title':              'Нема података у изабраном опсегу',
+  'ar.balance.empty.sub':                'Нема извештаја у том периоду. Прошири опсег или очисти филтер.',
+  'ar.balance.empty.cta':                'Очисти филтер →',
+  'ar.balance.error':                    'Грешка при учитавању биланса.',
+  'ar.balance.retry':                    'Покушај поново',
+
+  // Глобални акордеони (S-cierre)
+  'ar.stats.global.regen.header':        'Глобална стопа регенерације',
+  'ar.stats.global.regen.summary':       '{n} животиња · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Глобална појављивања животиња',
+  'ar.stats.global.appearances.summary': '{n} животиња посматрано · top: {top}',
+
+  // Валидација датума у Историји (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Неважећи формат — користи YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default rs

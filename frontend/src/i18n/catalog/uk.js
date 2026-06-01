@@ -512,6 +512,53 @@ const uk = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Глобальна статистика — всі оазиси',
+  'ar.stats.global.col.appearances':   'Появи',
+  'ar.stats.global.appearances.title': 'Спостережені тварини (глобально)',
+  'ar.stats.global.loading':           'Завантаження глобальної статистики…',
+  'ar.stats.global.error':             'Не вдалося завантажити глобальну статистику.',
+  'ar.stats.global.retry':             'Спробувати ще раз',
+  'ar.stats.global.empty.title':       'Даних ще немає.',
+  'ar.stats.global.empty.sub':         'Додайте звіти про атаки, щоб побачити глобальну статистику.',
+  'ar.stats.global.empty.cta':         'Перейти до Введення →',
+
+  // Операційний баланс (S-cierre)
+  'ar.balance.title':                    'Операційний баланс',
+  'ar.balance.pill.noFilter':            '{n} звітів · без фільтра дати',
+  'ar.balance.pill.filtered':            '{n} звітів · {from} — {to}',
+  'ar.balance.filter.from':              'Від',
+  'ar.balance.filter.to':                'До',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Без діапазону → показує всі звіти',
+  'ar.balance.filter.invalidDate':       'Невірний формат — використовуйте YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Застосувати',
+  'ar.balance.filter.clear':             'Очистити',
+  'ar.balance.col.lost':                 'Втрачено',
+  'ar.balance.col.stolen':               'Вкрадено',
+  'ar.balance.row.wood':                 'Деревина',
+  'ar.balance.row.clay':                 'Глина',
+  'ar.balance.row.iron':                 'Залізо',
+  'ar.balance.row.crop':                 'Зерно',
+  'ar.balance.row.total':                'Разом',
+  'ar.balance.net.label':                'Нето (вкрадено − втрачено)',
+  'ar.balance.tribeless.note':           '{n} звітів без виявленого племені не зараховуються до «Втрачено» — втрати можуть бути занижені.',
+  'ar.balance.empty.title':              'Немає даних у вибраному діапазоні',
+  'ar.balance.empty.sub':                'Звітів за цей період немає. Розширте діапазон або очистіть фільтр.',
+  'ar.balance.empty.cta':                'Очистити фільтр →',
+  'ar.balance.error':                    'Помилка при завантаженні балансу.',
+  'ar.balance.retry':                    'Спробувати ще раз',
+
+  // Глобальні акордеони (S-cierre)
+  'ar.stats.global.regen.header':        'Глобальна швидкість регенерації',
+  'ar.stats.global.regen.summary':       '{n} тварин · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Глобальні появи тварин',
+  'ar.stats.global.appearances.summary': '{n} тварин спостережено · top: {top}',
+
+  // Перевірка дати в Історії (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Невірний формат — використовуйте YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default uk

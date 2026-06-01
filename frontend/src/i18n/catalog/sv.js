@@ -512,6 +512,53 @@ const sv = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Globala statistiker — alla oaser',
+  'ar.stats.global.col.appearances':   'Förekomster',
+  'ar.stats.global.appearances.title': 'Observerade djur (globalt)',
+  'ar.stats.global.loading':           'Laddar globala statistiker…',
+  'ar.stats.global.error':             'Kunde inte ladda globala statistiker.',
+  'ar.stats.global.retry':             'Försök igen',
+  'ar.stats.global.empty.title':       'Inga data ännu.',
+  'ar.stats.global.empty.sub':         'Lägg till attackrapporter för att se globala statistiker.',
+  'ar.stats.global.empty.cta':         'Gå till Infoga →',
+
+  // Operationsbalans (S-cierre)
+  'ar.balance.title':                    'Operationsbalans',
+  'ar.balance.pill.noFilter':            '{n} rapporter · inget datumfilter',
+  'ar.balance.pill.filtered':            '{n} rapporter · {from} — {to}',
+  'ar.balance.filter.from':              'Från',
+  'ar.balance.filter.to':                'Till',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Inget intervall → visar alla rapporter',
+  'ar.balance.filter.invalidDate':       'Ogiltigt format — använd YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Tillämpa',
+  'ar.balance.filter.clear':             'Rensa',
+  'ar.balance.col.lost':                 'Förlorat',
+  'ar.balance.col.stolen':               'Stulet',
+  'ar.balance.row.wood':                 'Trä',
+  'ar.balance.row.clay':                 'Lera',
+  'ar.balance.row.iron':                 'Järn',
+  'ar.balance.row.crop':                 'Säd',
+  'ar.balance.row.total':                'Totalt',
+  'ar.balance.net.label':                'Netto (stulet − förlorat)',
+  'ar.balance.tribeless.note':           '{n} rapporter utan identifierad stam räknas inte in i "Förlorat" — förluster kan vara underskattade.',
+  'ar.balance.empty.title':              'Inga data i valt intervall',
+  'ar.balance.empty.sub':                'Inga rapporter under den perioden. Utöka intervallet eller rensa filtret.',
+  'ar.balance.empty.cta':                'Rensa filter →',
+  'ar.balance.error':                    'Fel vid inläsning av balans.',
+  'ar.balance.retry':                    'Försök igen',
+
+  // Globala dragspel (S-cierre)
+  'ar.stats.global.regen.header':        'Global regenerationshastighet',
+  'ar.stats.global.regen.summary':       '{n} djur · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globala djurförekomster',
+  'ar.stats.global.appearances.summary': '{n} djur observerade · top: {top}',
+
+  // Datumvalidering i Historik (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Ogiltigt format — använd YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default sv

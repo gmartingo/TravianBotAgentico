@@ -38,6 +38,28 @@ function buildHeaders(extra = {}) {
   }
 }
 
+/**
+ * Normaliza el campo `detail` de FastAPI a un STRING legible.
+ *
+ * FastAPI devuelve `detail` como string en errores de negocio (400/404/409),
+ * pero como ARRAY de objetos `{loc, msg, type}` en errores de validación (422).
+ * Si ese array/objeto llega tal cual a la UI y se intenta renderizar como hijo
+ * de React, lanza "Objects are not valid as a React child" y tumba el árbol
+ * (pantalla en gris, sin botones). Aquí lo aplanamos siempre a string.
+ */
+function normalizeDetail(detail) {
+  if (detail == null) return null
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((e) => (typeof e === 'string' ? e : e?.msg))
+      .filter(Boolean)
+    return msgs.length ? msgs.join(' · ') : JSON.stringify(detail)
+  }
+  if (typeof detail === 'object') return detail.msg ?? JSON.stringify(detail)
+  return String(detail)
+}
+
 async function parseResponse(res) {
   // Intentar parsear JSON siempre; si falla, devolver texto plano
   const contentType = res.headers.get('content-type') || ''
@@ -53,7 +75,7 @@ async function parseResponse(res) {
   if (isJson) {
     try {
       const body = await res.json()
-      detail = body.detail ?? detail
+      detail = normalizeDetail(body.detail) ?? detail
     } catch (_) {
       // ignorar errores de parseo
     }
@@ -297,11 +319,34 @@ export const api = {
     request('GET', '/attack-reports/oasis'),
 
   /**
+   * GET /attack-reports/stats/global
+   * EP-09: Estadísticas globales de todos los oasis combinados
+   * (animal_appearances + animal_regen_rates agregados de toda la BD).
+   */
+  getGlobalOasisStats: () =>
+    request('GET', '/attack-reports/stats/global'),
+
+  /**
    * GET /attack-reports/stats/oasis?x=<int>&y=<int>
    * EP-06: Estadísticas de un oasis (apariciones, repoblación, animal_regen_rates).
    */
   getOasisStats: (x, y) =>
     request('GET', `/attack-reports/stats/oasis?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}`),
+
+  /**
+   * GET /attack-reports/stats/balance → balance global PERDIDOS vs ROBADOS.
+   * Parámetros opcionales: x, y (oasis), from_date, to_date (ISO 8601 con segundos).
+   * Devuelve { range, total_reports, reports_without_tribe, lost, stolen, net }.
+   */
+  getBalanceStats: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.x != null)    qs.set('x', params.x)
+    if (params.y != null)    qs.set('y', params.y)
+    if (params.from_date)    qs.set('from_date', params.from_date)
+    if (params.to_date)      qs.set('to_date', params.to_date)
+    const q = qs.toString()
+    return request('GET', `/attack-reports/stats/balance${q ? '?' + q : ''}`)
+  },
 
   /**
    * GET /attack-reports → lista paginada de reportes

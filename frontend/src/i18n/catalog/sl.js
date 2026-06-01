@@ -512,6 +512,53 @@ const sl = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Globalne statistike — vse oaze',
+  'ar.stats.global.col.appearances':   'Pojavitve',
+  'ar.stats.global.appearances.title': 'Opažene živali (globalno)',
+  'ar.stats.global.loading':           'Nalaganje globalnih statistik…',
+  'ar.stats.global.error':             'Globalnih statistik ni mogoče naložiti.',
+  'ar.stats.global.retry':             'Poskusi znova',
+  'ar.stats.global.empty.title':       'Ni podatkov.',
+  'ar.stats.global.empty.sub':         'Dodaj poročila o napadih za ogled globalnih statistik.',
+  'ar.stats.global.empty.cta':         'Na Vstavitev →',
+
+  // Operativna bilanca (S-cierre)
+  'ar.balance.title':                    'Operativna bilanca',
+  'ar.balance.pill.noFilter':            '{n} poročil · brez filtra datuma',
+  'ar.balance.pill.filtered':            '{n} poročil · {from} — {to}',
+  'ar.balance.filter.from':              'Od',
+  'ar.balance.filter.to':                'Do',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Brez obsega → prikaže vsa poročila',
+  'ar.balance.filter.invalidDate':       'Napačna oblika — uporabi YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Uporabi',
+  'ar.balance.filter.clear':             'Počisti',
+  'ar.balance.col.lost':                 'Izgubljeno',
+  'ar.balance.col.stolen':               'Ukradeno',
+  'ar.balance.row.wood':                 'Les',
+  'ar.balance.row.clay':                 'Glina',
+  'ar.balance.row.iron':                 'Železo',
+  'ar.balance.row.crop':                 'Žito',
+  'ar.balance.row.total':                'Skupaj',
+  'ar.balance.net.label':                'Neto (ukradeno − izgubljeno)',
+  'ar.balance.tribeless.note':           '{n} poročil brez zaznane frakcije ne šteje v „Izgubljeno" — izgube so lahko podcenjene.',
+  'ar.balance.empty.title':              'Ni podatkov v izbranem obsegu',
+  'ar.balance.empty.sub':                'V tem obdobju ni poročil. Razširi obseg ali počisti filter.',
+  'ar.balance.empty.cta':                'Počisti filter →',
+  'ar.balance.error':                    'Napaka pri nalaganju bilance.',
+  'ar.balance.retry':                    'Poskusi znova',
+
+  // Globalne harmonike (S-cierre)
+  'ar.stats.global.regen.header':        'Globalna hitrost regeneracije',
+  'ar.stats.global.regen.summary':       '{n} živali · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globalne pojavitve živali',
+  'ar.stats.global.appearances.summary': '{n} živali opaženih · top: {top}',
+
+  // Preverjanje datuma v Zgodovini (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Napačna oblika — uporabi YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default sl

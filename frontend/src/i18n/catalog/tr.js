@@ -512,6 +512,53 @@ const tr = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Küresel istatistikler — tüm vahalar',
+  'ar.stats.global.col.appearances':   'Görünümler',
+  'ar.stats.global.appearances.title': 'Gözlemlenen hayvanlar (küresel)',
+  'ar.stats.global.loading':           'Küresel istatistikler yükleniyor…',
+  'ar.stats.global.error':             'Küresel istatistikler yüklenemedi.',
+  'ar.stats.global.retry':             'Tekrar dene',
+  'ar.stats.global.empty.title':       'Henüz veri yok.',
+  'ar.stats.global.empty.sub':         'Küresel istatistikleri görmek için saldırı raporları ekleyin.',
+  'ar.stats.global.empty.cta':         'Ekle sayfasına git →',
+
+  // Operasyon dengesi (S-cierre)
+  'ar.balance.title':                    'Operasyon dengesi',
+  'ar.balance.pill.noFilter':            '{n} rapor · tarih filtresi yok',
+  'ar.balance.pill.filtered':            '{n} rapor · {from} — {to}',
+  'ar.balance.filter.from':              'Başlangıç',
+  'ar.balance.filter.to':                'Bitiş',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Aralık yok → tüm raporları gösterir',
+  'ar.balance.filter.invalidDate':       'Geçersiz format — YYYY-MM-DD HH:MM:SS kullanın',
+  'ar.balance.filter.apply':             'Uygula',
+  'ar.balance.filter.clear':             'Temizle',
+  'ar.balance.col.lost':                 'Kaybedilen',
+  'ar.balance.col.stolen':               'Çalınan',
+  'ar.balance.row.wood':                 'Odun',
+  'ar.balance.row.clay':                 'Kil',
+  'ar.balance.row.iron':                 'Demir',
+  'ar.balance.row.crop':                 'Tahıl',
+  'ar.balance.row.total':                'Toplam',
+  'ar.balance.net.label':                'Net (çalınan − kaybedilen)',
+  'ar.balance.tribeless.note':           '{n} kabile tespit edilemeyen rapor «Kaybedilen» hesabına dahil edilmez — kayıplar düşük tahmin edilmiş olabilir.',
+  'ar.balance.empty.title':              'Seçilen aralıkta veri yok',
+  'ar.balance.empty.sub':                'Bu dönemde rapor yok. Aralığı genişletin veya filtreyi temizleyin.',
+  'ar.balance.empty.cta':                'Filtreyi temizle →',
+  'ar.balance.error':                    'Denge yüklenirken hata oluştu.',
+  'ar.balance.retry':                    'Tekrar dene',
+
+  // Küresel akordejonlar (S-cierre)
+  'ar.stats.global.regen.header':        'Küresel yenilenme hızı',
+  'ar.stats.global.regen.summary':       '{n} hayvan · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Küresel hayvan görünümleri',
+  'ar.stats.global.appearances.summary': '{n} hayvan gözlemlendi · top: {top}',
+
+  // Geçmişte tarih doğrulama (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Geçersiz format — YYYY-MM-DD HH:MM:SS kullanın',
+
 }
 
 export default tr

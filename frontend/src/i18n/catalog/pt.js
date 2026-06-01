@@ -513,6 +513,53 @@ const pt = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Estatísticas globais — todos os oásis',
+  'ar.stats.global.col.appearances':   'Aparições',
+  'ar.stats.global.appearances.title': 'Animais observados (global)',
+  'ar.stats.global.loading':           'A carregar estatísticas globais…',
+  'ar.stats.global.error':             'Não foi possível carregar as estatísticas globais.',
+  'ar.stats.global.retry':             'Tentar novamente',
+  'ar.stats.global.empty.title':       'Ainda sem dados.',
+  'ar.stats.global.empty.sub':         'Adicione alguns relatórios de ataque para ver as estatísticas globais.',
+  'ar.stats.global.empty.cta':         'Ir para Inserir →',
+
+  // Balanço de operações (S-cierre)
+  'ar.balance.title':                    'Balanço de operações',
+  'ar.balance.pill.noFilter':            '{n} relatórios · sem filtro de data',
+  'ar.balance.pill.filtered':            '{n} relatórios · {from} — {to}',
+  'ar.balance.filter.from':              'De',
+  'ar.balance.filter.to':                'Até',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Sem intervalo → mostra todos os relatórios',
+  'ar.balance.filter.invalidDate':       'Formato inválido — usar YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Aplicar',
+  'ar.balance.filter.clear':             'Limpar',
+  'ar.balance.col.lost':                 'Perdido',
+  'ar.balance.col.stolen':               'Roubado',
+  'ar.balance.row.wood':                 'Madeira',
+  'ar.balance.row.clay':                 'Barro',
+  'ar.balance.row.iron':                 'Ferro',
+  'ar.balance.row.crop':                 'Trigo',
+  'ar.balance.row.total':                'Total',
+  'ar.balance.net.label':                'Líquido (roubado − perdido)',
+  'ar.balance.tribeless.note':           '{n} relatórios sem tribo detetada não contam em "Perdido" — as perdas podem estar subestimadas.',
+  'ar.balance.empty.title':              'Sem dados no intervalo selecionado',
+  'ar.balance.empty.sub':                'Sem relatórios nesse período. Alargue o intervalo ou limpe o filtro.',
+  'ar.balance.empty.cta':                'Limpar filtro →',
+  'ar.balance.error':                    'Erro ao carregar o balanço.',
+  'ar.balance.retry':                    'Tentar novamente',
+
+  // Acordeões globais (S-cierre)
+  'ar.stats.global.regen.header':        'Taxa de regeneração global',
+  'ar.stats.global.regen.summary':       '{n} animais · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Aparições globais de animais',
+  'ar.stats.global.appearances.summary': '{n} animais observados · top: {top}',
+
+  // Validação de data no Histórico (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Formato inválido — usar YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default pt

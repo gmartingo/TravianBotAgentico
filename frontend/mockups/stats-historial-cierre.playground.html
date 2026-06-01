@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — Estadísticas + Historial (cierre) | Playground</title>
+<style>
+/* ── TOKENS (fuente de verdad: frontend/src/styles/tokens.css §19.16 DESIGN.md) ── */
+:root {
+  --bg:#F5F5F7; --surface:#fff; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93; --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012; --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#fff; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+}
+[data-theme="dark"] {
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ── RESET + BASE ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ── TOOLBAR ── */
+#toolbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; height: 48px;
+}
+#toolbar h1 { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.tb-btn {
+  height: 28px; padding: 0 12px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500; font-family: var(--font-sans);
+  cursor: pointer; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text);
+  transition: background var(--dur-fast);
+}
+.tb-btn:hover { background: var(--surface-2); }
+.tb-btn.primary {
+  background: var(--btn-primary-bg); color: var(--btn-primary-text);
+  border-color: var(--btn-primary-bg);
+}
+.tb-btn.primary:hover { background: var(--btn-primary-hover); }
+.tb-btn.active { background: var(--accent-subtle); color: var(--accent-text); border-color: var(--accent); }
+
+/* ── CANVAS ── */
+#canvas {
+  margin-top: 56px; padding: 24px;
+  position: relative; min-height: calc(100vh - 56px);
+}
+
+/* ── GRID (visual, solo en modo editar) ── */
+#canvas.edit-mode::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 8px 8px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ── BLOQUE ARRASTRABLE ── */
+.block {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow var(--dur-fast);
+  min-width: 240px;
+  user-select: none;
+}
+.block:hover { box-shadow: var(--shadow-md); }
+.block.dragging { box-shadow: var(--shadow-lg); opacity: .95; z-index: 500; }
+
+/* Grip de arrastre */
+.block-handle {
+  height: 28px; padding: 0 12px;
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  cursor: grab; font-size: 11px; font-weight: 600;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em;
+}
+.block-handle:active { cursor: grabbing; }
+.block-label { flex: 1; }
+.grip { color: var(--text-disabled); font-size: 10px; letter-spacing: 1px; }
+
+.block-body { padding: 16px; }
+
+/* Modo editar: bloques movibles */
+#canvas.edit-mode .block { cursor: default; }
+#canvas:not(.edit-mode) .block { position: static; margin-bottom: 16px; border-radius: var(--radius-md); }
+#canvas:not(.edit-mode) { display: flex; flex-direction: column; padding: 24px; }
+
+/* ── COMPONENTES INTERNOS DEL MOCKUP ── */
+
+/* --- TabBar --- */
+.tabbar {
+  display: flex; border-bottom: 1px solid var(--border);
+  gap: 0;
+}
+.tab-item {
+  padding: 10px 16px; font-size: 14px; font-weight: 500;
+  color: var(--text-secondary); cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--dur-fast);
+  white-space: nowrap;
+}
+.tab-item.active {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+.tab-item:hover:not(.active) { color: var(--text); }
+
+/* --- Badge / pill --- */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: var(--radius-full); padding: 2px 8px;
+  font-size: 11px; font-weight: 500;
+}
+.pill.neutral { background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+.pill.success { background: rgba(36,138,61,.1); color: var(--success); }
+.pill.danger  { background: rgba(201,53,44,.1); color: var(--danger); }
+.pill.warn    { background: var(--accent-subtle); color: var(--accent-text); }
+
+/* --- Sección título --- */
+.section-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 12px; gap: 8px;
+}
+.section-title {
+  font-size: 17px; font-weight: 600; color: var(--text);
+  letter-spacing: -.01em;
+}
+.section-caption {
+  font-size: 12px; color: var(--text-tertiary);
+}
+
+/* --- Balance block --- */
+.balance-grid {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  gap: 0; align-items: start;
+}
+.balance-col { padding: 12px 16px; }
+.balance-divider {
+  width: 1px; background: var(--border); align-self: stretch; margin: 8px 0;
+}
+.balance-col-title {
+  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px;
+}
+.balance-res-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 3px 0;
+}
+.balance-res-label { font-size: 12px; color: var(--text-secondary); }
+.balance-res-value {
+  font-family: var(--font-mono); font-size: 13px;
+  font-variant-numeric: tabular-nums; color: var(--text); font-weight: 500;
+}
+.balance-total-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 0 0 0; margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.balance-total-label { font-size: 12px; font-weight: 600; color: var(--text); }
+.balance-total-value {
+  font-family: var(--font-mono); font-size: 14px;
+  font-variant-numeric: tabular-nums; font-weight: 700;
+}
+.balance-total-value.lost { color: var(--danger); }
+.balance-total-value.stolen { color: var(--success); }
+
+.balance-neto {
+  margin-top: 12px; padding: 10px 16px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--border);
+}
+.balance-neto-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.balance-neto-value {
+  font-family: var(--font-mono); font-size: 22px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.balance-neto-value.positive { color: var(--success); }
+.balance-neto-value.negative { color: var(--danger); }
+
+.balance-note {
+  margin-top: 8px; font-size: 11px; color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 5px;
+}
+
+/* --- Filtro de fecha text --- */
+.date-filter-wrap {
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end;
+}
+.date-filter-field { display: flex; flex-direction: column; gap: 4px; }
+.date-filter-label {
+  font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.date-filter-input {
+  height: 32px; padding: 0 8px;
+  background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--text);
+  font-family: var(--font-mono); width: 172px; outline: none;
+  transition: border-color var(--dur-fast);
+}
+.date-filter-input:focus { border-color: var(--accent); }
+.date-filter-input.invalid { border-color: var(--danger) !important; }
+.date-filter-error {
+  font-size: 11px; color: var(--danger); margin-top: 2px;
+  display: none;
+}
+.date-filter-error.show { display: block; }
+.date-filter-actions { display: flex; gap: 6px; align-items: flex-end; }
+
+/* Botón Aplicar */
+.btn-apply {
+  height: 32px; padding: 0 14px; border-radius: var(--radius-sm);
+  background: var(--btn-primary-bg); color: var(--btn-primary-text);
+  border: none; font-size: 13px; font-weight: 500; cursor: pointer;
+  font-family: var(--font-sans); transition: background var(--dur-fast);
+}
+.btn-apply:hover:not(:disabled) { background: var(--btn-primary-hover); }
+.btn-apply:disabled {
+  background: var(--surface-2); color: var(--text-disabled);
+  border: 1px solid var(--border); cursor: not-allowed;
+}
+.btn-clear {
+  height: 32px; padding: 0 12px; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  border: 1px solid var(--border); font-size: 13px; cursor: pointer;
+  font-family: var(--font-sans); transition: background var(--dur-fast);
+}
+.btn-clear:hover { background: var(--surface-2); }
+
+/* --- Acordeón de sección global --- */
+.accordion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; cursor: pointer; gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.accordion-header:hover { color: var(--text); }
+.accordion-title {
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.accordion-summary {
+  font-size: 12px; color: var(--text-tertiary); flex: 1;
+  padding-left: 10px;
+}
+.accordion-chevron {
+  font-size: 10px; color: var(--text-disabled);
+  transition: transform var(--dur-base) var(--ease);
+  flex-shrink: 0;
+}
+.accordion-chevron.open { transform: rotate(180deg); }
+.accordion-body {
+  overflow: hidden; transition: max-height var(--dur-base) var(--ease), opacity var(--dur-base);
+}
+.accordion-body.closed { max-height: 0; opacity: 0; pointer-events: none; }
+.accordion-body.open { max-height: 600px; opacity: 1; padding-top: 12px; }
+
+/* --- Tabla densa --- */
+.dense-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.dense-table thead tr { border-bottom: 1px solid var(--border); }
+.dense-table th {
+  padding: 6px 10px; text-align: start;
+  font-size: 11px; color: var(--text-tertiary); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+}
+.dense-table th.num { text-align: end; }
+.dense-table td {
+  padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text);
+}
+.dense-table td.num {
+  text-align: end; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.dense-table td.secondary { color: var(--text-secondary); }
+.dense-table tbody tr:hover td { background: var(--surface-2); }
+
+/* --- Historial tabla (móvil scroll) --- */
+.history-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.history-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px;
+}
+.history-table thead tr { border-bottom: 1px solid var(--border); }
+.history-table th {
+  padding: 6px 12px; text-align: start;
+  font-size: 11px; color: var(--text-tertiary); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+  background: var(--surface);
+}
+.history-table th:first-child {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.history-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text);
+  white-space: nowrap;
+}
+.history-table td:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.history-table tbody tr:hover td { background: var(--surface-2); cursor: pointer; }
+.history-table .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.history-table .num { text-align: end; }
+.history-table .secondary { color: var(--text-secondary); }
+.history-table .actions { text-align: end; white-space: nowrap; }
+
+/* Botón de acción en tabla */
+.row-action {
+  width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); cursor: pointer; color: var(--text-tertiary);
+  font-size: 12px; transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.row-action:hover { color: var(--text); border-color: var(--border); }
+.row-action.del:hover { color: var(--danger); border-color: var(--danger); }
+
+/* Nota de tabla */
+.table-note { font-size: 12px; color: var(--text-secondary); padding-top: 6px; text-align: end; }
+
+/* Paginación */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding-top: 10px;
+}
+.page-btn {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 13px; color: var(--text-secondary); font-family: var(--font-sans);
+  padding: 4px 0;
+}
+.page-btn:disabled { color: var(--text-disabled); cursor: not-allowed; }
+.page-info { font-size: 12px; color: var(--text-tertiary); }
+
+/* --- Estado vacío genérico --- */
+.empty-state {
+  text-align: center; padding: 32px 16px;
+  color: var(--text-secondary);
+}
+.empty-state p { margin: 0 0 8px 0; font-size: 14px; }
+.empty-state .sub { font-size: 13px; color: var(--text-tertiary); margin-bottom: 16px; }
+.empty-state .cta {
+  color: var(--accent-text); background: transparent; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
+}
+
+/* --- Banner de estado (vacío/cargando con texto) --- */
+.status-banner {
+  padding: 12px 16px; background: var(--surface-2); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text-secondary); border: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* --- Separador entre bloques --- */
+hr.sep { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+/* --- Toast --- */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(8px);
+  background: var(--btn-primary-bg); color: var(--btn-primary-text);
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg); font-size: 13px; pointer-events: none;
+  opacity: 0; transition: opacity var(--dur-base), transform var(--dur-base);
+  white-space: nowrap; z-index: 2000;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* @keyframes pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
+/* ── RESPONSIVE HINT ── */
+.resp-hint {
+  display: none;
+  font-size: 11px; color: var(--text-tertiary);
+  padding: 4px 8px; background: var(--surface-2); border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+@media (max-width: 640px) { .resp-hint { display: inline; } }
+</style>
+</head>
+<body>
+
+<!-- ── TOOLBAR ── -->
+<div id="toolbar">
+  <h1>Mockup: Estadísticas + Historial — cierre&nbsp;<span class="resp-hint">móvil</span></h1>
+  <button class="tb-btn" id="btn-edit" onclick="toggleEdit()">✎ Editar</button>
+  <button class="tb-btn" id="btn-theme" onclick="toggleTheme()">🌙 Oscuro</button>
+  <button class="tb-btn" onclick="saveLayout()">💾 Guardar</button>
+  <button class="tb-btn" onclick="resetLayout()">↺ Restablecer</button>
+  <button class="tb-btn primary" onclick="exportLayout()">↓ Exportar</button>
+</div>
+
+<!-- ── CANVAS ── -->
+<div id="canvas">
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE A — TabBar (referencia de contexto)
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-A" style="top:0;left:0;width:700px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">A — TabBar (contexto)</span></div>
+    <div class="block-body" style="padding:0">
+      <div class="tabbar">
+        <div class="tab-item">Ingresar</div>
+        <div class="tab-item">Historial</div>
+        <div class="tab-item active">Estadísticas</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE B — Bloque Balance (encabeza Estadísticas)
+       Incluye: filtro de fecha texto + tabla perdido/robado + neto
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-B" style="top:60px;left:0;width:700px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">B — Balance Perdido vs Robado (encabeza Estadísticas, ANTES del panel global)</span></div>
+    <div class="block-body">
+
+      <!-- Cabecera de sección -->
+      <div class="section-header">
+        <span class="section-title">Balance de operaciones</span>
+        <span class="pill neutral" id="balance-meta">23 reportes · sin filtro de fecha</span>
+      </div>
+
+      <!-- Filtro de fecha (afecta SOLO a este bloque) -->
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px">
+        <div class="date-filter-wrap">
+          <!-- Desde -->
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="df-from">Desde</label>
+            <input
+              class="date-filter-input" id="df-from"
+              type="text" placeholder="YYYY-MM-DD HH:MM:SS"
+              oninput="validateDateFilter()"
+            />
+            <div class="date-filter-error" id="err-from">Formato inválido — usar YYYY-MM-DD HH:MM:SS</div>
+          </div>
+          <!-- Hasta -->
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="df-to">Hasta</label>
+            <input
+              class="date-filter-input" id="df-to"
+              type="text" placeholder="YYYY-MM-DD HH:MM:SS"
+              oninput="validateDateFilter()"
+            />
+            <div class="date-filter-error" id="err-to">Formato inválido — usar YYYY-MM-DD HH:MM:SS</div>
+          </div>
+          <!-- Acciones -->
+          <div class="date-filter-actions">
+            <button class="btn-apply" id="btn-apply-balance" onclick="applyBalanceFilter()">Aplicar</button>
+            <button class="btn-clear" id="btn-clear-balance" style="display:none" onclick="clearBalanceFilter()">Limpiar</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:6px">
+          Sin rango → muestra todos los reportes
+        </div>
+      </div>
+
+      <!-- Tabla Perdido | Robado -->
+      <div class="balance-grid">
+        <!-- PERDIDO -->
+        <div class="balance-col">
+          <div class="balance-col-title">Perdido</div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🌾 Trigo</span>
+            <span class="balance-res-value">1.240</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🪵 Madera</span>
+            <span class="balance-res-value">0</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🏺 Barro</span>
+            <span class="balance-res-value">0</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">⚒ Hierro</span>
+            <span class="balance-res-value">0</span>
+          </div>
+          <div class="balance-total-row">
+            <span class="balance-total-label">Total</span>
+            <span class="balance-total-value lost">1.240</span>
+          </div>
+        </div>
+
+        <!-- Divisor -->
+        <div class="balance-divider"></div>
+
+        <!-- ROBADO -->
+        <div class="balance-col">
+          <div class="balance-col-title">Robado</div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🌾 Trigo</span>
+            <span class="balance-res-value">4.832</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🪵 Madera</span>
+            <span class="balance-res-value">3.120</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">🏺 Barro</span>
+            <span class="balance-res-value">1.900</span>
+          </div>
+          <div class="balance-res-row">
+            <span class="balance-res-label">⚒ Hierro</span>
+            <span class="balance-res-value">560</span>
+          </div>
+          <div class="balance-total-row">
+            <span class="balance-total-label">Total</span>
+            <span class="balance-total-value stolen">10.412</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- NETO -->
+      <div class="balance-neto">
+        <span class="balance-neto-label">Neto (robado − perdido)</span>
+        <span class="balance-neto-value positive">+9.172</span>
+      </div>
+
+      <!-- Nota reports_without_tribe -->
+      <div class="balance-note" id="balance-note-tribe">
+        <span style="color:var(--accent-text)">ⓘ</span>
+        <span>3 reportes sin tribu detectada no computan en "Perdido" — las bajas pueden estar subestimadas.</span>
+      </div>
+
+      <!-- Estado vacío del bloque balance -->
+      <!--
+      <div class="empty-state" style="padding:20px 0">
+        <p>Sin datos en el rango seleccionado</p>
+        <p class="sub">Amplía el rango de fechas o limpia el filtro.</p>
+      </div>
+      -->
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE C — Regen Global (colapsado / expandible)
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-C" style="top:520px;left:0;width:700px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">C — Ritmo de regeneración global (acordeón, arranca CERRADO)</span></div>
+    <div class="block-body">
+      <!-- Acordeón Regen global -->
+      <div class="accordion-header" id="acc-regen-hdr" onclick="toggleAccordion('regen')" role="button" tabindex="0" aria-expanded="false" aria-controls="acc-regen-body">
+        <span class="accordion-title">Ritmo de regeneración global</span>
+        <span class="accordion-summary" id="acc-regen-summary">6 animales · 0,80 – 4,72 /h</span>
+        <span class="accordion-chevron" id="acc-regen-chv">▾</span>
+      </div>
+      <div class="accordion-body closed" id="acc-regen-body">
+        <table class="dense-table">
+          <thead>
+            <tr>
+              <th>Animal</th>
+              <th class="num">Ratio /h</th>
+              <th class="num">Confianza</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>🐀 Rata</td><td class="num" style="color:var(--text);font-weight:600">4,72</td><td class="num" style="color:var(--success)">≈ 8 intervalos</td></tr>
+            <tr><td>🕷 Araña</td><td class="num" style="color:var(--text);font-weight:600">1,20</td><td class="num" style="color:var(--text-tertiary)">≈ 3 intervalos</td></tr>
+            <tr><td>🐍 Serpiente</td><td class="num" style="color:var(--text);font-weight:600">2,35</td><td class="num" style="color:var(--success)">≈ 6 intervalos</td></tr>
+            <tr><td>🦎 Lagarto</td><td class="num" style="color:var(--text);font-weight:600">1,80</td><td class="num" style="color:var(--text-tertiary)">≈ 4 intervalos</td></tr>
+            <tr><td>🦇 Murciélago</td><td class="num" style="color:var(--text);font-weight:600">0,80</td><td class="num" style="color:var(--text-tertiary)">≈ 2 intervalos</td></tr>
+            <tr><td>🐻 Oso</td><td class="num" style="color:var(--text);font-weight:600">3,10</td><td class="num" style="color:var(--success)">≈ 7 intervalos</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE D — Apariciones Globales (colapsado / expandible)
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-D" style="top:640px;left:0;width:700px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">D — Apariciones globales (acordeón, arranca CERRADO)</span></div>
+    <div class="block-body">
+      <div class="accordion-header" id="acc-app-hdr" onclick="toggleAccordion('app')" role="button" tabindex="0" aria-expanded="false" aria-controls="acc-app-body">
+        <span class="accordion-title">Apariciones globales de animales</span>
+        <span class="accordion-summary" id="acc-app-summary">6 animales observados · top: Rata, Araña, Oso</span>
+        <span class="accordion-chevron" id="acc-app-chv">▾</span>
+      </div>
+      <div class="accordion-body closed" id="acc-app-body">
+        <table class="dense-table">
+          <thead>
+            <tr>
+              <th>Animal</th>
+              <th class="num">Apariciones</th>
+              <th class="num">Prom.</th>
+              <th class="num">Máx.</th>
+              <th class="num">Mín.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>🐀 Rata</td><td class="num">48</td><td class="num">9,3</td><td class="num">14</td><td class="num">7</td></tr>
+            <tr><td>🕷 Araña</td><td class="num">31</td><td class="num">4,1</td><td class="num">8</td><td class="num">2</td></tr>
+            <tr><td>🐻 Oso</td><td class="num">27</td><td class="num">2,8</td><td class="num">5</td><td class="num">1</td></tr>
+            <tr><td>🦇 Murciélago</td><td class="num">19</td><td class="num">1,9</td><td class="num">4</td><td class="num">0</td></tr>
+            <tr><td>🐍 Serpiente</td><td class="num">14</td><td class="num">1,4</td><td class="num">3</td><td class="num">0</td></tr>
+            <tr><td>🦎 Lagarto</td><td class="num">8</td><td class="num">0,8</td><td class="num">2</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE E — OasisList (sin cambios de diseño, referencia)
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-E" style="top:760px;left:0;width:700px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">E — OasisList (sin cambios en este cierre, referencia contextual)</span></div>
+    <div class="block-body">
+      <div class="section-header">
+        <span class="section-title" style="font-size:14px">Estadísticas de oasis</span>
+        <span class="section-caption">3 oasis con reportes</span>
+      </div>
+      <div class="status-banner">
+        <span style="color:var(--text-tertiary)">📋</span>
+        OasisList no cambia en este cierre — ver spec anterior stats-oasis-nav
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE F — Historial (tabla sin tarjetas móvil)
+       Muestra la tabla con scroll horizontal + columna sticky
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-F" style="top:0;left:730px;width:680px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">F — Historial (pestaña "Historial") — tabla única, sin tarjetas en móvil</span></div>
+    <div class="block-body">
+      <!-- Filtros (acordeón en móvil, inline en desktop — sin cambios de diseño) -->
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px">
+        <div style="font-size:13px;color:var(--text-secondary);font-weight:500;margin-bottom:8px">
+          Filtros de Historial (sin cambios de diseño)
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end">
+          <!-- Coords (existentes, sin cambios) -->
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="hf-x">x</label>
+            <input class="date-filter-input" id="hf-x" type="text" placeholder="0" style="width:72px"/>
+          </div>
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="hf-y">y</label>
+            <input class="date-filter-input" id="hf-y" type="text" placeholder="0" style="width:72px"/>
+          </div>
+          <!-- FECHAS — cambio: tipo texto, formato YYYY-MM-DD HH:MM:SS -->
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="hf-from">Desde</label>
+            <input
+              class="date-filter-input" id="hf-from"
+              type="text" placeholder="YYYY-MM-DD HH:MM:SS"
+              oninput="validateHistoryDate('hf-from','hf-err-from','hf-apply')"
+            />
+            <div class="date-filter-error" id="hf-err-from">Formato inválido</div>
+          </div>
+          <div class="date-filter-field">
+            <label class="date-filter-label" for="hf-to">Hasta</label>
+            <input
+              class="date-filter-input" id="hf-to"
+              type="text" placeholder="YYYY-MM-DD HH:MM:SS"
+              oninput="validateHistoryDate('hf-to','hf-err-to','hf-apply')"
+            />
+            <div class="date-filter-error" id="hf-err-to">Formato inválido</div>
+          </div>
+          <div class="date-filter-actions">
+            <button class="btn-apply" id="hf-apply">Aplicar</button>
+            <button class="btn-clear">Limpiar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caption -->
+      <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:6px">12 reportes</div>
+
+      <!-- TABLA — única representación (desktop + móvil, scroll horizontal en móvil) -->
+      <div class="history-table-wrap">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Fecha</th><!-- sticky -->
+              <th>Oasis</th>
+              <th>Desde <span style="font-weight:400;text-transform:none;letter-spacing:0">(P2, oculto &lt;md)</span></th>
+              <th class="num">Botín</th>
+              <th class="num">Bajas <span style="font-weight:400;text-transform:none;letter-spacing:0">(P2, oculto &lt;md)</span></th>
+              <th class="num">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>31 may 26 13:39</td>
+              <td class="mono">(−70|73)</td>
+              <td class="secondary">Mi Aldea</td>
+              <td class="num mono">2.450</td>
+              <td class="num mono secondary">0</td>
+              <td class="actions"><button class="row-action del" title="Borrar">🗑</button><button class="row-action" title="Ver">▶</button></td>
+            </tr>
+            <tr>
+              <td>30 may 26 09:14</td>
+              <td class="mono">(−45|12)</td>
+              <td class="secondary">Mi Aldea</td>
+              <td class="num mono">1.830</td>
+              <td class="num mono" style="color:var(--danger)">3</td>
+              <td class="actions"><button class="row-action del" title="Borrar">🗑</button><button class="row-action" title="Ver">▶</button></td>
+            </tr>
+            <tr>
+              <td>28 may 26 16:05</td>
+              <td class="mono">(12|−8)</td>
+              <td class="secondary">Mi Aldea</td>
+              <td class="num mono">620</td>
+              <td class="num mono secondary">0</td>
+              <td class="actions"><button class="row-action del" title="Borrar">🗑</button><button class="row-action" title="Ver">▶</button></td>
+            </tr>
+            <tr>
+              <td>27 may 26 20:30</td>
+              <td class="mono">(−70|73)</td>
+              <td class="secondary">Mi Aldea</td>
+              <td class="num mono">1.900</td>
+              <td class="num mono secondary">0</td>
+              <td class="actions"><button class="row-action del" title="Borrar">🗑</button><button class="row-action" title="Ver">▶</button></td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6" class="table-note">Botín acumulado del rango: 6.800</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <!-- Nota: en móvil NO hay tarjetas — solo la tabla con scroll horizontal
+           y primera columna (Fecha) sticky izquierda -->
+      <div style="margin-top:8px;padding:8px 10px;background:var(--accent-subtle);border-radius:var(--radius-sm);font-size:12px;color:var(--accent-text)">
+        ⚠ En móvil: se elimina la vista de tarjetas (<code style="font-size:11px">div.md:hidden</code>). La tabla queda con scroll horizontal y columna Fecha sticky. Columnas P2 (Desde, Bajas) se ocultan &lt;md como antes.
+      </div>
+      <!-- Paginación -->
+      <div class="pagination">
+        <button class="page-btn" disabled>← Anterior</button>
+        <span class="page-info">1–4 de 12</span>
+        <button class="page-btn">Siguiente →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE G — Estado vacío del bloque Balance
+       (alternativo al bloque B cuando no hay datos en rango)
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-G" style="top:880px;left:730px;width:500px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">G — Balance: estado vacío (sin datos en el rango)</span></div>
+    <div class="block-body">
+      <div class="empty-state" style="padding:20px 0">
+        <p style="font-weight:500;color:var(--text)">Sin datos en el rango seleccionado</p>
+        <p class="sub">No hay reportes en ese periodo. Amplía el rango o limpia el filtro.</p>
+        <button class="cta" onclick="">Limpiar filtro →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       BLOQUE H — Estados de validación del filtro de fecha
+       ════════════════════════════════════════════════════════ -->
+  <div class="block" id="blk-H" style="top:1010px;left:730px;width:500px">
+    <div class="block-handle"><span class="grip">⣿⣿</span><span class="block-label">H — Estados del filtro de fecha (referencia visual)</span></div>
+    <div class="block-body" style="display:flex;flex-direction:column;gap:12px">
+      <!-- Estado: válido -->
+      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Estado: válido</div>
+      <div class="date-filter-field">
+        <label class="date-filter-label" for="ex-valid">Desde</label>
+        <input class="date-filter-input" id="ex-valid" type="text" value="2026-05-01 00:00:00" style="border-color:var(--border-strong)"/>
+      </div>
+
+      <hr class="sep"/>
+
+      <!-- Estado: inválido (borde rojo + error) -->
+      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Estado: inválido</div>
+      <div class="date-filter-field">
+        <label class="date-filter-label" for="ex-invalid">Desde</label>
+        <input class="date-filter-input invalid" id="ex-invalid" type="text" value="01/05/2026"/>
+        <div class="date-filter-error show">Formato inválido — usar YYYY-MM-DD HH:MM:SS</div>
+      </div>
+      <div style="margin-top:4px">
+        <button class="btn-apply" disabled>Aplicar</button>
+        <span style="font-size:11px;color:var(--text-tertiary);margin-left:8px">Botón deshabilitado mientras haya error</span>
+      </div>
+
+      <hr class="sep"/>
+
+      <!-- Estado: vacío (sin filtro) -->
+      <div style="font-size:12px;color:var(--text-tertiary);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Estado: vacío (sin rango = todo)</div>
+      <div class="date-filter-field">
+        <label class="date-filter-label" for="ex-empty">Desde</label>
+        <input class="date-filter-input" id="ex-empty" type="text" placeholder="YYYY-MM-DD HH:MM:SS"/>
+      </div>
+      <div style="font-size:11px;color:var(--text-tertiary)">Sin valor → el filtro no aplica (muestra todo)</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────
+   DRAG & DROP con imán de 8px
+   ────────────────────────────────────────────────────────────────── */
+const GRID = 8
+let editMode = false
+let dragging = null, ox = 0, oy = 0
+
+function snapToGrid(v) { return Math.round(v / GRID) * GRID }
+
+function enableDrag(block) {
+  const handle = block.querySelector('.block-handle')
+  handle.addEventListener('mousedown', (e) => {
+    if (!editMode) return
+    dragging = block
+    const r = block.getBoundingClientRect()
+    ox = e.clientX - r.left
+    oy = e.clientY - r.top
+    block.classList.add('dragging')
+    e.preventDefault()
+  })
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return
+  const canvas = document.getElementById('canvas')
+  const cr = canvas.getBoundingClientRect()
+  let nx = e.clientX - cr.left - ox
+  let ny = e.clientY - cr.top - oy
+  nx = snapToGrid(Math.max(0, nx))
+  ny = snapToGrid(Math.max(0, ny))
+  dragging.style.left = nx + 'px'
+  dragging.style.top  = ny + 'px'
+})
+
+document.addEventListener('mouseup', () => {
+  if (dragging) {
+    dragging.classList.remove('dragging')
+    dragging = null
+  }
+})
+
+document.querySelectorAll('.block').forEach(enableDrag)
+
+/* ──────────────────────────────────────────────────────────────────
+   TOGGLE EDIT MODE
+   ────────────────────────────────────────────────────────────────── */
+function toggleEdit() {
+  editMode = !editMode
+  const canvas = document.getElementById('canvas')
+  const btn    = document.getElementById('btn-edit')
+  if (editMode) {
+    canvas.classList.add('edit-mode')
+    btn.classList.add('active')
+    btn.textContent = '✎ Editando'
+    // asegurar posición absoluta para todos los bloques
+    document.querySelectorAll('.block').forEach((b) => {
+      if (!b.style.position || b.style.position !== 'absolute') {
+        b.style.position = 'absolute'
+      }
+    })
+  } else {
+    canvas.classList.remove('edit-mode')
+    btn.classList.remove('active')
+    btn.textContent = '✎ Editar'
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   TOGGLE TEMA
+   ────────────────────────────────────────────────────────────────── */
+function toggleTheme() {
+  const html = document.documentElement
+  const btn  = document.getElementById('btn-theme')
+  if (html.dataset.theme === 'dark') {
+    html.dataset.theme = 'light'
+    btn.textContent = '🌙 Oscuro'
+  } else {
+    html.dataset.theme = 'dark'
+    btn.textContent = '☀ Claro'
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   GUARDAR / RESTAURAR / EXPORTAR
+   ────────────────────────────────────────────────────────────────── */
+const STORAGE_KEY = 'playground_layout_stats_historial_cierre'
+
+const DEFAULT_LAYOUT = {}
+
+function getLayout() {
+  const layout = {}
+  document.querySelectorAll('.block').forEach((b) => {
+    layout[b.id] = { left: b.style.left, top: b.style.top, width: b.style.width }
+  })
+  return layout
+}
+
+function applyLayout(layout) {
+  document.querySelectorAll('.block').forEach((b) => {
+    if (layout[b.id]) {
+      b.style.left  = layout[b.id].left  || b.style.left
+      b.style.top   = layout[b.id].top   || b.style.top
+      b.style.width = layout[b.id].width || b.style.width
+    }
+  })
+}
+
+function saveLayout() {
+  const layout = getLayout()
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(layout))
+  showToast('Layout guardado en localStorage')
+}
+
+function resetLayout() {
+  localStorage.removeItem(STORAGE_KEY)
+  location.reload()
+}
+
+function exportLayout() {
+  const layout = getLayout()
+  const json   = JSON.stringify(layout, null, 2)
+  const blob   = new Blob([json], { type: 'application/json' })
+  const a      = document.createElement('a')
+  a.href       = URL.createObjectURL(blob)
+  a.download   = 'layout-stats-historial-cierre.json'
+  a.click()
+  showToast('Layout exportado como JSON')
+}
+
+// Restaurar desde localStorage al cargar
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  if (saved) {
+    try { applyLayout(JSON.parse(saved)) } catch {}
+  }
+})
+
+/* ──────────────────────────────────────────────────────────────────
+   TOAST
+   ────────────────────────────────────────────────────────────────── */
+let toastTimer = null
+function showToast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = msg
+  t.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800)
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   ACORDEÓN (Regen global + Apariciones globales)
+   ────────────────────────────────────────────────────────────────── */
+const accordions = {
+  regen: { hdr: 'acc-regen-hdr', body: 'acc-regen-body', chv: 'acc-regen-chv', open: false },
+  app:   { hdr: 'acc-app-hdr',   body: 'acc-app-body',   chv: 'acc-app-chv',   open: false },
+}
+
+function toggleAccordion(key) {
+  const acc = accordions[key]
+  acc.open = !acc.open
+  const body = document.getElementById(acc.body)
+  const chv  = document.getElementById(acc.chv)
+  const hdr  = document.getElementById(acc.hdr)
+  body.className = 'accordion-body ' + (acc.open ? 'open' : 'closed')
+  chv.className  = 'accordion-chevron ' + (acc.open ? 'open' : '')
+  hdr.setAttribute('aria-expanded', acc.open ? 'true' : 'false')
+}
+
+// Soporte teclado en acordeón
+document.querySelectorAll('.accordion-header').forEach((el) => {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      el.click()
+    }
+  })
+})
+
+/* ──────────────────────────────────────────────────────────────────
+   VALIDACIÓN FILTRO DE FECHA (bloque Balance)
+   Formato: YYYY-MM-DD HH:MM:SS
+   ────────────────────────────────────────────────────────────────── */
+const DATE_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
+
+function isValidDate(val) {
+  if (!val || val.trim() === '') return true  // vacío = válido (sin filtro)
+  return DATE_RE.test(val.trim())
+}
+
+function validateDateFilter() {
+  const fromVal = document.getElementById('df-from').value
+  const toVal   = document.getElementById('df-to').value
+  const fromEl  = document.getElementById('df-from')
+  const toEl    = document.getElementById('df-to')
+  const errFrom = document.getElementById('err-from')
+  const errTo   = document.getElementById('err-to')
+  const applyBtn = document.getElementById('btn-apply-balance')
+
+  const fromOk = isValidDate(fromVal)
+  const toOk   = isValidDate(toVal)
+
+  fromEl.classList.toggle('invalid', !fromOk)
+  toEl.classList.toggle('invalid', !toOk)
+  errFrom.classList.toggle('show', !fromOk)
+  errTo.classList.toggle('show', !toOk)
+
+  applyBtn.disabled = !(fromOk && toOk)
+}
+
+function validateHistoryDate(inputId, errId, applyId) {
+  const val    = document.getElementById(inputId).value
+  const inputEl = document.getElementById(inputId)
+  const errEl  = document.getElementById(errId)
+  const applyBtn = document.getElementById(applyId)
+  const ok = isValidDate(val)
+  inputEl.classList.toggle('invalid', !ok)
+  errEl.classList.toggle('show', !ok)
+  // deshabilitar Aplicar si hay algún error en los campos de fecha del historial
+  const fromOk = isValidDate(document.getElementById('hf-from').value)
+  const toOk   = isValidDate(document.getElementById('hf-to').value)
+  applyBtn.disabled = !(fromOk && toOk)
+}
+
+function applyBalanceFilter() {
+  const from = document.getElementById('df-from').value.trim()
+  const to   = document.getElementById('df-to').value.trim()
+  if (from || to) {
+    document.getElementById('btn-clear-balance').style.display = 'inline-block'
+    const meta = document.getElementById('balance-meta')
+    meta.textContent = `23 reportes · ${from || '…'} → ${to || '…'}`
+    showToast('Filtro de balance aplicado')
+  }
+}
+
+function clearBalanceFilter() {
+  document.getElementById('df-from').value = ''
+  document.getElementById('df-to').value   = ''
+  document.getElementById('err-from').classList.remove('show')
+  document.getElementById('err-to').classList.remove('show')
+  document.getElementById('df-from').classList.remove('invalid')
+  document.getElementById('df-to').classList.remove('invalid')
+  document.getElementById('btn-apply-balance').disabled = false
+  document.getElementById('btn-clear-balance').style.display = 'none'
+  document.getElementById('balance-meta').textContent = '23 reportes · sin filtro de fecha'
+  showToast('Filtro de balance limpiado')
+}
+</script>
+</body>
+</html>

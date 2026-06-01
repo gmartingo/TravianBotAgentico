@@ -512,6 +512,53 @@ const el = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Παγκόσμιες στατιστικές — όλες οι όασεις',
+  'ar.stats.global.col.appearances':   'Εμφανίσεις',
+  'ar.stats.global.appearances.title': 'Παρατηρηθέντα ζώα (παγκόσμια)',
+  'ar.stats.global.loading':           'Φόρτωση παγκόσμιων στατιστικών…',
+  'ar.stats.global.error':             'Αδυναμία φόρτωσης παγκόσμιων στατιστικών.',
+  'ar.stats.global.retry':             'Επανάληψη',
+  'ar.stats.global.empty.title':       'Δεν υπάρχουν δεδομένα ακόμη.',
+  'ar.stats.global.empty.sub':         'Προσθέστε αναφορές επίθεσης για να δείτε παγκόσμιες στατιστικές.',
+  'ar.stats.global.empty.cta':         'Μετάβαση στην Εισαγωγή →',
+
+  // Ισολογισμός επιχειρήσεων (S-cierre)
+  'ar.balance.title':                    'Ισολογισμός επιχειρήσεων',
+  'ar.balance.pill.noFilter':            '{n} αναφορές · χωρίς φίλτρο ημερομηνίας',
+  'ar.balance.pill.filtered':            '{n} αναφορές · {from} — {to}',
+  'ar.balance.filter.from':              'Από',
+  'ar.balance.filter.to':                'Έως',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Χωρίς εύρος → εμφανίζει όλες τις αναφορές',
+  'ar.balance.filter.invalidDate':       'Μη έγκυρη μορφή — χρησιμοποιήστε YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Εφαρμογή',
+  'ar.balance.filter.clear':             'Εκκαθάριση',
+  'ar.balance.col.lost':                 'Χαμένα',
+  'ar.balance.col.stolen':               'Κλεμμένα',
+  'ar.balance.row.wood':                 'Ξύλο',
+  'ar.balance.row.clay':                 'Άργιλος',
+  'ar.balance.row.iron':                 'Σίδερο',
+  'ar.balance.row.crop':                 'Σιτάρι',
+  'ar.balance.row.total':                'Σύνολο',
+  'ar.balance.net.label':                'Καθαρό (κλεμμένα − χαμένα)',
+  'ar.balance.tribeless.note':           '{n} αναφορές χωρίς αναγνωρισμένη φυλή δεν υπολογίζονται στο «Χαμένα» — οι απώλειες ενδέχεται να υποεκτιμηθούν.',
+  'ar.balance.empty.title':              'Δεν υπάρχουν δεδομένα στο επιλεγμένο εύρος',
+  'ar.balance.empty.sub':                'Δεν υπάρχουν αναφορές σε αυτή την περίοδο. Διευρύνετε το εύρος ή εκκαθαρίστε το φίλτρο.',
+  'ar.balance.empty.cta':                'Εκκαθάριση φίλτρου →',
+  'ar.balance.error':                    'Σφάλμα κατά τη φόρτωση του ισολογισμού.',
+  'ar.balance.retry':                    'Επανάληψη',
+
+  // Παγκόσμια ακορντεόν (S-cierre)
+  'ar.stats.global.regen.header':        'Παγκόσμιος ρυθμός αναγέννησης',
+  'ar.stats.global.regen.summary':       '{n} ζώα · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Παγκόσμιες εμφανίσεις ζώων',
+  'ar.stats.global.appearances.summary': '{n} ζώα παρατηρήθηκαν · top: {top}',
+
+  // Επικύρωση ημερομηνίας στο Ιστορικό (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Μη έγκυρη μορφή — χρησιμοποιήστε YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default el

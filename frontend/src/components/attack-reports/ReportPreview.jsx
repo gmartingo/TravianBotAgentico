@@ -52,9 +52,11 @@ function mapDefenderTroops(animalsRaw) {
     ordinal: a.animal_ordinal ?? a.ordinal ?? null,
     name: a.animal_name ?? a.name ?? `A${a.animal_ordinal ?? a.ordinal}`,
     icon_url: a.icon_url ?? null,
-    quantity_initial: a.present ?? 0,
-    quantity_lost: a.killed ?? 0,
-    quantity_survived: a.survived ?? (a.present ?? 0) - (a.killed ?? 0),
+    // §17.5 / §17.10: si present/killed/survived es null (reporte perdido),
+    // preservar null para que TravianReport muestre '?' en lugar de 0.
+    quantity_initial:  a.present  != null ? a.present  : null,
+    quantity_lost:     a.killed   != null ? a.killed   : null,
+    quantity_survived: a.survived != null ? a.survived : null,
   }))
 }
 
@@ -152,6 +154,7 @@ export function ReportPreview({ data, lang, onViewExisting, t }) {
   // TravianReport espera attackerWins. En ataques a animales, el atacante casi
   // siempre gana. El reporte no lo indica explícitamente — lo inferimos por si
   // quedan supervivientes atacantes (si hay al menos 1, el atacante ganó).
+  // Con quantity_survived=null (reporte perdido) se considera como 0.
   const anyAttackerSurvived = attackerTroops.some(t => (t.quantity_survived ?? 0) > 0)
   const attackerWins = totalLost === 0 || anyAttackerSurvived
 

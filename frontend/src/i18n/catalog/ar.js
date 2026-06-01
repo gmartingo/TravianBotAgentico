@@ -513,6 +513,53 @@ const ar = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'الإحصائيات العالمية — جميع الواحات',
+  'ar.stats.global.col.appearances':   'الظهورات',
+  'ar.stats.global.appearances.title': 'الحيوانات المرصودة (عالمياً)',
+  'ar.stats.global.loading':           'جارٍ تحميل الإحصائيات العالمية…',
+  'ar.stats.global.error':             'تعذّر تحميل الإحصائيات العالمية.',
+  'ar.stats.global.retry':             'إعادة المحاولة',
+  'ar.stats.global.empty.title':       'لا توجد بيانات بعد.',
+  'ar.stats.global.empty.sub':         'أضف تقارير هجمات لعرض الإحصائيات العالمية.',
+  'ar.stats.global.empty.cta':         'انتقل إلى الإدخال →',
+
+  // ميزان العمليات (S-cierre)
+  'ar.balance.title':                    'ميزان العمليات',
+  'ar.balance.pill.noFilter':            '{n} تقرير · بدون فلتر تاريخ',
+  'ar.balance.pill.filtered':            '{n} تقرير · {from} — {to}',
+  'ar.balance.filter.from':              'من',
+  'ar.balance.filter.to':                'إلى',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'بدون نطاق → يعرض جميع التقارير',
+  'ar.balance.filter.invalidDate':       'تنسيق غير صالح — استخدم YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'تطبيق',
+  'ar.balance.filter.clear':             'مسح',
+  'ar.balance.col.lost':                 'مفقود',
+  'ar.balance.col.stolen':               'مسروق',
+  'ar.balance.row.wood':                 'خشب',
+  'ar.balance.row.clay':                 'طين',
+  'ar.balance.row.iron':                 'حديد',
+  'ar.balance.row.crop':                 'قمح',
+  'ar.balance.row.total':                'المجموع',
+  'ar.balance.net.label':                'الصافي (مسروق − مفقود)',
+  'ar.balance.tribeless.note':           '{n} تقرير بدون قبيلة محددة لا يُحتسب في «مفقود» — قد تكون الخسائر مُقدَّرة بأقل من الفعلي.',
+  'ar.balance.empty.title':              'لا توجد بيانات في النطاق المحدد',
+  'ar.balance.empty.sub':                'لا توجد تقارير في هذه الفترة. وسّع النطاق أو امسح الفلتر.',
+  'ar.balance.empty.cta':                'مسح الفلتر →',
+  'ar.balance.error':                    'خطأ أثناء تحميل الميزان.',
+  'ar.balance.retry':                    'إعادة المحاولة',
+
+  // الأكورديونات العالمية (S-cierre)
+  'ar.stats.global.regen.header':        'معدل التجديد العالمي',
+  'ar.stats.global.regen.summary':       '{n} حيوان · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'ظهورات الحيوانات العالمية',
+  'ar.stats.global.appearances.summary': '{n} حيوان مرصود · الأعلى: {top}',
+
+  // التحقق من التاريخ في السجل (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'تنسيق غير صالح — استخدم YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default ar

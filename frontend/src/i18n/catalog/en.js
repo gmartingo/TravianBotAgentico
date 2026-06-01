@@ -566,6 +566,17 @@ const en = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Global statistics — all oases',
+  'ar.stats.global.col.appearances':   'Appearances',
+  'ar.stats.global.appearances.title': 'Observed animals (global)',
+  'ar.stats.global.loading':           'Loading global statistics…',
+  'ar.stats.global.error':             'Could not load global statistics.',
+  'ar.stats.global.retry':             'Retry',
+  'ar.stats.global.empty.title':       'No data yet.',
+  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
+  'ar.stats.global.empty.cta':         'Go to Ingest →',
+
   // ── Calculadora de combate (S11) ── restaurado desde feature/optimizador-balance-multiraid
   // ── Combat calculator (S11) ───────────────────────────────────────────────────
   'calc.title':                   'Combat Calculator',
@@ -830,6 +841,42 @@ const en = {
   'calc.optimizer.multiRaid.raidsPossible': 'You can do this {n} times',
   'calc.optimizer.multiRaid.remaining':     'Remaining troops',
   'calc.optimizer.multiRaid.aggregate':     'Aggregated total ({n} raids)',
+
+  // ── Balance section (S-cierre) ────────────────────────────────────────────
+  'ar.balance.title':                    'Operations balance',
+  'ar.balance.pill.noFilter':            '{n} reports · no date filter',
+  'ar.balance.pill.filtered':            '{n} reports · {from} — {to}',
+  'ar.balance.filter.from':              'From',
+  'ar.balance.filter.to':                'To',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'No range → shows all reports',
+  'ar.balance.filter.invalidDate':       'Invalid format — use YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Apply',
+  'ar.balance.filter.clear':             'Clear',
+  'ar.balance.col.lost':                 'Lost',
+  'ar.balance.col.stolen':               'Stolen',
+  'ar.balance.row.wood':                 'Wood',
+  'ar.balance.row.clay':                 'Clay',
+  'ar.balance.row.iron':                 'Iron',
+  'ar.balance.row.crop':                 'Crop',
+  'ar.balance.row.total':                'Total',
+  'ar.balance.net.label':                'Net (stolen − lost)',
+  'ar.balance.tribeless.note':           '{n} reports without detected tribe do not count in "Lost" — losses may be underestimated.',
+  'ar.balance.empty.title':              'No data in the selected range',
+  'ar.balance.empty.sub':                'No reports in that period. Widen the range or clear the filter.',
+  'ar.balance.empty.cta':                'Clear filter →',
+  'ar.balance.error':                    'Error loading balance.',
+  'ar.balance.retry':                    'Retry',
+
+  // Global accordions (S-cierre)
+  'ar.stats.global.regen.header':        'Global regeneration rate',
+  'ar.stats.global.regen.summary':       '{n} animals · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Global animal appearances',
+  'ar.stats.global.appearances.summary': '{n} animals observed · top: {top}',
+
+  // Date validation in History (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Invalid format — use YYYY-MM-DD HH:MM:SS',
 }
 
 export default en

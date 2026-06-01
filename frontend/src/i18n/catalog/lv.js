@@ -512,6 +512,53 @@ const lv = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Globālā statistika — visas oāzes',
+  'ar.stats.global.col.appearances':   'Parādīšanās',
+  'ar.stats.global.appearances.title': 'Novērotie dzīvnieki (globāli)',
+  'ar.stats.global.loading':           'Ielādē globālo statistiku…',
+  'ar.stats.global.error':             'Globālo statistiku neizdevās ielādēt.',
+  'ar.stats.global.retry':             'Mēģināt vēlreiz',
+  'ar.stats.global.empty.title':       'Datu vēl nav.',
+  'ar.stats.global.empty.sub':         'Pievienojiet uzbrukumu ziņojumus, lai redzētu globālo statistiku.',
+  'ar.stats.global.empty.cta':         'Uz Ievadīt →',
+
+  // Operāciju bilance (S-cierre)
+  'ar.balance.title':                    'Operāciju bilance',
+  'ar.balance.pill.noFilter':            '{n} ziņojumi · bez datuma filtra',
+  'ar.balance.pill.filtered':            '{n} ziņojumi · {from} — {to}',
+  'ar.balance.filter.from':              'No',
+  'ar.balance.filter.to':                'Līdz',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Bez diapazona → rāda visus ziņojumus',
+  'ar.balance.filter.invalidDate':       'Nepareizs formāts — izmantojiet YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Lietot',
+  'ar.balance.filter.clear':             'Notīrīt',
+  'ar.balance.col.lost':                 'Zaudēts',
+  'ar.balance.col.stolen':               'Nozagts',
+  'ar.balance.row.wood':                 'Koks',
+  'ar.balance.row.clay':                 'Māls',
+  'ar.balance.row.iron':                 'Dzelzs',
+  'ar.balance.row.crop':                 'Grauds',
+  'ar.balance.row.total':                'Kopā',
+  'ar.balance.net.label':                'Neto (nozagts − zaudēts)',
+  'ar.balance.tribeless.note':           '{n} ziņojumi bez atpazītas cilts netiek ieskaitīti "Zaudēts" — zaudējumi var būt novērtēti par zemu.',
+  'ar.balance.empty.title':              'Nav datu izvēlētajā diapazonā',
+  'ar.balance.empty.sub':                'Šajā periodā nav ziņojumu. Paplašiniet diapazonu vai notīriet filtru.',
+  'ar.balance.empty.cta':                'Notīrīt filtru →',
+  'ar.balance.error':                    'Kļūda ielādējot bilanci.',
+  'ar.balance.retry':                    'Mēģināt vēlreiz',
+
+  // Globālie akordeoni (S-cierre)
+  'ar.stats.global.regen.header':        'Globālais reģenerācijas ātrums',
+  'ar.stats.global.regen.summary':       '{n} dzīvnieki · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globālā dzīvnieku parādīšanās',
+  'ar.stats.global.appearances.summary': '{n} dzīvnieki novēroti · top: {top}',
+
+  // Datuma validācija Vēsturē (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Nepareizs formāts — izmantojiet YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default lv

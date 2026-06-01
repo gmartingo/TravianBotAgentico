@@ -512,6 +512,53 @@ const da = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Globale statistikker — alle oaser',
+  'ar.stats.global.col.appearances':   'Forekomster',
+  'ar.stats.global.appearances.title': 'Observerede dyr (globalt)',
+  'ar.stats.global.loading':           'Indlæser globale statistikker…',
+  'ar.stats.global.error':             'Kunne ikke indlæse globale statistikker.',
+  'ar.stats.global.retry':             'Prøv igen',
+  'ar.stats.global.empty.title':       'Ingen data endnu.',
+  'ar.stats.global.empty.sub':         'Tilføj angrebsrapporter for at se globale statistikker.',
+  'ar.stats.global.empty.cta':         'Gå til Indsæt →',
+
+  // Operationsbalance (S-cierre)
+  'ar.balance.title':                    'Operationsbalance',
+  'ar.balance.pill.noFilter':            '{n} rapporter · ingen datofilter',
+  'ar.balance.pill.filtered':            '{n} rapporter · {from} — {to}',
+  'ar.balance.filter.from':              'Fra',
+  'ar.balance.filter.to':                'Til',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Intet interval → viser alle rapporter',
+  'ar.balance.filter.invalidDate':       'Ugyldigt format — brug YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Anvend',
+  'ar.balance.filter.clear':             'Ryd',
+  'ar.balance.col.lost':                 'Tabt',
+  'ar.balance.col.stolen':               'Stjålet',
+  'ar.balance.row.wood':                 'Træ',
+  'ar.balance.row.clay':                 'Ler',
+  'ar.balance.row.iron':                 'Jern',
+  'ar.balance.row.crop':                 'Korn',
+  'ar.balance.row.total':                'Total',
+  'ar.balance.net.label':                'Netto (stjålet − tabt)',
+  'ar.balance.tribeless.note':           '{n} rapporter uden registreret stamme tæller ikke med i "Tabt" — tab kan være undervurderet.',
+  'ar.balance.empty.title':              'Ingen data i det valgte interval',
+  'ar.balance.empty.sub':                'Ingen rapporter i den periode. Udvid intervallet eller ryd filtret.',
+  'ar.balance.empty.cta':                'Ryd filter →',
+  'ar.balance.error':                    'Fejl ved indlæsning af balance.',
+  'ar.balance.retry':                    'Prøv igen',
+
+  // Globale akkordeonser (S-cierre)
+  'ar.stats.global.regen.header':        'Global regenerationshastighed',
+  'ar.stats.global.regen.summary':       '{n} dyr · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globale dyreforekomster',
+  'ar.stats.global.appearances.summary': '{n} dyr observeret · top: {top}',
+
+  // Datovalidering i Historik (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Ugyldigt format — brug YYYY-MM-DD HH:MM:SS',
+
 }
 
 export default da

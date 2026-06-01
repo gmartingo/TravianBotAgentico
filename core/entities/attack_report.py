@@ -22,12 +22,19 @@ from dataclasses import dataclass, field
 
 @dataclass
 class AnimalEntry:
-    """Un tipo de animal en la sección de defensor (Nature)."""
+    """Un tipo de animal en la sección de defensor (Nature).
+
+    §17.5 (delta reporte perdido): present/killed/survived son int | None.
+      - None  → desconocido: el atacante perdió y Travian ocultó las cantidades.
+      - 0     → oasis vacío de ese tipo de animal (semánticamente distinto de None).
+
+    Precedente: AttackerTroopEntry.troop_ordinal: int | None (mismo fichero).
+    """
     animal_ordinal: int          # 1=Rata … 10=Elefante
     animal_name: str             # nombre localizado tal como aparece en el reporte
-    present: int                 # presentes al inicio del combate
-    killed: int                  # muertos en el combate
-    survived: int                # = present - killed (calculado al parsear)
+    present: int | None          # presentes al inicio del combate; None si reporte perdido
+    killed: int | None           # muertos en el combate; None si reporte perdido
+    survived: int | None         # = present - killed (calculado al parsear); None si reporte perdido
 
 
 @dataclass
