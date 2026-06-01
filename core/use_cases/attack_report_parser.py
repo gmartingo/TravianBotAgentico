@@ -72,6 +72,20 @@ class UnrecognizedAnimalError(ReportFormatError):
         )
 
 
+class DefeatReportParseError(Exception):
+    """
+    El reporte es de combate perdido pero el formato es corrupto o inesperado.
+
+    Se lanza cuando la fila de cantidades del defensor mezcla '?' y dígitos,
+    lo cual indica un reporte corrupto (Travian nunca produce filas mixtas).
+
+    §17.3 del spec bd-ataques-oasis.md.
+    """
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
 # ---------------------------------------------------------------------------
 # Índice invertido NATURE (singleton lazy)
 # ---------------------------------------------------------------------------
@@ -238,6 +252,32 @@ _INVENTORY_SIGNAL = re.compile(r"inventor", re.IGNORECASE)
 
 # Línea con exactamente 4 enteros ≥ 0 separados por espacios o comas
 _FOUR_NUMBERS = re.compile(r"^\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)\s*[,\s]\s*(\d+)\s*$")
+
+# ── Patrones para detección del modo perdido (§17.2) ─────────────────────────
+# Fila de derrota: solo tokens '?' separados por espacios/tabs (ningún dígito).
+# Ejemplos válidos: "?", "?  ?  ?", "?\t?\t?"
+_DEFEAT_ROW_PATTERN = re.compile(r"^\?[\s\t]*(\?[\s\t]*)*$")
+
+
+def _is_defeat_row(line: str) -> bool:
+    """True si la línea es una fila de cantidades desconocidas (solo '?').
+
+    §17.2: detección idioma-agnóstica del modo perdido. Solo se llama
+    sobre la siguiente línea no vacía tras la cabecera de animales en
+    _extract_animals (sección Defender); nunca sobre tropas atacantes.
+    """
+    return bool(_DEFEAT_ROW_PATTERN.match(line.strip()))
+
+
+def _is_mixed_row(line: str) -> bool:
+    """True si la línea mezcla '?' y dígitos (caso de reporte corrupto).
+
+    §17.2: Travian siempre produce filas homogéneas. Una fila mixta indica
+    texto corrupto o pegado incorrecto → se lanza DefeatReportParseError.
+    """
+    has_digit = bool(re.search(r"\d", line))
+    has_question = "?" in line
+    return has_digit and has_question
 
 
 # ---------------------------------------------------------------------------
@@ -613,13 +653,14 @@ def _extract_animals(text: str, lines: list[str]) -> list[AnimalEntry]:
     defender_start = joined[:m_defender.start()].count("\n") + 1
     defender_lines = lines[defender_start:]
 
-    # Buscar el bloque de tabla (cabecera + 2 filas numéricas)
-    # La cabecera contiene los nombres de los animales
+    # Buscar el bloque de tabla (cabecera + filas numéricas o fila de '?')
+    # La cabecera contiene los nombres de los animales.
+    # En modo perdido (§17.2) la siguiente línea es solo '?'; en modo normal es numérica.
     header_names: list[str] = []
     rows_numeric: list[list[int]] = []
+    defeat_mode: bool = False  # True si el atacante perdió (cantidades desconocidas)
 
-    # Buscar la primera línea de la sección que no sea el nombre del oasis/coord
-    # y que actúe como cabecera de tabla
+    # Buscar la primera línea de la sección que actúe como cabecera de tabla
     i = 0
     while i < len(defender_lines):
         line = defender_lines[i].strip()
@@ -628,18 +669,46 @@ def _extract_animals(text: str, lines: list[str]) -> list[AnimalEntry]:
             continue
 
         # Detectar si es cabecera (tiene texto, no es puramente numérica)
-        # La siguiente línea debe ser numérica
+        # La siguiente línea no vacía debe ser numérica o de '?'
         if i + 1 < len(defender_lines):
-            next_line = defender_lines[i + 1].strip()
+            # Buscar la siguiente línea no vacía
+            next_idx = i + 1
+            while next_idx < len(defender_lines) and not defender_lines[next_idx].strip():
+                next_idx += 1
+            if next_idx >= len(defender_lines):
+                i += 1
+                continue
+
+            next_line = defender_lines[next_idx].strip()
+
+            # §17.2 — Comprobar fila mixta antes que cualquier otra detección
+            if _is_mixed_row(next_line):
+                raise DefeatReportParseError(
+                    "La fila de cantidades del defensor mezcla '?' y dígitos. "
+                    "Formato de reporte no reconocido."
+                )
+
+            # §17.2 — Fila de solo '?': modo perdido
+            if _is_defeat_row(next_line):
+                # Candidato a cabecera: la línea actual
+                candidate_names = re.split(r"\t|  +", line)
+                candidate_names = [h.strip() for h in candidate_names if h.strip()]
+                # Verificar que la candidata no sea una línea de coordenadas/aldea
+                if candidate_names and all(not re.match(r"^\d+$", n) for n in candidate_names):
+                    header_names = candidate_names
+                    defeat_mode = True
+                    rows_numeric = []  # vacío — no hay cantidades en modo perdido
+                    break
+
+            # Modo normal: la siguiente línea es numérica
             next_nums = _extract_numbers_from_line(next_line)
-            # La cabecera es texto y la siguiente es una fila de números
             if next_nums and re.match(r"^[\d\s\t]+$", next_line):
                 # Esta línea es la cabecera
                 header_names = re.split(r"\t|  +", line)
                 header_names = [h.strip() for h in header_names if h.strip()]
 
                 # Recopilar filas numéricas
-                j = i + 1
+                j = next_idx
                 while j < len(defender_lines):
                     ln = defender_lines[j].strip()
                     if ln and re.match(r"^[\d\s\t]+$", ln):
@@ -650,15 +719,15 @@ def _extract_animals(text: str, lines: list[str]) -> list[AnimalEntry]:
                 break
         i += 1
 
-    if not header_names or len(rows_numeric) < 2:
-        # Intento alternativo: búsqueda más laxa
-        # A veces el formato tiene nombres y números en la misma línea o separados por tabs
+    # Intento alternativo (solo en modo normal): búsqueda más laxa
+    if not defeat_mode and (not header_names or len(rows_numeric) < 2):
         header_names, rows_numeric = _parse_table_flexible(defender_lines)
 
     if not header_names:
         raise NotNatureOasisError()
 
-    # Validar nombres contra el índice NATURE
+    # Validar nombres contra el índice NATURE (§17.4: se valida siempre,
+    # incluso en modo perdido — los nombres SÍ aparecen en el reporte perdido)
     unrecognized: list[str] = []
     recognized: list[tuple[str, int]] = []  # (nombre, ordinal)
 
@@ -676,22 +745,35 @@ def _extract_animals(text: str, lines: list[str]) -> list[AnimalEntry]:
         raise NotNatureOasisError()
 
     # Construir AnimalEntry para cada animal
-    # rows_numeric[0] = presentes, rows_numeric[1] = muertos
-    present_row = rows_numeric[0] if rows_numeric else []
-    killed_row = rows_numeric[1] if len(rows_numeric) > 1 else []
-
     entries: list[AnimalEntry] = []
-    for idx, (name, ordinal) in enumerate(recognized):
-        present = present_row[idx] if idx < len(present_row) else 0
-        killed = killed_row[idx] if idx < len(killed_row) else 0
-        survived = present - killed
-        entries.append(AnimalEntry(
-            animal_ordinal=ordinal,
-            animal_name=name,
-            present=present,
-            killed=killed,
-            survived=survived,
-        ))
+
+    if defeat_mode:
+        # §17.4 — Modo perdido: present/killed/survived = None (desconocido).
+        # EC-18: Travian muestra UNA fila de '?'; no se intenta leer segunda fila.
+        for name, ordinal in recognized:
+            entries.append(AnimalEntry(
+                animal_ordinal=ordinal,
+                animal_name=name,
+                present=None,
+                killed=None,
+                survived=None,
+            ))
+    else:
+        # Modo normal: rows_numeric[0] = presentes, rows_numeric[1] = muertos
+        present_row = rows_numeric[0] if rows_numeric else []
+        killed_row = rows_numeric[1] if len(rows_numeric) > 1 else []
+
+        for idx, (name, ordinal) in enumerate(recognized):
+            present = present_row[idx] if idx < len(present_row) else 0
+            killed = killed_row[idx] if idx < len(killed_row) else 0
+            survived = present - killed
+            entries.append(AnimalEntry(
+                animal_ordinal=ordinal,
+                animal_name=name,
+                present=present,
+                killed=killed,
+                survived=survived,
+            ))
 
     return entries
 

@@ -111,9 +111,12 @@ CREATE TABLE IF NOT EXISTS attack_report_animals (
     animal_ordinal  INTEGER NOT NULL CHECK (animal_ordinal BETWEEN 1 AND 10),
     animal_name     TEXT    NOT NULL,
 
-    present         INTEGER NOT NULL DEFAULT 0,
-    killed          INTEGER NOT NULL DEFAULT 0,
-    survived        INTEGER NOT NULL DEFAULT 0   -- = present - killed, calculado al insertar
+    -- present/killed/survived son NULL cuando el atacante pierde (cantidades desconocidas).
+    -- 0 significa oasis vacío de ese tipo de animal (distinto semánticamente de NULL).
+    -- §17.6 del spec bd-ataques-oasis.md.
+    present         INTEGER,
+    killed          INTEGER,
+    survived        INTEGER
 );
 """
 
@@ -756,6 +759,135 @@ class AttackReportSQLiteAdapter(AttackReportPort):
                 "crop":  crop,
                 "total": wood + clay + iron + crop,
             },
+        }
+
+    async def get_global_oasis_stats(self) -> dict:
+        """
+        Estadísticas globales de todos los oasis combinados.
+        Reutiliza _calc_regen_rates con los gaps de todos los oasis concatenados.
+
+        Ver spec docs/specs/bd-ataques-oasis-stats-global.md §9 EP-09.
+        """
+        # ── Paso 1: Apariciones globales ──────────────────────────────────────
+        # WHERE present > 0: excluye animales con 0 unidades observadas.
+        # MIN(CASE WHEN present > 0 THEN present END): excluye ceros del mínimo.
+        async with self._conn.execute(
+            """
+            SELECT
+                a.animal_ordinal,
+                a.animal_name,
+                COUNT(*)                                              AS appearances,
+                AVG(a.present)                                        AS avg_present,
+                MAX(a.present)                                        AS max_present,
+                MIN(CASE WHEN a.present > 0 THEN a.present END)       AS min_present_nonzero
+            FROM attack_report_animals a
+            JOIN attack_reports r ON r.id = a.report_id
+            WHERE a.present > 0
+            GROUP BY a.animal_ordinal, a.animal_name
+            ORDER BY a.animal_ordinal
+            """,
+        ) as cursor:
+            appearance_rows = await cursor.fetchall()
+
+        # ── Paso 2: Regen con LAG particionado por (oasis, animal) ────────────
+        # PARTITION BY (coord_x_dest, coord_y_dest, animal_ordinal):
+        # el LAG no cruza entre oasis distintos.
+        regen_sql = """
+            WITH ordered AS (
+                SELECT
+                    r.id               AS report_id,
+                    r.attacked_at,
+                    r.coord_x_dest,
+                    r.coord_y_dest,
+                    a.animal_ordinal,
+                    a.animal_name,
+                    a.present,
+                    a.survived,
+                    LAG(a.survived) OVER w  AS prev_survived
+                FROM attack_reports r
+                JOIN attack_report_animals a ON a.report_id = r.id
+                WINDOW w AS (
+                    PARTITION BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+                    ORDER BY r.attacked_at
+                )
+            )
+            SELECT
+                report_id, attacked_at, animal_ordinal, animal_name,
+                present, survived, prev_survived,
+                CASE WHEN prev_survived IS NOT NULL
+                     THEN present - prev_survived
+                     ELSE NULL
+                END AS regenerated
+            FROM ordered
+            ORDER BY attacked_at, coord_x_dest, coord_y_dest, animal_ordinal
+        """
+        async with self._conn.execute(regen_sql) as cursor:
+            regen_rows = await cursor.fetchall()
+
+        # ── Paso 3: Gaps con LAG particionado por oasis ───────────────────────
+        # PARTITION BY (coord_x_dest, coord_y_dest): los gaps se calculan dentro
+        # de cada oasis. El LAG NO cruza entre oasis distintos.
+        gap_sql = """
+            SELECT
+                r.id,
+                r.coord_x_dest,
+                r.coord_y_dest,
+                r.attacked_at,
+                LAG(r.attacked_at) OVER w            AS prev_attacked_at,
+                (UNIXEPOCH(r.attacked_at) - UNIXEPOCH(LAG(r.attacked_at) OVER w))
+                                                     AS gap_seconds
+            FROM attack_reports r
+            WINDOW w AS (
+                PARTITION BY r.coord_x_dest, r.coord_y_dest
+                ORDER BY r.attacked_at
+            )
+            ORDER BY r.attacked_at
+        """
+        async with self._conn.execute(gap_sql) as cursor:
+            gap_rows = await cursor.fetchall()
+
+        # ── Paso 4: Construir repopulation_gaps ───────────────────────────────
+        # Agrupar regen_rows por report_id
+        regen_by_report: dict[int, list[dict]] = {}
+        for row in regen_rows:
+            rid = row["report_id"]
+            if rid not in regen_by_report:
+                regen_by_report[rid] = []
+            regen_by_report[rid].append({
+                "animal_ordinal": row["animal_ordinal"],
+                "animal_name": row["animal_name"],
+                "regenerated": row["regenerated"],
+            })
+
+        repopulation_gaps = [
+            {
+                "attack_id": gap["id"],
+                "attacked_at": gap["attacked_at"],
+                "prev_attacked_at": gap["prev_attacked_at"],
+                "gap_seconds": gap["gap_seconds"],
+                "regenerated_animals": regen_by_report.get(gap["id"], []),
+            }
+            for gap in gap_rows
+        ]
+
+        # ── Paso 5: Calcular rates globales ───────────────────────────────────
+        animal_regen_rates = _calc_regen_rates(repopulation_gaps)
+
+        # ── Paso 6: Construir y devolver el dict de respuesta ─────────────────
+        return {
+            "scope": "global",
+            "animal_appearances": [
+                {
+                    "animal_ordinal": row["animal_ordinal"],
+                    "animal_name": row["animal_name"],
+                    "appearances": row["appearances"],
+                    "avg_present": round(row["avg_present"], 2) if row["avg_present"] is not None else None,
+                    "max_present": row["max_present"],
+                    "min_present": row["min_present_nonzero"],  # puede ser None (guardia defensiva)
+                }
+                for row in appearance_rows
+            ],
+            "animal_regen_rates": animal_regen_rates,
         }
 
     async def list_oasis_summaries(

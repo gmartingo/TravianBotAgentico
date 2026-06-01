@@ -2,16 +2,17 @@
 Endpoints de la feature "BD de ataques a oasis".
 
 Rutas (sin prefijo /api — el proxy de Vite lo retira):
-  POST   /attack-reports/parse        EP-01: parse sin guardar   (200)
-  POST   /attack-reports              EP-02: guardar reporte      (201)
-  GET    /attack-reports              EP-03: historial filtrable  (200)
-  GET    /attack-reports/oasis        EP-08: lista oasis          (200)  ← ANTES de /{id}
-  GET    /attack-reports/stats/bounty EP-07: balance recursos     (200)  ← ANTES de /{id}
-  GET    /attack-reports/stats/oasis  EP-06: estadísticas oasis   (200)  ← ANTES de /{id}
-  GET    /attack-reports/{id}         EP-04: detalle reporte      (200)
-  DELETE /attack-reports/{id}         EP-05: borrar reporte       (204)
+  POST   /attack-reports/parse         EP-01: parse sin guardar   (200)
+  POST   /attack-reports               EP-02: guardar reporte      (201)
+  GET    /attack-reports               EP-03: historial filtrable  (200)
+  GET    /attack-reports/oasis         EP-08: lista oasis          (200)  ← ANTES de /{id}
+  GET    /attack-reports/stats/bounty  EP-07: balance recursos     (200)  ← ANTES de /{id}
+  GET    /attack-reports/stats/global  EP-09: stats globales       (200)  ← ANTES de stats/oasis
+  GET    /attack-reports/stats/oasis   EP-06: estadísticas oasis   (200)  ← ANTES de /{id}
+  GET    /attack-reports/{id}          EP-04: detalle reporte      (200)
+  DELETE /attack-reports/{id}          EP-05: borrar reporte       (204)
 
-NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06, EP-07, EP-08)
+NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06, EP-07, EP-08, EP-09)
 se declaran ANTES de EP-04/{id} para que FastAPI los resuelva como literales
 y no capturen "stats" u "oasis" como {id}. {id} está tipado int con ge=1.
 
@@ -34,6 +35,7 @@ from pydantic import BaseModel, Field
 from core.entities.tribe import Tribe
 from core.ports.attack_report_port import DuplicateReportError
 from core.use_cases.attack_report_parser import (
+    DefeatReportParseError,
     MultipleReportsError,
     NotNatureOasisError,
     ReportFormatError,
@@ -185,6 +187,12 @@ def _parse_or_422(raw_text: str) -> object:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
+        ) from exc
+    except DefeatReportParseError as exc:
+        # §17.3: reporte perdido con formato corrupto (fila mixta '?'/dígitos)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Reporte de combate perdido con formato inesperado: {exc.reason}",
         ) from exc
     except ReportFormatError as exc:
         raise HTTPException(
@@ -427,6 +435,24 @@ async def get_bounty_stats(
         )
     port = request.app.state.attack_report_port
     return await port.get_bounty_stats(x=x, y=y)
+
+
+# ---------------------------------------------------------------------------
+# EP-09 — Estadísticas globales de todos los oasis (ANTES de stats/oasis)
+# ---------------------------------------------------------------------------
+
+@router.get("/attack-reports/stats/global", status_code=status.HTTP_200_OK)
+async def get_global_oasis_stats(request: Request) -> dict:
+    """
+    Estadísticas globales de todos los oasis combinados.
+
+    Sin parámetros de entrada. Sin Accept-Language.
+    200 siempre (arrays vacíos si BD vacía).
+
+    Ver spec docs/specs/bd-ataques-oasis-stats-global.md §8 EP-09.
+    """
+    port = request.app.state.attack_report_port
+    return await port.get_global_oasis_stats()
 
 
 # ---------------------------------------------------------------------------

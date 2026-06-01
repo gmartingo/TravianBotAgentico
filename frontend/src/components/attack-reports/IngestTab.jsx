@@ -167,7 +167,7 @@ export function IngestTab({ onOpenDrawer, lang }) {
     setSaveError(null)
     setSaving(true)
     try {
-      await api.saveAttackReport(text)
+      await api.saveAttackReport({ raw_text: text })
       showToast(t('ar.ingest.toast.saved'))
       resetForm()
     } catch (err) {
@@ -350,29 +350,15 @@ export function IngestTab({ onOpenDrawer, lang }) {
             animation: 'fade-in-up 220ms ease both',
           }}
         >
-          <ReportPreview
-            data={parseResult}
-            lang={lang}
-            onViewExisting={(id) => onOpenDrawer(id)}
-            t={t}
-          />
-
-          {/* Error al guardar */}
-          {saveError && (
-            <div style={{ marginTop: '12px' }}>
-              <InlineError message={saveError} />
-            </div>
-          )}
-
-          {/* Botones de acción (§6.4 / §6.5) */}
+          {/* Botones de acción (§6.4 / §6.5) — encima del preview */}
           <div
             style={{
               display: 'flex',
               justifyContent: 'flex-end',
               gap: '10px',
-              marginTop: '16px',
-              paddingTop: '12px',
-              borderTop: '1px solid var(--border)',
+              marginBottom: '16px',
+              paddingBottom: '12px',
+              borderBottom: '1px solid var(--border)',
             }}
           >
             <GhostBtn disabled={saving} onClick={resetForm}>
@@ -386,6 +372,20 @@ export function IngestTab({ onOpenDrawer, lang }) {
                   : t('ar.ingest.save')}
             </PrimaryBtn>
           </div>
+
+          {/* Error al guardar */}
+          {saveError && (
+            <div style={{ marginBottom: '12px' }}>
+              <InlineError message={saveError} />
+            </div>
+          )}
+
+          <ReportPreview
+            data={parseResult}
+            lang={lang}
+            onViewExisting={(id) => onOpenDrawer(id)}
+            t={t}
+          />
         </div>
       )}
 

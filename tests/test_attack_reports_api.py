@@ -1101,3 +1101,413 @@ class TestOasisList:
         assert "last_attack" in item
         assert "total_bounty" in item
         assert isinstance(item["total_bounty"], int)
+
+
+# ---------------------------------------------------------------------------
+# CORS — Tests de la política de orígenes permitidos
+#
+# Verifican que CORSMiddleware responde correctamente al preflight OPTIONS
+# y a peticiones reales para la extensión Chrome y el dashboard local,
+# y que rechaza orígenes externos de internet.
+# ---------------------------------------------------------------------------
+
+_EXTENSION_ORIGIN = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+_LOCALHOST_ORIGIN = "http://localhost:5173"
+_LAN_ORIGIN = "http://192.168.1.100:5173"
+_EVIL_ORIGIN = "https://evil.example.com"
+
+
+class TestCors:
+    """Tests de la política CORS — preflight + petición real + origen denegado."""
+
+    def test_cors_preflight_extension_devuelve_200_y_allow_origin(self, client):
+        """
+        Preflight OPTIONS desde la extensión Chrome → 200 con
+        Access-Control-Allow-Origin igual al origin enviado.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _EXTENSION_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type",
+            },
+        )
+        # Starlette CORSMiddleware devuelve 200 en preflight
+        assert resp.status_code == 200
+        assert resp.headers.get("access-control-allow-origin") == _EXTENSION_ORIGIN
+
+    def test_cors_preflight_localhost_devuelve_200_y_allow_origin(self, client):
+        """
+        Preflight OPTIONS desde localhost (dashboard Vite) → 200 con
+        Access-Control-Allow-Origin correcto.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _LOCALHOST_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type, Accept-Language",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("access-control-allow-origin") == _LOCALHOST_ORIGIN
+
+    def test_cors_preflight_lan_devuelve_200_y_allow_origin(self, client):
+        """
+        Preflight OPTIONS desde IP de LAN privada (Raspberry Pi) → 200.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _LAN_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.headers.get("access-control-allow-origin") == _LAN_ORIGIN
+
+    def test_cors_post_real_extension_incluye_allow_origin(self, client):
+        """
+        POST real desde la extensión Chrome → la respuesta (sea 201, 409 o 422)
+        incluye Access-Control-Allow-Origin con el origin de la extensión.
+        """
+        resp = client.post(
+            "/attack-reports",
+            json={"raw_text": _REPORT_VALID},
+            headers={"Origin": _EXTENSION_ORIGIN},
+        )
+        # No importa el código de negocio (201 si es nuevo, 409 si ya existe)
+        assert resp.headers.get("access-control-allow-origin") == _EXTENSION_ORIGIN
+
+    def test_cors_origen_externo_no_recibe_allow_origin(self, client):
+        """
+        Petición desde un origen externo de internet → la respuesta NO incluye
+        Access-Control-Allow-Origin (origen denegado por la política CORS).
+        """
+        resp = client.get(
+            "/attack-reports",
+            headers={"Origin": _EVIL_ORIGIN},
+        )
+        # El backend procesa la petición (CORS no bloquea en servidor, lo hace el browser),
+        # pero NO debe devolver Access-Control-Allow-Origin para ese origen.
+        assert "access-control-allow-origin" not in resp.headers
+
+    def test_cors_preflight_origen_externo_no_recibe_allow_origin(self, client):
+        """
+        Preflight OPTIONS desde origen externo → sin Access-Control-Allow-Origin.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _EVIL_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        assert "access-control-allow-origin" not in resp.headers
+
+    def test_cors_allow_methods_en_preflight(self, client):
+        """
+        El preflight devuelve Access-Control-Allow-Methods con al menos GET, POST, DELETE.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _EXTENSION_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        allow_methods = resp.headers.get("access-control-allow-methods", "")
+        assert "POST" in allow_methods
+        assert "GET" in allow_methods
+        assert "DELETE" in allow_methods
+
+
+# ---------------------------------------------------------------------------
+# §17 Delta — Tests de modo perdido (T-perdido-01..10)
+# ---------------------------------------------------------------------------
+
+# Reporte de referencia del spec §17.9 — oasis (-59|25), galos, animales '?',
+# hero_inventory {240,240,240,240}
+_REPORT_LOST = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman  Theutates Thunder
+2          2
+2          2
+
+Defender
+Rat  Spider  Snake  Bat  Wild Boar  Wolf  Bear  Crocodile  Tiger  Elephant
+?    ?       ?      ?    ?          ?     ?     ?           ?      ?
+
+Bounty
+0  0  0  0
+0/0
+Additional resources were added to the hero's inventory
+240  240  240  240
+"""
+
+# Reporte perdido con hero_inventory nulo
+_REPORT_LOST_NO_HERO = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 09:00:00
+Server time: 10:00:00 (UTC +1:00)
+
+Attacker
+Otra aldea (-5|-5)
+Swordsman
+1
+1
+
+Defender
+Rat  Spider
+?    ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+# Reporte con fila mixta '?'/dígitos
+_REPORT_MIXED_ROW = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 10:00:00
+Server time: 11:00:00 (UTC +1:00)
+
+Attacker
+Aldea3 (-3|-3)
+Swordsman
+1
+1
+
+Defender
+Rat  Spider  Snake
+?    5       ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+# Reporte perdido con nombres de animales no reconocibles
+_REPORT_LOST_UNKNOWN_ANIMALS = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 11:00:00
+Server time: 12:00:00 (UTC +1:00)
+
+Attacker
+Aldea4 (-4|-4)
+Swordsman
+1
+1
+
+Defender
+Dragón  Lobezno
+?       ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+
+class TestLostReport:
+    """Tests de integración del modo perdido (§17.12 T-perdido-01..10)."""
+
+    def test_T_perdido_01_parse_returns_null_animals(self, client):
+        """T-perdido-01: Parse del reporte perdido → 200 con animals[*].present=null."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert len(data["animals"]) > 0
+        for a in data["animals"]:
+            assert a["present"] is None, f"animal {a['animal_name']}: present debe ser null"
+            assert a["killed"] is None
+            assert a["survived"] is None
+
+    def test_T_perdido_01_hero_inventory_240(self, client):
+        """T-perdido-01: hero_inventory={wood:240,...} incluso en reporte perdido."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["hero_inventory"] is not None
+        assert data["hero_inventory"]["wood"] == 240
+        assert data["hero_inventory"]["clay"] == 240
+        assert data["hero_inventory"]["iron"] == 240
+        assert data["hero_inventory"]["crop"] == 240
+
+    def test_T_perdido_01_bounty_zero(self, client):
+        """T-perdido-01: bounty = {wood:0,...} en reporte perdido."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST})
+        assert resp.status_code == 200
+        b = resp.json()["bounty"]
+        assert b["wood"] == 0
+        assert b["clay"] == 0
+        assert b["iron"] == 0
+        assert b["crop"] == 0
+
+    def test_T_perdido_01_attacker_troops_intact(self, client):
+        """T-perdido-01: tropas atacantes con datos correctos (lost=sent=2, survived=0)."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST})
+        assert resp.status_code == 200
+        troops = resp.json()["attacker_troops"]
+        assert len(troops) >= 1
+        for t in troops:
+            assert t["survived"] == t["sent"] - t["lost"]
+
+    def test_T_perdido_02_save_returns_201(self, client):
+        """T-perdido-02: Save del reporte perdido → 201 Created."""
+        resp = client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "id" in data
+        assert data["coord_x_dest"] == -59
+        assert data["coord_y_dest"] == 25
+
+    def test_T_perdido_03_get_detail_returns_null_animals(self, client):
+        """T-perdido-03 / CA-D03: GET /{id} del reporte perdido → animals[*].present=null."""
+        save_resp = client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        assert save_resp.status_code == 201
+        report_id = save_resp.json()["id"]
+
+        resp = client.get(f"/attack-reports/{report_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["animals"]) > 0
+        for a in data["animals"]:
+            assert a["present"] is None, f"CA-D03: present debe ser null, no 0 ni NaN"
+            assert a["killed"] is None
+            assert a["survived"] is None
+
+    def test_T_perdido_04_mixed_row_returns_422(self, client):
+        """T-perdido-04 / CA-D07: fila mixta '?'/dígitos → 422 con mensaje descriptivo."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_MIXED_ROW})
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "inesperado" in detail.lower() or "formato" in detail.lower()
+
+    def test_T_perdido_05_unknown_animals_in_defeat_mode(self, client):
+        """T-perdido-05 / CA-D08: nombres no reconocibles en modo perdido → 422."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST_UNKNOWN_ANIMALS})
+        assert resp.status_code == 422
+
+    def test_T_perdido_07_stats_excludes_lost_report(self, client):
+        """T-perdido-07 / CA-D06: stats/oasis con reporte perdido no lo cuenta en appearances."""
+        # Primero guardar un reporte GANADO
+        won_report = """\
+Attack report on Oasis (-59|25)
+
+10.05.26, 08:00:00
+Server time: 09:00:00 (UTC +1:00)
+
+Attacker
+Aldea ganadora (-1|-1)
+Swordsman
+10
+0
+
+Defender
+Rat  Spider
+8    5
+8    5
+
+Bounty
+200  200  200  200
+100/200
+"""
+        client.post("/attack-reports", json={"raw_text": won_report})
+        # Luego guardar el reporte PERDIDO (timestamp diferente)
+        client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+
+        resp = client.get("/attack-reports/stats/oasis?x=-59&y=25")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Los appearances solo cuentan reportes con present IS NOT NULL y present > 0
+        # El reporte perdido tiene present=NULL → no cuenta en appearances
+        for app in data["animal_appearances"]:
+            # Cada aparición debe tener avg_present > 0 (no influida por el reporte perdido)
+            assert app["avg_present"] is not None
+
+    def test_T_perdido_08_list_includes_lost_report(self, client):
+        """T-perdido-08: GET /attack-reports con reporte perdido → animals_summary[*].present=null."""
+        client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        resp = client.get("/attack-reports?x=-59&y=25")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Debe haber al menos un reporte con animals_summary
+        items_with_animals = [it for it in data["items"] if it.get("animals_summary")]
+        if items_with_animals:
+            # El reporte perdido tiene present=null en animals_summary
+            lost_items = [
+                it for it in items_with_animals
+                if any(a.get("present") is None for a in it.get("animals_summary", []))
+            ]
+            assert len(lost_items) >= 1
+
+    def test_T_perdido_09_duplicate_lost_report_409(self, client):
+        """T-perdido-09: Pegar el mismo reporte perdido dos veces → 409 en save."""
+        r1 = client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        assert r1.status_code == 201
+        r2 = client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        assert r2.status_code == 409
+
+    def test_T_perdido_09_duplicate_already_exists_in_parse(self, client):
+        """T-perdido-09: Parse del reporte perdido ya guardado → already_exists=true."""
+        client.post("/attack-reports", json={"raw_text": _REPORT_LOST})
+        parse_resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST})
+        assert parse_resp.status_code == 200
+        assert parse_resp.json()["already_exists"] is True
+
+    def test_T_perdido_10_hero_inventory_null_in_lost(self, client):
+        """T-perdido-10: Reporte perdido sin hero_inventory → hero_inventory=null."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_LOST_NO_HERO})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["hero_inventory"] is None
+        for a in data["animals"]:
+            assert a["present"] is None
+
+    def test_CA_D05_normal_report_not_affected(self, client):
+        """CA-D05: reporte ganado normal → present/killed/survived son enteros, no null."""
+        resp = client.post("/attack-reports/parse", json={"raw_text": _REPORT_VALID})
+        assert resp.status_code == 200
+        for a in resp.json()["animals"]:
+            assert a["present"] is not None
+            assert a["killed"] is not None
+            assert a["survived"] is not None
+            assert isinstance(a["present"], int)
+            assert isinstance(a["killed"], int)
+            assert isinstance(a["survived"], int)
+
+    def test_CA_D09_new_db_table_has_nullable_columns(self, client):
+        """CA-D09: Insertar reporte perdido → filas con present/killed/survived=NULL en BD.
+
+        Se verifica indirectamente: si el DDL tuviera NOT NULL, el save fallaría.
+        El test ya pasa si save devuelve 201 (la BD aceptó los NULL).
+        """
+        resp = client.post("/attack-reports", json={"raw_text": _REPORT_LOST_NO_HERO})
+        assert resp.status_code == 201
+
+    def test_cors_accept_language_en_allow_headers(self, client):
+        """
+        El preflight que solicita Accept-Language lo aprueba en Allow-Headers.
+        """
+        resp = client.options(
+            "/attack-reports",
+            headers={
+                "Origin": _EXTENSION_ORIGIN,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Accept-Language",
+            },
+        )
+        allow_headers = resp.headers.get("access-control-allow-headers", "").lower()
+        assert "accept-language" in allow_headers

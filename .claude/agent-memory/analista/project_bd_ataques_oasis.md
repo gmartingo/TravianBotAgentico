@@ -1,6 +1,6 @@
 ---
 name: project-bd-ataques-oasis
-description: BD de ataques a oasis por pegado de reporte — hallazgos del catálogo, diseño de parser, modelo de datos y correcciones C1-C7 de desarrollador-apis
+description: BD de ataques a oasis — hallazgos del catálogo, modelo de datos, correcciones C1-C7 APIs, delta reportes perdidos (present/killed/survived nullable)
 metadata:
   type: project
 ---
@@ -93,3 +93,50 @@ el reporte, no la hora del ataque. En reportes reales pueden diferir varias hora
 - Reutilizar patrón WHERE dinámico de `list_reports`.
 - Sin paginación en v1 (pocos oasis distintos en caso de uso real).
 - Declarar ANTES de `GET /attack-reports/{id}` en el router.
+
+## Agregado global (EP-09 — 2026-05-31)
+
+Spec en `docs/specs/bd-ataques-oasis-stats-global.md` (`ready-for-impl`).
+
+**Decisiones clave:**
+- `_calc_regen_rates` reutilizada SIN modificación: es función pura, acepta cualquier lista de gaps.
+- LAG global usa `PARTITION BY coord_x_dest, coord_y_dest` (y también `animal_ordinal` en la query de regen): los intervalos de cada oasis se calculan de forma independiente, nunca se cruzan oasis distintos.
+- Panel frontend en `StatsTab` (hermano de `OasisList`, no hijo); carga en paralelo.
+- `RegenRatesSection` reutilizada sin modificación.
+- Ruta `stats/global` declarada ANTES de `stats/oasis` en el router (orden de declaración: bounty → global → oasis → {id}).
+- `apis_validadas_por_desarrollador_apis: false` — la herramienta Agent no estuvo disponible; contrato revisado manualmente por el analista con criterios C1-C7.
+
+**Patrón LAG global (para futuros specs de agregados multi-oasis):**
+```sql
+WINDOW w AS (
+    PARTITION BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+    ORDER BY r.attacked_at
+)
+```
+Sin filtro WHERE de coordenadas, el PARTITION garantiza que el LAG no cruce oasis distintos.
+
+## Delta: reportes de combate PERDIDO (2026-06-01)
+
+Spec en `docs/specs/bd-ataques-oasis.md` §17 (`ready-for-impl`).
+
+**Hallazgo clave para futuros parsers de reportes Travian:**
+Cuando el atacante pierde contra un oasis, Travian muestra `?` en lugar de
+cantidades del defensor. La fila de `?` no supera el test `^[\d\s\t]+$` y el
+parser anterior lanzaba `NotNatureOasisError` antes de validar los nombres.
+
+**Decisiones de diseño cerradas:**
+- `present/killed/survived = null` (no 0). null = desconocido; 0 = oasis vacío de ese tipo.
+- Detección por patrón `_DEFEAT_ROW_PATTERN = r"^\?[\s\t]*(\?[\s\t]*)*$"` (idioma-agnóstico).
+- Fila mixta `?`/dígitos → `DefeatReportParseError` (reporte corrupto).
+- Validar nombres de la cabecera también en modo perdido (confirma que es oasis Nature).
+- En modo perdido, Travian muestra UNA sola fila de `?` (no dos); el parser no busca segunda fila.
+- NO añadir `is_defeat: bool` — derivable de `all(a.present is None for a in animals)`.
+- Migración BD de desarrollo: borrar `travian_bot.db` (sin Alembic; BD sin datos de producción).
+- DDL: columnas `present/killed/survived` pasan de `INTEGER NOT NULL DEFAULT 0` a `INTEGER` puro.
+- `hero_inventory` no cambia: es independiente del modo perdido/ganado.
+- Contrato de API: sin cambio de ruta/método/código. Solo `present/killed/survived` pasan a `integer | null`.
+- `apis_validadas_por_desarrollador_apis: true` (fallback manual; Agent no disponible; FastAPI serializa `None → null` automáticamente; queries de stats toleran NULL por SQL estándar).
+
+**Reporte de referencia para CA-D01:**
+Oasis (-59|25), tropas galas Swordsman×2 + Theutates Thunder×2, todas perdidas,
+animales desconocidos (todos `?`), bounty 0/0, hero_inventory {wood:240, clay:240, iron:240, crop:240}.

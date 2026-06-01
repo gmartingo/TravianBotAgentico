@@ -138,6 +138,8 @@ function buildSourceTroops(troops, tribeTroops) {
 function buildFormationSourceTroops(subset, catalog) {
   const data = subset ?? []
   // Agregar por ordinal — todas las tropas de esta slice son de la misma tribu.
+  // §17.10: null = cantidad desconocida (reporte perdido); se preserva como null
+  // para que NumRow muestre '?' en lugar de 0.
   const byOrdinal = new Map()
   for (const tr of data) {
     if (tr.ordinal == null) continue
@@ -145,18 +147,25 @@ function buildFormationSourceTroops(subset, catalog) {
       ordinal: tr.ordinal,
       name: tr.name,
       icon_url: tr.icon_url,
+      // Semilla en 0 (cero CONOCIDO), no null: el acumulador solo pasa a null
+      // si un valor ENTRANTE es null (reporte perdido). Arrancar en null haría
+      // que addOrNull devolviera null siempre y todo se mostrara como '?'.
       quantity_initial: 0,
       quantity_lost: 0,
       quantity_survived: 0,
     }
-    cur.quantity_initial += tr.quantity_initial ?? 0
-    cur.quantity_lost += tr.quantity_lost ?? 0
-    cur.quantity_survived += tr.quantity_survived ?? 0
+    // Si el valor entrante es null (desconocido), el agregado pasa a null.
+    // Si ambos son enteros, se suman.
+    const addOrNull = (a, b) => (a === null || b === null) ? null : a + b
+    cur.quantity_initial  = addOrNull(cur.quantity_initial,  tr.quantity_initial  ?? null)
+    cur.quantity_lost     = addOrNull(cur.quantity_lost,     tr.quantity_lost     ?? null)
+    cur.quantity_survived = addOrNull(cur.quantity_survived, tr.quantity_survived ?? null)
     byOrdinal.set(tr.ordinal, cur)
   }
 
   if (!catalog || catalog.length === 0) {
-    return Array.from(byOrdinal.values()).filter(tr => tr.quantity_initial > 0)
+    // Sin catálogo: mostrar solo los que tienen alguna cantidad conocida (>0) o desconocida (null)
+    return Array.from(byOrdinal.values()).filter(tr => tr.quantity_initial === null || tr.quantity_initial > 0)
   }
 
   return catalog
@@ -170,9 +179,10 @@ function buildFormationSourceTroops(subset, catalog) {
         ordinal: m.ordinal,
         name: matched?.name ?? m.name ?? `T${m.ordinal}`,
         icon_url: matched?.icon_url ?? iconFromCatalog,
-        quantity_initial: matched?.quantity_initial ?? 0,
-        quantity_lost: matched?.quantity_lost ?? 0,
-        quantity_survived: matched?.quantity_survived ?? 0,
+        // §17.10: preservar null si la cantidad es desconocida
+        quantity_initial:  matched ? matched.quantity_initial  : 0,
+        quantity_lost:     matched ? matched.quantity_lost     : 0,
+        quantity_survived: matched ? matched.quantity_survived : 0,
       }
     })
 }
@@ -294,17 +304,20 @@ function NumRow({ label, troops, pick, color, sign, bold, lang }) {
         {label}
       </td>
       {troops.map((tr, idx) => {
-        const v = tr[pick] ?? 0
+        const raw = tr[pick]
+        // §17.10: null = reporte perdido (cantidades desconocidas) → mostrar '?'
+        const isUnknown = raw === null || raw === undefined
+        const v = isUnknown ? 0 : raw
         return (
           <td key={`${pick}-${tr.ordinal}-${idx}`} style={{
             padding: '6px 2px', borderBottom: '1px solid var(--border)', textAlign: 'center',
             fontSize: '12px', fontFamily: 'var(--font-mono)',
-            fontVariantNumeric: 'tabular-nums', color: v > 0 ? color : 'var(--text-tertiary)',
+            fontVariantNumeric: 'tabular-nums', color: isUnknown ? 'var(--text-tertiary)' : (v > 0 ? color : 'var(--text-tertiary)'),
             fontWeight: bold && v > 0 ? 600 : 400,
             boxSizing: 'border-box',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {v > 0 ? (sign === '-' ? '−' : '') + fmt(v, lang) : '0'}
+            {isUnknown ? '?' : (v > 0 ? (sign === '-' ? '−' : '') + fmt(v, lang) : '0')}
           </td>
         )
       })}

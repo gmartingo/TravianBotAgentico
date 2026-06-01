@@ -566,6 +566,17 @@ const en = {
   'ar.stats.repop.col.interval':   'Interval',
   'ar.stats.repop.first':          '(first attack)',
 
+  // Statistics — global panel (EP-09)
+  'ar.stats.global.title':             'Global statistics — all oases',
+  'ar.stats.global.col.appearances':   'Appearances',
+  'ar.stats.global.appearances.title': 'Observed animals (global)',
+  'ar.stats.global.loading':           'Loading global statistics…',
+  'ar.stats.global.error':             'Could not load global statistics.',
+  'ar.stats.global.retry':             'Retry',
+  'ar.stats.global.empty.title':       'No data yet.',
+  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
+  'ar.stats.global.empty.cta':         'Go to Ingest →',
+
   // ── Calculadora de combate (S11) ── restaurado desde feature/optimizador-balance-multiraid
   // ── Combat calculator (S11) ───────────────────────────────────────────────────
   'calc.title':                   'Combat Calculator',

@@ -565,6 +565,11 @@ class TestParseRealGameReport:
 # (importamos directamente la función de módulo del adaptador)
 # ---------------------------------------------------------------------------
 
+from core.use_cases.attack_report_parser import (  # noqa: E402
+    DefeatReportParseError,
+    _is_defeat_row,
+    _is_mixed_row,
+)
 from adapters.db.attack_report_sqlite_adapter import _calc_regen_rates  # noqa: E402
 
 
@@ -673,3 +678,260 @@ class TestCalcRegenRates:
         ]
         result = _calc_regen_rates(gaps)
         assert result[0]["avg_regen_per_hour"] == 5.0
+
+
+# ---------------------------------------------------------------------------
+# Fixtures — reportes de modo perdido (§17 delta)
+# ---------------------------------------------------------------------------
+
+# Reporte de referencia del spec §17.12 T-perdido-01:
+#   oasis (-59|25), tribu galos, Swordsman×2 + Theutates Thunder×2 todas perdidas,
+#   animales '?' (desconocidos), botín 0/0, hero_inventory {240,240,240,240}
+_REPORT_LOST_EN = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman  Theutates Thunder
+2          2
+2          2
+
+Defender
+Rat  Spider  Snake  Bat  Wild Boar  Wolf  Bear  Crocodile  Tiger  Elephant
+?    ?       ?      ?    ?          ?     ?     ?           ?      ?
+
+Bounty
+0  0  0  0
+0/0
+Additional resources were added to the hero's inventory
+240  240  240  240
+"""
+
+# Reporte perdido en español (T-perdido-03)
+_REPORT_LOST_ES = """\
+Informe de ataque a Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Espadachín  Trueno de Teutates
+2           2
+2           2
+
+Defender
+Rata  Araña  Serpiente
+?     ?      ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+# Reporte perdido con hero_inventory nulo (T-perdido-10)
+_REPORT_LOST_NO_HERO = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman
+2
+2
+
+Defender
+Rat  Spider
+?    ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+# Reporte con fila mixta '?'/dígitos — EC-20 (caso corrupto)
+_REPORT_MIXED_ROW = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman
+2
+2
+
+Defender
+Rat  Spider  Snake
+?    5       ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+# Reporte perdido con nombres de animales no reconocibles en la cabecera — EC-19
+_REPORT_LOST_UNKNOWN_ANIMALS = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman
+2
+2
+
+Defender
+Dragón  Lobezno  Basilisco
+?       ?        ?
+
+Bounty
+0  0  0  0
+0/0
+"""
+
+
+# ---------------------------------------------------------------------------
+# Tests de helpers del modo perdido (§17.2)
+# ---------------------------------------------------------------------------
+
+class TestDefeatRowHelpers:
+    """Tests de las funciones _is_defeat_row y _is_mixed_row."""
+
+    def test_is_defeat_row_single_question(self):
+        assert _is_defeat_row("?") is True
+
+    def test_is_defeat_row_multiple_questions_spaces(self):
+        assert _is_defeat_row("?  ?  ?  ?") is True
+
+    def test_is_defeat_row_multiple_questions_tabs(self):
+        assert _is_defeat_row("?\t?\t?") is True
+
+    def test_is_defeat_row_with_trailing_space(self):
+        assert _is_defeat_row("?  ?  ? ") is True  # strip se aplica
+
+    def test_is_defeat_row_false_for_numbers(self):
+        assert _is_defeat_row("12  8  0") is False
+
+    def test_is_defeat_row_false_for_text(self):
+        assert _is_defeat_row("Rat  Spider") is False
+
+    def test_is_defeat_row_false_for_mixed(self):
+        assert _is_defeat_row("?  5  ?") is False
+
+    def test_is_mixed_row_with_digit_and_question(self):
+        assert _is_mixed_row("?  5  ?") is True
+
+    def test_is_mixed_row_only_questions(self):
+        assert _is_mixed_row("?  ?  ?") is False
+
+    def test_is_mixed_row_only_digits(self):
+        assert _is_mixed_row("12  8  0") is False
+
+    def test_is_mixed_row_text_no_digit(self):
+        assert _is_mixed_row("Rat  Spider") is False
+
+
+# ---------------------------------------------------------------------------
+# Tests del parser en modo perdido (§17.12 T-perdido-*)
+# ---------------------------------------------------------------------------
+
+class TestParseLostReport:
+    """T-perdido-01..10: reporte de combate perdido contra oasis."""
+
+    def test_T_perdido_01_animals_all_null(self):
+        """T-perdido-01: Parse del reporte de referencia → present/killed/survived=None."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert len(preview.animals) > 0
+        for a in preview.animals:
+            assert a.present is None, f"animal {a.animal_name}: present debe ser None"
+            assert a.killed is None, f"animal {a.animal_name}: killed debe ser None"
+            assert a.survived is None, f"animal {a.animal_name}: survived debe ser None"
+
+    def test_T_perdido_01_bounty_zero(self):
+        """T-perdido-01: bounty = 0 en reporte perdido."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert preview.bounty.wood == 0
+        assert preview.bounty.clay == 0
+        assert preview.bounty.iron == 0
+        assert preview.bounty.crop == 0
+
+    def test_T_perdido_01_hero_inventory_240(self):
+        """T-perdido-01: hero_inventory={240,240,240,240} aunque el ataque se pierda."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert preview.hero_inventory is not None
+        assert preview.hero_inventory["wood"] == 240
+        assert preview.hero_inventory["clay"] == 240
+        assert preview.hero_inventory["iron"] == 240
+        assert preview.hero_inventory["crop"] == 240
+
+    def test_T_perdido_01_attacker_troops_lost_2(self):
+        """T-perdido-01: tropas atacantes con lost=2, survived=0."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert len(preview.attacker_troops) >= 1
+        # Al menos una tropa con lost=2
+        assert any(t.lost == 2 for t in preview.attacker_troops)
+        # survived = sent - lost
+        for t in preview.attacker_troops:
+            assert t.survived == t.sent - t.lost
+
+    def test_T_perdido_01_coords(self):
+        """T-perdido-01: coordenadas del oasis correctas."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert preview.coord_x_dest == -59
+        assert preview.coord_y_dest == 25
+
+    def test_T_perdido_01_animals_are_nature(self):
+        """T-perdido-01: los nombres de la cabecera son reconocidos como NATURE."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        for a in preview.animals:
+            assert 1 <= a.animal_ordinal <= 10
+
+    def test_T_perdido_01_already_exists_false(self):
+        """T-perdido-01: already_exists=False sin db_port."""
+        preview = parse_attack_report(_REPORT_LOST_EN)
+        assert preview.already_exists is False
+        assert preview.existing_id is None
+
+    def test_T_perdido_03_spanish_names_recognized(self):
+        """T-perdido-03: nombres de animales en español reconocidos en modo perdido."""
+        preview = parse_attack_report(_REPORT_LOST_ES)
+        assert len(preview.animals) > 0
+        for a in preview.animals:
+            assert a.present is None
+            assert 1 <= a.animal_ordinal <= 10
+
+    def test_T_perdido_04_mixed_row_raises_DefeatReportParseError(self):
+        """T-perdido-04: fila mixta '?'/dígitos → DefeatReportParseError (EC-20)."""
+        with pytest.raises(DefeatReportParseError) as exc_info:
+            parse_attack_report(_REPORT_MIXED_ROW)
+        assert "formato" in str(exc_info.value).lower() or "mezcla" in str(exc_info.value).lower()
+
+    def test_T_perdido_05_unknown_animals_in_defeat_mode_raises(self):
+        """T-perdido-05: nombres no reconocibles en modo perdido → error (EC-19)."""
+        with pytest.raises((UnrecognizedAnimalError, NotNatureOasisError)):
+            parse_attack_report(_REPORT_LOST_UNKNOWN_ANIMALS)
+
+    def test_T_perdido_10_hero_inventory_null(self):
+        """T-perdido-10: reporte perdido sin inventario del héroe → hero_inventory=None."""
+        preview = parse_attack_report(_REPORT_LOST_NO_HERO)
+        assert preview.hero_inventory is None
+        for a in preview.animals:
+            assert a.present is None
+
+    def test_no_regression_normal_report_still_has_ints(self):
+        """CA-D05: reporte ganado normal → present/killed/survived siguen siendo enteros."""
+        preview = parse_attack_report(_REPORT_EN)
+        for a in preview.animals:
+            assert isinstance(a.present, int), f"present debe ser int, got {type(a.present)}"
+            assert isinstance(a.killed, int), f"killed debe ser int, got {type(a.killed)}"
+            assert isinstance(a.survived, int), f"survived debe ser int, got {type(a.survived)}"
+            assert a.survived == a.present - a.killed

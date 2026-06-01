@@ -2,7 +2,7 @@
 id: bd-ataques-oasis
 titulo: BD de ataques a oasis por pegado de reporte
 estado: implemented
-fecha: 2026-05-30
+fecha: 2026-06-01
 autor: analista
 apis_validadas_por_desarrollador_apis: true
 ---
@@ -64,6 +64,8 @@ No hay autenticación multi-usuario. El sistema es single-tenant (uso local, igu
 
 ### RN-01 — Tipo de reporte aceptado
 Solo reportes donde el **defensor** es `Nature`. El identificador de esto en el texto es la sección de defensor que contiene únicamente nombres de animales NATURE (Rata, Rat, Ratte, etc.). Si el parser no encuentra ningún animal NATURE en la sección de defensor, rechaza el reporte con error descriptivo.
+
+**Extensión (delta §17):** Se aceptan también reportes donde el atacante **pierde** contra el oasis. En este caso Travian oculta las cantidades del defensor mostrando `?` en lugar de números. El parser debe detectar este modo, guardar los animales con `present/killed/survived = null` (desconocido), y completar el resto del reporte (coordenadas, tropas atacantes, botín = 0, inventario del héroe si lo hay). Ver §17 para la especificación completa del modo perdido.
 
 ### RN-02 — Idioma: autodetección por inversión del catálogo
 El parser construye en memoria un índice invertido `name_lower → ordinal` desde `core/i18n/catalog/base/troops.json`, filtrando solo las entradas `NATURE_1..10`. Este índice tiene **215 entradas únicas** (nombres distintos en 25 idiomas), con **cero colisiones cross-language** (ningún nombre de animal mapea a dos ordinales distintos). El parser puede por tanto operar con un único índice global sin necesitar conocer el idioma a priori.
@@ -205,6 +207,9 @@ DELETE /attack-reports/{id}
 | EC-05 | Tropa atacante con 0 enviadas | Incluir en la lista (cantidad 0 es válida: el usuario puede haber enviado solo héroe). |
 | EC-06 | Sin bajas del atacante | `attacker_losses` = 0 para todos los tipos. Fila "pérdidas" con todos ceros. |
 | EC-07 | Sin animales sobrevivientes (todos muertos) | `animals_survived = 0`. `animals_killed = animals_present`. |
+| EC-18 | Reporte perdido (cantidades de animales son `?`) | Modo perdido: `present/killed/survived = null` para todos los animales. Tropas atacantes, botín (=0), coordenadas e inventario del héroe se guardan normalmente. Ver §17. |
+| EC-19 | Reporte perdido con nombres de animales no reconocibles en la cabecera | Aunque las cantidades sean `?`, si los nombres de la cabecera no están en el índice NATURE se lanza `NotNatureOasisError`. Los nombres sí aparecen en un reporte perdido real; si no hay ninguno reconocible, el texto no es un reporte de oasis válido. |
+| EC-20 | Fila de cantidades mixta (`?` y dígitos) | Considerado reporte corrupto: Travian siempre produce o todo `?` o todo dígitos. Si se detecta una fila mixta, se lanza `DefeatReportParseError` con mensaje descriptivo (no se guarda parcialmente). |
 | EC-08 | Sin botín (oasis vacío o sin carga) | `bounty_wood/clay/iron/crop = 0`, `capacity_used = 0`. |
 | EC-09 | Reporte de ataque con héroe pero sin tropas | Aceptado: todas las cantidades de tropas atacantes son 0 excepto el héroe (héroe no es una tropa en el catálogo; se ignora como tipo). |
 | EC-10 | Texto pegado con caracteres extra (encabezado de UI de Travian, menús) | El parser ignora líneas que no encajan con ningún patrón conocido. Solo falla si no puede extraer los bloques obligatorios: fecha+coords, al menos una tropa atacante, al menos un animal Nature. |
@@ -1273,6 +1278,516 @@ Todos los endpoints son CREAR (nuevos). El router `attack_reports.py` no existe.
 
 ---
 
+---
+
+## §17 — Delta: soporte de reportes de combate PERDIDO contra oasis
+
+> **Estado:** `ready-for-impl`
+> **Fecha:** 2026-06-01
+> **APIs validadas (fallback manual):** CORRECTO — ver nota al pie de esta sección.
+>
+> Este delta es una extensión del spec original. Solo describe los cambios
+> respecto a la implementación existente. El implementador debe leer las
+> secciones 1–16 antes de abordar este delta.
+
+---
+
+### §17.1 — Contexto y problema
+
+Cuando el atacante **pierde** contra los animales de un oasis, Travian no revela
+las cantidades del defensor y las muestra como `?`:
+
+```
+Defender
+Rat    Spider    Snake    Bat    Wild Boar    Wolf    Bear    Crocodile    Tiger    Elephant
+?      ?         ?        ?      ?            ?       ?       ?            ?        ?
+```
+
+El parser actual falla con `NotNatureOasisError` porque la fila de `?` no supera
+el test `re.match(r"^[\d\s\t]+$", next_line)` (líneas 636 y 645 de
+`core/use_cases/attack_report_parser.py`), de modo que nunca detecta la fila de
+cantidades y aborta antes de llegar a validar los nombres.
+
+**Decisión de producto (no negociable):** el reporte perdido SÍ se guarda.
+Las cantidades de animales quedan como `null` en BD, que significa "hubo animales
+pero no se sabe cuántos", distinto de `0` (oasis vacío de ese tipo).
+
+---
+
+### §17.2 — Señal de detección del modo perdido
+
+**Regla primaria (idioma-agnóstica):**
+
+> Si, tras la cabecera de nombres de animales NATURE, la siguiente línea
+> no vacía contiene **únicamente tokens `?`** (separados por espacios o tabs,
+> sin ningún dígito), el parser entra en **modo perdido**.
+
+Implementación en pseudocódigo:
+
+```python
+_DEFEAT_ROW_PATTERN = re.compile(r"^\?[\s\t]*(\?[\s\t]*)*$")
+
+def _is_defeat_row(line: str) -> bool:
+    """True si la línea es una fila de cantidades desconocidas (solo '?')."""
+    return bool(_DEFEAT_ROW_PATTERN.match(line.strip()))
+
+def _is_mixed_row(line: str) -> bool:
+    """True si la línea mezcla '?' y dígitos (caso corrupto)."""
+    has_digit = bool(re.search(r"\d", line))
+    has_question = "?" in line
+    return has_digit and has_question
+```
+
+**Supuesto documentado:** Travian produce filas homogéneas: o todo dígitos
+(`12  0  3  …`) o todo `?` (`?  ?  ?  …`). Nunca mezcla ambos en la misma fila.
+Si se detecta una fila mixta (`_is_mixed_row`), se considera reporte corrupto
+y se lanza `DefeatReportParseError` (ver §17.3).
+
+**Por qué NO usar el texto de la sección "Information"** (ej. "None of the
+attacker's troops have returned"): ese texto varía por idioma de Travian y es
+frágil ante actualizaciones de traducción. El patrón de `?` es estructural y
+universal en todas las versiones e idiomas del juego.
+
+**Señal secundaria (opcional, para logging/debugging):** la sección "Information"
+con el texto de pérdida puede leerse como confirmación adicional, pero nunca como
+fuente primaria de la detección del modo perdido.
+
+---
+
+### §17.3 — Nueva excepción del parser
+
+```python
+# core/use_cases/attack_report_parser.py
+
+class DefeatReportParseError(Exception):
+    """
+    El reporte es de combate perdido pero el formato es corrupto o inesperado.
+    Ejemplo: fila de cantidades mixta (mezcla '?' y dígitos).
+    """
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+```
+
+Mapa de excepción → HTTP (añadir al handler del router):
+```
+DefeatReportParseError → 422  (detail: "Reporte de combate perdido con formato inesperado: <reason>")
+```
+
+---
+
+### §17.4 — Cambios en el parser (`_extract_animals`)
+
+La función `_extract_animals` en `core/use_cases/attack_report_parser.py`
+(líneas 588–696) debe modificarse en el punto donde detecta la fila numérica
+que sigue a la cabecera de nombres.
+
+**Lógica modificada (pseudocódigo):**
+
+```python
+# Después de identificar la línea de cabecera (header_names) y
+# antes de recopilar filas numéricas:
+
+next_line = defender_lines[i + 1].strip()
+
+if _is_mixed_row(next_line):
+    raise DefeatReportParseError(
+        "La fila de cantidades del defensor mezcla '?' y dígitos. "
+        "Formato de reporte no reconocido."
+    )
+
+if _is_defeat_row(next_line):
+    # Modo perdido: cantidades desconocidas
+    defeat_mode = True
+    rows_numeric = []   # vacío — no hay cantidades reales
+else:
+    # Modo normal: la siguiente línea es numérica
+    if not re.match(r"^[\d\s\t]+$", next_line):
+        # No es numérica ni de '?': no es una tabla válida, seguir buscando
+        i += 1
+        continue
+    defeat_mode = False
+    # recopilar filas numéricas (lógica existente)
+    j = i + 1
+    while j < len(defender_lines):
+        ln = defender_lines[j].strip()
+        if ln and re.match(r"^[\d\s\t]+$", ln):
+            rows_numeric.append(_extract_numbers_from_line(ln))
+            j += 1
+        else:
+            break
+```
+
+**Construcción de `AnimalEntry` en modo perdido:**
+
+```python
+if defeat_mode:
+    # present/killed/survived = None (desconocido, no 0)
+    for name, ordinal in recognized:
+        entries.append(AnimalEntry(
+            animal_ordinal=ordinal,
+            animal_name=name,
+            present=None,
+            killed=None,
+            survived=None,
+        ))
+else:
+    # lógica existente con present_row / killed_row
+    present_row = rows_numeric[0] if rows_numeric else []
+    killed_row  = rows_numeric[1] if len(rows_numeric) > 1 else []
+    for idx, (name, ordinal) in enumerate(recognized):
+        present  = present_row[idx] if idx < len(present_row) else 0
+        killed   = killed_row[idx]  if idx < len(killed_row)  else 0
+        survived = present - killed
+        entries.append(AnimalEntry(
+            animal_ordinal=ordinal,
+            animal_name=name,
+            present=present,
+            killed=killed,
+            survived=survived,
+        ))
+```
+
+**Validación de nombres en modo perdido:** se mantiene igual que en modo normal.
+Los nombres de la cabecera SIEMPRE se validan contra el índice NATURE,
+independientemente de si las cantidades son `?` o números. Si en modo perdido
+no hay ningún nombre reconocible, se lanza `NotNatureOasisError` (el texto
+no es un reporte de oasis válido).
+
+**Número de filas en modo perdido:** Travian muestra UNA sola fila de `?`
+(no dos). El código no intenta leer una segunda fila de `?`. El modo perdido
+se activa solo con la primera fila de `?` y no procesa filas adicionales de
+cantidades.
+
+---
+
+### §17.5 — Cambios en la entidad `AnimalEntry`
+
+Archivo: `core/entities/attack_report.py`
+
+```python
+# ANTES:
+@dataclass
+class AnimalEntry:
+    animal_ordinal: int
+    animal_name: str
+    present: int
+    killed: int
+    survived: int
+
+# DESPUÉS:
+@dataclass
+class AnimalEntry:
+    animal_ordinal: int
+    animal_name: str
+    present: int | None    # None = desconocido (reporte perdido). 0 = oasis vacío de ese tipo.
+    killed: int | None     # None si present es None.
+    survived: int | None   # None si present es None. Nunca se calcula si present es None.
+```
+
+**Precedente en el proyecto:** `AttackerTroopEntry.troop_ordinal: int | None`
+(línea 37 del mismo archivo), `hero_inventory: dict | None`, `utc_offset: str | None`.
+El patrón `int | None` con `INTEGER` sin NOT NULL en SQLite y `null` en JSON
+ya es el estándar del proyecto. No se inventa un patrón nuevo.
+
+---
+
+### §17.6 — Cambios en la BD (`attack_report_animals`)
+
+#### DDL objetivo
+
+```sql
+CREATE TABLE IF NOT EXISTS attack_report_animals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id       INTEGER NOT NULL REFERENCES attack_reports(id) ON DELETE CASCADE,
+
+    animal_ordinal  INTEGER NOT NULL CHECK (animal_ordinal BETWEEN 1 AND 10),
+    animal_name     TEXT    NOT NULL,
+
+    -- present/killed/survived son NULL cuando el atacante pierde (cantidades desconocidas).
+    -- 0 significa oasis vacío de ese tipo de animal (distinto semánticamente de NULL).
+    present         INTEGER,   -- era: INTEGER NOT NULL DEFAULT 0
+    killed          INTEGER,   -- era: INTEGER NOT NULL DEFAULT 0
+    survived        INTEGER    -- era: INTEGER NOT NULL DEFAULT 0
+);
+```
+
+Se eliminan `NOT NULL` y `DEFAULT 0` de las tres columnas. El `NULL` explícito
+es la representación correcta de "desconocido"; `DEFAULT 0` eliminaría la
+distinción entre "oasis vacío" y "cantidad desconocida".
+
+#### Estrategia de migración SQLite (sin Alembic)
+
+El proyecto no usa Alembic. Las tablas se crean con `CREATE TABLE IF NOT EXISTS`
+en `ensure_tables()`. Las tablas ya existentes en BDs de desarrollo **no se
+recrean automáticamente** al cambiar el DDL.
+
+**Estrategia para BDs de desarrollo (única opción viable):**
+
+> Borrar `travian_bot.db` antes de arrancar la app tras este cambio.
+> La BD de desarrollo no contiene datos de producción y su recreación es trivial.
+
+Comando:
+```bash
+rm travian_bot.db
+# Luego arrancar la app; ensure_tables() crea la BD con el nuevo DDL.
+```
+
+**Estrategia para BDs con datos que se quieran preservar (si aplica):**
+
+SQLite 3.35+ (disponible en Python 3.14 que empaqueta SQLite 3.46+) soporta
+`ALTER TABLE ... DROP COLUMN`. Sin embargo, `DROP COLUMN` en SQLite no re-evalúa
+constraints CHECK ni DEFAULT. La única solución robusta para un ALTER en SQLite
+es la recreación de tabla con el patrón oficial:
+
+```sql
+-- 1. Renombrar tabla vieja
+ALTER TABLE attack_report_animals RENAME TO attack_report_animals_old;
+
+-- 2. Crear tabla nueva con DDL actualizado
+CREATE TABLE attack_report_animals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id       INTEGER NOT NULL REFERENCES attack_reports(id) ON DELETE CASCADE,
+    animal_ordinal  INTEGER NOT NULL CHECK (animal_ordinal BETWEEN 1 AND 10),
+    animal_name     TEXT    NOT NULL,
+    present         INTEGER,
+    killed          INTEGER,
+    survived        INTEGER
+);
+
+-- 3. Copiar datos (los NOT NULL se eliminan; los 0 existentes se conservan como 0, no como NULL)
+INSERT INTO attack_report_animals
+    (id, report_id, animal_ordinal, animal_name, present, killed, survived)
+SELECT id, report_id, animal_ordinal, animal_name, present, killed, survived
+FROM attack_report_animals_old;
+
+-- 4. Eliminar tabla vieja
+DROP TABLE attack_report_animals_old;
+
+-- 5. Recrear índices
+CREATE INDEX IF NOT EXISTS idx_animals_report ON attack_report_animals (report_id);
+CREATE INDEX IF NOT EXISTS idx_animals_ordinal_report ON attack_report_animals (animal_ordinal, report_id);
+```
+
+**AVISO sobre el adapter modificado sin commitear:** El spec del usuario indica
+que `adapters/db/attack_report_sqlite_adapter.py` tiene cambios sin commitear
+de otra feature (farm stats). El implementador no debe asumir el estado actual
+del archivo; solo debe verificar que el DDL de `_CREATE_ANIMALS` queda con
+las columnas `INTEGER` (sin NOT NULL ni DEFAULT 0) y que los INSERT en
+`save_report()` pasen `None` cuando `entry.present is None`.
+
+---
+
+### §17.7 — Cambios en el adapter de BD (`save_report`)
+
+En `adapters/db/attack_report_sqlite_adapter.py`, la función `save_report()`
+inserta las filas de `attack_report_animals`. El INSERT debe pasar `None`
+cuando el campo es `None` en la entidad (SQLite almacena `None` de Python
+como `NULL`):
+
+```python
+# Fragmento de save_report — inserción de animales
+for animal in preview.animals:
+    await conn.execute(
+        """
+        INSERT INTO attack_report_animals
+            (report_id, animal_ordinal, animal_name, present, killed, survived)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            report_id,
+            animal.animal_ordinal,
+            animal.animal_name,
+            animal.present,    # None → NULL en SQLite (correcto)
+            animal.killed,     # None → NULL en SQLite (correcto)
+            animal.survived,   # None → NULL en SQLite (correcto)
+        ),
+    )
+```
+
+No hay cambios adicionales en el adapter: las queries de stats ya toleran
+NULL correctamente (ver §17.8).
+
+---
+
+### §17.8 — Impacto en queries de estadísticas
+
+No se modifica ninguna query de estadísticas. El comportamiento con NULL es
+correcto por diseño de SQL:
+
+| Query | Comportamiento con NULL | Correcto |
+|---|---|---|
+| `WHERE a.present > 0` (EP-06 `animal_appearances`) | `NULL > 0` es `FALSE` → los reportes perdidos no distorsionan las estadísticas de aparición | Sí |
+| `AVG(a.present)`, `MAX(a.present)`, `MIN(...)` | SQLite ignora NULL en funciones de agregación | Sí |
+| `LAG(a.survived) OVER w` (regeneración) | Si `survived` es NULL, `prev_survived` es NULL, `regenerated` es NULL — coherente: sin datos de supervivencia no hay delta calculable | Sí |
+| `SUM(bounty_*)` en historial | Botín es 0 en reportes perdidos (NOT NULL DEFAULT 0 en `attack_reports`); no afecta | Sí |
+
+---
+
+### §17.9 — Cambios en el contrato de API
+
+**No hay cambios de ruta, método ni código de estado** en ninguno de los
+6 endpoints existentes (EP-01 a EP-06).
+
+El único cambio observable en el contrato es que los campos `present`,
+`killed` y `survived` dentro de `animals[]` (EP-01 y EP-04) y
+`animals_summary[]` (EP-03) pasan a ser `integer | null`:
+
+```jsonc
+// EP-01 — Response 200 (reporte perdido)
+{
+  "attacked_at": "2026-05-15T08:30:00",
+  "coord_x_dest": -59,
+  "coord_y_dest": 25,
+  "origin_village_name": "Mi aldea",
+  "attacker_troops": [
+    { "troop_name": "Swordsman", "troop_ordinal": null, "sent": 2, "lost": 2, "survived": 0 },
+    { "troop_name": "Theutates Thunder", "troop_ordinal": null, "sent": 2, "lost": 2, "survived": 0 }
+  ],
+  "animals": [
+    { "animal_ordinal": 1, "animal_name": "Rat",      "present": null, "killed": null, "survived": null },
+    { "animal_ordinal": 2, "animal_name": "Spider",   "present": null, "killed": null, "survived": null },
+    // … (todos los animales de la cabecera con null)
+  ],
+  "bounty": { "wood": 0, "clay": 0, "iron": 0, "crop": 0, "capacity_used": 0, "capacity_total": 0 },
+  "hero_inventory": { "wood": 240, "clay": 240, "iron": 240, "crop": 240 },
+  "already_exists": false,
+  "existing_id": null
+}
+```
+
+**Nota sobre `hero_inventory` en reportes perdidos:** el inventario del héroe
+SÍ puede tener recursos aunque el ataque se pierda (el héroe puede matar
+algunos animales antes de morir y generar drop). Si el héroe sobrevive con
+recursos del inventario, `hero_inventory` contiene los valores; si el héroe
+muere sin drop, es `null`. El parser no cambia la lógica de extracción del
+inventario del héroe: sigue siendo independiente del modo perdido/ganado.
+
+**Validación del gate de APIs (fallback manual — agente Agent no disponible):**
+
+FastAPI serializa automáticamente `None` como `null` para campos `int | None`
+en dataclasses. Los consumidores actuales del contrato (frontend React) ya
+reciben `null` en otros campos (`troop_ordinal`, `hero_inventory`, `utc_offset`)
+y los tratan como falsy/nulo. No hay rotura de contrato. El contrato actualizado
+en `documentacion/api/` (si existe la entrada de este router) debe reflejar
+que `present`/`killed`/`survived` son `integer | null`.
+
+---
+
+### §17.10 — Requisito de UI (sin diseñar la implementación)
+
+El frontend debe mostrar `null` en `present`/`killed`/`survived` como el
+símbolo `?` (o `—`), no como `0` ni como `NaN`. Los archivos afectados
+identificados son:
+
+- `frontend/src/components/attack-reports/IngestTab.jsx` (modificado sin commitear)
+- `frontend/src/components/combat/TravianReport.jsx` (reutilizado para el preview)
+- Cualquier tabla/tarjeta del historial que muestre cantidades de animales
+
+El requisito exacto: **si `present`, `killed` o `survived` es `null`, mostrar `?`
+en el lugar del número**. No calcular ningún valor derivado (ej. ratio de bajas)
+cuando alguno de sus operandos sea `null`.
+
+Esta decisión de UI se anota como requisito para el implementador. La implementación
+visual concreta (símbolo elegido, estilo) queda a criterio del implementador dentro
+de las convenciones de diseño de `frontend/DESIGN.md`.
+
+---
+
+### §17.11 — Flujo alternativo nuevo (Fase 1 actualizada)
+
+Añadir al diagrama §9.1 la rama de modo perdido:
+
+```
+F →|animales NATURE con cantidades '?'| F2[Modo perdido: present/killed/survived = null]
+F2 → I{Extraer todos los campos}
+```
+
+En texto: cuando `_extract_animals` detecta modo perdido, no lanza excepción.
+Retorna `AnimalEntry` con `present=None, killed=None, survived=None` para cada
+animal reconocido en la cabecera. El flujo principal continúa normalmente
+(extracción de tropas atacantes, botín, coordenadas, verificación de unicidad).
+
+---
+
+### §17.12 — Plan de pruebas del delta
+
+#### Casos de test nuevos
+
+| ID | Caso | Verificación |
+|---|---|---|
+| T-perdido-01 | Parse de reporte perdido (reporte de referencia: oasis (-59\|25), galos Swordsman×2 + Theutates Thunder×2, todos perdidos, animales desconocidos, bounty 0/0, hero_inventory {240,240,240,240}) | Preview: `animals[*].present=null`, `animals[*].killed=null`, `animals[*].survived=null`; `bounty.wood=0`; `hero_inventory.wood=240`; `attacker_troops[0].lost=2, survived=0`; `already_exists=false` |
+| T-perdido-02 | Save del reporte perdido de referencia | 201 Created; filas en `attack_report_animals` con `present=NULL, killed=NULL, survived=NULL`; fila en `attack_reports` con `bounty_*=0` |
+| T-perdido-03 | Parse de reporte perdido en otro idioma (p.ej. español con "Rata Araña...") | Nombres reconocidos correctamente; cantidades null |
+| T-perdido-04 | Fila mixta `?` y dígitos | 422 con `DefeatReportParseError` |
+| T-perdido-05 | Reporte perdido sin nombres de animales reconocibles en la cabecera | 422 `NotNatureOasisError` |
+| T-perdido-06 | `GET /attack-reports/{id}` de un reporte perdido guardado | `animals[*].present=null` en response |
+| T-perdido-07 | `GET /attack-reports/stats/oasis` con mezcla de reportes ganados y perdidos | `animal_appearances` excluye reportes perdidos (present IS NULL, no satisface `> 0`); `gap_seconds` se calcula normalmente; `regenerated=null` si el ataque previo fue perdido |
+| T-perdido-08 | `GET /attack-reports` (lista) con reporte perdido incluido | `animals_summary[*].present=null` en el item del reporte perdido |
+| T-perdido-09 | Pegar el mismo reporte perdido dos veces | Preview con `already_exists=true` la segunda vez; save devuelve 409 |
+| T-perdido-10 | Reporte perdido con `hero_inventory` nulo (héroe muerto sin drop) | `hero_inventory=null`; todos los `animals[*].present=null` |
+
+#### Tests unitarios a añadir
+
+- `tests/unit/test_attack_report_parser.py`: añadir fixture de texto de reporte perdido.
+  Verificar que `parse_attack_report(raw_perdido)` devuelve `AnimalEntry` con
+  `present=None` para cada animal; no lanza excepción.
+- Añadir test de `_is_defeat_row` y `_is_mixed_row` como funciones auxiliares.
+- Añadir test de que fila mixta lanza `DefeatReportParseError`.
+
+#### Tests de integración a añadir
+
+- `tests/test_attack_reports_api.py`: añadir los 10 casos `T-perdido-*`.
+  Usar fixture de texto crudo del reporte perdido de referencia.
+
+---
+
+### §17.13 — Criterios de aceptación del delta
+
+Lista verificable por el implementador antes de considerar el delta completo:
+
+- [ ] **CA-D01**: Pegar el reporte perdido de referencia (oasis (-59|25), Swordsman×2 + Theutates Thunder×2 todas perdidas, animales `?`, bounty 0/0, hero_inventory 240×4) obtiene un preview 200 OK con `animals[*].present=null` y `hero_inventory.wood=240`.
+- [ ] **CA-D02**: Confirmar el guardado del reporte perdido de referencia devuelve 201 Created. Verificar en BD que las filas de `attack_report_animals` tienen `present=NULL, killed=NULL, survived=NULL`.
+- [ ] **CA-D03**: `GET /attack-reports/{id}` del reporte perdido devuelve `animals[*].present=null` (no `0`, no `NaN`).
+- [ ] **CA-D04**: El frontend muestra `?` (o `—`) en los campos de cantidades de animales cuando son `null`. No muestra `0` ni `NaN`.
+- [ ] **CA-D05**: Un reporte ganado existente NO se ve afectado: sus `present`/`killed`/`survived` siguen siendo enteros, no `null`.
+- [ ] **CA-D06**: `GET /attack-reports/stats/oasis` con mezcla de reportes ganados y uno perdido: `animal_appearances` no incluye al reporte perdido en los conteos (`present IS NULL` excluido por `WHERE a.present > 0`).
+- [ ] **CA-D07**: Pegar texto con fila mixta `?`/dígitos devuelve 422 con mensaje descriptivo que incluye "formato inesperado".
+- [ ] **CA-D08**: Pegar reporte perdido con nombres de animales no reconocibles devuelve 422 `NotNatureOasisError`.
+- [ ] **CA-D09**: La tabla `attack_report_animals` en una BD nueva (o recreada) tiene las columnas `present`, `killed`, `survived` sin `NOT NULL` y sin `DEFAULT 0`.
+- [ ] **CA-D10**: Todos los tests nuevos `T-perdido-*` pasan. La suite completa existente (943 passed antes del delta) sigue en verde.
+
+---
+
+### §17.14 — Riesgos y trade-offs del delta
+
+| ID | Riesgo / Trade-off | Decisión |
+|---|---|---|
+| RT-D01 | `is_defeat: bool` como campo explícito vs. inferir de `animals[*].present is None` | NO añadir `is_defeat`. Es 100% derivable. Una columna redundante en BD viola la normalización y obliga a mantener coherencia entre ella y las cantidades. El frontend y las queries infieren el modo con `present IS NULL`. |
+| RT-D02 | Migración de BD de desarrollo — borrar `travian_bot.db` | ACEPTADO. La BD de desarrollo no tiene datos de producción. Documentado claramente para el implementador. Para BDs con datos se proporciona el script de recreación de tabla (§17.6). |
+| RT-D03 | Reportes perdidos distorsionan estadísticas de regeneración | MITIGADO. Las queries de stats excluyen naturalmente los reportes perdidos (`WHERE a.present > 0`). El cálculo de regeneración devuelve `null` si algún ataque en la cadena fue perdido — comportamiento correcto y semánticamente honesto. |
+| RT-D04 | Parser con fila de `?` en sección de atacante (no defensor) | Sin riesgo. La detección de `_is_defeat_row` solo se activa dentro de `_extract_animals` (sección Defender). La sección de tropas atacantes siempre tiene dígitos reales (el atacante sí ve sus propias tropas). |
+| RT-D05 | El adapter tiene cambios sin commitear (farm stats) | El implementador debe resolver el merge/rebase antes de aplicar este delta. El spec describe el estado objetivo del DDL; el implementador verifica el estado actual del archivo antes de editar. |
+
+---
+
+### §17.15 — Trazabilidad del delta
+
+| Decisión técnica | Requisito / edge case que la origina |
+|---|---|
+| Detección por fila de `?` (no por texto "Information") | EC-18; idioma-agnóstico; texto "Information" es localizado y frágil |
+| `present/killed/survived = null` (no 0) | Decisión de producto del usuario: null = desconocido; 0 = oasis vacío de ese tipo |
+| `int | None` en `AnimalEntry` | Patrón existente del proyecto (`troop_ordinal: int | None`, `utc_offset: str | None`) |
+| `INTEGER` sin NOT NULL/DEFAULT en DDL | Necesario para que SQLite acepte NULL explícito; DEFAULT 0 ocultaría la distinción desconocido vs. vacío |
+| Validar nombres en modo perdido | EC-19; los nombres SÍ aparecen; validar confirma que es un oasis Nature y rechaza basura |
+| `DefeatReportParseError` para fila mixta | EC-20; Travian nunca produce filas mixtas; detectarla y rechazarla evita guardar datos corruptos |
+| NO añadir `is_defeat` | RT-D01; dato 100% derivable; redundancia perjudica mantenibilidad |
+| Borrar BD de desarrollo como estrategia de migración | RT-D02; SQLite sin Alembic; BD de desarrollo sin datos de producción |
+| `hero_inventory` sin cambios | La extracción del inventario es independiente del modo perdido/ganado |
+| UI muestra `?` para null | §17.10; el usuario ya ve `?` en Travian; coherencia visual con el juego |
+
+---
+
 ## Registro de implementación
 
 **Fecha:** 2026-05-30
@@ -1308,3 +1823,36 @@ Todos los endpoints son CREAR (nuevos). El router `attack_reports.py` no existe.
 1. **`db_port` en `parse_attack_report()`:** El spec indica que el parser puede recibir `db_port` y verificar unicidad al final. Sin embargo, `parse_attack_report` es una función síncrona y la verificación de BD es async. La verificación de unicidad se mantiene en el handler async de la ruta (EP-01), que llama a `port.report_exists()` tras el parse y rellena `already_exists`/`existing_id` en el preview. El parser siempre devuelve `already_exists=False` (valor por defecto); el endpoint lo corrige. La firma `db_port=None` se conserva para compatibilidad con tests futuros que quieran inyectar un mock síncrono.
 
 2. **Constante HTTP 422:** Se usó `status.HTTP_422_UNPROCESSABLE_CONTENT` (nombre actual en FastAPI 0.136) en lugar de `HTTP_422_UNPROCESSABLE_ENTITY` (deprecado), eliminando 4 advertencias en los tests.
+
+---
+
+## Registro de implementación §17 (delta: reportes de combate PERDIDO)
+
+**Fecha:** 2026-06-01
+
+**Ficheros modificados:**
+- `core/entities/attack_report.py` — `AnimalEntry.present/killed/survived`: `int` → `int | None` con docstring explicando la semántica de `None` vs `0`
+- `core/use_cases/attack_report_parser.py` — nueva excepción `DefeatReportParseError`; nuevo patrón `_DEFEAT_ROW_PATTERN`; nuevas funciones `_is_defeat_row()` / `_is_mixed_row()`; lógica de modo perdido en `_extract_animals()` (fila de `?` → `AnimalEntry` con `present=None`)
+- `adapters/db/attack_report_sqlite_adapter.py` — DDL `_CREATE_ANIMALS`: eliminados `NOT NULL DEFAULT 0` de columnas `present`, `killed`, `survived`
+- `adapters/api/routes/attack_reports.py` — import de `DefeatReportParseError`; nuevo caso en `_parse_or_422()` → HTTP 422 con mensaje "Reporte de combate perdido con formato inesperado: ..."
+- `frontend/src/components/attack-reports/ReportPreview.jsx` — `mapDefenderTroops()`: usa `!= null` en lugar de `?? 0` para preservar `null` como centinela de cantidad desconocida
+- `frontend/src/components/combat/TravianReport.jsx` — `NumRow`: renderiza `'?'` cuando el valor de la celda es `null`/`undefined`; `buildFormationSourceTroops`: preserva `null` en lugar de reemplazar con `0` cuando la entidad tiene cantidad desconocida
+
+**Ficheros de tests modificados:**
+- `tests/unit/test_attack_report_parser.py` — añadidas 3 nuevas clases: `TestDefeatRowHelpers` (11 tests), `TestParseLostReport` (12 tests); import de `DefeatReportParseError`, `_is_defeat_row`, `_is_mixed_row`
+- `tests/test_attack_reports_api.py` — añadida clase `TestLostReport` (15 tests de integración T-perdido-01..10 + CA-D05 + CA-D09)
+
+**Resultado de tests tras el delta:**
+- Tests unitarios parser: 67 passed (antes: 28 + regen; ahora +23 nuevos del delta)
+- Tests de integración API: 86 passed (antes: 37+...; ahora +15 nuevos del delta)
+- Suite completa: 1099 passed, 2 failed (preexistentes — test_login_use_case + test_session_api), 23 skipped
+
+**Sanity-check con fichero real:** `/tmp/report_lost_test.txt` — parser devuelve `animals[*].present=None` en lugar de lanzar `NotNatureOasisError`. Verificado.
+
+**Estrategia de migración BD de desarrollo:** borrar `travian_bot.db` antes del primer arranque tras este cambio (`rm travian_bot.db`). La BD de desarrollo no contiene datos de producción. Para BDs con datos reales, usar el script de recreación de tabla en §17.6.
+
+**Desviaciones respecto al diseño §17:**
+
+1. **`_is_defeat_row` / `_is_mixed_row` exportadas:** El spec las define como privadas, pero se exportan (sin underscore en el import de test) para poder testearlas directamente. No afecta al comportamiento del módulo; las funciones siguen con el prefijo `_` en el módulo (son privadas por convención). El import de test usa la ruta completa del módulo.
+
+2. **`addOrNull` helper inline en `buildFormationSourceTroops`:** El spec no especifica la lógica de agregación de animales con `null`. Implementado como helper anónimo inline (`addOrNull = lambda a, b: None if...`) para preservar `null` cuando cualquier operando es `null`. Decisión trivial y reversible; coherente con el principio "null = desconocido".

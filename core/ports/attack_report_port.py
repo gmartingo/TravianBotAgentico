@@ -124,6 +124,17 @@ class AttackReportPort(ABC):
         Ver spec docs/specs/bd-ataques-oasis-stats-oasis-nav.md §8 EP-08.
         """
 
+    @abstractmethod
+    async def get_global_oasis_stats(self) -> dict:
+        """
+        Devuelve estadísticas globales de todos los oasis combinados:
+          - animal_appearances: aparición de animales (appearances, avg, max, min)
+          - animal_regen_rates: ratio de regeneración por hora por animal
+            (calculado juntando todos los intervalos de todos los oasis)
+        200 con arrays vacíos si no hay datos.
+        Ver spec docs/specs/bd-ataques-oasis-stats-global.md §8 EP-09.
+        """
+
 
 class DuplicateReportError(Exception):
     """Se intenta guardar un reporte que ya existe en BD (clave única violada)."""
