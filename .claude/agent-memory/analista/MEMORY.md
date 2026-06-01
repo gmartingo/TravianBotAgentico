@@ -15,3 +15,4 @@
 - [project-task-order-randomization](project_task_order_randomization.md) — Helper ordered() para aleatorizar orden de colecciones (33/33/33 DEFAULT/REVERSED/SHUFFLE); bot_config tabla genérica
 - [project-bd-ataques-oasis](project_bd_ataques_oasis.md) — BD reportes de ataques a oasis: 0 colisiones NATURE index, 3 tablas, LAG(), correcciones C1-C7 APIs validadas — incluye patrones recurrentes para futuros specs
 - [project-extension-chrome](project_extension_chrome.md) — Extensión Chrome MV3 captura reportes: CORS via service worker (sin delta backend), host_permissions lista TLDs, restricción anti-detección, EP-02 reutilizado
+- [project-human-click](project_human_click.md) — human-click v2.3: Fitts [200-800ms], curvatura 10-25%, human_drift_toward, asyncio.Lock por tab; deltas ready-for-impl sobre base v2.2.1 implementada
