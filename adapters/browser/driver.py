@@ -575,53 +575,79 @@ async def human_click(
     page: zd.Tab,
     jitter: float = 0.25,
     settle_ms: tuple[int, int] = (80, 180),
+    min_duration_ms: int | None = None,
 ) -> None:
     """
     Click anti-detección: posición gaussiana truncada dentro del inner 80%
-    del elemento, precedido de movimiento con waypoints Bézier y micro-pausa,
+    del elemento, precedido de movimiento con waypoints Bézier y timing Fitts,
     con mousedown y mouseup separados por 35-110 ms.
+
+    El timing total del movimiento se calcula con la ley de Fitts (a=100, b=80,
+    rango [200, 800] ms) con jitter ±15% entre waypoints (RN-HC12).
 
     API de zendriver usada:
       - element.apply() para obtener getBoundingClientRect() en coordenadas CSS
       - tab.send(cdp.input_.dispatch_mouse_event(...)) para move/down/up
-      - element.scroll_into_view() para scrollear antes de fallar (RN-HC10)
+      - element.scroll_into_view() para scrollear antes de fallar (RN-HC09)
 
     DPR: zendriver opera en CSS pixels (los eventos CDP reciben coords CSS).
     No se multiplica por devicePixelRatio.
 
+    Args:
+        element: Elemento de zendriver que recibe el click.
+        page: Tab de zendriver donde vive el elemento.
+        jitter: Sigma gaussiana como fracción del ancho/alto del rect [0.10, 0.45].
+        settle_ms: (min_ms, max_ms) del settle antes del mousedown.
+        min_duration_ms: Si se pasa, el movimiento dura al menos este tiempo
+                         (capado a 800 ms). Si Fitts da más, gana Fitts.
+                         None = Fitts puro. Valores <= 0 → ValueError.
+
     Raises:
         ElementNotClickableError: si el rect es inválido (width/height 0)
             o el elemento sigue offscreen tras intentar scroll.
-        ValueError: si jitter o settle_ms están fuera de rango.
+        ValueError: si jitter/settle_ms están fuera de rango, o min_duration_ms <= 0.
     """
     _validate_jitter_settle(jitter, settle_ms)
 
-    # Obtener bounding rect via element.apply() — CSS pixels, coords de viewport
-    rect: dict = await element.apply(
-        "(el) => { const r = el.getBoundingClientRect(); "
-        "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
-    )
+    # Validar min_duration_ms temprano para lanzar ValueError antes del IO
+    if min_duration_ms is not None and min_duration_ms <= 0:
+        raise ValueError("min_duration_ms debe ser un entero positivo")
 
-    tag: str = await element.apply("(el) => el.tagName") or "UNKNOWN"
-
-    # Rect inválido: width o height es 0 (display:none, no en DOM) — EC-HC01
-    if not rect or rect.get("width", 0) == 0 or rect.get("height", 0) == 0:
-        raise ElementNotClickableError(tag, "rect width/height is 0")
-
-    # Elemento offscreen: intentar scroll antes de fallar (RN-HC10, EC-HC09)
-    if _is_offscreen(rect):
-        await element.scroll_into_view()
-        await human_delay(150, 350)
-        rect = await element.apply(
+    # Serializar con human_drift_toward en la misma tab (RN-HC16)
+    async with _TAB_LOCKS.setdefault(id(page), asyncio.Lock()):
+        # Obtener bounding rect via element.apply() — CSS pixels, coords de viewport
+        rect: dict = await element.apply(
             "(el) => { const r = el.getBoundingClientRect(); "
             "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
         )
-        if _is_offscreen(rect):
-            raise ElementNotClickableError(
-                tag, f"element offscreen after scroll attempt: rect={rect}"
-            )
 
-    await _perform_human_click(page, rect, jitter, settle_ms)
+        tag: str = await element.apply("(el) => el.tagName") or "UNKNOWN"
+
+        # Rect inválido: width o height es 0 (display:none, no en DOM) — EC-HC03
+        if not rect or rect.get("width", 0) == 0 or rect.get("height", 0) == 0:
+            raise ElementNotClickableError(tag, "rect width/height is 0")
+
+        # Elemento offscreen: intentar scroll antes de fallar (RN-HC09, EC-HC06)
+        if _is_offscreen(rect):
+            await element.scroll_into_view()
+            await human_delay(150, 350)
+            rect = await element.apply(
+                "(el) => { const r = el.getBoundingClientRect(); "
+                "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
+            )
+            if _is_offscreen(rect):
+                raise ElementNotClickableError(
+                    tag, f"element offscreen after scroll attempt: rect={rect}"
+                )
+
+        # Calcular timing con Fitts (RN-HC12, RN-HC14)
+        tab_key = id(page)
+        origin = _CURSOR_POS.get(tab_key, (0.0, 0.0))
+        px_target, py_target = _sample_click_point(rect, jitter)
+        distance = math.hypot(px_target - origin[0], py_target - origin[1])
+        total_ms = _fitts_duration_ms(distance, rect.get("width", 1.0), min_duration_ms)
+
+        await _perform_human_click(page, rect, jitter, settle_ms, total_ms)
 
 
 async def human_click_at_rect(
@@ -629,6 +655,7 @@ async def human_click_at_rect(
     page: zd.Tab,
     jitter: float = 0.25,
     settle_ms: tuple[int, int] = (80, 180),
+    min_duration_ms: int | None = None,
 ) -> None:
     """
     Variante de human_click para cuando el rect ya viene de JS evaluate().
@@ -639,11 +666,17 @@ async def human_click_at_rect(
     No realiza scroll automático (el caller es responsable de que el rect
     sea válido al pasarlo — si viene de JS, debería estarlo).
 
+    Args:
+        min_duration_ms: Igual que en human_click. None = Fitts puro.
+
     Raises:
         ElementNotClickableError: si el rect tiene width/height 0 o es offscreen.
-        ValueError: si jitter o settle_ms están fuera de rango.
+        ValueError: si jitter/settle_ms están fuera de rango, o min_duration_ms <= 0.
     """
     _validate_jitter_settle(jitter, settle_ms)
+
+    if min_duration_ms is not None and min_duration_ms <= 0:
+        raise ValueError("min_duration_ms debe ser un entero positivo")
 
     if not rect or rect.get("width", 0) == 0 or rect.get("height", 0) == 0:
         raise ElementNotClickableError("js-rect", "rect width/height is 0")
@@ -651,7 +684,13 @@ async def human_click_at_rect(
     if _is_offscreen(rect):
         raise ElementNotClickableError("js-rect", f"element offscreen: rect={rect}")
 
-    await _perform_human_click(page, rect, jitter, settle_ms)
+    async with _TAB_LOCKS.setdefault(id(page), asyncio.Lock()):
+        tab_key = id(page)
+        origin = _CURSOR_POS.get(tab_key, (0.0, 0.0))
+        px_target, py_target = _sample_click_point(rect, jitter)
+        distance = math.hypot(px_target - origin[0], py_target - origin[1])
+        total_ms = _fitts_duration_ms(distance, rect.get("width", 1.0), min_duration_ms)
+        await _perform_human_click(page, rect, jitter, settle_ms, total_ms)
 
 
 # ---------------------------------------------------------------------------
