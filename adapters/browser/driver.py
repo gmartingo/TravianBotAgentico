@@ -408,12 +408,24 @@ def _sample_click_point(
     return px, py
 
 
-def _sample_near_target(rect: dict, end_distance_px: int) -> tuple[float, float]:
+def _sample_near_target(
+    rect: dict,
+    end_distance_px: int,
+    viewport_w: float | None = None,
+    viewport_h: float | None = None,
+) -> tuple[float, float]:
     """
     Calcula un punto aleatorio a ≤ end_distance_px px del borde del rect
     (RN-HC15). El punto está FUERA del rect, en dirección aleatoria.
 
     end_distance_px se capa a [5, 200] px (EC-HC11).
+
+    [GUARDIAN] Si se pasan viewport_w/viewport_h, el punto final se "clampa"
+    al interior del viewport (margen de 1 px). Razón anti-detección (RN-HC18):
+    un target pegado al borde del viewport podía producir un end point FUERA
+    del viewport; CDP dispatchMouseEvent con coords fuera del viewport es no-op
+    silencioso → los últimos waypoints del drift no se renderizan y el cursor
+    "salta" = teletransporte detectable, justo la firma que RN-HC18 elimina.
     """
     d = max(5, min(end_distance_px, 200))
     angle = random.uniform(0, 2 * math.pi)
@@ -433,6 +445,12 @@ def _sample_near_target(rect: dict, end_distance_px: int) -> tuple[float, float]
     )
     x = cx + (border_r + radius) * cos_a
     y = cy + (border_r + radius) * sin_a
+
+    # [GUARDIAN RN-HC18] Clamp al interior del viewport para que el end point
+    # SIEMPRE sea una coordenada CDP válida (sin no-op silencioso = sin salto).
+    if viewport_w is not None and viewport_h is not None:
+        x = max(1.0, min(x, viewport_w - 1.0))
+        y = max(1.0, min(y, viewport_h - 1.0))
     return (x, y)
 
 
@@ -767,14 +785,16 @@ async def human_drift_toward(
                     "drift-target", f"target offscreen after scroll attempt: rect={rect}"
                 )
 
-        # Calcular punto final: a end_distance_px del borde del target, fuera del rect
-        end = _sample_near_target(rect, end_distance_px)
-
-        # Obtener viewport para validar cursor (RN-HC18)
+        # Obtener viewport para validar cursor y clampar el end point (RN-HC18)
         vw = await tab.evaluate("window.innerWidth")
         vh = await tab.evaluate("window.innerHeight")
         vw = float(vw) if isinstance(vw, (int, float)) else 800.0
         vh = float(vh) if isinstance(vh, (int, float)) else 600.0
+
+        # Calcular punto final: a end_distance_px del borde del target, fuera del
+        # rect, pero SIEMPRE dentro del viewport (RN-HC18: evita end point no-op
+        # de CDP cuando el target está pegado al borde de la ventana).
+        end = _sample_near_target(rect, end_distance_px, vw, vh)
 
         # Validar/resetear cursor antes de calcular el Bézier (RN-HC18)
         origin = await _validate_or_reset_cursor(tab, vw, vh)
