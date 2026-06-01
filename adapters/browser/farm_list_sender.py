@@ -17,11 +17,11 @@ import logging
 
 import zendriver as zd
 
-from adapters.browser.driver import human_delay
+from adapters.browser.driver import human_click_at_rect, human_delay
 from adapters.browser.farm_lists import (
     ensure_farm_list_loaded,
     _js_is_expanded,
-    _js_click_expand,
+    _js_get_expand_rect,
 )
 from core.entities.farm_list_send_result import FarmListSendResult
 from core.exceptions import FarmListSendError
@@ -33,18 +33,19 @@ logger = logging.getLogger(__name__)
 # JS expressions (IIFE) para envío y lectura de estado
 # ---------------------------------------------------------------------------
 
-# Localiza el header por data-list y hace click en button.startFarmList vía JS.
+# Localiza el header por data-list y devuelve el bounding rect de button.startFarmList.
+# El JS NO hace click (RN-HC02): solo localiza el botón, Python hace el click vía CDP.
 # El id es un entero → interpolación segura (no hay riesgo de inyección JS).
-_JS_START_FARM_LIST = """
+_JS_GET_START_BUTTON_RECT = """
 (() => {{
     const dragEl = document.querySelector('[data-list="{farm_list_id}"]');
-    if (!dragEl) return 'not_found';
+    if (!dragEl) return null;
     const header = dragEl.closest('.farmListHeader');
-    if (!header) return 'no_header';
+    if (!header) return null;
     const btn = header.querySelector('button.startFarmList');
-    if (!btn) return 'no_button';
-    btn.click();
-    return 'ok';
+    if (!btn) return null;
+    const r = btn.getBoundingClientRect();
+    return {{ x: r.left, y: r.top, width: r.width, height: r.height, _found: true }};
 }})()
 """
 
@@ -107,24 +108,38 @@ async def send_farm_list(
             farm_list_id, "farm list not found in DOM after navigation"
         )
 
-    # Click JS en el botón Start (IIFE — zendriver no acepta argumentos externos)
-    js_click = _JS_START_FARM_LIST.format(farm_list_id=int(farm_list_id))
-    result = await page.evaluate(js_click)
+    # Obtener rect del botón Start via JS (el JS solo localiza, Python hace el click — RN-HC02)
+    js_rect = _JS_GET_START_BUTTON_RECT.format(farm_list_id=int(farm_list_id))
+    start_rect = await page.evaluate(js_rect)
 
-    if result != "ok":
-        reason_map = {
-            "not_found": "no se encontró el elemento [data-list] en el DOM",
-            "no_header": "se encontró el data-list pero no el .farmListHeader padre",
-            "no_button": "no se encontró button.startFarmList — ¿todas las vacas desactivadas?",
-        }
-        reason = reason_map.get(result, f"resultado inesperado del DOM: {result}")
+    if start_rect is None:
+        # El JS devuelve null cuando no puede localizar el botón: distinguimos el motivo
+        # intentando evaluar las condiciones previas en orden. Si no, error genérico.
+        check_el = await page.evaluate(
+            f"!!document.querySelector('[data-list=\"{int(farm_list_id)}\"]')"
+        )
+        if not check_el:
+            reason = "no se encontró el elemento [data-list] en el DOM"
+        else:
+            check_hdr = await page.evaluate(
+                f"!!document.querySelector('[data-list=\"{int(farm_list_id)}\"]')"
+                f"?.closest('.farmListHeader')"
+            )
+            if not check_hdr:
+                reason = "se encontró el data-list pero no el .farmListHeader padre"
+            else:
+                reason = "no se encontró button.startFarmList — ¿todas las vacas desactivadas?"
         raise FarmListSendError(farm_list_id, reason)
+
+    await human_click_at_rect(start_rect, page)
 
     # Asegurarse de que la lista esté expandida para leer .farmListStatus
     # (en ProcessFarmListUseCase ya está expandida; en SendFarmListUseCase puede no estarlo)
     is_expanded = await page.evaluate(_js_is_expanded(farm_list_id))
     if not is_expanded:
-        await page.evaluate(_js_click_expand(farm_list_id))
+        rect = await page.evaluate(_js_get_expand_rect(farm_list_id))
+        if rect:
+            await human_click_at_rect(rect, page)
         await human_delay(400, 600)
 
     # Esperar a que el AJAX de Travian actualice farmListStatus (EC-11)

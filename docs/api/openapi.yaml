@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: TravianBot API
+  version: 1.0.0
+  description: |
+    API interna del bot de Travian. Sin prefijo /api en las rutas
+    (el proxy de Vite lo retira antes de redirigir a :8000).
+
+    FastAPI genera el OpenAPI completo automáticamente en /docs y /openapi.json.
+    Este archivo documenta EP-10 como primer artefacto persistente; el resto
+    de endpoints se irán añadiendo en futuras iteraciones.
+
+servers:
+  - url: http://localhost:8000
+    description: Servidor de desarrollo local
+
+components:
+  schemas:
+    SpeciesColumn:
+      type: object
+      required: [animal_ordinal, animal_name, icon_url]
+      properties:
+        animal_ordinal:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Identificador único de la especie (1=Rat..10)
+        animal_name:
+          type: string
+          description: Nombre crudo de la especie (texto del usuario, no localizado)
+        icon_url:
+          type: string
+          description: "Ruta del icono: /static/icons/nature_{animal_ordinal}.png"
+
+    SpeciesEntry:
+      type: object
+      required: [animal_ordinal, animal_name, icon_url, avg_regen_per_hour, valid_intervals, last_survived, projected_now]
+      properties:
+        animal_ordinal:
+          type: integer
+        animal_name:
+          type: string
+        icon_url:
+          type: string
+        avg_regen_per_hour:
+          type: number
+          format: float
+          description: Media aritmética de tasas de regeneración (animales/hora)
+        valid_intervals:
+          type: integer
+          minimum: 1
+          description: Número de intervalos válidos que contribuyeron a la tasa
+        last_survived:
+          type: [integer, "null"]
+          description: survived del último reporte; null si fue derrota
+        projected_now:
+          type: [integer, "null"]
+          description: "floor(last_survived + avg_regen_per_hour × hours_since_last_attack); null si last_survived es null"
+
+    OasisEntry:
+      type: object
+      required: [coord_x_dest, coord_y_dest, total_attacks, last_attack, hours_since_last_attack, has_rates, species]
+      properties:
+        coord_x_dest:
+          type: integer
+          description: Coordenada X del oasis
+        coord_y_dest:
+          type: integer
+          description: Coordenada Y del oasis
+        total_attacks:
+          type: integer
+          minimum: 1
+        last_attack:
+          type: string
+          description: "attacked_at del último reporte (ISO 8601 naive — hora local Travian, sin zona)"
+          example: "2026-05-30T20:15:00"
+        hours_since_last_attack:
+          type: number
+          format: float
+          minimum: 0
+          description: Horas entre last_attack (ajustado a UTC con utc_offset) y computed_at. Redondeado a 2 decimales.
+        has_rates:
+          type: boolean
+          description: true si al menos una especie tiene tasa calculable
+        species:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpeciesEntry"
+          description: Solo especies con tasa válida para este oasis. Ausencia = celda "—" en la UI.
+
+    OasisComparisonResponse:
+      type: object
+      required: [computed_at, species_columns, oasis]
+      properties:
+        computed_at:
+          type: string
+          format: date-time
+          description: Instante UTC en que se calculó la proyección
+        species_columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpeciesColumn"
+          description: Columnas dinámicas de la tabla (unión de especies con tasa en algún oasis)
+        oasis:
+          type: array
+          items:
+            $ref: "#/components/schemas/OasisEntry"
+          description: |
+            Oasis ordenados: has_rates=true primero, luego last_attack DESC dentro de cada grupo.
+            Array vacío si BD sin reportes.
+
+paths:
+  /attack-reports/stats/oasis/comparison:
+    get:
+      summary: Comparativa de tasas de reaparición por oasis (EP-10)
+      description: |
+        Devuelve la tasa bruta de reaparición de animales y la proyección del número
+        acumulado en el momento de la petición, para todos los oasis conocidos en BD.
+
+        Sin parámetros de entrada. Sin Accept-Language (datos numéricos + animal_name crudo).
+        Siempre devuelve 200, incluso con BD vacía (oasis: [], species_columns: []).
+
+        Ver spec docs/specs/reaparicion-animales-oasis.md §8.
+      operationId: get_oasis_regen_comparison
+      tags:
+        - attack-reports
+      responses:
+        "200":
+          description: Comparativa calculada correctamente (incluso si BD vacía)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OasisComparisonResponse"
+              examples:
+                con_datos:
+                  summary: Con oasis y tasas calculadas
+                  value:
+                    computed_at: "2026-06-01T12:34:56.789012+00:00"
+                    species_columns:
+                      - { animal_ordinal: 1, animal_name: "Rat", icon_url: "/static/icons/nature_1.png" }
+                      - { animal_ordinal: 7, animal_name: "Tiger", icon_url: "/static/icons/nature_7.png" }
+                    oasis:
+                      - coord_x_dest: -70
+                        coord_y_dest: 73
+                        total_attacks: 8
+                        last_attack: "2026-05-30T20:15:00"
+                        hours_since_last_attack: 16.3
+                        has_rates: true
+                        species:
+                          - animal_ordinal: 7
+                            animal_name: "Tiger"
+                            icon_url: "/static/icons/nature_7.png"
+                            avg_regen_per_hour: 1.25
+                            valid_intervals: 6
+                            last_survived: 3
+                            projected_now: 23
+                      - coord_x_dest: 12
+                        coord_y_dest: -45
+                        total_attacks: 1
+                        last_attack: "2026-05-28T10:00:00"
+                        hours_since_last_attack: 50.6
+                        has_rates: false
+                        species: []
+                bd_vacia:
+                  summary: BD vacía
+                  value:
+                    computed_at: "2026-06-01T12:34:56.789012+00:00"
+                    species_columns: []
+                    oasis: []
+        "500":
+          description: Error inesperado de BD
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Error interno al calcular la comparativa de oasis."

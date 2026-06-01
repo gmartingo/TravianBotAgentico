@@ -107,6 +107,26 @@ class BrowserError(TravianBotError):
         self.params = {}
 
 
+class ElementNotClickableError(BrowserError):
+    """
+    El elemento del DOM no es clicable (rect inválido o fuera de pantalla).
+
+    Usada por adapters/browser/driver.py en las funciones de click humano.
+    Añadida en la feature human-click (2026-06-01).
+    """
+
+    error_code = "ELEMENT_NOT_CLICKABLE"
+
+    def __init__(self, element_tag: str = "", reason: str = "") -> None:
+        msg = f"Elemento no clicable: {element_tag}"
+        if reason:
+            msg += f" — {reason}"
+        super().__init__(msg)
+        self.element_tag = element_tag
+        self.reason = reason
+        self.params = {"element_tag": element_tag, "reason": reason}
+
+
 class DatabaseError(TravianBotError):
     """Error al acceder a la base de datos local."""
 
