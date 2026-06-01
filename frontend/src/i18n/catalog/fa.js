@@ -514,15 +514,51 @@ const fa = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'آمار جهانی — همه واحه‌ها',
+  'ar.stats.global.col.appearances':   'ظهورها',
+  'ar.stats.global.appearances.title': 'حیوانات مشاهده‌شده (جهانی)',
+  'ar.stats.global.loading':           'در حال بارگذاری آمار جهانی…',
+  'ar.stats.global.error':             'بارگذاری آمار جهانی انجام نشد.',
+  'ar.stats.global.retry':             'تلاش مجدد',
+  'ar.stats.global.empty.title':       'هنوز داده‌ای وجود ندارد.',
+  'ar.stats.global.empty.sub':         'گزارش‌های حمله اضافه کنید تا آمار جهانی نمایش داده شود.',
+  'ar.stats.global.empty.cta':         'رفتن به ورود →',
+
+  // ترازنامه عملیات (S-cierre)
+  'ar.balance.title':                    'ترازنامه عملیات',
+  'ar.balance.pill.noFilter':            '{n} گزارش · بدون فیلتر تاریخ',
+  'ar.balance.pill.filtered':            '{n} گزارش · {from} — {to}',
+  'ar.balance.filter.from':              'از',
+  'ar.balance.filter.to':                'تا',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'بدون بازه → همه گزارش‌ها نمایش داده می‌شود',
+  'ar.balance.filter.invalidDate':       'فرمت نامعتبر — از YYYY-MM-DD HH:MM:SS استفاده کنید',
+  'ar.balance.filter.apply':             'اعمال',
+  'ar.balance.filter.clear':             'پاک کردن',
+  'ar.balance.col.lost':                 'از دست رفته',
+  'ar.balance.col.stolen':               'دزدیده‌شده',
+  'ar.balance.row.wood':                 'چوب',
+  'ar.balance.row.clay':                 'خاک رس',
+  'ar.balance.row.iron':                 'آهن',
+  'ar.balance.row.crop':                 'گندم',
+  'ar.balance.row.total':                'جمع',
+  'ar.balance.net.label':                'خالص (دزدیده‌شده − از دست رفته)',
+  'ar.balance.tribeless.note':           '{n} گزارش بدون قبیله شناسایی‌شده در «از دست رفته» محاسبه نمی‌شود — ممکن است ضررها کم‌تر از واقع باشند.',
+  'ar.balance.empty.title':              'داده‌ای در بازه انتخاب‌شده وجود ندارد',
+  'ar.balance.empty.sub':                'گزارشی در آن دوره وجود ندارد. بازه را گسترش دهید یا فیلتر را پاک کنید.',
+  'ar.balance.empty.cta':                'پاک کردن فیلتر →',
+  'ar.balance.error':                    'خطا در بارگذاری ترازنامه.',
+  'ar.balance.retry':                    'تلاش مجدد',
+
+  // آکاردئون‌های جهانی (S-cierre)
+  'ar.stats.global.regen.header':        'نرخ بازسازی جهانی',
+  'ar.stats.global.regen.summary':       '{n} حیوان · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'ظهورهای جهانی حیوانات',
+  'ar.stats.global.appearances.summary': '{n} حیوان مشاهده‌شده · برتر: {top}',
+
+  // اعتبارسنجی تاریخ در تاریخچه (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'فرمت نامعتبر — از YYYY-MM-DD HH:MM:SS استفاده کنید',
 
 }
 

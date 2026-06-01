@@ -514,15 +514,51 @@ const nl = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Globale statistieken — alle oases',
+  'ar.stats.global.col.appearances':   'Verschijningen',
+  'ar.stats.global.appearances.title': 'Waargenomen dieren (globaal)',
+  'ar.stats.global.loading':           'Globale statistieken laden…',
+  'ar.stats.global.error':             'Globale statistieken konden niet worden geladen.',
+  'ar.stats.global.retry':             'Opnieuw proberen',
+  'ar.stats.global.empty.title':       'Nog geen gegevens.',
+  'ar.stats.global.empty.sub':         'Voeg aanvalsrapporten toe om globale statistieken te zien.',
+  'ar.stats.global.empty.cta':         'Naar Invoeren →',
+
+  // Operatiebalans (S-cierre)
+  'ar.balance.title':                    'Operatiebalans',
+  'ar.balance.pill.noFilter':            '{n} rapporten · geen datumfilter',
+  'ar.balance.pill.filtered':            '{n} rapporten · {from} — {to}',
+  'ar.balance.filter.from':              'Van',
+  'ar.balance.filter.to':                'Tot',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Geen bereik → toont alle rapporten',
+  'ar.balance.filter.invalidDate':       'Ongeldig formaat — gebruik YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Toepassen',
+  'ar.balance.filter.clear':             'Wissen',
+  'ar.balance.col.lost':                 'Verloren',
+  'ar.balance.col.stolen':               'Gestolen',
+  'ar.balance.row.wood':                 'Hout',
+  'ar.balance.row.clay':                 'Klei',
+  'ar.balance.row.iron':                 'IJzer',
+  'ar.balance.row.crop':                 'Graan',
+  'ar.balance.row.total':                'Totaal',
+  'ar.balance.net.label':                'Netto (gestolen − verloren)',
+  'ar.balance.tribeless.note':           '{n} rapporten zonder herkende stam tellen niet mee bij "Verloren" — verliezen kunnen onderschat zijn.',
+  'ar.balance.empty.title':              'Geen gegevens in het geselecteerde bereik',
+  'ar.balance.empty.sub':                'Geen rapporten in die periode. Vergroot het bereik of wis het filter.',
+  'ar.balance.empty.cta':                'Filter wissen →',
+  'ar.balance.error':                    'Fout bij het laden van de balans.',
+  'ar.balance.retry':                    'Opnieuw proberen',
+
+  // Globale accordeons (S-cierre)
+  'ar.stats.global.regen.header':        'Globale regeneratiesnelheid',
+  'ar.stats.global.regen.summary':       '{n} dieren · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globale dierenverschijningen',
+  'ar.stats.global.appearances.summary': '{n} dieren waargenomen · top: {top}',
+
+  // Datumvalidatie in Geschiedenis (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Ongeldig formaat — gebruik YYYY-MM-DD HH:MM:SS',
 
 }
 

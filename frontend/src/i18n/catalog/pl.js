@@ -513,15 +513,51 @@ const pl = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Statystyki globalne — wszystkie oazy',
+  'ar.stats.global.col.appearances':   'Wystąpienia',
+  'ar.stats.global.appearances.title': 'Obserwowane zwierzęta (globalnie)',
+  'ar.stats.global.loading':           'Ładowanie globalnych statystyk…',
+  'ar.stats.global.error':             'Nie można załadować globalnych statystyk.',
+  'ar.stats.global.retry':             'Spróbuj ponownie',
+  'ar.stats.global.empty.title':       'Brak danych.',
+  'ar.stats.global.empty.sub':         'Dodaj raporty ataków, aby zobaczyć statystyki globalne.',
+  'ar.stats.global.empty.cta':         'Przejdź do Wprowadź →',
+
+  // Bilans operacji (S-cierre)
+  'ar.balance.title':                    'Bilans operacji',
+  'ar.balance.pill.noFilter':            '{n} raporty · bez filtru daty',
+  'ar.balance.pill.filtered':            '{n} raporty · {from} — {to}',
+  'ar.balance.filter.from':              'Od',
+  'ar.balance.filter.to':                'Do',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Brak zakresu → wyświetla wszystkie raporty',
+  'ar.balance.filter.invalidDate':       'Nieprawidłowy format — użyj YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Zastosuj',
+  'ar.balance.filter.clear':             'Wyczyść',
+  'ar.balance.col.lost':                 'Utracone',
+  'ar.balance.col.stolen':               'Ukradzione',
+  'ar.balance.row.wood':                 'Drewno',
+  'ar.balance.row.clay':                 'Glina',
+  'ar.balance.row.iron':                 'Żelazo',
+  'ar.balance.row.crop':                 'Zboże',
+  'ar.balance.row.total':                'Razem',
+  'ar.balance.net.label':                'Netto (ukradzione − utracone)',
+  'ar.balance.tribeless.note':           '{n} raportów bez wykrytego plemienia nie jest uwzględnionych w „Utracone" — straty mogą być niedoszacowane.',
+  'ar.balance.empty.title':              'Brak danych w wybranym zakresie',
+  'ar.balance.empty.sub':                'Brak raportów w tym okresie. Rozszerz zakres lub wyczyść filtr.',
+  'ar.balance.empty.cta':                'Wyczyść filtr →',
+  'ar.balance.error':                    'Błąd podczas ładowania bilansu.',
+  'ar.balance.retry':                    'Spróbuj ponownie',
+
+  // Globalne akordeony (S-cierre)
+  'ar.stats.global.regen.header':        'Globalne tempo regeneracji',
+  'ar.stats.global.regen.summary':       '{n} zwierząt · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globalne wystąpienia zwierząt',
+  'ar.stats.global.appearances.summary': '{n} zwierząt obserwowanych · top: {top}',
+
+  // Walidacja daty w Historii (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Nieprawidłowy format — użyj YYYY-MM-DD HH:MM:SS',
 
 }
 

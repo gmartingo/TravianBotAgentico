@@ -18,7 +18,7 @@
  *   cumulativeBounty — number | null (botín acumulado del rango)
  *   lang          — string (idioma activo)
  */
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
 import { DeletePopover } from '../ui/DeletePopover.jsx'
 import { Spinner } from '../ui/uiUtils.jsx'
@@ -223,94 +223,6 @@ function ReportRow({ item, onRowClick, onDelete, lang, t }) {
   )
 }
 
-// ── Tarjeta móvil ────────────────────────────────────────────────────────────
-function ReportCard({ item, onRowClick, onDelete, lang, t }) {
-  const [showPopover, setShowPopover] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [disappearing, setDisappearing] = useState(false)
-  const deleteRef = useRef(null)
-
-  const coordStr = formatCoords(item.coord_x_dest, item.coord_y_dest)
-  const dateStr  = formatDate(item.attacked_at)
-  const rowBounty = item.bounty_total ?? (
-    item.bounty
-      ? (item.bounty.wood ?? 0) + (item.bounty.clay ?? 0) + (item.bounty.iron ?? 0) + (item.bounty.crop ?? 0)
-      : null
-  )
-
-  async function handleConfirmDelete() {
-    setDeleting(true)
-    try {
-      await onDelete(item.id)
-      setShowPopover(false)
-      setDisappearing(true)
-    } catch {
-      setDeleting(false)
-    }
-  }
-
-  return (
-    <div
-      style={{
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '10px 12px',
-        background: 'var(--surface)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '8px',
-        opacity: disappearing ? 0 : 1,
-        transition: 'opacity 220ms ease',
-        cursor: 'pointer',
-      }}
-      onClick={() => onRowClick(item.id)}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '2px' }}>{dateStr}</div>
-        <div style={{ fontSize: '14px', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', color: 'var(--text)', fontWeight: 600 }}>{coordStr}</div>
-        {rowBounty != null && (
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', marginTop: '2px' }}>
-            {formatBounty(rowBounty, lang)}
-          </div>
-        )}
-      </div>
-      <div data-actions="true" style={{ position: 'relative', display: 'flex', gap: '4px' }}>
-        <div style={{ position: 'relative' }}>
-          <button
-            ref={deleteRef}
-            type="button"
-            aria-label={t('ar.history.delete.aria')}
-            onClick={(e) => { e.stopPropagation(); setShowPopover((v) => !v) }}
-            style={{ width: '32px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '15px' }}
-          >
-            {deleting ? <Spinner size={12} /> : '🗑'}
-          </button>
-          {showPopover && (
-            <DeletePopover
-              question={t('ar.delete.question')}
-              confirmLabel={t('ar.delete.confirm')}
-              cancelLabel={t('ar.delete.cancel')}
-              onConfirm={handleConfirmDelete}
-              onCancel={() => setShowPopover(false)}
-              loading={deleting}
-              triggerRef={deleteRef}
-            />
-          )}
-        </div>
-        <button
-          type="button"
-          aria-label={t('ar.history.detail.aria')}
-          onClick={(e) => { e.stopPropagation(); onRowClick(item.id) }}
-          style={{ width: '32px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px' }}
-        >
-          ▶
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ── Componente principal ─────────────────────────────────────────────────────
 export function HistoryTable({ items, total, page, pageSize, onPageChange, onRowClick, onDelete, cumulativeBounty, lang, loading }) {
   const { t } = useI18n()
@@ -328,8 +240,8 @@ export function HistoryTable({ items, total, page, pageSize, onPageChange, onRow
         {countStr}
       </div>
 
-      {/* ── Tabla (md+) ───────────────────────────────────────────── */}
-      <div className="hidden md:block" style={{ overflowX: 'auto' }}>
+      {/* ── Tabla (única representación, scroll horizontal en móvil) ── */}
+      <div style={{ overflowX: 'auto' }}>
         <table
           role="table"
           style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}
@@ -392,30 +304,6 @@ export function HistoryTable({ items, total, page, pageSize, onPageChange, onRow
             </tfoot>
           )}
         </table>
-      </div>
-
-      {/* ── Tarjetas (< md) ──────────────────────────────────────── */}
-      <div className="md:hidden" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {loading
-          ? Array.from({ length: 3 }, (_, i) => (
-              <div key={i} style={{ height: '70px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', animation: 'pulse 1.4s ease-in-out infinite' }} />
-            ))
-          : items.map((item) => (
-              <ReportCard
-                key={item.id}
-                item={item}
-                onRowClick={onRowClick}
-                onDelete={onDelete}
-                lang={lang}
-                t={t}
-              />
-            ))}
-        {/* Botín acumulado en móvil como resumen */}
-        {!loading && cumulativeBounty != null && items.length > 0 && (
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'end', paddingTop: '4px' }}>
-            {t('ar.history.accum').replace('{n}', new Intl.NumberFormat(lang).format(Math.round(cumulativeBounty)))}
-          </div>
-        )}
       </div>
 
       {/* ── Paginación ────────────────────────────────────────────── */}

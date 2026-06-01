@@ -513,15 +513,51 @@ const ru = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Глобальная статистика — все оазисы',
+  'ar.stats.global.col.appearances':   'Появления',
+  'ar.stats.global.appearances.title': 'Наблюдаемые животные (глобально)',
+  'ar.stats.global.loading':           'Загрузка глобальной статистики…',
+  'ar.stats.global.error':             'Не удалось загрузить глобальную статистику.',
+  'ar.stats.global.retry':             'Повторить',
+  'ar.stats.global.empty.title':       'Данных пока нет.',
+  'ar.stats.global.empty.sub':         'Добавьте отчёты об атаках, чтобы увидеть глобальную статистику.',
+  'ar.stats.global.empty.cta':         'Перейти к Вводу →',
+
+  // Операционный баланс (S-cierre)
+  'ar.balance.title':                    'Операционный баланс',
+  'ar.balance.pill.noFilter':            '{n} отчётов · без фильтра дат',
+  'ar.balance.pill.filtered':            '{n} отчётов · {from} — {to}',
+  'ar.balance.filter.from':              'С',
+  'ar.balance.filter.to':                'По',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Без диапазона → показывает все отчёты',
+  'ar.balance.filter.invalidDate':       'Неверный формат — используйте YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Применить',
+  'ar.balance.filter.clear':             'Очистить',
+  'ar.balance.col.lost':                 'Потеряно',
+  'ar.balance.col.stolen':               'Украдено',
+  'ar.balance.row.wood':                 'Дерево',
+  'ar.balance.row.clay':                 'Глина',
+  'ar.balance.row.iron':                 'Железо',
+  'ar.balance.row.crop':                 'Зерно',
+  'ar.balance.row.total':                'Итого',
+  'ar.balance.net.label':                'Нетто (украдено − потеряно)',
+  'ar.balance.tribeless.note':           '{n} отчётов без определённого племени не учитываются в «Потеряно» — потери могут быть занижены.',
+  'ar.balance.empty.title':              'Нет данных в выбранном диапазоне',
+  'ar.balance.empty.sub':                'За этот период нет отчётов. Расширьте диапазон или очистите фильтр.',
+  'ar.balance.empty.cta':                'Очистить фильтр →',
+  'ar.balance.error':                    'Ошибка при загрузке баланса.',
+  'ar.balance.retry':                    'Повторить',
+
+  // Глобальные аккордеоны (S-cierre)
+  'ar.stats.global.regen.header':        'Глобальная скорость регенерации',
+  'ar.stats.global.regen.summary':       '{n} животных · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Глобальные появления животных',
+  'ar.stats.global.appearances.summary': '{n} животных наблюдалось · top: {top}',
+
+  // Проверка даты в Истории (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Неверный формат — используйте YYYY-MM-DD HH:MM:SS',
 
 }
 

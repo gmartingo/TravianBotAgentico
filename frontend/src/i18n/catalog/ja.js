@@ -513,15 +513,51 @@ const ja = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'グローバル統計 — 全オアシス',
+  'ar.stats.global.col.appearances':   '出現数',
+  'ar.stats.global.appearances.title': '観察された動物（グローバル）',
+  'ar.stats.global.loading':           'グローバル統計を読み込み中…',
+  'ar.stats.global.error':             'グローバル統計を読み込めませんでした。',
+  'ar.stats.global.retry':             '再試行',
+  'ar.stats.global.empty.title':       'まだデータがありません。',
+  'ar.stats.global.empty.sub':         '攻撃レポートを追加するとグローバル統計が表示されます。',
+  'ar.stats.global.empty.cta':         '入力へ移動 →',
+
+  // 作戦収支 (S-cierre)
+  'ar.balance.title':                    '作戦収支',
+  'ar.balance.pill.noFilter':            '{n}件のレポート · 日付フィルターなし',
+  'ar.balance.pill.filtered':            '{n}件のレポート · {from} — {to}',
+  'ar.balance.filter.from':              '開始',
+  'ar.balance.filter.to':                '終了',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              '範囲なし → 全レポートを表示',
+  'ar.balance.filter.invalidDate':       '無効な形式 — YYYY-MM-DD HH:MM:SS を使用してください',
+  'ar.balance.filter.apply':             '適用',
+  'ar.balance.filter.clear':             'クリア',
+  'ar.balance.col.lost':                 '損失',
+  'ar.balance.col.stolen':               '略奪',
+  'ar.balance.row.wood':                 '木材',
+  'ar.balance.row.clay':                 '土',
+  'ar.balance.row.iron':                 '鉄',
+  'ar.balance.row.crop':                 '小麦',
+  'ar.balance.row.total':                '合計',
+  'ar.balance.net.label':                '純損益（略奪 − 損失）',
+  'ar.balance.tribeless.note':           '部族が検出されない{n}件のレポートは「損失」に含まれません — 損失が過小評価される可能性があります。',
+  'ar.balance.empty.title':              '選択した期間にデータがありません',
+  'ar.balance.empty.sub':                'その期間のレポートがありません。範囲を広げるかフィルターをクリアしてください。',
+  'ar.balance.empty.cta':                'フィルターをクリア →',
+  'ar.balance.error':                    '収支の読み込み中にエラーが発生しました。',
+  'ar.balance.retry':                    '再試行',
+
+  // グローバルアコーディオン (S-cierre)
+  'ar.stats.global.regen.header':        'グローバル再生速度',
+  'ar.stats.global.regen.summary':       '{n}匹の動物 · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  '動物のグローバル出現',
+  'ar.stats.global.appearances.summary': '{n}匹の動物が観察されました · top: {top}',
+
+  // 履歴の日付検証 (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      '無効な形式 — YYYY-MM-DD HH:MM:SS を使用してください',
 
 }
 

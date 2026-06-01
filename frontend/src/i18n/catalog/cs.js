@@ -513,15 +513,51 @@ const cs = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Globální statistiky — všechny oázy',
+  'ar.stats.global.col.appearances':   'Výskyty',
+  'ar.stats.global.appearances.title': 'Pozorovaná zvířata (globálně)',
+  'ar.stats.global.loading':           'Načítání globálních statistik…',
+  'ar.stats.global.error':             'Globální statistiky nelze načíst.',
+  'ar.stats.global.retry':             'Zkusit znovu',
+  'ar.stats.global.empty.title':       'Zatím žádná data.',
+  'ar.stats.global.empty.sub':         'Přidejte zprávy o útocích pro zobrazení globálních statistik.',
+  'ar.stats.global.empty.cta':         'Přejít na Vložit →',
+
+  // Bilance operací (S-cierre)
+  'ar.balance.title':                    'Bilance operací',
+  'ar.balance.pill.noFilter':            '{n} zprávy · bez filtru data',
+  'ar.balance.pill.filtered':            '{n} zprávy · {from} — {to}',
+  'ar.balance.filter.from':              'Od',
+  'ar.balance.filter.to':                'Do',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Bez rozsahu → zobrazí všechny zprávy',
+  'ar.balance.filter.invalidDate':       'Neplatný formát — použijte YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Použít',
+  'ar.balance.filter.clear':             'Vymazat',
+  'ar.balance.col.lost':                 'Ztraceno',
+  'ar.balance.col.stolen':               'Ukradeno',
+  'ar.balance.row.wood':                 'Dřevo',
+  'ar.balance.row.clay':                 'Hlína',
+  'ar.balance.row.iron':                 'Železo',
+  'ar.balance.row.crop':                 'Obilí',
+  'ar.balance.row.total':                'Celkem',
+  'ar.balance.net.label':                'Čistý zisk (ukradeno − ztraceno)',
+  'ar.balance.tribeless.note':           '{n} zpráv bez zjištěného kmene se nezapočítává do „Ztraceno" — ztráty mohou být podhodnoceny.',
+  'ar.balance.empty.title':              'Žádná data ve vybraném rozsahu',
+  'ar.balance.empty.sub':                'V tomto období nejsou žádné zprávy. Rozšiřte rozsah nebo vymažte filtr.',
+  'ar.balance.empty.cta':                'Vymazat filtr →',
+  'ar.balance.error':                    'Chyba při načítání bilance.',
+  'ar.balance.retry':                    'Zkusit znovu',
+
+  // Globální akordeony (S-cierre)
+  'ar.stats.global.regen.header':        'Globální rychlost regenerace',
+  'ar.stats.global.regen.summary':       '{n} zvířat · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globální výskyty zvířat',
+  'ar.stats.global.appearances.summary': '{n} zvířat pozorováno · top: {top}',
+
+  // Ověření data v Historii (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Neplatný formát — použijte YYYY-MM-DD HH:MM:SS',
 
 }
 

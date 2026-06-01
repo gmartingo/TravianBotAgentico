@@ -514,15 +514,51 @@ const he = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'סטטיסטיקה גלובלית — כל האואזות',
+  'ar.stats.global.col.appearances':   'הופעות',
+  'ar.stats.global.appearances.title': 'חיות שנצפו (גלובלי)',
+  'ar.stats.global.loading':           'טעינת סטטיסטיקה גלובלית…',
+  'ar.stats.global.error':             'לא ניתן לטעון את הסטטיסטיקה הגלובלית.',
+  'ar.stats.global.retry':             'נסה שוב',
+  'ar.stats.global.empty.title':       'אין נתונים עדיין.',
+  'ar.stats.global.empty.sub':         'הוסף דוחות תקיפה כדי לראות סטטיסטיקה גלובלית.',
+  'ar.stats.global.empty.cta':         'עבור להזנה →',
+
+  // מאזן פעולות (S-cierre)
+  'ar.balance.title':                    'מאזן פעולות',
+  'ar.balance.pill.noFilter':            '{n} דוחות · ללא סינון תאריך',
+  'ar.balance.pill.filtered':            '{n} דוחות · {from} — {to}',
+  'ar.balance.filter.from':              'מ',
+  'ar.balance.filter.to':                'עד',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'ללא טווח → מציג את כל הדוחות',
+  'ar.balance.filter.invalidDate':       'פורמט לא חוקי — השתמש ב-YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'החל',
+  'ar.balance.filter.clear':             'נקה',
+  'ar.balance.col.lost':                 'אבוד',
+  'ar.balance.col.stolen':               'נגנב',
+  'ar.balance.row.wood':                 'עץ',
+  'ar.balance.row.clay':                 'חרסינה',
+  'ar.balance.row.iron':                 'ברזל',
+  'ar.balance.row.crop':                 'חיטה',
+  'ar.balance.row.total':                'סה"כ',
+  'ar.balance.net.label':                'נטו (נגנב − אבוד)',
+  'ar.balance.tribeless.note':           '{n} דוחות ללא שבט מזוהה אינם נכללים ב«אבוד» — ההפסדים עלולים להיות מוערכים בחסר.',
+  'ar.balance.empty.title':              'אין נתונים בטווח שנבחר',
+  'ar.balance.empty.sub':                'אין דוחות בתקופה זו. הרחב את הטווח או נקה את הסינון.',
+  'ar.balance.empty.cta':                'נקה סינון →',
+  'ar.balance.error':                    'שגיאה בטעינת המאזן.',
+  'ar.balance.retry':                    'נסה שוב',
+
+  // אקורדיונים גלובליים (S-cierre)
+  'ar.stats.global.regen.header':        'קצב התחדשות גלובלי',
+  'ar.stats.global.regen.summary':       '{n} חיות · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'הופעות חיות גלובליות',
+  'ar.stats.global.appearances.summary': '{n} חיות שנצפו · מוביל: {top}',
+
+  // אימות תאריך בהיסטוריה (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'פורמט לא חוקי — השתמש ב-YYYY-MM-DD HH:MM:SS',
 
 }
 

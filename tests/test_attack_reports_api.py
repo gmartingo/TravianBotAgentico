@@ -1511,3 +1511,329 @@ Bounty
         )
         allow_headers = resp.headers.get("access-control-allow-headers", "").lower()
         assert "accept-language" in allow_headers
+
+
+# ---------------------------------------------------------------------------
+# Tests EP-balance — GET /attack-reports/stats/balance
+#
+# Valores del CA-B01 verificados contra seeds/game_data/troop_stats.json
+# (troop_stats server_version='1.45').
+# El parser (_assign_attacker_ordinals) asigna ordinales por nombre dentro
+# del roster de la tribu. Los nombres del reporte de referencia resuelven:
+#   "Swordsman"         → gauls ordinal 2 (wood=140, clay=150, iron=185, crop=60)
+#   "Theutates Thunder" → gauls ordinal 4 (wood=350, clay=450, iron=230, crop=60)
+# lost=2 de cada → PERDIDO: wood=980, clay=1200, iron=830, crop=240, total=3250
+# ---------------------------------------------------------------------------
+
+_REPORT_BALANCE_REF = """\
+Attack report on Oasis (-59|25)
+
+15.05.26, 08:30:00
+Server time: 09:30:00 (UTC +1:00)
+
+Attacker
+Mi aldea (-10|-20)
+Swordsman  Theutates Thunder
+2          2
+2          2
+
+Defender
+Rat  Spider  Snake  Bat  Wild Boar  Wolf  Bear  Crocodile  Tiger  Elephant
+?    ?       ?      ?    ?          ?     ?     ?           ?      ?
+
+Bounty
+0  0  0  0
+0/0
+Additional resources were added to the hero's inventory
+240  240  240  240
+"""
+
+_CA_B01_LOST_WOOD  = 980
+_CA_B01_LOST_CLAY  = 1200
+_CA_B01_LOST_IRON  = 830
+_CA_B01_LOST_CROP  = 240
+_CA_B01_LOST_TOTAL = 3250
+_CA_B01_HI_TOTAL   = 960
+_CA_B01_NET        = 960 - 3250  # = -2290
+
+
+class TestBalance:
+    """Tests de GET /attack-reports/stats/balance (EP-balance spec §12)."""
+
+    def test_CA_B02_bd_vacia_todo_cero(self, client):
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["total_reports"] == 0
+        assert data["reports_without_tribe"] == 0
+        assert data["lost"]["total"] == 0
+        assert data["stolen"]["bounty"]["total"] == 0
+        assert data["stolen"]["hero_inventory"]["total"] == 0
+        assert data["stolen"]["total"]["total"] == 0
+        assert data["net"] == 0
+
+    def test_CA_B01_numerico_gaulos(self, client):
+        """CA-B01: fixture Swordsman×2 + Theutates Thunder×2 + hero_inventory 240×4."""
+        resp_save = client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        assert resp_save.status_code == 201, resp_save.text
+
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+
+        assert data["lost"]["wood"]  == _CA_B01_LOST_WOOD
+        assert data["lost"]["clay"]  == _CA_B01_LOST_CLAY
+        assert data["lost"]["iron"]  == _CA_B01_LOST_IRON
+        assert data["lost"]["crop"]  == _CA_B01_LOST_CROP
+        assert data["lost"]["total"] == _CA_B01_LOST_TOTAL
+        assert data["stolen"]["bounty"]["total"] == 0
+        assert data["stolen"]["hero_inventory"]["total"] == _CA_B01_HI_TOTAL
+        assert data["stolen"]["hero_inventory"]["wood"] == 240
+        assert data["stolen"]["hero_inventory"]["clay"] == 240
+        assert data["stolen"]["hero_inventory"]["iron"] == 240
+        assert data["stolen"]["hero_inventory"]["crop"] == 240
+        assert data["stolen"]["total"]["total"] == _CA_B01_HI_TOTAL
+        assert data["net"] == _CA_B01_NET
+
+    def test_CA_B03_reporte_sin_tribu(self, client):
+        """CA-B03: reporte con tribu no resoluble → reports_without_tribe≥1, lost.total=0."""
+        report_no_tribe = """\
+Attack report on Oasis (-32|-45)
+
+30.05.26, 16:28:53
+Server time: 17:28:53 (UTC +1:00)
+
+Attacker
+MyVillage (-10|-20)
+Hero
+5
+5
+
+Defender
+Rat
+3
+3
+
+Bounty
+100  100  100  100
+50/100
+"""
+        resp_save = client.post("/attack-reports", json={"raw_text": report_no_tribe})
+        assert resp_save.status_code == 201, resp_save.text
+
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["reports_without_tribe"] >= 1
+        assert data["lost"]["total"] == 0
+
+    def test_CA_B04_filtro_fecha_fuera_rango(self, client):
+        client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        resp = client.get("/attack-reports/stats/balance?from_date=2030-01-01T00:00:00")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_reports"] == 0
+        assert data["lost"]["total"] == 0
+        assert data["net"] == 0
+
+    def test_CA_B05_filtro_por_coords(self, client):
+        client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        client.post("/attack-reports", json={"raw_text": _REPORT_VALID})
+        resp_filtered = client.get("/attack-reports/stats/balance?x=-59&y=25")
+        assert resp_filtered.status_code == 200
+        resp_global = client.get("/attack-reports/stats/balance")
+        assert resp_filtered.json()["total_reports"] < resp_global.json()["total_reports"]
+
+    def test_CA_B06_from_date_posterior_a_to_date(self, client):
+        resp = client.get(
+            "/attack-reports/stats/balance"
+            "?from_date=2026-06-01T00:00:00&to_date=2026-05-01T00:00:00"
+        )
+        assert resp.status_code == 400
+        assert "from_date" in resp.json()["detail"].lower() or "posterior" in resp.json()["detail"].lower()
+
+    def test_CA_B07_solo_x_sin_y(self, client):
+        resp = client.get("/attack-reports/stats/balance?x=10")
+        assert resp.status_code == 400
+
+    def test_CA_B08_from_date_invalido(self, client):
+        resp = client.get("/attack-reports/stats/balance?from_date=hoy")
+        assert resp.status_code == 400
+        assert "from_date" in resp.json()["detail"].lower()
+
+    def test_CA_B08_to_date_invalido(self, client):
+        resp = client.get("/attack-reports/stats/balance?to_date=manana")
+        assert resp.status_code == 400
+        assert "to_date" in resp.json()["detail"].lower()
+
+    def test_CA_B09_from_date_igual_to_date(self, client):
+        client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        mismo = "2026-05-15T08:30:00"
+        resp = client.get(f"/attack-reports/stats/balance?from_date={mismo}&to_date={mismo}")
+        assert resp.status_code == 200
+        assert resp.json()["total_reports"] >= 1
+
+    def test_CA_B10_bounty_cero_hero_inventory(self, client):
+        client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["stolen"]["bounty"]["total"] == 0
+        assert data["stolen"]["hero_inventory"]["total"] == _CA_B01_HI_TOTAL
+
+    def test_CA_B11_migracion_attacker_tribe_poblada(self, client):
+        """CA-B11: attacker_tribe está poblada → reports_without_tribe=0."""
+        resp_save = client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        assert resp_save.status_code == 201
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200
+        assert resp.json()["reports_without_tribe"] == 0
+
+    def test_CA_B12_migracion_idempotente(self, monkeypatch, tmp_path):
+        """CA-B12: llamar ensure_tables() dos veces no falla ni duplica."""
+        import asyncio
+        import aiosqlite
+        from adapters.db.attack_report_sqlite_adapter import AttackReportSQLiteAdapter
+
+        async def _run():
+            db_file = str(tmp_path / "idem_test.db")
+            async with aiosqlite.connect(db_file) as conn:
+                conn.row_factory = aiosqlite.Row
+                adapter = AttackReportSQLiteAdapter(conn)
+                await adapter.ensure_tables()
+                await adapter.ensure_tables()  # idempotente
+                async with conn.execute("PRAGMA table_info(attack_reports)") as cur:
+                    cols = await cur.fetchall()
+                assert "attacker_tribe" in [c["name"] for c in cols]
+
+        asyncio.run(_run())
+
+    def test_save_report_persiste_attacker_tribe(self, monkeypatch, tmp_path):
+        """save_report persiste attacker_tribe correctamente."""
+        import asyncio
+        import aiosqlite
+        from adapters.db.attack_report_sqlite_adapter import AttackReportSQLiteAdapter
+        from core.use_cases.attack_report_parser import parse_attack_report
+
+        async def _run():
+            db_file = str(tmp_path / "save_tribe_test.db")
+            async with aiosqlite.connect(db_file) as conn:
+                conn.row_factory = aiosqlite.Row
+                adapter = AttackReportSQLiteAdapter(conn)
+                await adapter.ensure_tables()
+                preview = parse_attack_report(_REPORT_BALANCE_REF, db_port=None)
+                report_id = await adapter.save_report(preview, _REPORT_BALANCE_REF)
+                async with conn.execute(
+                    "SELECT attacker_tribe FROM attack_reports WHERE id = ?",
+                    (report_id,),
+                ) as cur:
+                    row = await cur.fetchone()
+                assert row is not None
+                assert row["attacker_tribe"] == "gauls"
+
+        asyncio.run(_run())
+
+    def test_coords_fuera_rango_422(self, client):
+        resp = client.get("/attack-reports/stats/balance?x=999&y=0")
+        assert resp.status_code == 422
+
+    def test_solo_y_sin_x_400(self, client):
+        resp = client.get("/attack-reports/stats/balance?y=10")
+        assert resp.status_code == 400
+
+    def test_estructura_respuesta(self, client):
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "range" in data and "from" in data["range"] and "to" in data["range"]
+        assert "total_reports" in data
+        assert "reports_without_tribe" in data
+        assert set(data["lost"].keys()) == {"wood", "clay", "iron", "crop", "total"}
+        assert "stolen" in data
+        assert "bounty" in data["stolen"]
+        assert "hero_inventory" in data["stolen"]
+        assert "total" in data["stolen"]
+        assert "net" in data
+        assert isinstance(data["net"], int)
+
+    def test_range_refleja_parametros(self, client):
+        resp = client.get(
+            "/attack-reports/stats/balance"
+            "?from_date=2026-01-01T00:00:00&to_date=2026-12-31T23:59:59"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["range"]["from"] == "2026-01-01T00:00:00"
+        assert data["range"]["to"] == "2026-12-31T23:59:59"
+
+    def test_range_none_sin_parametros(self, client):
+        resp = client.get("/attack-reports/stats/balance")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["range"]["from"] is None
+        assert data["range"]["to"] is None
+
+
+# ---------------------------------------------------------------------------
+# Tests unitarios de compute_attacker_cost_loss (spec §12.3)
+# ---------------------------------------------------------------------------
+
+class TestComputeAttackerCostLoss:
+    """Tests unitarios del use case core/use_cases/attack_report_balance.py."""
+
+    def _make_mock_gdp(self, stats):
+        class _MockGDP:
+            async def get_all_troop_stats(self, tribe):
+                return stats
+        return _MockGDP()
+
+    def _make_troop(self, ordinal, lost):
+        class _T:
+            pass
+        t = _T()
+        t.troop_ordinal = ordinal
+        t.lost = lost
+        return t
+
+    def test_tribe_none_devuelve_cero(self):
+        import asyncio
+        from core.use_cases.attack_report_balance import compute_attacker_cost_loss
+        result = asyncio.run(compute_attacker_cost_loss([], None, None))
+        assert result == {"wood": 0, "clay": 0, "iron": 0, "crop": 0, "total": 0}
+
+    def test_game_data_port_none_devuelve_cero(self):
+        import asyncio
+        from core.use_cases.attack_report_balance import compute_attacker_cost_loss
+        result = asyncio.run(compute_attacker_cost_loss([], "gauls", None))
+        assert result == {"wood": 0, "clay": 0, "iron": 0, "crop": 0, "total": 0}
+
+    def test_troop_ordinal_none_ignorada(self):
+        import asyncio
+        from core.use_cases.attack_report_balance import compute_attacker_cost_loss
+        troop = self._make_troop(ordinal=None, lost=5)
+        gdp = self._make_mock_gdp([
+            {"ordinal": 1, "cost_wood": 100, "cost_clay": 100, "cost_iron": 100, "cost_crop": 100}
+        ])
+        result = asyncio.run(compute_attacker_cost_loss([troop], "gauls", gdp))
+        assert result["total"] == 0
+
+    def test_calculo_correcto(self):
+        import asyncio
+        from core.use_cases.attack_report_balance import compute_attacker_cost_loss
+        troop = self._make_troop(ordinal=1, lost=2)
+        gdp = self._make_mock_gdp([
+            {"ordinal": 1, "cost_wood": 10, "cost_clay": 20, "cost_iron": 30, "cost_crop": 40}
+        ])
+        result = asyncio.run(compute_attacker_cost_loss([troop], "gauls", gdp))
+        assert result["wood"] == 20
+        assert result["clay"] == 40
+        assert result["iron"] == 60
+        assert result["crop"] == 80
+        assert result["total"] == 200
+
+    def test_tribu_invalida_devuelve_cero(self):
+        import asyncio
+        from core.use_cases.attack_report_balance import compute_attacker_cost_loss
+        gdp = self._make_mock_gdp([])
+        result = asyncio.run(compute_attacker_cost_loss([], "unicornios", gdp))
+        assert result == {"wood": 0, "clay": 0, "iron": 0, "crop": 0, "total": 0}

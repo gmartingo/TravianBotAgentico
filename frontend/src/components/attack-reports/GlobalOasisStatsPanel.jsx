@@ -23,6 +23,7 @@
  * Ver spec docs/specs/bd-ataques-oasis-stats-global.md §9 frontend.
  * Añadido en la feature bd-ataques-oasis-stats-global (2026-05-31).
  */
+import { useState } from 'react'
 import { RegenRatesSection } from './RegenRatesSection.jsx'
 
 // ── Skeleton de carga ────────────────────────────────────────────────────────
@@ -261,69 +262,131 @@ function GlobalAppearancesTable({ appearances, lang, t }) {
   )
 }
 
+// ── Acordeón colapsable ──────────────────────────────────────────────────────
+// DA-CL15–21: header + resumen + chevron + aria-expanded + max-height.
+// Envuelve sin modificar el componente hijo (DA-CL22).
+function Accordion({ headerId, bodyId, header, summary, open, onToggle, children }) {
+  return (
+    <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
+      <div
+        id={headerId}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle() } }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 0', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+            {header}
+          </span>
+          {!open && summary && (
+            <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {summary}
+            </span>
+          )}
+        </div>
+        {/* Chevron rota 180° al abrir — DA-CL19 */}
+        <span
+          aria-hidden="true"
+          style={{ fontSize: '10px', color: 'var(--text-disabled)', flexShrink: 0, display: 'inline-block', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform var(--dur-base) var(--ease)' }}
+        >
+          ▾
+        </span>
+      </div>
+      {/* Cuerpo: transición max-height — DA-CL20 */}
+      <div
+        id={bodyId}
+        role="region"
+        aria-labelledby={headerId}
+        style={{ overflow: 'hidden', maxHeight: open ? '2000px' : '0', transition: 'max-height var(--dur-base) var(--ease)' }}
+      >
+        <div style={{ paddingBottom: '12px' }}>{children}</div>
+      </div>
+      <style>{`
+        @media (prefers-reduced-motion: reduce) {
+          #${bodyId} { transition: none !important; }
+          #${headerId} span[aria-hidden] { transition: none !important; }
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      `}</style>
+    </div>
+  )
+}
+
 // ── Panel principal ──────────────────────────────────────────────────────────
 export function GlobalOasisStatsPanel({ data, loading, error, onRetry, onGoToIngest, lang, t }) {
-  // Estado loading: skeleton
+  // DA-CL15/16: ambos acordeones arrancan cerrados
+  const [regenOpen, setRegenOpen]             = useState(false)
+  const [appearancesOpen, setAppearancesOpen] = useState(false)
+
   if (loading) return <GlobalStatsSkeleton />
+  if (error)   return <ErrorBanner message={error} onRetry={onRetry} t={t} />
 
-  // Estado error: banner rojo + botón reintentar
-  if (error) {
-    return (
-      <ErrorBanner
-        message={error}
-        onRetry={onRetry}
-        t={t}
-      />
-    )
-  }
-
-  // Estado vacío: arrays vacíos (o sin data)
-  if (
-    !data ||
-    (data.animal_appearances.length === 0 && data.animal_regen_rates.length === 0)
-  ) {
+  if (!data || (data.animal_appearances.length === 0 && data.animal_regen_rates.length === 0)) {
     return <GlobalStatsEmpty onGoToIngest={onGoToIngest} t={t} />
   }
+
+  const rates       = data.animal_regen_rates ?? []
+  const appearances = data.animal_appearances ?? []
+
+  // DA-CL17: resumen de regen "N animales · X,XX–Y,YY /h"
+  const regenSummary = (() => {
+    if (rates.length === 0) return ''
+    const vals = rates.map((r) => r.avg_regen_per_hour).filter((v) => v != null)
+    if (vals.length === 0) return `${rates.length} animales`
+    const fmt = (n) => new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+    return t('ar.stats.global.regen.summary')
+      .replace('{n}', rates.length)
+      .replace('{min}', fmt(Math.min(...vals)))
+      .replace('{max}', fmt(Math.max(...vals)))
+  })()
+
+  // DA-CL17: resumen de apariciones "N animales observados · top: X, Y, Z"
+  const appearancesSummary = (() => {
+    if (appearances.length === 0) return ''
+    const top3 = [...appearances].sort((a, b) => (b.appearances ?? 0) - (a.appearances ?? 0)).slice(0, 3).map((a) => a.animal_name).join(', ')
+    return t('ar.stats.global.appearances.summary')
+      .replace('{n}', appearances.length)
+      .replace('{top}', top3)
+  })()
 
   return (
     <section
       aria-labelledby="global-stats-title"
       role="region"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0',
-        padding: '0 0 4px 0',
-        borderBottom: '1px solid var(--border)',
-        marginBottom: '24px',
-      }}
+      style={{ padding: '0 0 4px 0', borderBottom: '1px solid var(--border)', marginBottom: '24px' }}
     >
-      <h2
-        id="global-stats-title"
-        style={{
-          margin: '0 0 16px 0',
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--text)',
-        }}
-      >
+      <h2 id="global-stats-title" style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text)' }}>
         {t('ar.stats.global.title')}
       </h2>
 
-      {/* Sección 1: Ritmo de regeneración global (RegenRatesSection reutilizada) */}
-      <RegenRatesSection
-        rates={data.animal_regen_rates}
-        totalAttacks={null}
-        lang={lang}
-        t={t}
-      />
+      {/* Acordeón 1: Regen global — DA-CL15 */}
+      <Accordion
+        headerId="global-regen-hdr"
+        bodyId="global-regen-body"
+        header={t('ar.stats.global.regen.header')}
+        summary={regenSummary}
+        open={regenOpen}
+        onToggle={() => setRegenOpen((v) => !v)}
+      >
+        {/* RegenRatesSection sin tocar internamente — DA-CL22 */}
+        <RegenRatesSection rates={rates} totalAttacks={null} lang={lang} t={t} />
+      </Accordion>
 
-      {/* Sección 2: Apariciones globales de animales */}
-      <GlobalAppearancesTable
-        appearances={data.animal_appearances}
-        lang={lang}
-        t={t}
-      />
+      {/* Acordeón 2: Apariciones globales — DA-CL16 */}
+      <Accordion
+        headerId="global-appears-hdr"
+        bodyId="global-appears-body"
+        header={t('ar.stats.global.appearances.header')}
+        summary={appearancesSummary}
+        open={appearancesOpen}
+        onToggle={() => setAppearancesOpen((v) => !v)}
+      >
+        <GlobalAppearancesTable appearances={appearances} lang={lang} t={t} />
+      </Accordion>
     </section>
   )
 }

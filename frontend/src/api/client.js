@@ -334,6 +334,21 @@ export const api = {
     request('GET', `/attack-reports/stats/oasis?x=${encodeURIComponent(x)}&y=${encodeURIComponent(y)}`),
 
   /**
+   * GET /attack-reports/stats/balance → balance global PERDIDOS vs ROBADOS.
+   * Parámetros opcionales: x, y (oasis), from_date, to_date (ISO 8601 con segundos).
+   * Devuelve { range, total_reports, reports_without_tribe, lost, stolen, net }.
+   */
+  getBalanceStats: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.x != null)    qs.set('x', params.x)
+    if (params.y != null)    qs.set('y', params.y)
+    if (params.from_date)    qs.set('from_date', params.from_date)
+    if (params.to_date)      qs.set('to_date', params.to_date)
+    const q = qs.toString()
+    return request('GET', `/attack-reports/stats/balance${q ? '?' + q : ''}`)
+  },
+
+  /**
    * GET /attack-reports → lista paginada de reportes
    * Parámetros opcionales: x, y, fromDt, toDt, page, pageSize.
    */

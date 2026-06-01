@@ -135,6 +135,25 @@ class AttackReportPort(ABC):
         Ver spec docs/specs/bd-ataques-oasis-stats-global.md §8 EP-09.
         """
 
+    @abstractmethod
+    async def get_balance_stats(
+        self,
+        x: int | None = None,
+        y: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        game_data_port=None,
+    ) -> dict:
+        """
+        Cómputo global PERDIDOS (valor en recursos de tropas atacantes muertas)
+        vs ROBADOS (botín + inventario del héroe), con filtros opcionales por
+        oasis (x, y) y por rango de fecha (from_date, to_date, ISO 8601).
+
+        Devuelve {range, total_reports, reports_without_tribe, lost, stolen, net}.
+        El cálculo de PERDIDO requiere game_data_port (costes de tropas por tribu).
+        Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md.
+        """
+
 
 class DuplicateReportError(Exception):
     """Se intenta guardar un reporte que ya existe en BD (clave única violada)."""

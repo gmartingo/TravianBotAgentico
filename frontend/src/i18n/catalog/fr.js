@@ -514,15 +514,51 @@ const fr = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Statistiques globales — toutes les oasis',
+  'ar.stats.global.col.appearances':   'Apparitions',
+  'ar.stats.global.appearances.title': 'Animaux observés (global)',
+  'ar.stats.global.loading':           'Chargement des statistiques globales…',
+  'ar.stats.global.error':             'Impossible de charger les statistiques globales.',
+  'ar.stats.global.retry':             'Réessayer',
+  'ar.stats.global.empty.title':       'Aucune donnée pour l\'instant.',
+  'ar.stats.global.empty.sub':         'Ajoutez des rapports d\'attaque pour voir les statistiques globales.',
+  'ar.stats.global.empty.cta':         'Aller à Saisir →',
+
+  // Bilan des opérations (S-cierre)
+  'ar.balance.title':                    'Bilan des opérations',
+  'ar.balance.pill.noFilter':            '{n} rapports · sans filtre de date',
+  'ar.balance.pill.filtered':            '{n} rapports · {from} — {to}',
+  'ar.balance.filter.from':              'De',
+  'ar.balance.filter.to':                'À',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Sans plage → affiche tous les rapports',
+  'ar.balance.filter.invalidDate':       'Format invalide — utiliser YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Appliquer',
+  'ar.balance.filter.clear':             'Effacer',
+  'ar.balance.col.lost':                 'Perdu',
+  'ar.balance.col.stolen':               'Volé',
+  'ar.balance.row.wood':                 'Bois',
+  'ar.balance.row.clay':                 'Argile',
+  'ar.balance.row.iron':                 'Fer',
+  'ar.balance.row.crop':                 'Blé',
+  'ar.balance.row.total':                'Total',
+  'ar.balance.net.label':                'Net (volé − perdu)',
+  'ar.balance.tribeless.note':           '{n} rapports sans tribu détectée ne comptent pas dans « Perdu » — les pertes peuvent être sous-estimées.',
+  'ar.balance.empty.title':              'Aucune donnée dans la plage sélectionnée',
+  'ar.balance.empty.sub':                'Aucun rapport dans cette période. Élargissez la plage ou effacez le filtre.',
+  'ar.balance.empty.cta':                'Effacer le filtre →',
+  'ar.balance.error':                    'Erreur lors du chargement du bilan.',
+  'ar.balance.retry':                    'Réessayer',
+
+  // Accordéons globaux (S-cierre)
+  'ar.stats.global.regen.header':        'Taux de régénération global',
+  'ar.stats.global.regen.summary':       '{n} animaux · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Apparitions d\'animaux globales',
+  'ar.stats.global.appearances.summary': '{n} animaux observés · top : {top}',
+
+  // Validation de date dans l'Historique (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Format invalide — utiliser YYYY-MM-DD HH:MM:SS',
 
 }
 

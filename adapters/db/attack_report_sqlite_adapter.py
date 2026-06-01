@@ -20,12 +20,19 @@ Añadido en la feature bd-ataques-oasis (2026-05-30).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import logging
+import math
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
 from core.entities.attack_report import AttackReportPreview
+from core.entities.tribe import Tribe
 from core.ports.attack_report_port import AttackReportPort, DuplicateReportError
+from core.use_cases.attack_report_parser import parse_attack_report
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +69,11 @@ CREATE TABLE IF NOT EXISTS attack_reports (
 
     -- Texto crudo original (para re-parseo futuro)
     raw_text            TEXT    NOT NULL,
+
+    -- Tribu del atacante (resuelta por _resolve_attacker_tribe del parser).
+    -- NULL = no resoluble o reporte pre-migración sin re-parsear aún.
+    -- Valores posibles: 'gauls', 'romans', 'teutons', 'huns', 'egyptians', NULL.
+    attacker_tribe      TEXT,
 
     -- Extensión futura (siempre NULL en MVP)
     world_id            INTEGER,
@@ -130,6 +142,12 @@ CREATE INDEX IF NOT EXISTS idx_animals_ordinal_report
     ON attack_report_animals (animal_ordinal, report_id);
 """
 
+# Índice para filtros combinados tribu + fecha (balance stats EP-balance)
+_CREATE_IDX_TRIBE_ATTACKED_AT = """
+CREATE INDEX IF NOT EXISTS idx_attack_reports_tribe_attacked_at
+    ON attack_reports (attacker_tribe, attacked_at);
+"""
+
 
 # ---------------------------------------------------------------------------
 # Función de módulo — cálculo de ratios de regeneración
@@ -184,6 +202,97 @@ def _calc_regen_rates(repopulation_gaps: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Función de módulo — conversión de utc_offset normalizado a timedelta
+# ---------------------------------------------------------------------------
+
+def _parse_utc_offset(s: str) -> timedelta:
+    """
+    Convierte el offset UTC normalizado del reporte (p. ej. "+01:00", "-05:30")
+    a timedelta.
+
+    El formato esperado es "+HH:MM" o "-HH:MM". Si es inesperado, devuelve
+    timedelta(0) como comportamiento defensivo (EC-04: asumir UTC si NULL/inválido).
+
+    Ejemplos:
+      "+01:00" → timedelta(hours=1)
+      "-05:30" → timedelta(hours=-5, minutes=-30)
+      "+00:00" → timedelta(0)
+    """
+    try:
+        sign = 1 if s.startswith("+") else -1
+        parts = s[1:].split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1])
+        return timedelta(hours=sign * hours, minutes=sign * minutes)
+    except Exception:
+        return timedelta(0)
+
+
+# ---------------------------------------------------------------------------
+# Migración M-01 — añadir columna attacker_tribe y poblarla retroactivamente
+# ---------------------------------------------------------------------------
+
+async def _migrate_add_attacker_tribe(conn: aiosqlite.Connection) -> None:
+    """
+    Migración M-01: añade columna attacker_tribe TEXT a attack_reports y la
+    rellena re-parseando raw_text de los reportes existentes.
+
+    Estrategia:
+    1. ADD COLUMN attacker_tribe TEXT (idempotente: captura OperationalError si ya existe).
+    2. Recuperar todos los reportes con attacker_tribe IS NULL.
+    3. Para cada uno: parse_attack_report(raw_text) → attacker_tribe → UPDATE.
+    4. Si el parse falla: loguear warning + dejar NULL (no abortar).
+
+    Idempotente: si la columna ya existe el ADD COLUMN falla silenciosamente;
+    el SELECT solo retorna reportes aún sin tribu.
+
+    Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md §9.4.
+    """
+    # Paso 1: ADD COLUMN (idempotente)
+    try:
+        await conn.execute(
+            "ALTER TABLE attack_reports ADD COLUMN attacker_tribe TEXT"
+        )
+        await conn.commit()
+    except aiosqlite.OperationalError:
+        pass  # columna ya existe — migración ya corrió antes
+
+    # Paso 2: poblar retroactivamente solo los reportes sin tribu
+    async with conn.execute(
+        "SELECT id, raw_text FROM attack_reports WHERE attacker_tribe IS NULL"
+    ) as cursor:
+        rows = await cursor.fetchall()
+
+    if not rows:
+        return
+
+    updated = skipped = 0
+    for row in rows:
+        try:
+            preview = parse_attack_report(row["raw_text"], db_port=None)
+            tribe = getattr(preview, "attacker_tribe", None)
+        except Exception as exc:
+            logger.warning(
+                "M-01: no se pudo re-parsear reporte id=%s: %s", row["id"], exc
+            )
+            skipped += 1
+            continue
+        if tribe:
+            await conn.execute(
+                "UPDATE attack_reports SET attacker_tribe = ? WHERE id = ?",
+                (tribe, row["id"]),
+            )
+            updated += 1
+
+    await conn.commit()
+    logger.info(
+        "M-01 attacker_tribe: %d actualizados, %d sin tribu resoluble.",
+        updated,
+        skipped,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Adaptador
 # ---------------------------------------------------------------------------
 
@@ -198,7 +307,7 @@ class AttackReportSQLiteAdapter(AttackReportPort):
     # -----------------------------------------------------------------------
 
     async def ensure_tables(self) -> None:
-        """Crea las 3 tablas y los 4 índices si no existen."""
+        """Crea las tablas y los índices si no existen. Ejecuta migraciones pendientes."""
         async with self._conn.executescript(
             _CREATE_ATTACK_REPORTS
             + _CREATE_IDX_COORDS_TIME
@@ -210,7 +319,16 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             + _CREATE_IDX_ANIMALS_ORDINAL
         ):
             pass
+
+        await _migrate_add_attacker_tribe(self._conn)
+
+        async with self._conn.executescript(_CREATE_IDX_TRIBE_ATTACKED_AT):
+            pass
+
         await self._conn.commit()
+
+        # Migración M-01: añade columna attacker_tribe y la rellena retroactivamente.
+        await _migrate_add_attacker_tribe(self._conn)
 
     # -----------------------------------------------------------------------
     # Escritura
@@ -234,6 +352,7 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             if preview.hero_inventory is not None
             else None
         )
+        attacker_tribe = getattr(preview, "attacker_tribe", None)
 
         # --- Insertar cabecera ---
         try:
@@ -244,8 +363,8 @@ class AttackReportSQLiteAdapter(AttackReportPort):
                     attacked_at, utc_offset,
                     bounty_wood, bounty_clay, bounty_iron, bounty_crop,
                     capacity_used, capacity_total,
-                    hero_inventory_json, raw_text, world_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    hero_inventory_json, raw_text, attacker_tribe, world_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     preview.coord_x_dest,
@@ -261,6 +380,7 @@ class AttackReportSQLiteAdapter(AttackReportPort):
                     preview.bounty.capacity_total,
                     hero_json,
                     raw_text,
+                    attacker_tribe,
                     None,  # world_id: siempre NULL en MVP
                     created_at,
                 ),
@@ -942,3 +1062,396 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             for row in rows
         ]
         return {"total": len(items), "items": items}
+
+    async def get_all_oasis_regen_comparison(self) -> dict:
+        """
+        Comparativa de tasas de reaparición y proyección de animales para todos los oasis.
+
+        Reutiliza _calc_regen_rates por oasis. Una sola query SQL particionada
+        (no N llamadas a get_oasis_stats). Reutiliza _parse_utc_offset para la
+        conversión de hora local → UTC.
+
+        Ver spec docs/specs/reaparicion-animales-oasis.md §8 EP-10 y §9.
+        """
+        computed_at = datetime.now(timezone.utc)
+
+        # ── Paso 0: Especies que han estado presentes (present>0) en cada oasis ─
+        # RN del spec: un oasis donde NUNCA apareció una especie NO debe mostrar
+        # esa especie, ni con tasa 0. El parser de Travian inserta 10 filas por
+        # reporte (una por especie), con present=0 para las que no existen en ese
+        # oasis. Este índice pre-filtra cuáles han tenido present>0 alguna vez,
+        # equivalente al filtro AND a.present > 0 de get_oasis_stats (EP-06).
+        ever_present_sql = """
+            SELECT DISTINCT r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+            FROM attack_report_animals a
+            JOIN attack_reports r ON r.id = a.report_id
+            WHERE a.present > 0
+        """
+        async with self._conn.execute(ever_present_sql) as cursor:
+            ever_present_rows = await cursor.fetchall()
+
+        # Conjunto de tuplas (coord_x, coord_y, animal_ordinal) con presencia real
+        ever_present: set[tuple] = {
+            (row["coord_x_dest"], row["coord_y_dest"], row["animal_ordinal"])
+            for row in ever_present_rows
+        }
+
+        # ── Paso 1: Regen con LAG particionado por (oasis, animal) ───────────
+        regen_sql = """
+            WITH ordered AS (
+                SELECT
+                    r.id               AS report_id,
+                    r.attacked_at,
+                    r.coord_x_dest,
+                    r.coord_y_dest,
+                    a.animal_ordinal,
+                    a.animal_name,
+                    a.present,
+                    a.survived,
+                    LAG(a.survived) OVER w  AS prev_survived
+                FROM attack_reports r
+                JOIN attack_report_animals a ON a.report_id = r.id
+                WINDOW w AS (
+                    PARTITION BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+                    ORDER BY r.attacked_at
+                )
+            )
+            SELECT
+                report_id, attacked_at, coord_x_dest, coord_y_dest,
+                animal_ordinal, animal_name, present, survived, prev_survived,
+                CASE WHEN prev_survived IS NOT NULL
+                     THEN present - prev_survived
+                     ELSE NULL
+                END AS regenerated
+            FROM ordered
+            ORDER BY coord_x_dest, coord_y_dest, attacked_at, animal_ordinal
+        """
+        async with self._conn.execute(regen_sql) as cursor:
+            regen_rows = await cursor.fetchall()
+
+        # ── Paso 2: Gaps con LAG particionado por oasis (incluye utc_offset) ──
+        gap_sql = """
+            SELECT
+                r.id,
+                r.coord_x_dest,
+                r.coord_y_dest,
+                r.attacked_at,
+                r.utc_offset,
+                LAG(r.attacked_at) OVER w            AS prev_attacked_at,
+                (UNIXEPOCH(r.attacked_at) - UNIXEPOCH(LAG(r.attacked_at) OVER w))
+                                                     AS gap_seconds
+            FROM attack_reports r
+            WINDOW w AS (
+                PARTITION BY r.coord_x_dest, r.coord_y_dest
+                ORDER BY r.attacked_at
+            )
+            ORDER BY r.coord_x_dest, r.coord_y_dest, r.attacked_at
+        """
+        async with self._conn.execute(gap_sql) as cursor:
+            gap_rows = await cursor.fetchall()
+
+        # ── Paso 3: last_survived por (oasis, animal) — último reporte ────────
+        last_survived_sql = """
+            WITH ranked AS (
+                SELECT
+                    r.coord_x_dest,
+                    r.coord_y_dest,
+                    a.animal_ordinal,
+                    a.animal_name,
+                    a.survived,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+                        ORDER BY r.attacked_at DESC
+                    ) AS rn
+                FROM attack_report_animals a
+                JOIN attack_reports r ON r.id = a.report_id
+            )
+            SELECT coord_x_dest, coord_y_dest, animal_ordinal, animal_name, survived
+            FROM ranked
+            WHERE rn = 1
+        """
+        async with self._conn.execute(last_survived_sql) as cursor:
+            last_survived_rows = await cursor.fetchall()
+
+        # Índice: (cx, cy, ordinal) → survived (puede ser None en derrotas §17)
+        last_survived_by_key: dict[tuple, int | None] = {
+            (row["coord_x_dest"], row["coord_y_dest"], row["animal_ordinal"]): row["survived"]
+            for row in last_survived_rows
+        }
+
+        # ── Paso 4: Agrupar regen por report_id — filtrando ausentes ────────────
+        # Solo incluir filas de especies que han tenido present>0 en ese oasis.
+        # Las filas con present siempre 0 (especie nunca presente) se omiten aquí,
+        # evitando que _calc_regen_rates genere tasas 0.0 para especies ausentes.
+        regen_by_report: dict[int, list[dict]] = {}
+        for row in regen_rows:
+            oasis_species_key = (row["coord_x_dest"], row["coord_y_dest"], row["animal_ordinal"])
+            if oasis_species_key not in ever_present:
+                continue  # especie nunca presente en este oasis → omitir
+            rid = row["report_id"]
+            if rid not in regen_by_report:
+                regen_by_report[rid] = []
+            regen_by_report[rid].append({
+                "animal_ordinal": row["animal_ordinal"],
+                "animal_name": row["animal_name"],
+                "regenerated": row["regenerated"],
+            })
+
+        # ── Paso 5: Agrupar gaps por oasis y rastrear metadatos ──────────────
+        gaps_by_oasis: dict[tuple, list[dict]] = {}
+        last_attack_info: dict[tuple, dict] = {}
+        total_attacks_by_oasis: dict[tuple, int] = {}
+
+        for gap in gap_rows:
+            key = (gap["coord_x_dest"], gap["coord_y_dest"])
+            if key not in gaps_by_oasis:
+                gaps_by_oasis[key] = []
+                total_attacks_by_oasis[key] = 0
+
+            total_attacks_by_oasis[key] += 1
+            gaps_by_oasis[key].append({
+                "attack_id": gap["id"],
+                "attacked_at": gap["attacked_at"],
+                "prev_attacked_at": gap["prev_attacked_at"],
+                "gap_seconds": gap["gap_seconds"],
+                "regenerated_animals": regen_by_report.get(gap["id"], []),
+            })
+            # Los gaps están ordenados ASC → el último sobreescribe = más reciente
+            last_attack_info[key] = {
+                "attacked_at": gap["attacked_at"],
+                "utc_offset": gap["utc_offset"],
+            }
+
+        # ── Paso 6: Calcular tasas por oasis ─────────────────────────────────
+        oasis_rates: dict[tuple, list[dict]] = {
+            key: _calc_regen_rates(gaps)
+            for key, gaps in gaps_by_oasis.items()
+        }
+
+        # ── Paso 7: Calcular hours_since_last_attack por oasis ────────────────
+        oasis_hours: dict[tuple, float] = {}
+        computed_naive = computed_at.replace(tzinfo=None)
+        for key, info in last_attack_info.items():
+            last_attack_str = info["attacked_at"]
+            utc_offset_str = info["utc_offset"]  # puede ser None (EC-04)
+
+            last_attack_naive = datetime.fromisoformat(last_attack_str)
+            if utc_offset_str:
+                offset_td = _parse_utc_offset(utc_offset_str)
+                last_attack_utc = last_attack_naive - offset_td
+            else:
+                # EC-04: sin offset → asumir UTC (comportamiento defensivo)
+                last_attack_utc = last_attack_naive
+
+            hours_raw = (computed_naive - last_attack_utc).total_seconds() / 3600
+            oasis_hours[key] = round(max(0.0, hours_raw), 2)  # EC-09: nunca negativo
+
+        # ── Paso 8: Construir species_columns (unión de todas las especies con tasa)
+        species_cols_by_ordinal: dict[int, dict] = {}
+        for rates in oasis_rates.values():
+            for rate in rates:
+                ordinal = rate["animal_ordinal"]
+                if ordinal not in species_cols_by_ordinal:
+                    species_cols_by_ordinal[ordinal] = {
+                        "animal_ordinal": ordinal,
+                        "animal_name": rate["animal_name"],
+                        "icon_url": f"/static/icons/nature_{ordinal}.png",
+                    }
+
+        species_columns = [
+            species_cols_by_ordinal[ordinal]
+            for ordinal in sorted(species_cols_by_ordinal.keys())
+        ]
+
+        # ── Paso 9: Construir oasis entries ──────────────────────────────────
+        oasis_entries = []
+        for key in gaps_by_oasis:
+            cx, cy = key
+            rates = oasis_rates.get(key, [])
+            has_rates = len(rates) > 0
+            hours = oasis_hours.get(key, 0.0)
+            last_attack_str = last_attack_info[key]["attacked_at"]
+
+            species_list = []
+            for rate in rates:
+                ordinal = rate["animal_ordinal"]
+                last_surv = last_survived_by_key.get((cx, cy, ordinal))
+
+                if last_surv is None:
+                    # RN-08 / EC-02: survived NULL → proyección null
+                    projected_now = None
+                else:
+                    # RN-07: floor, mínimo 0
+                    raw = last_surv + rate["avg_regen_per_hour"] * hours
+                    projected_now = max(0, math.floor(raw))
+
+                species_list.append({
+                    "animal_ordinal": ordinal,
+                    "animal_name": rate["animal_name"],
+                    "icon_url": f"/static/icons/nature_{ordinal}.png",
+                    "avg_regen_per_hour": rate["avg_regen_per_hour"],
+                    "valid_intervals": rate["valid_intervals"],
+                    "last_survived": last_surv,
+                    "projected_now": projected_now,
+                })
+
+            oasis_entries.append({
+                "coord_x_dest": cx,
+                "coord_y_dest": cy,
+                "total_attacks": total_attacks_by_oasis[key],
+                "last_attack": last_attack_str,
+                "hours_since_last_attack": hours,
+                "has_rates": has_rates,
+                "species": species_list,
+            })
+
+        # ── Paso 10: Ordenar — has_rates DESC, luego last_attack DESC (RN-05) ─
+        oasis_entries.sort(key=lambda e: e["last_attack"], reverse=True)
+        oasis_entries.sort(key=lambda e: not e["has_rates"])
+
+        # ── Paso 11: Devolver dict de respuesta ───────────────────────────────
+        return {
+            "computed_at": computed_at.isoformat(),
+            "species_columns": species_columns,
+            "oasis": oasis_entries,
+        }
+
+    async def get_balance_stats(
+        self,
+        x: int | None = None,
+        y: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        game_data_port=None,
+    ) -> dict:
+        """
+        Cómputo balance PERDIDOS vs ROBADOS (EP-balance).
+
+        Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md §9.3.
+        """
+        # ── Construir WHERE dinámico (mismo patrón que list_reports) ──────────
+        where_parts: list[str] = []
+        params: list = []
+        if x is not None:
+            where_parts.append("r.coord_x_dest = ? AND r.coord_y_dest = ?")
+            params.extend([x, y])
+        if from_date is not None:
+            where_parts.append("r.attacked_at >= ?")
+            params.append(from_date)
+        if to_date is not None:
+            where_parts.append("r.attacked_at <= ?")
+            params.append(to_date)
+        where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+        # ── Paso 1: ROBADO (bounty + hero_inventory) — una sola query SQL ──────
+        stolen_sql = f"""
+            SELECT
+                COUNT(*)                                          AS total_reports,
+                COALESCE(SUM(r.bounty_wood),  0)                  AS b_wood,
+                COALESCE(SUM(r.bounty_clay),  0)                  AS b_clay,
+                COALESCE(SUM(r.bounty_iron),  0)                  AS b_iron,
+                COALESCE(SUM(r.bounty_crop),  0)                  AS b_crop,
+                COALESCE(SUM(COALESCE(json_extract(r.hero_inventory_json,'$.wood'), 0)), 0)  AS h_wood,
+                COALESCE(SUM(COALESCE(json_extract(r.hero_inventory_json,'$.clay'), 0)), 0)  AS h_clay,
+                COALESCE(SUM(COALESCE(json_extract(r.hero_inventory_json,'$.iron'), 0)), 0)  AS h_iron,
+                COALESCE(SUM(COALESCE(json_extract(r.hero_inventory_json,'$.crop'), 0)), 0)  AS h_crop,
+                COUNT(CASE WHEN r.attacker_tribe IS NULL THEN 1 END) AS without_tribe
+            FROM attack_reports r
+            {where}
+        """
+        async with self._conn.execute(stolen_sql, params) as cursor:
+            row = await cursor.fetchone()
+
+        total_reports = row["total_reports"] if row else 0
+        without_tribe = row["without_tribe"] if row else 0
+        b_wood = row["b_wood"] if row else 0
+        b_clay = row["b_clay"] if row else 0
+        b_iron = row["b_iron"] if row else 0
+        b_crop = row["b_crop"] if row else 0
+        h_wood = row["h_wood"] if row else 0
+        h_clay = row["h_clay"] if row else 0
+        h_iron = row["h_iron"] if row else 0
+        h_crop = row["h_crop"] if row else 0
+
+        # ── Paso 2: PERDIDO — recuperar tropas con tribu conocida ───────────────
+        # Añadimos las condiciones de tribu/lost/ordinal al WHERE de filtros.
+        troop_where_parts = list(where_parts) + [
+            "r.attacker_tribe IS NOT NULL",
+            "t.lost > 0",
+            "t.troop_ordinal IS NOT NULL",
+        ]
+        troop_where = "WHERE " + " AND ".join(troop_where_parts)
+
+        troops_sql = f"""
+            SELECT
+                r.id           AS report_id,
+                r.attacker_tribe,
+                t.troop_ordinal,
+                t.lost
+            FROM attack_reports r
+            JOIN attack_report_attacker_troops t ON t.report_id = r.id
+            {troop_where}
+        """
+        async with self._conn.execute(troops_sql, params) as cursor:
+            troop_rows = await cursor.fetchall()
+
+        # ── Paso 3: calcular PERDIDO agrupando por tribu ───────────────────────
+        lost_wood = lost_clay = lost_iron = lost_crop = 0
+        if game_data_port and troop_rows:
+            by_tribe: dict[str, list] = defaultdict(list)
+            for tr in troop_rows:
+                by_tribe[tr["attacker_tribe"]].append(tr)
+
+            for tribe_str, rows in by_tribe.items():
+                try:
+                    tribe = Tribe(tribe_str)
+                except ValueError:
+                    continue
+                stats = await game_data_port.get_all_troop_stats(tribe)
+                cost_by_ord = {s["ordinal"]: s for s in stats}
+                for tr in rows:
+                    s = cost_by_ord.get(tr["troop_ordinal"])
+                    if not s:
+                        continue
+                    lost_wood += tr["lost"] * (s.get("cost_wood") or 0)
+                    lost_clay += tr["lost"] * (s.get("cost_clay") or 0)
+                    lost_iron += tr["lost"] * (s.get("cost_iron") or 0)
+                    lost_crop += tr["lost"] * (s.get("cost_crop") or 0)
+
+        lost_total = lost_wood + lost_clay + lost_iron + lost_crop
+        bounty_total = b_wood + b_clay + b_iron + b_crop
+        hi_total = h_wood + h_clay + h_iron + h_crop
+        stolen_total = bounty_total + hi_total
+        s_wood = b_wood + h_wood
+        s_clay = b_clay + h_clay
+        s_iron = b_iron + h_iron
+        s_crop = b_crop + h_crop
+
+        return {
+            "range": {"from": from_date, "to": to_date},
+            "total_reports": total_reports,
+            "reports_without_tribe": without_tribe,
+            "lost": {
+                "wood": lost_wood, "clay": lost_clay,
+                "iron": lost_iron, "crop": lost_crop,
+                "total": lost_total,
+            },
+            "stolen": {
+                "bounty": {
+                    "wood": b_wood, "clay": b_clay,
+                    "iron": b_iron, "crop": b_crop,
+                    "total": bounty_total,
+                },
+                "hero_inventory": {
+                    "wood": h_wood, "clay": h_clay,
+                    "iron": h_iron, "crop": h_crop,
+                    "total": hi_total,
+                },
+                "total": {
+                    "wood": s_wood, "clay": s_clay,
+                    "iron": s_iron, "crop": s_crop,
+                    "total": stolen_total,
+                },
+            },
+            "net": stolen_total - lost_total,
+        }

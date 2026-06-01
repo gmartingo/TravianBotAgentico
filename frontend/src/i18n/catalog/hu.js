@@ -513,15 +513,51 @@ const hu = {
   'ar.stats.repop.first':          '(first attack)',
 
   // Statistics — global panel (EP-09)
-  'ar.stats.global.title':             'Global statistics — all oases',
-  'ar.stats.global.col.appearances':   'Appearances',
-  'ar.stats.global.appearances.title': 'Observed animals (global)',
-  'ar.stats.global.loading':           'Loading global statistics…',
-  'ar.stats.global.error':             'Could not load global statistics.',
-  'ar.stats.global.retry':             'Retry',
-  'ar.stats.global.empty.title':       'No data yet.',
-  'ar.stats.global.empty.sub':         'Add some attack reports to see global statistics.',
-  'ar.stats.global.empty.cta':         'Go to Ingest →',
+  'ar.stats.global.title':             'Globális statisztikák — összes oázis',
+  'ar.stats.global.col.appearances':   'Megjelenések',
+  'ar.stats.global.appearances.title': 'Megfigyelt állatok (globális)',
+  'ar.stats.global.loading':           'Globális statisztikák betöltése…',
+  'ar.stats.global.error':             'A globális statisztikák nem tölthetők be.',
+  'ar.stats.global.retry':             'Újra',
+  'ar.stats.global.empty.title':       'Még nincs adat.',
+  'ar.stats.global.empty.sub':         'Adj hozzá néhány támadásjelentést a globális statisztikák megtekintéséhez.',
+  'ar.stats.global.empty.cta':         'Ugrás a Beillesztés oldalra →',
+
+  // Műveleti mérleg (S-cierre)
+  'ar.balance.title':                    'Műveleti mérleg',
+  'ar.balance.pill.noFilter':            '{n} jelentés · nincs dátumszűrő',
+  'ar.balance.pill.filtered':            '{n} jelentés · {from} — {to}',
+  'ar.balance.filter.from':              'Tól',
+  'ar.balance.filter.to':                'Ig',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Nincs tartomány → az összes jelentést mutatja',
+  'ar.balance.filter.invalidDate':       'Érvénytelen formátum — használd: YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Alkalmaz',
+  'ar.balance.filter.clear':             'Törlés',
+  'ar.balance.col.lost':                 'Elveszett',
+  'ar.balance.col.stolen':               'Elrabolt',
+  'ar.balance.row.wood':                 'Fa',
+  'ar.balance.row.clay':                 'Agyag',
+  'ar.balance.row.iron':                 'Vas',
+  'ar.balance.row.crop':                 'Gabona',
+  'ar.balance.row.total':                'Összesen',
+  'ar.balance.net.label':                'Nettó (elrabolt − elveszett)',
+  'ar.balance.tribeless.note':           '{n} törzs nélküli jelentés nem számít be az „Elveszett" értékbe — a veszteségek alulbecsültek lehetnek.',
+  'ar.balance.empty.title':              'Nincs adat a kijelölt tartományban',
+  'ar.balance.empty.sub':                'Ebben az időszakban nincs jelentés. Bővítsd a tartományt vagy töröld a szűrőt.',
+  'ar.balance.empty.cta':                'Szűrő törlése →',
+  'ar.balance.error':                    'Hiba a mérleg betöltésekor.',
+  'ar.balance.retry':                    'Újra',
+
+  // Globális kinyitható panelek (S-cierre)
+  'ar.stats.global.regen.header':        'Globális regenerációs ütem',
+  'ar.stats.global.regen.summary':       '{n} állat · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Globális állatmegjelenések',
+  'ar.stats.global.appearances.summary': '{n} állat megfigyelve · top: {top}',
+
+  // Dátumvalidálás a Történetben (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Érvénytelen formátum — használd: YYYY-MM-DD HH:MM:SS',
 
 }
 

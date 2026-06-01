@@ -765,6 +765,42 @@ const es = {
   'calc.res.crop':                         'Cereal',
   'calc.optimizer.defenderNote':          'Bajas defensoras del mejor combate ganador; pueden variar para esta alternativa.',
 
+  // ── Balance de operaciones (S-cierre) ────────────────────────────────────
+  'ar.balance.title':                    'Balance de operaciones',
+  'ar.balance.pill.noFilter':            '{n} reportes · sin filtro de fecha',
+  'ar.balance.pill.filtered':            '{n} reportes · {from} — {to}',
+  'ar.balance.filter.from':              'Desde',
+  'ar.balance.filter.to':                'Hasta',
+  'ar.balance.filter.placeholder':       'YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.hint':              'Sin rango → muestra todos los reportes',
+  'ar.balance.filter.invalidDate':       'Formato inválido — usar YYYY-MM-DD HH:MM:SS',
+  'ar.balance.filter.apply':             'Aplicar',
+  'ar.balance.filter.clear':             'Limpiar',
+  'ar.balance.col.lost':                 'Perdido',
+  'ar.balance.col.stolen':               'Robado',
+  'ar.balance.row.wood':                 'Madera',
+  'ar.balance.row.clay':                 'Barro',
+  'ar.balance.row.iron':                 'Hierro',
+  'ar.balance.row.crop':                 'Trigo',
+  'ar.balance.row.total':                'Total',
+  'ar.balance.net.label':                'Neto (robado − perdido)',
+  'ar.balance.tribeless.note':           '{n} reportes sin tribu detectada no computan en «Perdido» — las bajas pueden estar subestimadas.',
+  'ar.balance.empty.title':              'Sin datos en el rango seleccionado',
+  'ar.balance.empty.sub':                'No hay reportes en ese periodo. Amplía el rango o limpia el filtro.',
+  'ar.balance.empty.cta':                'Limpiar filtro →',
+  'ar.balance.error':                    'Error al cargar el balance.',
+  'ar.balance.retry':                    'Reintentar',
+
+  // Acordeones globales (S-cierre)
+  'ar.stats.global.regen.header':        'Ritmo de regeneración global',
+  'ar.stats.global.regen.summary':       '{n} animales · {min}–{max} /h',
+  'ar.stats.global.appearances.header':  'Apariciones globales de animales',
+  'ar.stats.global.appearances.summary': '{n} animales observados · top: {top}',
+
+  // Validación de fecha en Historial (S-cierre)
+  'ar.history.filter.date.placeholder':  'YYYY-MM-DD HH:MM:SS',
+  'ar.history.filter.date.invalid':      'Formato inválido — usar YYYY-MM-DD HH:MM:SS',
+
   // ── Reportes de ataques a oasis (S12) ────────────────────────────────────
   'nav.attackReports':                 'Reportes de oasis',
   'ar.page.title':                     'Reportes de oasis',
