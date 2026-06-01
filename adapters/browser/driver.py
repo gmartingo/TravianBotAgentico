@@ -693,6 +693,107 @@ async def human_click_at_rect(
         await _perform_human_click(page, rect, jitter, settle_ms, total_ms)
 
 
+async def human_drift_toward(
+    target: object,
+    tab: zd.Tab,
+    duration_ms: int,
+    end_distance_px: int = 20,
+) -> None:
+    """
+    Mueve el cursor hacia target durante duration_ms ms SIN hacer click (RN-HC15).
+
+    Termina en un punto aleatorio a ≤ end_distance_px px del borde del target.
+    Útil para aprovechar tiempos de espera (AJAX, dwell) moviendo el cursor hacia
+    el próximo click de forma natural. El caller que invoque human_click(target)
+    después obtendrá un trayecto corto (~end_distance_px px) → Fitts ≈ 150-300 ms.
+
+    NOTA: si la página puede scrollear durante la espera (lazy load, infinite scroll),
+    NO usar esta función para ese target — el rect se calcula al inicio y se considera
+    fijo durante todo el duration_ms (EC-HC16).
+
+    Args:
+        target: Elemento de zendriver O dict {x, y, width, height}.
+        tab: Tab de zendriver.
+        duration_ms: Duración total del movimiento en ms (jitter ±15%).
+        end_distance_px: Radio máximo del punto final respecto al borde del target.
+                         Capado a [5, 200] px.
+
+    Raises:
+        ValueError: Si duration_ms <= 0.
+        ElementNotClickableError: Si target offscreen y scroll no resuelve.
+        TypeError: Si target no es element ni dict válido.
+    """
+    if duration_ms <= 0:
+        raise ValueError("duration_ms debe ser un entero positivo")
+
+    async with _TAB_LOCKS.setdefault(id(tab), asyncio.Lock()):
+        tab_key = id(tab)
+
+        # Resolver rect del target (EC-HC13)
+        if isinstance(target, dict):
+            rect = _to_rect(target)
+        else:
+            # Asumir que es un element de zendriver con apply()
+            try:
+                rect = await target.apply(
+                    "(el) => { const r = el.getBoundingClientRect(); "
+                    "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
+                )
+            except AttributeError:
+                raise TypeError(
+                    f"target debe ser un dict {{x,y,width,height}} o un element; "
+                    f"recibido: {type(target).__name__}"
+                )
+
+        # Scroll si el target está offscreen (EC-HC12, RN-HC19)
+        if _is_offscreen(rect):
+            try:
+                await target.scroll_into_view()
+            except AttributeError:
+                raise ElementNotClickableError(
+                    "drift-target", "target offscreen y no tiene scroll_into_view()"
+                )
+            # Sleep 150-350 ms post-scroll (RN-HC19): el layout tarda en asentar
+            await asyncio.sleep(random.uniform(0.150, 0.350))
+            try:
+                rect = await target.apply(
+                    "(el) => { const r = el.getBoundingClientRect(); "
+                    "return {x: r.left, y: r.top, width: r.width, height: r.height}; }"
+                )
+            except AttributeError:
+                pass
+            if _is_offscreen(rect) or (rect.get("width", 0) == 0 and rect.get("height", 0) == 0):
+                raise ElementNotClickableError(
+                    "drift-target", f"target offscreen after scroll attempt: rect={rect}"
+                )
+
+        # Calcular punto final: a end_distance_px del borde del target, fuera del rect
+        end = _sample_near_target(rect, end_distance_px)
+
+        # Obtener viewport para validar cursor (RN-HC18)
+        vw = await tab.evaluate("window.innerWidth")
+        vh = await tab.evaluate("window.innerHeight")
+        vw = float(vw) if isinstance(vw, (int, float)) else 800.0
+        vh = float(vh) if isinstance(vh, (int, float)) else 600.0
+
+        # Validar/resetear cursor antes de calcular el Bézier (RN-HC18)
+        origin = await _validate_or_reset_cursor(tab, vw, vh)
+
+        # Generar waypoints Bézier y recorrerlos con timing duration_ms + jitter ±15%
+        n_waypoints = random.randint(4, 8)
+        waypoints = _bezier_path(origin, end, n_waypoints)
+        sleep_base = duration_ms / (n_waypoints + 1)
+        for wx, wy in waypoints:
+            await _dispatch_mouse_move(tab, round(wx), round(wy))
+            # RN-HC17: actualizar posición incremental ANTES del sleep
+            _CURSOR_POS[tab_key] = (wx, wy)
+            jitter_factor = random.uniform(0.85, 1.15)
+            await asyncio.sleep(sleep_base * jitter_factor / 1000)
+
+        # Persistir la posición final del drift (no se emite click)
+        _CURSOR_POS[tab_key] = end
+
+
 # ---------------------------------------------------------------------------
 # ZendriverAdapter — implementación de BrowserPort (operaciones genéricas)
 # ---------------------------------------------------------------------------
