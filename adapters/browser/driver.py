@@ -263,6 +263,76 @@ async def human_type(element: object, text: str) -> None:
 # en vez de teletransportarse siempre desde el mismo origen (RN-HC05).
 _CURSOR_POS: dict[int, tuple[float, float]] = {}
 
+# Lock por tab para serializar human_click y human_drift_toward en la misma
+# pestaña (RN-HC16). Creado bajo demanda con setdefault.
+_TAB_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+def _fitts_duration_ms(
+    distance_px: float,
+    target_width_px: float,
+    min_duration_ms: int | None = None,
+) -> int:
+    """
+    Calcula la duración del movimiento usando la ley de Fitts (RN-HC12).
+    T = 100 + 80 * log2(2 * distance / target_width), capado a [200, 800] ms.
+
+    Si distance < 1 → fallback 200 ms (guard EC-HC02).
+    Si target_width < 1 → se usa 1 (guard EC-HC03).
+
+    Si min_duration_ms se pasa y es mayor que el valor de Fitts, se usa ese
+    (también capado a 800 ms). Valores min_duration_ms <= 0 lanzan ValueError.
+    """
+    if min_duration_ms is not None and min_duration_ms <= 0:
+        raise ValueError("min_duration_ms debe ser un entero positivo")
+
+    if distance_px < 1:
+        base = 200
+    else:
+        tw = max(target_width_px, 1.0)
+        base = 100 + 80 * math.log2(2 * distance_px / tw)
+        base = max(200, min(800, base))
+
+    if min_duration_ms is not None:
+        base = max(base, float(min_duration_ms))
+    # Cap máximo en 800 ms
+    return int(min(base, 800))
+
+
+async def _validate_or_reset_cursor(
+    tab: object,
+    viewport_w: float,
+    viewport_h: float,
+) -> tuple[float, float]:
+    """
+    Lee _CURSOR_POS[id(tab)] y comprueba que esté dentro del viewport actual
+    (RN-HC18). Si está fuera (o no existe), resetea a un punto aleatorio dentro
+    del inner 80% del viewport y emite un mouse.move de anclaje antes del Bézier.
+
+    Razón: CDP dispatchMouseEvent con coords fuera del viewport es no-op silencioso
+    → el cursor "aparece" en el primer waypoint válido sin trayectoria = teletransporte.
+    """
+    tab_key = id(tab)
+    pos = _CURSOR_POS.get(tab_key)
+    inside = (
+        pos is not None
+        and 0 <= pos[0] <= viewport_w
+        and 0 <= pos[1] <= viewport_h
+    )
+    if inside:
+        assert pos is not None
+        return pos
+
+    # Resetear a punto aleatorio en el inner 80% del viewport
+    margin_x = viewport_w * 0.10
+    margin_y = viewport_h * 0.10
+    rx = random.uniform(margin_x, viewport_w - margin_x)
+    ry = random.uniform(margin_y, viewport_h - margin_y)
+    _CURSOR_POS[tab_key] = (rx, ry)
+    # Emitir un move de anclaje para que CDP "sepa" dónde está el cursor
+    await _dispatch_mouse_move(tab, round(rx), round(ry))
+    return (rx, ry)
+
 
 def _bezier_path(
     origin: tuple[float, float],
@@ -285,8 +355,8 @@ def _bezier_path(
     length = math.hypot(dx, dy) or 1.0
     # Vector perpendicular normalizado
     px_, py_ = -dy / length, dx / length
-    # Desviación entre 5-20% de la longitud, con signo aleatorio
-    offset = random.uniform(0.05, 0.20) * length * random.choice([-1, 1])
+    # Desviación entre 10-25% de la longitud, con signo aleatorio (RN-HC13)
+    offset = random.uniform(0.10, 0.25) * length * random.choice([-1, 1])
     cx, cy = mx + px_ * offset, my + py_ * offset
     points: list[tuple[float, float]] = []
     for i in range(1, n_points + 1):
@@ -338,6 +408,55 @@ def _sample_click_point(
     return px, py
 
 
+def _sample_near_target(rect: dict, end_distance_px: int) -> tuple[float, float]:
+    """
+    Calcula un punto aleatorio a ≤ end_distance_px px del borde del rect
+    (RN-HC15). El punto está FUERA del rect, en dirección aleatoria.
+
+    end_distance_px se capa a [5, 200] px (EC-HC11).
+    """
+    d = max(5, min(end_distance_px, 200))
+    angle = random.uniform(0, 2 * math.pi)
+    radius = random.uniform(1, d)
+    cx = rect["x"] + rect["width"] / 2
+    cy = rect["y"] + rect["height"] / 2
+    # Radio desde el centro hasta el borde del rect en la dirección del ángulo
+    half_w = rect["width"] / 2
+    half_h = rect["height"] / 2
+    # Escalar para que el punto salga del borde del rect + radio de distancia
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    # Borde del rect en dirección (angle): usamos la escala del rectángulo
+    border_r = min(
+        half_w / (abs(cos_a) + 1e-9),
+        half_h / (abs(sin_a) + 1e-9),
+    )
+    x = cx + (border_r + radius) * cos_a
+    y = cy + (border_r + radius) * sin_a
+    return (x, y)
+
+
+def _to_rect(target: object) -> dict:
+    """
+    Normaliza un target a dict {x, y, width, height} (EC-HC13).
+    Acepta:
+      - dict con claves x, y, width, height → lo usa directamente.
+      - objeto con atributo get_bounding_rect (element de zendriver, síncrono).
+        Nota: el caller async debe haber resuelto el rect antes de llamar aquí,
+        o usar _to_rect_async.
+    Lanza TypeError si el target no encaja en ningún caso.
+    """
+    if isinstance(target, dict):
+        required = {"x", "y", "width", "height"}
+        if required.issubset(target.keys()):
+            return target
+        raise TypeError(f"dict target no tiene las claves requeridas: {required}")
+    raise TypeError(
+        f"target debe ser un dict {{x,y,width,height}} o un element; "
+        f"recibido: {type(target).__name__}"
+    )
+
+
 async def _dispatch_mouse_move(tab: zd.Tab, x: float, y: float) -> None:
     """Emite un único evento mouseMoved al punto (x, y) via CDP."""
     await tab.send(
@@ -378,40 +497,50 @@ async def _perform_human_click(
     rect: dict,
     jitter: float,
     settle_ms: tuple[int, int],
+    total_duration_ms: int = 300,
 ) -> None:
     """
     Núcleo compartido de human_click y human_click_at_rect.
     El rect ya ha sido validado antes de llegar aquí.
-    Ejecuta: muestreo gaussiano → Bézier path → settle → mousedown/up.
+    Ejecuta: validar cursor → muestreo gaussiano → Bézier path (con timing Fitts)
+             → settle → mousedown/up.
+
+    Args:
+        total_duration_ms: Duración calculada por Fitts (o min_duration_ms).
+                           Se reparte entre n_waypoints+1 intervalos con ±15% jitter.
     """
+    tab_key = id(tab)
+
+    # Obtener dimensiones del viewport para la validación del cursor (RN-HC18)
+    vw = await tab.evaluate("window.innerWidth")
+    vh = await tab.evaluate("window.innerHeight")
+    vw = float(vw) if isinstance(vw, (int, float)) else 800.0
+    vh = float(vh) if isinstance(vh, (int, float)) else 600.0
+
+    # Validar/resetear cursor antes de calcular el Bézier (RN-HC18)
+    origin = await _validate_or_reset_cursor(tab, vw, vh)
+
     px, py = _sample_click_point(rect, jitter)
 
-    # Obtener última posición del cursor para este tab (RN-HC05)
-    tab_key = id(tab)
-    if tab_key in _CURSOR_POS:
-        origin = _CURSOR_POS[tab_key]
-    else:
-        # Primera llamada: arrancar del centro del viewport (no de (0,0))
-        vw = await tab.evaluate("window.innerWidth")
-        vh = await tab.evaluate("window.innerHeight")
-        vw = vw if isinstance(vw, (int, float)) else 800
-        vh = vh if isinstance(vh, (int, float)) else 600
-        origin = (float(vw) / 2, float(vh) / 2)
-
-    # Generar y recorrer waypoints Bézier (RN-HC04)
+    # Generar waypoints Bézier (RN-HC04) y recorrerlos con timing Fitts
     n_waypoints = random.randint(3, 8)
     waypoints = _bezier_path(origin, (px, py), n_waypoints)
+    sleep_base = total_duration_ms / (n_waypoints + 1)
     for wx, wy in waypoints:
         await _dispatch_mouse_move(tab, round(wx), round(wy))
-        await asyncio.sleep(random.uniform(0.008, 0.025))
+        # RN-HC17: actualizar posición incremental ANTES del sleep.
+        # Si se produce CancelledError, el cursor persistido = último waypoint real.
+        _CURSOR_POS[tab_key] = (wx, wy)
+        jitter_factor = random.uniform(0.85, 1.15)
+        await asyncio.sleep(sleep_base * jitter_factor / 1000)
 
-    # Actualizar posición persistida del cursor (RN-HC05)
+    # Persistir la posición final exacta del click (reaseguro tras el último waypoint)
     _CURSOR_POS[tab_key] = (px, py)
 
-    # Settle: tiempo de reacción motor humano antes del press (RN-HC06)
+    # Settle: tiempo de reacción motor humano antes del press (RN-HC07)
     await asyncio.sleep(random.uniform(settle_ms[0] / 1000, settle_ms[1] / 1000))
 
-    # Click: mousedown + pausa real + mouseup (RN-HC07)
+    # Click: mousedown + pausa real + mouseup (RN-HC08)
     await _dispatch_mouse_down(tab, round(px), round(py))
     await asyncio.sleep(random.uniform(0.035, 0.110))
     await _dispatch_mouse_up(tab, round(px), round(py))
