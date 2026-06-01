@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -275,6 +276,41 @@ app = FastAPI(
     description="API de control del bot de Travian. Requiere Accept-Language en cada endpoint.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+
+# ---------------------------------------------------------------------------
+# CORS — permite peticiones de la extensión Chrome y del dashboard local
+#
+# Por qué allow_credentials=False:
+#   La extensión Chrome no envía cookies cross-origin (usa solo JSON + Bearer
+#   si aplica). El dashboard local tampoco usa cookies cross-origin. Con
+#   allow_credentials=True habría que fijar allow_origins exactos (no regex),
+#   lo que rompería el soporte para IDs de extensión variables en desarrollo.
+#   False es la opción correcta y más segura aquí.
+#
+# Orígenes permitidos (allow_origin_regex, anclado con ^ y $):
+#   - chrome-extension://.*          → extensión Chrome (cualquier ID de instalación)
+#   - http://localhost(:\d+)?        → dashboard Vite en desarrollo (localhost)
+#   - http://127\.0\.0\.1(:\d+)?    → alternativa loopback
+#   - http://192\.168\.\d+\.\d+(:\d+)? → LAN privada (escenario Raspberry Pi)
+#
+# No se usa allow_origins=["*"] para no exponer la API a cualquier origen de internet.
+# ---------------------------------------------------------------------------
+
+_CORS_ORIGIN_REGEX = (
+    r"^(chrome-extension://.*"
+    r"|http://localhost(:\d+)?"
+    r"|http://127\.0\.0\.1(:\d+)?"
+    r"|http://192\.168\.\d+\.\d+(:\d+)?)$"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=_CORS_ORIGIN_REGEX,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept-Language", "X-Request-ID", "X-Verbose", "Authorization"],
 )
 
 

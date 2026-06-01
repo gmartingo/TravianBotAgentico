@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<!--
+  Fixture HTML de prueba para extractReportText() / extractTextWithImageAlts()
+
+  Reproduce la estructura real de un reporte de ataque a oasis en Travian T4.6
+  donde los nombres de tropas y animales se muestran como iconos <img alt="...">.
+
+  Este fichero NO se carga en Travian; es solo para el test de Node.js con jsdom.
+
+  Estructura:
+    - Cabecera del atacante (aldea, tribu galos)
+    - Tabla de tropas atacantes: Phalanx, Swordsman, Pathfinder, Theutates Thunder, Hero
+    - Cabecera del defensor (oasis sin dueño, Nature)
+    - Tabla de animales: Rat, Spider, Snake, Bat, Wild Boar, Wolf, Bear, Crocodile, Tiger, Elephant
+    - Resumen de bajas y botín
+-->
+<html>
+<head><meta charset="utf-8"><title>Reporte de Combate</title></head>
+<body>
+
+<div id="reportContent">
+
+  <!-- Bloque atacante -->
+  <div class="section attacker">
+    <p class="tribe-info">Attacker</p>
+    <p class="village-info">[Storm] GonnaDie from village 02</p>
+
+    <table class="troop-table">
+      <thead>
+        <tr>
+          <th><img src="icons/u11.png" alt="Phalanx" title="Phalanx"></th>
+          <th><img src="icons/u12.png" alt="Swordsman" title="Swordsman"></th>
+          <th><img src="icons/u14.png" alt="Pathfinder" title="Pathfinder"></th>
+          <th><img src="icons/u15.png" alt="Theutates Thunder" title="Theutates Thunder"></th>
+          <th><img src="icons/hero.png" alt="Hero" title="Hero"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>0</td>
+          <td>124</td>
+          <td>0</td>
+          <td>750</td>
+          <td>1</td>
+        </tr>
+        <!-- Bajas -->
+        <tr class="losses">
+          <td>0</td>
+          <td>124</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Bloque defensor -->
+  <div class="section defender">
+    <p class="tribe-info">Defender</p>
+    <p class="village-info">Nature from village Unoccupied oasis (−10|139)</p>
+
+    <table class="troop-table">
+      <thead>
+        <tr>
+          <th><img src="icons/u71.png" alt="Rat" title="Rat"></th>
+          <th><img src="icons/u72.png" alt="Spider" title="Spider"></th>
+          <th><img src="icons/u73.png" alt="Snake" title="Snake"></th>
+          <th><img src="icons/u74.png" alt="Bat" title="Bat"></th>
+          <th><img src="icons/u75.png" alt="Wild Boar" title="Wild Boar"></th>
+          <th><img src="icons/u76.png" alt="Wolf" title="Wolf"></th>
+          <th><img src="icons/u77.png" alt="Bear" title="Bear"></th>
+          <th><img src="icons/u78.png" alt="Crocodile" title="Crocodile"></th>
+          <th><img src="icons/u79.png" alt="Tiger" title="Tiger"></th>
+          <th><img src="icons/u80.png" alt="Elephant" title="Elephant"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>19</td>
+          <td>18</td>
+          <td>0</td>
+          <td>0</td>
+          <td>6</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <!-- Bajas animales -->
+        <tr class="losses">
+          <td>19</td>
+          <td>18</td>
+          <td>0</td>
+          <td>0</td>
+          <td>6</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Botín -->
+  <div class="section loot">
+    <p>Loot</p>
+    <table class="loot-table">
+      <thead>
+        <tr>
+          <th><img src="icons/wood.png" alt="Lumber" title="Lumber"></th>
+          <th><img src="icons/clay.png" alt="Clay" title="Clay"></th>
+          <th><img src="icons/iron.png" alt="Iron" title="Iron"></th>
+          <th><img src="icons/crop.png" alt="Crop" title="Crop"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1000</td>
+          <td>1000</td>
+          <td>1000</td>
+          <td>1000</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Coordenadas e información del reporte -->
+  <div class="section meta">
+    <p>Server time: 01.06.2026 14:35:22</p>
+    <p>UTC+1:00</p>
+    <p>Coordinates: (−10|139)</p>
+  </div>
+
+</div><!-- #reportContent -->
+
+</body>
+</html>
