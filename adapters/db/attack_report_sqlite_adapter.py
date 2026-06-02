@@ -1648,7 +1648,7 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             observed: set[int] = {c["animal_ordinal"] for c in comp_list}
 
             # Inferir tipo y confianza (RN-TYP-01..05, EC-05, EC-07, EC-11)
-            tipo, confidence = _infer_type(observed, comp_list)
+            tipo, confidence = infer_type(observed, comp_list)
 
             set_base: set[int] = OASIS_TYPE_SETS.get(tipo, set()) if tipo else set()
 
@@ -1730,32 +1730,62 @@ class AttackReportSQLiteAdapter(AttackReportPort):
         }
 
     # ---------------------------------------------------------------------------
-    # EP-TD — Distribución temporal de animales por intervalo de farmeo
+    # EP-TD — Distribución temporal de animales por intervalo de farmeo (v2)
     # ---------------------------------------------------------------------------
 
     async def get_animal_temporal_distribution(
         self,
-        bucket_hours: int,
+        interval_minutes: int,
         lang: str,
         translation_port,
     ) -> dict:
         """
-        Distribución empírica de animales por franja temporal (gap entre ataques).
+        Distribución empírica de animales para una cadencia de farmeo dada (v2).
 
-        bucket_hours: tamaño del bucket en horas. Valores válidos: 1|2|4|8|12|24.
+        interval_minutes: frecuencia en minutos. Valores válidos: 6|7|10|15|30|60|120|180|240|300.
         lang: código de idioma validado (25 soportados).
         translation_port: puerto de traducción para resolver nombres de animales.
 
-        Devuelve { bucket_hours, animals: [...] }.
-        200 siempre (animals: [] si no hay datos).
-        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD y §9.
+        Binning por umbral inferior (Opción B): la ventana de F es [F*60, F_next*60) en segundos.
+        Ventana de 300: [18000, ∞) abierta por arriba.
+        Gaps < 360s (< 6 min) se descartan silenciosamente.
+
+        Devuelve { interval_minutes, interval_label, window, n_reports_in_window, animals }.
+        200 siempre (n_reports_in_window=0, animals=[] si ventana vacía).
+        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v2).
         """
+        # Constantes de módulo — tabla de bins (minutos) y etiquetas
+        _WINDOWS: dict[int, tuple[int, int | None]] = {
+            6:   (6,   7),
+            7:   (7,   10),
+            10:  (10,  15),
+            15:  (15,  30),
+            30:  (30,  60),
+            60:  (60,  120),
+            120: (120, 180),
+            180: (180, 240),
+            240: (240, 300),
+            300: (300, None),  # abierto por arriba
+        }
+        _LABELS: dict[int, str] = {
+            6: "6 min", 7: "7 min", 10: "10 min", 15: "15 min", 30: "30 min",
+            60: "1h", 120: "2h", 180: "3h", 240: "4h", 300: "5h+",
+        }
+
+        lower_min, upper_min = _WINDOWS[interval_minutes]
+        lower_sec = lower_min * 60
+        upper_sec = upper_min * 60 if upper_min is not None else None
+        is_open = (upper_sec is None)
+        interval_label = _LABELS[interval_minutes]
+
         # ── Paso 1: Calcular gaps con LAG sobre attack_reports + join con animales ──
-        # PARTITION BY coord_x_dest, coord_y_dest: el gap pertenece al oasis completo.
-        # El join con attack_report_animals se hace DESPUÉS para obtener present por animal.
-        # (RN-TD01, RN-TD11)
+        # PARTITION BY coord_x_dest, coord_y_dest garantiza que el gap se calcula
+        # dentro de cada oasis (RN-TD01, RN-TD11). El join con attack_report_animals
+        # añade present y animal_ordinal a cada gap.
+        # También se devuelve r.id para contar n_reports_in_window (report_ids distintos).
         gap_sql = """
             SELECT
+                r.id            AS report_id,
                 a.animal_ordinal,
                 a.animal_name,
                 a.present,
@@ -1774,114 +1804,108 @@ class AttackReportSQLiteAdapter(AttackReportPort):
         async with self._conn.execute(gap_sql) as cursor:
             raw_rows = await cursor.fetchall()
 
-        # ── Paso 2: Filtrar primer ataque (gap NULL) y gaps <= 0 (RN-TD02, EC-TD07) ──
-        rows = [
+        # ── Paso 2: Filtrar gaps inválidos (RN-TD02, RN-TD04, EC-TD07) ──────────
+        # Descarta: NULL (primer ataque), <= 0 (relojes inconsistentes), < 360 (< 6 min)
+        valid_rows = [
             row for row in raw_rows
-            if row["gap_seconds"] is not None and row["gap_seconds"] > 0
+            if row["gap_seconds"] is not None
+            and row["gap_seconds"] > 0
+            and row["gap_seconds"] >= 360
         ]
 
-        if not rows:
-            return {"bucket_hours": bucket_hours, "animals": []}
+        # ── Paso 3: Filtrar por la ventana de la frecuencia solicitada (RN-TD03) ──
+        if is_open:
+            window_rows = [r for r in valid_rows if r["gap_seconds"] >= lower_sec]
+        else:
+            window_rows = [
+                r for r in valid_rows
+                if lower_sec <= r["gap_seconds"] < upper_sec
+            ]
 
-        # ── Paso 3: Generar lista de buckets en Python (RN-TD03, RN-TD04) ──────────
-        THRESHOLD = 24 * 3600  # 86400 segundos
-        bucket_secs = bucket_hours * 3600
+        # n_reports_in_window: report_ids distintos en la ventana (RN-TD08)
+        n_reports_in_window = len({row["report_id"] for row in window_rows})
 
-        def assign_bucket(gap_seconds: int) -> tuple[int, int | None]:
-            """
-            Asigna un gap a su bucket (lower_h, upper_h).
-            gap >= 86400s → cubo abierto (24, None).
-            gap < 86400s  → cubo cerrado basado en floor(gap / bucket_secs).
-            """
-            if gap_seconds >= THRESHOLD:
-                return (24, None)  # cubo abierto (EC-TD08)
-            lower_h = (gap_seconds // bucket_secs) * bucket_hours
-            upper_h = lower_h + bucket_hours
-            return (lower_h, upper_h)
+        if n_reports_in_window == 0:
+            return {
+                "interval_minutes": interval_minutes,
+                "interval_label": interval_label,
+                "window": {
+                    "lower_min": lower_min,
+                    "upper_min": upper_min,
+                    "is_open": is_open,
+                },
+                "n_reports_in_window": 0,
+                "animals": [],
+            }
 
-        # ── Paso 4: Agrupar por (animal_ordinal, bucket) ──────────────────────────
-        # { animal_ordinal: { (lower_h, upper_h): {"n_total": int, "valids": [int]} } }
-        groups: dict[int, dict] = defaultdict(lambda: defaultdict(lambda: {"n_total": 0, "valids": []}))
-        # También guardamos animal_name de BD para fallback de localización
-        animal_name_by_ordinal: dict[int, str] = {}
+        # ── Paso 4: Agrupar por animal_ordinal ──────────────────────────────────
+        # { ordinal: { "n_total": int, "valids": [int], "name_raw": str } }
+        groups: dict[int, dict] = defaultdict(
+            lambda: {"n_total": 0, "valids": [], "name_raw": ""}
+        )
 
-        for row in rows:
+        for row in window_rows:
             ordinal = row["animal_ordinal"]
-            bucket = assign_bucket(row["gap_seconds"])
-            groups[ordinal][bucket]["n_total"] += 1
-            if row["present"] is not None:  # RN-TD05: NULL (derrota) excluido de cálculos
-                groups[ordinal][bucket]["valids"].append(row["present"])
-            # Guardar el animal_name de BD para fallback (cualquier row vale)
-            if ordinal not in animal_name_by_ordinal:
-                animal_name_by_ordinal[ordinal] = row["animal_name"]
+            groups[ordinal]["n_total"] += 1
+            if row["present"] is not None:  # RN-TD05: NULL (derrota) excluido de media/moda
+                groups[ordinal]["valids"].append(row["present"])
+            if not groups[ordinal]["name_raw"]:
+                groups[ordinal]["name_raw"] = row["animal_name"]
 
-        # ── Paso 5: Resolver nombres localizados vía translation_port ─────────────
-        # (RN-TD10, EC-TD11)
+        # ── Paso 5: Resolver nombres localizados vía translation_port ─────────
+        # (RN-TD10, fallback al animal_name de BD si el ordinal no está en el catálogo)
+        # El dict devuelto por JsonTranslationAdapter usa la clave "nombre" (no "name").
+        # El enum se accede como Tribe.NATURE (mayúsculas), no Tribe.nature.
         names_by_ordinal: dict[int, str] = {}
         try:
-            name_entries = translation_port.get_troop_names_by_tribe(Tribe.nature, lang)
-            names_by_ordinal = {entry["ordinal"]: entry["name"] for entry in name_entries}
+            name_entries = translation_port.get_troop_names_by_tribe(Tribe.NATURE, lang)
+            names_by_ordinal = {entry["ordinal"]: entry["nombre"] for entry in name_entries}
         except Exception:
             logger.warning(
                 "get_animal_temporal_distribution: fallo al resolver nombres para lang=%s",
                 lang,
             )
 
-        # ── Paso 6: Construir respuesta ───────────────────────────────────────────
+        # ── Paso 6: Construir lista de animales ordenada por ordinal ASC (RN-TD09) ─
         result_animals = []
+        for ordinal in sorted(groups.keys()):
+            data = groups[ordinal]
+            n_valid = len(data["valids"])
 
-        for ordinal in sorted(groups.keys()):  # RN-TD09: animales ASC por ordinal
-            bucket_data = groups[ordinal]
+            # Media redondeada a 2 decimales (RN-TD06)
+            avg_present = round(sum(data["valids"]) / n_valid, 2) if n_valid > 0 else None
 
-            # Ordenar buckets: cerrados por lower_h ASC, abierto al final (RN-TD09)
-            sorted_buckets = sorted(
-                bucket_data.items(),
-                key=lambda kv: (9999 if kv[0][1] is None else kv[0][0], kv[0][0]),
-            )
+            # Moda en Python con Counter; empates → lista ordenada ASC (RN-TD07)
+            if n_valid > 0:
+                counter = Counter(data["valids"])
+                max_count = max(counter.values())
+                mode_present = sorted(k for k, v in counter.items() if v == max_count)
+            else:
+                mode_present = []
 
-            animal_buckets = []
-            for (lower_h, upper_h), data in sorted_buckets:
-                n_total = data["n_total"]
-                n_valid = len(data["valids"])
-
-                # Media (RN-TD06)
-                avg_present = round(sum(data["valids"]) / n_valid, 2) if n_valid > 0 else None
-
-                # Moda (RN-TD07) — calculada en Python con Counter
-                if n_valid > 0:
-                    counter = Counter(data["valids"])
-                    max_count = max(counter.values())
-                    mode_present = sorted(k for k, v in counter.items() if v == max_count)
-                else:
-                    mode_present = []
-
-                is_open = (upper_h is None)
-                label = f"{lower_h}h+" if is_open else f"{lower_h}h-{upper_h}h"
-
-                animal_buckets.append({
-                    "label": label,
-                    "lower_h": lower_h,
-                    "upper_h": upper_h,
-                    "is_open": is_open,
-                    "n_total": n_total,
-                    "n_valid": n_valid,
-                    "avg_present": avg_present,
-                    "mode_present": mode_present,
-                })
-
-            # Nombre localizado con fallback al animal_name de BD (EC-TD11)
-            animal_name_raw = animal_name_by_ordinal.get(ordinal, "")
-            localized_name = names_by_ordinal.get(ordinal, animal_name_raw)
+            # Nombre localizado con fallback al nombre de BD (EC-TD16)
+            localized_name = names_by_ordinal.get(ordinal, data["name_raw"])
 
             result_animals.append({
                 "animal_ordinal": ordinal,
                 "animal_name": localized_name,
                 "icon_url": f"/static/icons/nature_{ordinal}.png",
-                "buckets": animal_buckets,
+                "avg_present": avg_present,
+                "mode_present": mode_present,
+                "n_total": data["n_total"],
+                "n_valid": n_valid,
             })
 
+        # ── Paso 7: Construir respuesta raíz ─────────────────────────────────
         return {
-            "bucket_hours": bucket_hours,
+            "interval_minutes": interval_minutes,
+            "interval_label": interval_label,
+            "window": {
+                "lower_min": lower_min,
+                "upper_min": upper_min,
+                "is_open": is_open,
+            },
+            "n_reports_in_window": n_reports_in_window,
             "animals": result_animals,
         }
 
@@ -1926,12 +1950,15 @@ def _load_nature_defense_stats() -> dict[int, dict[str, int]]:
     return result
 
 
-def _infer_type(
+def infer_type(
     observed_ordinales: set[int],
     comp_list: list[dict],
 ) -> tuple[str | None, str | None]:
     """
     Infiere el tipo de oasis por similitud de Jaccard |∩|/|∪| (RN-TYP-02 v2).
+
+    Función pública de módulo (elevada desde _infer_type en v3) para que tanto
+    EP-SPAWN como EP-TD la reutilicen sin duplicar el cálculo de Jaccard (RN-TD14).
 
     En caso de empate: tipo con menor cardinal de set; si persiste, alfabético (EC-07).
     Confianza: "low" si <3 bursts con present>0, "medium" si >=3 (RN-TYP-04/05).

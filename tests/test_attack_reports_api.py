@@ -651,6 +651,127 @@ Bounty
         # Si está bien declarada, devuelve 200 (aunque sea con datos vacíos).
         assert resp.status_code == 200
 
+    # ------------------------------------------------------------------
+    # EP-06 balance — campo 'balance' añadido en la respuesta
+    # ------------------------------------------------------------------
+
+    def test_T_EP06_B01_balance_presente_en_respuesta_sin_reportes(self, client):
+        """EP-06 B01: oasis sin reportes → 'balance' presente con todos los totales a 0."""
+        resp = client.get("/attack-reports/stats/oasis?x=-999&y=-999")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Claves preexistentes — no regresión
+        assert "total_attacks" in data
+        assert "first_attack" in data
+        assert "last_attack" in data
+        assert "animal_appearances" in data
+        assert "repopulation_gaps" in data
+
+        # Clave nueva obligatoria
+        assert "balance" in data, "'balance' no está presente en la respuesta de EP-06"
+        bal = data["balance"]
+
+        # Shape mínimo de balance
+        assert "total_reports" in bal
+        assert "reports_without_tribe" in bal
+        assert "lost" in bal
+        assert "stolen" in bal
+        assert "net" in bal
+
+        # Sin reportes → todo a cero
+        assert bal["total_reports"] == 0
+        assert bal["lost"]["total"] == 0
+        assert bal["stolen"]["total"]["total"] == 0
+        assert bal["net"] == 0
+
+    def test_T_EP06_B02_balance_con_reportes_claves_previas_no_cambian(self, client):
+        """EP-06 B02: oasis con reportes → 'balance' incluye datos reales; claves previas intactas."""
+        ox, oy = -59, 25
+        resp_save = client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        assert resp_save.status_code == 201, resp_save.text
+
+        resp = client.get(f"/attack-reports/stats/oasis?x={ox}&y={oy}")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Claves preexistentes — no regresión
+        assert "coord_x_dest" in data
+        assert "coord_y_dest" in data
+        assert "total_attacks" in data
+        assert "first_attack" in data
+        assert "last_attack" in data
+        assert "animal_appearances" in data
+        assert "repopulation_gaps" in data
+
+        # Clave nueva
+        assert "balance" in data
+        bal = data["balance"]
+
+        # Al menos 1 reporte
+        assert bal["total_reports"] >= 1
+
+        # Shape completo de lost y stolen
+        for key in ("wood", "clay", "iron", "crop", "total"):
+            assert key in bal["lost"], f"lost.{key} ausente"
+        assert "bounty" in bal["stolen"]
+        assert "hero_inventory" in bal["stolen"]
+        assert "total" in bal["stolen"]
+        assert "net" in bal
+
+    def test_T_EP06_B03_balance_numerico_correcto_gaulos(self, client):
+        """EP-06 B03: fixture Gaulos (Swordsman×2 + Theutates Thunder×2 + hero_inventory 240×4)
+        → 'balance' del endpoint coincide con los mismos valores que EP-balance filtrado."""
+        ox, oy = -59, 25
+        resp_save = client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        assert resp_save.status_code == 201, resp_save.text
+
+        # Respuesta EP-06
+        resp_ep06 = client.get(f"/attack-reports/stats/oasis?x={ox}&y={oy}")
+        assert resp_ep06.status_code == 200
+        bal_ep06 = resp_ep06.json()["balance"]
+
+        # Respuesta EP-balance con el mismo filtro — debe ser idéntica
+        resp_ep_bal = client.get(f"/attack-reports/stats/balance?x={ox}&y={oy}")
+        assert resp_ep_bal.status_code == 200
+        bal_ref = resp_ep_bal.json()
+
+        # Comparar campo a campo (shape completo)
+        assert bal_ep06["total_reports"]          == bal_ref["total_reports"]
+        assert bal_ep06["reports_without_tribe"]  == bal_ref["reports_without_tribe"]
+        assert bal_ep06["lost"]["wood"]           == bal_ref["lost"]["wood"]
+        assert bal_ep06["lost"]["clay"]           == bal_ref["lost"]["clay"]
+        assert bal_ep06["lost"]["iron"]           == bal_ref["lost"]["iron"]
+        assert bal_ep06["lost"]["crop"]           == bal_ref["lost"]["crop"]
+        assert bal_ep06["lost"]["total"]          == bal_ref["lost"]["total"]
+        assert bal_ep06["stolen"]["bounty"]["total"]          == bal_ref["stolen"]["bounty"]["total"]
+        assert bal_ep06["stolen"]["hero_inventory"]["total"]  == bal_ref["stolen"]["hero_inventory"]["total"]
+        assert bal_ep06["stolen"]["total"]["total"]           == bal_ref["stolen"]["total"]["total"]
+        assert bal_ep06["net"]                    == bal_ref["net"]
+
+    def test_T_EP06_B04_balance_aislado_por_coordenada(self, client):
+        """EP-06 B04: el 'balance' de EP-06 refleja SOLO el oasis pedido, no el global."""
+        # Guardar en oasis A (-59|25)
+        resp_a = client.post("/attack-reports", json={"raw_text": _REPORT_BALANCE_REF})
+        assert resp_a.status_code == 201
+
+        # Guardar en oasis B (-32|-45)
+        resp_b = client.post("/attack-reports", json={"raw_text": _REPORT_VALID})
+        assert resp_b.status_code == 201
+
+        # EP-06 para oasis A
+        resp_ep06 = client.get("/attack-reports/stats/oasis?x=-59&y=25")
+        assert resp_ep06.status_code == 200
+        bal_a = resp_ep06.json()["balance"]
+
+        # Balance global (sin filtro)
+        resp_global = client.get("/attack-reports/stats/balance")
+        assert resp_global.status_code == 200
+        bal_global = resp_global.json()
+
+        # El balance del oasis A debe ser menor que el global (hay 2 reportes en total)
+        assert bal_a["total_reports"] < bal_global["total_reports"]
+
 
 # ---------------------------------------------------------------------------
 # CA-14 — GET /attack-reports sin filtros devuelve JSON paginado con total correcto
@@ -665,7 +786,6 @@ class TestPagination:
         assert isinstance(data["total"], int)
         assert data["total"] >= 0
         assert len(data["items"]) <= data["total"]
-
     def test_cumulative_bounty_is_int_or_zero(self, client):
         """cumulative_bounty es un entero >= 0."""
         resp = client.get("/attack-reports")

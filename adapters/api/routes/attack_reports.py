@@ -597,12 +597,12 @@ async def get_oasis_spawn_composition(
 
 
 # ---------------------------------------------------------------------------
-# EP-TD — Distribución temporal de animales por intervalo de farmeo
+# EP-TD — Distribución temporal de animales por intervalo de farmeo (v2)
 #          (literal más larga que EP-06 → ANTES de EP-06)
 # ---------------------------------------------------------------------------
 
-# Valores válidos de bucket_hours (whitelist exacta — RN-TD13)
-_VALID_BUCKET_HOURS = {1, 2, 4, 8, 12, 24}
+# Valores válidos de interval_minutes (whitelist exacta — RN-TD13)
+_VALID_INTERVAL_MINUTES = {6, 7, 10, 15, 30, 60, 120, 180, 240, 300}
 
 
 @router.get(
@@ -611,47 +611,47 @@ _VALID_BUCKET_HOURS = {1, 2, 4, 8, 12, 24}
 )
 async def get_animal_temporal_distribution(
     request: Request,
-    bucket_hours: int = Query(
-        default=2,
+    interval_minutes: int = Query(
+        default=240,
         description=(
-            "Tamaño del bucket en horas. Valores válidos: 1, 2, 4, 8, 12, 24. "
-            "Default: 2. Valor fuera de ese conjunto → 400."
+            "Cadencia de farmeo en minutos. Valores válidos: 6, 7, 10, 15, 30, 60, 120, 180, 240, 300. "
+            "Default: 240 (4 horas). Valor fuera de ese conjunto → 400."
         ),
     ),
     lang: str = Depends(get_language),
     translation_port=Depends(get_translation_port),
 ) -> dict:
     """
-    EP-TD — Distribución empírica de animales por franja temporal (gap entre ataques).
+    EP-TD — Distribución empírica de animales por cadencia de farmeo (v2).
 
-    Para cada tipo de animal y cada franja temporal (bucket), devuelve cuántas veces
-    apareció ese animal en reportes cuyo gap con el ataque anterior cae en esa franja,
-    junto con la media y la moda del número de unidades observadas.
+    Dado interval_minutes (cadencia elegida), devuelve las estadísticas de animales
+    en reportes cuyos gaps con el ataque anterior caen en la ventana correspondiente
+    a esa cadencia (binning por umbral inferior, Opción B).
 
-    bucket_hours: int (default 2). Valores válidos: {1, 2, 4, 8, 12, 24}.
-      - Fuera del conjunto → 400 con detail legible.
+    interval_minutes: int (default 240). Valores válidos: {6, 7, 10, 15, 30, 60, 120, 180, 240, 300}.
+      - Fuera del conjunto → 400 con detail legible que lista los 10 valores válidos.
       - Tipo no entero → 422 (FastAPI validation automática).
-      - Ausente → 200 con bucket_hours=2 (default).
+      - Ausente → 200 con interval_minutes=240 (default).
 
     Accept-Language: obligatorio. Ausente o código no soportado → 400.
-    200 siempre, incluso con animals: [] (BD vacía o sin gaps calculables).
+    200 siempre, incluso con n_reports_in_window=0 y animals: [] (ventana vacía).
     500 ante error inesperado de BD (detail genérico, sin stack trace).
 
-    Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+    Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v2).
     """
-    if bucket_hours not in _VALID_BUCKET_HOURS:
+    if interval_minutes not in _VALID_INTERVAL_MINUTES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"bucket_hours debe ser uno de: 1, 2, 4, 8, 12, 24. "
-                f"Recibido: {bucket_hours}"
+                f"interval_minutes debe ser uno de: 6, 7, 10, 15, 30, 60, 120, 180, 240, 300. "
+                f"Recibido: {interval_minutes}"
             ),
         )
 
     port = request.app.state.attack_report_port
     try:
         return await port.get_animal_temporal_distribution(
-            bucket_hours=bucket_hours,
+            interval_minutes=interval_minutes,
             lang=lang,
             translation_port=translation_port,
         )

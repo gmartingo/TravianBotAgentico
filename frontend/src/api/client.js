@@ -397,15 +397,15 @@ export const api = {
     request('GET', `/attack-reports/stats/oasis/spawn-composition?timer_min=${timerMin}`),
 
   /**
-   * GET /attack-reports/stats/oasis/temporal-distribution?bucket_hours=<1|2|4|8|12|24>
-   * EP-TD: distribución empírica de animales por franja temporal (gap entre ataques).
-   * bucketHours: default 2. Valores válidos: {1, 2, 4, 8, 12, 24}. Fuera → 400.
+   * GET /attack-reports/stats/oasis/temporal-distribution?interval_minutes=<6|7|10|15|30|60|120|180|240|300>
+   * EP-TD: distribución empírica de animales por cadencia de farmeo (v2).
+   * intervalMinutes: default 240 (4h). Valores válidos: {6,7,10,15,30,60,120,180,240,300}. Fuera → 400.
    * Envía Accept-Language desde localStorage (obligatorio en este endpoint).
    * buildHeaders() ya incluye Accept-Language automáticamente — no hace falta extra.
-   * Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+   * Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v2).
    */
-  getAnimalTemporalDistribution: (bucketHours = 2) => {
-    const params = new URLSearchParams({ bucket_hours: bucketHours })
+  getAnimalTemporalDistribution: (intervalMinutes = 240) => {
+    const params = new URLSearchParams({ interval_minutes: intervalMinutes })
     return request('GET', `/attack-reports/stats/oasis/temporal-distribution?${params}`)
   },
 

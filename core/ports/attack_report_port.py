@@ -180,20 +180,22 @@ class AttackReportPort(ABC):
     @abstractmethod
     async def get_animal_temporal_distribution(
         self,
-        bucket_hours: int,
+        interval_minutes: int,
         lang: str,
         translation_port,
     ) -> dict:
         """
-        Distribución empírica de animales por franja temporal (gap entre ataques).
+        Distribución empírica de animales por tipo de oasis para una cadencia de farmeo dada (v3).
 
-        bucket_hours: tamaño del bucket en horas. Valores válidos: 1|2|4|8|12|24.
+        interval_minutes: frecuencia en minutos. Valores válidos: 6|7|10|15|30|60|120|180|240|300.
         lang: código de idioma validado (25 soportados).
         translation_port: puerto de traducción para resolver nombres de animales.
 
-        Devuelve { bucket_hours, animals: [...] }.
-        200 siempre (animals: [] si no hay datos).
-        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+        Devuelve { interval_minutes, interval_label, window, n_reports_in_window, types }.
+        types: lista de 5 secciones fijas (hierro, arcilla, madera, cereal, sin_clasificar).
+        Cada sección contiene: oasis_type, oasis_type_label, n_oasis, n_oasis_low_confidence,
+        n_reports_in_section, animals[] (mismos campos que la lista plana de v2).
+        200 siempre. Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v3).
         """
 
 

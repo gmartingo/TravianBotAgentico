@@ -532,3 +532,342 @@ class TestGlobalOasisStats:
         assert rat_row["min_present"] == 2
         # avg = (4+6+2)/3 = 4.0
         assert rat_row["avg_present"] == 4.0
+
+
+# ---------------------------------------------------------------------------
+# EP-09 — Tests T-P01..T-P08 — campo eligible_reports (denominador del % aparición)
+# Spec: docs/specs/bd-ataques-oasis-global-pct-aparicion.md §12
+# ---------------------------------------------------------------------------
+
+class TestGlobalOasisStatsEligibleReports:
+    """
+    Verifica la correctitud del campo eligible_reports (denominador por animal).
+
+    Reutiliza el mismo fixture client y los helpers _build_report / _save.
+    """
+
+    def test_T_P01_single_oasis_n_reports_m_with_animal(self, client):
+        """
+        T-P01: Un solo oasis, 5 reportes, 3 con Rata present>0 y 2 con Rata present=0.
+        appearances = 3, eligible_reports = 5, 3 <= 5.
+        EC-P04: los reportes donde la rata estaba a 0 forman parte del denominador
+        (el oasis sí puede tener ratas) pero no del numerador.
+        """
+        ox, oy = -110, -110
+        # 3 reportes con rata presente
+        for date_str, present in [
+            ("14.01.26, 08:00:00", "5"),
+            ("14.01.26, 12:00:00", "3"),
+            ("14.01.26, 16:00:00", "7"),
+        ]:
+            _save(client, _build_report(
+                x=ox, y=oy,
+                date_str=date_str,
+                village="V1",
+                animals_str="Rat",
+                animals_present=present,
+                animals_killed=present,
+            ))
+        # 2 reportes con araña pero rata=0 (para que el parser genere Rat present=0
+        # necesitamos enviar Rat con present=0 explícitamente)
+        for date_str in ["14.01.26, 20:00:00", "14.01.26, 22:00:00"]:
+            _save(client, _build_report(
+                x=ox, y=oy,
+                date_str=date_str,
+                village="V1",
+                animals_str="Rat  Spider",
+                animals_present="0  4",
+                animals_killed="0  4",
+            ))
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        rat_row = next((r for r in data["animal_appearances"] if r["animal_name"] == "Rat"), None)
+        assert rat_row is not None
+        assert rat_row["appearances"] == 3
+        assert rat_row["eligible_reports"] == 5
+        assert rat_row["appearances"] <= rat_row["eligible_reports"]
+
+    def test_T_P02_two_oasis_with_rat_third_without(self, client):
+        """
+        T-P02: Oasis A (10 rep, Rata siempre) + oasis B (5 rep, Rata siempre) +
+        oasis C (20 rep, Spider; sin Rata).
+        appearances_rata = 15, eligible_reports_rata = 15 (oasis C excluido).
+        """
+        ox_a, oy_a = -120, -120
+        ox_b, oy_b = -121, -121
+        ox_c, oy_c = -122, -122
+
+        # Oasis A: 10 reportes con Rata
+        for i in range(10):
+            _save(client, _build_report(
+                x=ox_a, y=oy_a,
+                date_str=f"15.01.26, {(6+i):02d}:00:00",
+                village="VA",
+                animals_str="Rat",
+                animals_present="5",
+                animals_killed="5",
+            ))
+        # Oasis B: 5 reportes con Rata
+        for i in range(5):
+            _save(client, _build_report(
+                x=ox_b, y=oy_b,
+                date_str=f"15.01.26, {(6+i):02d}:00:00",
+                village="VB",
+                animals_str="Rat",
+                animals_present="3",
+                animals_killed="3",
+            ))
+        # Oasis C: 20 reportes con Spider (sin Rata)
+        for i in range(10):
+            _save(client, _build_report(
+                x=ox_c, y=oy_c,
+                date_str=f"15.01.26, {(6+i):02d}:00:00",
+                village="VC",
+                animals_str="Spider",
+                animals_present="4",
+                animals_killed="4",
+            ))
+        for i in range(10):
+            _save(client, _build_report(
+                x=ox_c, y=oy_c,
+                date_str=f"16.01.26, {(6+i):02d}:00:00",
+                village="VC",
+                animals_str="Spider",
+                animals_present="4",
+                animals_killed="4",
+            ))
+
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        rat_row = next((r for r in data["animal_appearances"] if r["animal_name"] == "Rat"), None)
+        assert rat_row is not None, "Rata debe aparecer en animal_appearances"
+        assert rat_row["appearances"] == 15
+        assert rat_row["eligible_reports"] == 15, (
+            "eligible_reports debe ser 15 (oasis A + oasis B); oasis C (sin rata) excluido"
+        )
+
+    def test_T_P03_invariant_appearances_le_eligible_reports(self, client):
+        """
+        T-P03: Para todos los items de animal_appearances, appearances <= eligible_reports.
+        """
+        ox1, oy1 = -130, -130
+        ox2, oy2 = -131, -131
+
+        # Oasis 1: Rata en algunos reportes, Araña en todos
+        for i in range(4):
+            _save(client, _build_report(
+                x=ox1, y=oy1,
+                date_str=f"17.01.26, {(8+i):02d}:00:00",
+                village="V1",
+                animals_str="Rat  Spider",
+                animals_present=f"{(i * 2 + 1)}  3",  # Rata: 1, 3, 5, 7
+                animals_killed=f"{(i * 2 + 1)}  3",
+            ))
+        # Añadir un reporte extra sin Rata para que eligible > appearances
+        _save(client, _build_report(
+            x=ox1, y=oy1,
+            date_str="17.01.26, 14:00:00",
+            village="V1",
+            animals_str="Rat  Spider",
+            animals_present="0  2",
+            animals_killed="0  2",
+        ))
+        # Oasis 2: solo Araña
+        for i in range(3):
+            _save(client, _build_report(
+                x=ox2, y=oy2,
+                date_str=f"17.01.26, {(8+i):02d}:00:00",
+                village="V2",
+                animals_str="Spider",
+                animals_present="6",
+                animals_killed="6",
+            ))
+
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        assert len(data["animal_appearances"]) >= 1
+        for row in data["animal_appearances"]:
+            assert row["appearances"] <= row["eligible_reports"], (
+                f"Invariante rota: appearances={row['appearances']} > "
+                f"eligible_reports={row['eligible_reports']} para animal={row['animal_name']}"
+            )
+
+    def test_T_P04_eligible_reports_is_integer_ge_1(self, client):
+        """
+        T-P04: eligible_reports presente en cada item de animal_appearances,
+        es un entero >= 1 cuando appearances >= 1.
+        """
+        _save(client, _build_report(
+            x=-140, y=-140,
+            date_str="18.01.26, 10:00:00",
+            village="V1",
+            animals_str="Rat",
+            animals_present="5",
+            animals_killed="5",
+        ))
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        for row in data["animal_appearances"]:
+            assert "eligible_reports" in row, (
+                f"eligible_reports ausente en {row}"
+            )
+            assert isinstance(row["eligible_reports"], int), (
+                f"eligible_reports debe ser int, es {type(row['eligible_reports'])}"
+            )
+            if row["appearances"] >= 1:
+                assert row["eligible_reports"] >= 1, (
+                    f"eligible_reports debe ser >= 1 cuando appearances >= 1"
+                )
+
+    def test_T_P05_ec_p08_oasis_three_reports_present_zero_nonzero(self, client):
+        """
+        T-P05 / EC-P08: Oasis con 3 reportes: present=5, present=0, present=3.
+        appearances = 2 (reportes 1 y 3); eligible_reports = 3 (todos, porque
+        el oasis sí tiene ever_present).
+        """
+        ox, oy = -150, -150
+        _save(client, _build_report(
+            x=ox, y=oy,
+            date_str="19.01.26, 08:00:00",
+            village="V1",
+            animals_str="Rat",
+            animals_present="5",
+            animals_killed="5",
+        ))
+        _save(client, _build_report(
+            x=ox, y=oy,
+            date_str="19.01.26, 12:00:00",
+            village="V1",
+            animals_str="Rat",
+            animals_present="0",
+            animals_killed="0",
+        ))
+        _save(client, _build_report(
+            x=ox, y=oy,
+            date_str="19.01.26, 16:00:00",
+            village="V1",
+            animals_str="Rat",
+            animals_present="3",
+            animals_killed="3",
+        ))
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        rat_row = next((r for r in data["animal_appearances"] if r["animal_name"] == "Rat"), None)
+        assert rat_row is not None
+        assert rat_row["appearances"] == 2
+        assert rat_row["eligible_reports"] == 3
+
+    def test_T_P06_reference_numeric_example(self, client):
+        """
+        T-P06: Ejemplo numérico de referencia del spec §1.
+        Oasis A: 10 reportes, 6 con Rata (present>0).
+        Oasis B:  5 reportes, 2 con Rata (present>0).
+        Oasis C: 20 reportes, sin Rata (solo Spider).
+        appearances = 6+2 = 8, eligible_reports = 10+5 = 15 (NO 35).
+        """
+        ox_a, oy_a = -160, -160
+        ox_b, oy_b = -161, -161
+        ox_c, oy_c = -162, -162
+
+        # Oasis A: 10 reportes. Primeros 6 con Rata, últimos 4 sin Rata.
+        for i in range(6):
+            _save(client, _build_report(
+                x=ox_a, y=oy_a,
+                date_str=f"20.01.26, {(6+i):02d}:00:00",
+                village="VA",
+                animals_str="Rat",
+                animals_present="4",
+                animals_killed="4",
+            ))
+        for i in range(4):
+            _save(client, _build_report(
+                x=ox_a, y=oy_a,
+                date_str=f"21.01.26, {(6+i):02d}:00:00",
+                village="VA",
+                animals_str="Rat",
+                animals_present="0",
+                animals_killed="0",
+            ))
+
+        # Oasis B: 5 reportes. Primeros 2 con Rata, últimos 3 sin Rata.
+        for i in range(2):
+            _save(client, _build_report(
+                x=ox_b, y=oy_b,
+                date_str=f"20.01.26, {(6+i):02d}:00:00",
+                village="VB",
+                animals_str="Rat",
+                animals_present="3",
+                animals_killed="3",
+            ))
+        for i in range(3):
+            _save(client, _build_report(
+                x=ox_b, y=oy_b,
+                date_str=f"21.01.26, {(6+i):02d}:00:00",
+                village="VB",
+                animals_str="Rat",
+                animals_present="0",
+                animals_killed="0",
+            ))
+
+        # Oasis C: 20 reportes con Spider (sin Rata ninguno).
+        for i in range(10):
+            _save(client, _build_report(
+                x=ox_c, y=oy_c,
+                date_str=f"20.01.26, {(6+i):02d}:00:00",
+                village="VC",
+                animals_str="Spider",
+                animals_present="5",
+                animals_killed="5",
+            ))
+        for i in range(10):
+            _save(client, _build_report(
+                x=ox_c, y=oy_c,
+                date_str=f"21.01.26, {(6+i):02d}:00:00",
+                village="VC",
+                animals_str="Spider",
+                animals_present="5",
+                animals_killed="5",
+            ))
+
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        rat_row = next((r for r in data["animal_appearances"] if r["animal_name"] == "Rat"), None)
+        assert rat_row is not None, "Rata debe aparecer en animal_appearances"
+        assert rat_row["appearances"] == 8, (
+            f"appearances debe ser 8, es {rat_row['appearances']}"
+        )
+        assert rat_row["eligible_reports"] == 15, (
+            f"eligible_reports debe ser 15 (oasis A:10 + oasis B:5), "
+            f"NO 35 (que sería incluir los 20 de oasis C). Es {rat_row['eligible_reports']}"
+        )
+
+    def test_T_P07_empty_db(self, client):
+        """
+        T-P07: BD vacía → animal_appearances = []; no hay items que verificar.
+        Confirma que eligible_reports no produce error con BD vacía.
+        """
+        resp = client.get("/attack-reports/stats/global")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["animal_appearances"] == []
+
+    def test_T_P08_ec_p07_single_oasis_single_report(self, client):
+        """
+        T-P08 / EC-P07: Un oasis con un solo reporte con present > 0.
+        appearances = 1, eligible_reports = 1, % = 100%.
+        """
+        _save(client, _build_report(
+            x=-170, y=-170,
+            date_str="22.01.26, 10:00:00",
+            village="V1",
+            animals_str="Rat",
+            animals_present="7",
+            animals_killed="7",
+        ))
+        resp = client.get("/attack-reports/stats/global")
+        data = resp.json()
+        rat_row = next((r for r in data["animal_appearances"] if r["animal_name"] == "Rat"), None)
+        assert rat_row is not None
+        assert rat_row["appearances"] == 1
+        assert rat_row["eligible_reports"] == 1
+        assert rat_row["appearances"] <= rat_row["eligible_reports"]
