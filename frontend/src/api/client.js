@@ -388,6 +388,82 @@ export const api = {
   deleteAttackReport: (id) =>
     request('DELETE', `/attack-reports/${id}`),
 
+  /**
+   * GET /attack-reports/stats/oasis/spawn-composition?timer_min=<6|7|10|15>
+   * EP-SPAWN: composición típica, peor combinación y estado cooldown/respawn por oasis.
+   * timer_min obligatorio. Fuera de {6,7,10,15} → 400.
+   */
+  getOasisSpawnComposition: (timerMin) =>
+    request('GET', `/attack-reports/stats/oasis/spawn-composition?timer_min=${timerMin}`),
+
+  /**
+   * GET /attack-reports/stats/oasis/temporal-distribution?bucket_hours=<1|2|4|8|12|24>
+   * EP-TD: distribución empírica de animales por franja temporal (gap entre ataques).
+   * bucketHours: default 2. Valores válidos: {1, 2, 4, 8, 12, 24}. Fuera → 400.
+   * Envía Accept-Language desde localStorage (obligatorio en este endpoint).
+   * buildHeaders() ya incluye Accept-Language automáticamente — no hace falta extra.
+   * Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+   */
+  getAnimalTemporalDistribution: (bucketHours = 2) => {
+    const params = new URLSearchParams({ bucket_hours: bucketHours })
+    return request('GET', `/attack-reports/stats/oasis/temporal-distribution?${params}`)
+  },
+
+  // ── Noise (Catálogo de Ruido) ─────────────────────────────────────────────
+  // EP-N01..N13 — /worlds/:worldId/noise/...
+
+  /** EP-N01 GET /worlds/:worldId/noise/config → NoiseConfig */
+  getNoiseConfig: (worldId) =>
+    request('GET', `/worlds/${worldId}/noise/config`),
+
+  /** EP-N02 PUT /worlds/:worldId/noise/config → NoiseConfig actualizada */
+  putNoiseConfig: (worldId, data) =>
+    request('PUT', `/worlds/${worldId}/noise/config`, data),
+
+  /** EP-N03 GET /worlds/:worldId/noise/destinations → lista de destinos */
+  getNoiseDestinations: (worldId) =>
+    request('GET', `/worlds/${worldId}/noise/destinations`),
+
+  /** EP-N04 POST /worlds/:worldId/noise/destinations → 201 destino creado */
+  createNoiseDestination: (worldId, data) =>
+    request('POST', `/worlds/${worldId}/noise/destinations`, data),
+
+  /** EP-N05 PUT /worlds/:worldId/noise/destinations/:destId → destino actualizado */
+  updateNoiseDestination: (worldId, destId, data) =>
+    request('PUT', `/worlds/${worldId}/noise/destinations/${destId}`, data),
+
+  /** EP-N06 DELETE /worlds/:worldId/noise/destinations/:destId → 204 */
+  deleteNoiseDestination: (worldId, destId) =>
+    request('DELETE', `/worlds/${worldId}/noise/destinations/${destId}`),
+
+  /** EP-N07 GET /worlds/:worldId/noise/destinations/:destId/paths → lista de rutas con pasos */
+  getNoisePaths: (worldId, destId) =>
+    request('GET', `/worlds/${worldId}/noise/destinations/${destId}/paths`),
+
+  /** EP-N08 POST /worlds/:worldId/noise/destinations/:destId/paths → 201 ruta creada */
+  createNoisePath: (worldId, destId, data) =>
+    request('POST', `/worlds/${worldId}/noise/destinations/${destId}/paths`, data),
+
+  /** EP-N09 PUT /worlds/:worldId/noise/paths/:pathId → ruta actualizada (is_active, steps…) */
+  updateNoisePath: (worldId, pathId, data) =>
+    request('PUT', `/worlds/${worldId}/noise/paths/${pathId}`, data),
+
+  /** EP-N10 DELETE /worlds/:worldId/noise/paths/:pathId → 204 */
+  deleteNoisePath: (worldId, pathId) =>
+    request('DELETE', `/worlds/${worldId}/noise/paths/${pathId}`),
+
+  /** EP-N11 POST /worlds/:worldId/noise/derive-selector → deriva selector CSS del outerHTML */
+  deriveNoiseSelector: (worldId, outerHtml) =>
+    request('POST', `/worlds/${worldId}/noise/derive-selector`, { outer_html: outerHtml }),
+
+  /** EP-N12 GET /worlds/:worldId/noise/origins → anclas semilla (genéricas + por-aldea) */
+  getNoiseOrigins: (worldId) =>
+    request('GET', `/worlds/${worldId}/noise/origins`),
+
+  /** EP-N13 POST /worlds/:worldId/noise/refresh-villages → refresca aldeas desde el browser */
+  refreshNoiseVillages: (worldId) =>
+    request('POST', `/worlds/${worldId}/noise/refresh-villages`, {}),
+
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 

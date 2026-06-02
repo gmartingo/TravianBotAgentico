@@ -5,11 +5,10 @@
  * Carga independiente: un error aquí no afecta a OasisList.
  *
  * Secciones:
- *   1. Ritmo de regeneración global (RegenRatesSection reutilizada)
- *   2. Apariciones globales de animales (tabla: animal, apariciones, prom, máx, mín)
+ *   1. Apariciones globales de animales (tabla: animal, apariciones, prom, máx, mín)
  *
  * Estados: loading (skeleton) / error (banner rojo + reintentar) /
- *          vacío (estado descriptivo con CTA) / con-datos (dos secciones).
+ *          vacío (estado descriptivo con CTA) / con-datos.
  *
  * Props:
  *   data      — respuesta de GET /attack-reports/stats/global (o null)
@@ -24,7 +23,6 @@
  * Añadido en la feature bd-ataques-oasis-stats-global (2026-05-31).
  */
 import { useState } from 'react'
-import { RegenRatesSection } from './RegenRatesSection.jsx'
 
 // ── Skeleton de carga ────────────────────────────────────────────────────────
 function GlobalStatsSkeleton() {
@@ -208,7 +206,8 @@ function GlobalAppearancesTable({ appearances, lang, t }) {
                 <td style={{ padding: '7px 10px', color: 'var(--text)' }}>
                   {row.animal_name}
                 </td>
-                {/* appearances (total global, sin denominador) */}
+                {/* appearances / eligible_reports (NN%) — denominador = reportes de oasis
+                    donde esa especie aparece alguna vez; oasis sin esa especie no diluyen el % */}
                 <td
                   style={{
                     padding: '7px 10px',
@@ -216,9 +215,22 @@ function GlobalAppearancesTable({ appearances, lang, t }) {
                     fontFamily: 'var(--font-mono)',
                     fontVariantNumeric: 'tabular-nums',
                     color: 'var(--text-secondary)',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {new Intl.NumberFormat(lang).format(row.appearances)}
+                  {(() => {
+                    const nf = new Intl.NumberFormat(lang)
+                    const app = nf.format(row.appearances)
+                    // Guarda defensiva: backend antiguo sin eligible_reports → solo conteo
+                    if (row.eligible_reports == null || row.eligible_reports === 0) return app
+                    const pct = Math.round((row.appearances / row.eligible_reports) * 100)
+                    return (
+                      <>
+                        {app}/{nf.format(row.eligible_reports)}{' '}
+                        <span style={{ color: 'var(--text-tertiary)' }}>({pct}%)</span>
+                      </>
+                    )
+                  })()}
                 </td>
                 {/* avg_present */}
                 <td
@@ -318,33 +330,18 @@ function Accordion({ headerId, bodyId, header, summary, open, onToggle, children
 
 // ── Panel principal ──────────────────────────────────────────────────────────
 export function GlobalOasisStatsPanel({ data, loading, error, onRetry, onGoToIngest, lang, t }) {
-  // DA-CL15/16: ambos acordeones arrancan cerrados
-  const [regenOpen, setRegenOpen]             = useState(false)
   const [appearancesOpen, setAppearancesOpen] = useState(false)
 
   if (loading) return <GlobalStatsSkeleton />
   if (error)   return <ErrorBanner message={error} onRetry={onRetry} t={t} />
 
-  if (!data || (data.animal_appearances.length === 0 && data.animal_regen_rates.length === 0)) {
+  if (!data || data.animal_appearances.length === 0) {
     return <GlobalStatsEmpty onGoToIngest={onGoToIngest} t={t} />
   }
 
-  const rates       = data.animal_regen_rates ?? []
   const appearances = data.animal_appearances ?? []
 
-  // DA-CL17: resumen de regen "N animales · X,XX–Y,YY /h"
-  const regenSummary = (() => {
-    if (rates.length === 0) return ''
-    const vals = rates.map((r) => r.avg_regen_per_hour).filter((v) => v != null)
-    if (vals.length === 0) return `${rates.length} animales`
-    const fmt = (n) => new Intl.NumberFormat(lang, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-    return t('ar.stats.global.regen.summary')
-      .replace('{n}', rates.length)
-      .replace('{min}', fmt(Math.min(...vals)))
-      .replace('{max}', fmt(Math.max(...vals)))
-  })()
-
-  // DA-CL17: resumen de apariciones "N animales observados · top: X, Y, Z"
+  // Resumen de apariciones "N animales observados · top: X, Y, Z"
   const appearancesSummary = (() => {
     if (appearances.length === 0) return ''
     const top3 = [...appearances].sort((a, b) => (b.appearances ?? 0) - (a.appearances ?? 0)).slice(0, 3).map((a) => a.animal_name).join(', ')
@@ -363,20 +360,7 @@ export function GlobalOasisStatsPanel({ data, loading, error, onRetry, onGoToIng
         {t('ar.stats.global.title')}
       </h2>
 
-      {/* Acordeón 1: Regen global — DA-CL15 */}
-      <Accordion
-        headerId="global-regen-hdr"
-        bodyId="global-regen-body"
-        header={t('ar.stats.global.regen.header')}
-        summary={regenSummary}
-        open={regenOpen}
-        onToggle={() => setRegenOpen((v) => !v)}
-      >
-        {/* RegenRatesSection sin tocar internamente — DA-CL22 */}
-        <RegenRatesSection rates={rates} totalAttacks={null} lang={lang} t={t} />
-      </Accordion>
-
-      {/* Acordeón 2: Apariciones globales — DA-CL16 */}
+      {/* Acordeón: Apariciones globales */}
       <Accordion
         headerId="global-appears-hdr"
         bodyId="global-appears-body"

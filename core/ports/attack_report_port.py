@@ -154,6 +154,48 @@ class AttackReportPort(ABC):
         Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md.
         """
 
+    @abstractmethod
+    async def get_all_oasis_regen_comparison(self) -> dict:
+        """
+        Comparativa de tasas de reaparición y proyección de animales para todos los oasis.
+
+        Sin parámetros. 200 siempre, incluso con BD vacía (oasis:[], species_columns:[]).
+        Ver spec docs/specs/reaparicion-animales-oasis.md §8 EP-10 y §9.
+
+        Gap pre-existente regularizado en oasis-spawn-mechanics-stats §14 paso 0.
+        El adaptador ya implementaba este método (línea 1115); el port no lo declaraba.
+        """
+
+    @abstractmethod
+    async def get_oasis_spawn_composition(self, timer_min: int) -> dict:
+        """
+        Devuelve composición típica, inferencia de tipo, peor combinación a batir
+        (dado timer_min en minutos) y estado cooldown/respawn para todos los oasis.
+
+        timer_min: 6|7|10|15 (validado en el router antes de llamar al port).
+        200 siempre, incluso con oasis: [].
+        Ver spec docs/specs/oasis-spawn-mechanics-stats.md §8 EP-SPAWN y §9.
+        """
+
+    @abstractmethod
+    async def get_animal_temporal_distribution(
+        self,
+        bucket_hours: int,
+        lang: str,
+        translation_port,
+    ) -> dict:
+        """
+        Distribución empírica de animales por franja temporal (gap entre ataques).
+
+        bucket_hours: tamaño del bucket en horas. Valores válidos: 1|2|4|8|12|24.
+        lang: código de idioma validado (25 soportados).
+        translation_port: puerto de traducción para resolver nombres de animales.
+
+        Devuelve { bucket_hours, animals: [...] }.
+        200 siempre (animals: [] si no hay datos).
+        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+        """
+
 
 class DuplicateReportError(Exception):
     """Se intenta guardar un reporte que ya existe en BD (clave única violada)."""

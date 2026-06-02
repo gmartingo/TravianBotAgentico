@@ -7,20 +7,22 @@ Rutas (sin prefijo /api — el proxy de Vite lo retira):
   GET    /attack-reports               EP-03: historial filtrable  (200)
   GET    /attack-reports/oasis         EP-08: lista oasis          (200)  ← ANTES de /{id}
   GET    /attack-reports/stats/bounty  EP-07: balance recursos     (200)  ← ANTES de /{id}
-  GET    /attack-reports/stats/global           EP-09: stats globales       (200)  ← ANTES de stats/oasis
-  GET    /attack-reports/stats/oasis/comparison EP-10: comparativa reapar.  (200)  ← ANTES de EP-06
-  GET    /attack-reports/stats/oasis            EP-06: estadísticas oasis   (200)  ← ANTES de /{id}
-  GET    /attack-reports/{id}                   EP-04: detalle reporte      (200)
-  DELETE /attack-reports/{id}                   EP-05: borrar reporte       (204)
+  GET    /attack-reports/stats/global                        EP-09: stats globales           (200)  ← ANTES de stats/oasis
+  GET    /attack-reports/stats/oasis/comparison              EP-10: comparativa reapar.      (200)  ← ANTES de EP-SPAWN y EP-06
+  GET    /attack-reports/stats/oasis/spawn-composition       EP-SPAWN: composición spawn     (200)  ← ANTES de EP-TD y EP-06
+  GET    /attack-reports/stats/oasis/temporal-distribution   EP-TD: distrib. temporal        (200)  ← ANTES de EP-06
+  GET    /attack-reports/stats/oasis                         EP-06: estadísticas oasis       (200)  ← ANTES de /{id}
+  GET    /attack-reports/{id}                                EP-04: detalle reporte          (200)
+  DELETE /attack-reports/{id}                                EP-05: borrar reporte           (204)
 
-NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06 a EP-10)
+NOTA DE ROUTING (C6): los endpoints con rutas literales (EP-06 a EP-10, EP-SPAWN, EP-TD)
 se declaran ANTES de EP-04/{id} para que FastAPI los resuelva como literales
 y no capturen "stats" u "oasis" como {id}. {id} está tipado int con ge=1.
-EP-10 no colisiona con EP-06: tienen paths de distinta longitud de segmentos.
+EP-10, EP-SPAWN, EP-TD y EP-06 tienen paths de distinta longitud de segmentos: sin colisión.
 
-Sin Accept-Language obligatorio en este router: los endpoints devuelven datos
-numéricos e ISO 8601; el animal_name es texto crudo del usuario (validado por
-desarrollador-apis).
+NOTA: EP-TD (temporal-distribution) exige Accept-Language obligatorio vía get_language,
+a diferencia del resto del router que devuelve datos numéricos o texto crudo.
+Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 y §16.
 
 Ver spec docs/specs/bd-ataques-oasis.md §8 para los contratos completos.
 Correcciones C1–C7 del spec incorporadas.
@@ -30,10 +32,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Path, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from adapters.api.dependencies import get_language, get_translation_port
 from core.entities.tribe import Tribe
 from core.ports.attack_report_port import DuplicateReportError
 from core.use_cases.attack_report_parser import (
@@ -550,6 +553,116 @@ async def get_oasis_regen_comparison(request: Request) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# EP-SPAWN — Composición, peor combinación e inferencia de tipo por oasis
+#            (literal más larga que EP-06 → ANTES de EP-06)
+# ---------------------------------------------------------------------------
+
+@router.get("/attack-reports/stats/oasis/spawn-composition",
+            status_code=status.HTTP_200_OK)
+async def get_oasis_spawn_composition(
+    request: Request,
+    timer_min: int = Query(
+        ...,
+        description="Intervalo de timer en minutos. Valores válidos: 6, 7, 10, 15.",
+    ),
+) -> dict:
+    """
+    EP-SPAWN — Composición típica, peor combinación a batir e inferencia de tipo
+    para todos los oasis con reportes en BD.
+
+    timer_min: int requerido; valores válidos = {6, 7, 10, 15}.
+      - Fuera del conjunto → 400 con detail legible.
+      - Ausente o tipo no entero → 422 (FastAPI validation automática).
+
+    Sin Accept-Language (datos numéricos e ordinales; nombres resueltos en el frontend).
+    200 siempre, incluso con oasis: [].
+    500 ante error inesperado de BD (detail genérico, sin stack trace).
+
+    Ver spec docs/specs/oasis-spawn-mechanics-stats.md §8 EP-SPAWN y §9.
+    Añadido en la feature oasis-spawn-mechanics-stats (2026-06-02).
+    """
+    if timer_min not in (6, 7, 10, 15):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"timer_min debe ser uno de: 6, 7, 10, 15. Recibido: {timer_min}",
+        )
+    port = request.app.state.attack_report_port
+    try:
+        return await port.get_oasis_spawn_composition(timer_min)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular la composición de spawn.",
+        )
+
+
+# ---------------------------------------------------------------------------
+# EP-TD — Distribución temporal de animales por intervalo de farmeo
+#          (literal más larga que EP-06 → ANTES de EP-06)
+# ---------------------------------------------------------------------------
+
+# Valores válidos de bucket_hours (whitelist exacta — RN-TD13)
+_VALID_BUCKET_HOURS = {1, 2, 4, 8, 12, 24}
+
+
+@router.get(
+    "/attack-reports/stats/oasis/temporal-distribution",
+    status_code=status.HTTP_200_OK,
+)
+async def get_animal_temporal_distribution(
+    request: Request,
+    bucket_hours: int = Query(
+        default=2,
+        description=(
+            "Tamaño del bucket en horas. Valores válidos: 1, 2, 4, 8, 12, 24. "
+            "Default: 2. Valor fuera de ese conjunto → 400."
+        ),
+    ),
+    lang: str = Depends(get_language),
+    translation_port=Depends(get_translation_port),
+) -> dict:
+    """
+    EP-TD — Distribución empírica de animales por franja temporal (gap entre ataques).
+
+    Para cada tipo de animal y cada franja temporal (bucket), devuelve cuántas veces
+    apareció ese animal en reportes cuyo gap con el ataque anterior cae en esa franja,
+    junto con la media y la moda del número de unidades observadas.
+
+    bucket_hours: int (default 2). Valores válidos: {1, 2, 4, 8, 12, 24}.
+      - Fuera del conjunto → 400 con detail legible.
+      - Tipo no entero → 422 (FastAPI validation automática).
+      - Ausente → 200 con bucket_hours=2 (default).
+
+    Accept-Language: obligatorio. Ausente o código no soportado → 400.
+    200 siempre, incluso con animals: [] (BD vacía o sin gaps calculables).
+    500 ante error inesperado de BD (detail genérico, sin stack trace).
+
+    Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD.
+    """
+    if bucket_hours not in _VALID_BUCKET_HOURS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"bucket_hours debe ser uno de: 1, 2, 4, 8, 12, 24. "
+                f"Recibido: {bucket_hours}"
+            ),
+        )
+
+    port = request.app.state.attack_report_port
+    try:
+        return await port.get_animal_temporal_distribution(
+            bucket_hours=bucket_hours,
+            lang=lang,
+            translation_port=translation_port,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular la distribución temporal de animales.",
+        )
+
+
+# ---------------------------------------------------------------------------
 # EP-06 — Estadísticas de oasis (ANTES de /{id} para evitar colisión de routing)
 # ---------------------------------------------------------------------------
 
@@ -561,8 +674,11 @@ async def get_oasis_stats(
 ) -> dict:
     """
     Estadísticas de un oasis: aparición de animales, repoblación temporal y regeneración.
+    Incluye además el balance de recursos (bajas + botín + neto) del oasis.
 
     Requiere x e y (ambos obligatorios). Si no hay reportes → 200 con total_attacks=0 (C7).
+    La clave 'balance' sigue el mismo shape que GET /attack-reports/stats/balance filtrado
+    por coordenada: {range, total_reports, reports_without_tribe, lost, stolen, net}.
     """
     if x is None or y is None:
         raise HTTPException(
@@ -571,7 +687,12 @@ async def get_oasis_stats(
         )
 
     port = request.app.state.attack_report_port
-    return await port.get_oasis_stats(x, y)
+    oasis_data = await port.get_oasis_stats(x, y)
+
+    game_data_port = getattr(request.app.state, "game_data_port", None)
+    balance = await port.get_balance_stats(x=x, y=y, game_data_port=game_data_port)
+
+    return {**oasis_data, "balance": balance}
 
 
 # ---------------------------------------------------------------------------
