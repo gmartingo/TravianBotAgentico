@@ -64,6 +64,10 @@ class DbPort(ABC):
         """Devuelve un mundo por su ID global, o None."""
 
     @abstractmethod
+    async def get_account_id_for_world(self, world_id: int) -> Optional[int]:
+        """Devuelve el account_id propietario de un mundo, o None si no existe."""
+
+    @abstractmethod
     async def get_world_by_account_and_server(
         self, account_id: int, server: str
     ) -> Optional[World]:

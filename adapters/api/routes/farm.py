@@ -837,7 +837,38 @@ async def start_agent(world_id: int, request: Request) -> dict:
         )
     browser = get_or_create(world_id)
 
-    agent = WorldAgent(world_id=world_id, browser=browser, db=db)
+    # Cablear el WorldAgent con sus dependencias de sesión y ruido.
+    # Sin esto el agente queda "ciego": no ve la sesión de Chrome abierta (que vive
+    # en el SessionRegistry singleton), no sigue el timeline de modos y no puede
+    # ejecutar ruido ni probar rutas (get_browser → None → 500/409 espurio).
+    #   - session_registry: para que el agente vea/use el browser real del mundo.
+    #   - session_db:       timeline horario (HARDCORE/PASIVO/DISCONNECTED) + override.
+    #   - noise_db:         destinos y rutas de ruido de navegación.
+    #   - login_use_case + account_id: relogin automático al salir de DISCONNECTED.
+    session_registry = getattr(request.app.state, "world_runtime_port", None)
+    session_db = getattr(request.app.state, "session_db_port", None)
+    noise_db = getattr(request.app.state, "noise_db_port", None)
+    accounts_db = getattr(request.app.state, "db_port", None)
+    fernet = getattr(request.app.state, "fernet", None)
+
+    login_use_case = None
+    account_id = None
+    if accounts_db is not None and fernet is not None and session_registry is not None:
+        from core.use_cases.login_use_case import LoginUseCase  # noqa: PLC0415
+
+        account_id = await accounts_db.get_account_id_for_world(world_id)
+        login_use_case = LoginUseCase(registry=session_registry, db=accounts_db, fernet=fernet)
+
+    agent = WorldAgent(
+        world_id=world_id,
+        browser=browser,
+        db=db,
+        session_db=session_db,
+        session_registry=session_registry,
+        login_use_case=login_use_case,
+        account_id=account_id,
+        noise_db=noise_db,
+    )
     seeded = await agent.seed_from_schedulers()
     agents[world_id] = agent
 
