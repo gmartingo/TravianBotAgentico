@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Calendario de rango para el filtro del Historial de reportes
+  HTML autocontenido — cero dependencias del backend ni build. Abrir en el navegador.
+
+  Bloques arrastrables (modo Editar):
+    A. FILTRO       — el filtro del historial con los inputs Desde/Hasta + botón 📅
+    B. POPOVER      — el calendario de rango (atajos + grid + horas + acciones)
+
+  Controles (toolbar):
+    - Toggle tema (claro / oscuro)
+    - Idioma (es / de / ar-RTL) → meses y días vía Intl, semana empieza LUNES
+    - Botón "Abrir/Cerrar popover" (en el mockup el popover está siempre montado para verlo)
+    - Modo Editar: drag & drop con imán de 8px
+    - Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec:   docs/design/calendario-filtro-historial.md
+  Feature: filtro del historial de reportes de ataque (HistoryFilters.jsx)
+
+  NOTA: la interacción del calendario (seleccionar rango, atajos, horas) ES real para
+  poder validar el comportamiento; el backend NO existe aquí.
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Calendario de rango del historial (playground)</title>
+<style>
+/* ===== TOKENS (fuente de verdad: frontend/src/styles/tokens.css §19.16 DESIGN.md) ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--danger:#C9352C;--info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+
+/* ===== AVISO MOCKUP ===== */
+.mock-banner{
+  background:var(--accent-subtle);color:var(--accent-text);
+  border-bottom:1px solid var(--accent);
+  padding:7px 16px;font-size:12px;font-weight:600;text-align:center;flex-shrink:0;
+}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);font-size:12px;flex-shrink:0;
+  position:sticky;top:0;z-index:400;
+}
+.toolbar label{color:var(--text-secondary);}
+.toolbar select,.toolbar button{
+  font:inherit;font-size:12px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);
+  padding:4px 9px;cursor:pointer;transition:background var(--dur-fast);
+}
+.toolbar select:hover,.toolbar button:hover{background:var(--border);}
+.toolbar button.active{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent-text);}
+.tb-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== CANVAS ===== */
+.canvas{flex:1;position:relative;overflow:auto;padding:40px;min-height:0;}
+.canvas.editing{background-image:radial-gradient(var(--border) 1px,transparent 1px);background-size:16px 16px;}
+
+.block{position:absolute;}
+.block.editing{cursor:grab;}
+.block.editing:hover{outline:2px dashed var(--accent);outline-offset:6px;border-radius:var(--radius-md);}
+.block.dragging{cursor:grabbing;opacity:.92;z-index:500;}
+.block-tag{
+  display:none;position:absolute;inset-block-start:-22px;inset-inline-start:0;
+  font:600 10px/1 var(--font-mono);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--accent-text);background:var(--accent-subtle);
+  padding:3px 6px;border-radius:var(--radius-sm);white-space:nowrap;
+}
+.block.editing .block-tag{display:block;}
+
+/* ===== FILTRO (bloque A) ===== */
+.filter{
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 14px;
+  display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;
+}
+.fgroup{display:flex;flex-direction:column;gap:4px;}
+.flabel{font-size:11px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.frow{display:flex;gap:6px;align-items:flex-start;}
+.finput{
+  height:32px;padding:0 8px;background:var(--surface);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:13px;color:var(--text);font-family:var(--font-mono);box-sizing:border-box;outline:none;
+}
+.finput:focus{border-color:var(--accent);}
+.finput.coord{width:64px;}
+.finput.date{width:160px;}
+.finput.err{border-color:var(--danger);}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field .sub{font-size:11px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;}
+.cal-btn{
+  height:32px;width:34px;display:grid;place-items:center;
+  background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;
+  transition:background var(--dur-fast),border-color var(--dur-fast);
+}
+.cal-btn:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent-text);}
+.btn-primary{
+  height:32px;padding:0 14px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{background:var(--text-disabled);opacity:.5;cursor:not-allowed;}
+.btn-ghost-border{
+  height:32px;padding:0 12px;background:transparent;color:var(--text-secondary);
+  border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;
+}
+.btn-ghost-border:hover{border-color:var(--accent);color:var(--accent-text);}
+.err-msg{font-size:11px;color:var(--danger);margin-top:2px;}
+
+/* ===== POPOVER (bloque B) ===== */
+.popover{
+  width:330px;max-width:calc(100vw - 32px);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);overflow:hidden;
+}
+.pop-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 14px;border-bottom:1px solid var(--border);
+}
+.pop-head h3{font-size:14px;font-weight:600;}
+.pop-x{
+  width:28px;height:28px;display:grid;place-items:center;border-radius:var(--radius-sm);
+  background:transparent;border:none;color:var(--text-tertiary);cursor:pointer;font-size:16px;
+}
+.pop-x:hover{background:var(--surface-2);color:var(--text);}
+.pop-section{padding:12px 14px;border-bottom:1px solid var(--border);}
+.pop-section:last-child{border-bottom:none;}
+.pop-section .seclabel{
+  font-size:11px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;
+  margin-bottom:8px;
+}
+.shortcuts{display:flex;flex-wrap:wrap;gap:6px;}
+.sc-btn{
+  height:30px;padding:0 12px;background:transparent;color:var(--text);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap;
+  transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+}
+.sc-btn:hover{background:var(--accent-subtle);border-color:var(--accent);color:var(--accent-text);}
+
+/* Calendar grid */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.cal-nav .month{font-size:14px;font-weight:600;text-transform:capitalize;}
+.cal-nav button{
+  width:28px;height:28px;display:grid;place-items:center;border-radius:var(--radius-sm);
+  background:transparent;border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;
+}
+.cal-nav button:hover{background:var(--surface-2);border-color:var(--accent);color:var(--accent-text);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-dow{
+  text-align:center;font-size:11px;color:var(--text-tertiary);font-weight:500;
+  text-transform:capitalize;padding:4px 0;
+}
+.cal-day{
+  aspect-ratio:1/1;min-height:32px;display:grid;place-items:center;
+  border:none;background:transparent;color:var(--text);cursor:pointer;
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;
+  border-radius:var(--radius-sm);transition:background var(--dur-fast);position:relative;
+}
+.cal-day:hover{background:var(--surface-2);}
+.cal-day.muted{color:var(--text-disabled);}
+.cal-day.today{font-weight:700;}
+.cal-day.today::after{
+  content:"";position:absolute;inset-block-end:4px;inset-inline:0;margin-inline:auto;
+  width:4px;height:4px;border-radius:50%;background:var(--accent);
+}
+.cal-day.in-range{background:var(--accent-subtle);border-radius:0;}
+.cal-day.range-start{background:var(--accent);color:var(--btn-primary-text);border-start-start-radius:var(--radius-sm);border-end-start-radius:var(--radius-sm);}
+.cal-day.range-end{background:var(--accent);color:var(--btn-primary-text);border-start-end-radius:var(--radius-sm);border-end-end-radius:var(--radius-sm);}
+.cal-day.single{background:var(--accent);color:var(--btn-primary-text);border-radius:var(--radius-sm);}
+.cal-day.today.range-start::after,.cal-day.today.range-end::after,.cal-day.today.single::after{background:var(--btn-primary-text);}
+.cal-hint{font-size:12px;color:var(--text-secondary);margin-top:8px;min-height:16px;}
+
+/* Time inputs */
+.time-row{display:flex;flex-wrap:wrap;gap:14px;}
+.time-group{display:flex;flex-direction:column;gap:4px;}
+.time-group .tl{font-size:12px;color:var(--text-secondary);}
+
+/* La sección de Hora arranca OCULTA: solo aparece cuando hay día(s) seleccionado(s).
+   Cada extremo (Desde/Hasta) se muestra de forma independiente. La aparición es
+   suave (--dur-fast) y se evita el salto brusco de layout animando max-height.
+   Accesibilidad: mientras está oculto lleva hidden + aria-hidden y queda fuera del
+   orden de tabulación; al mostrarse, los inputs vuelven a ser enfocables. */
+#timeSection{
+  overflow:hidden;
+  max-height:0;padding-block:0;border-bottom-width:0;opacity:0;
+  transition:max-height var(--dur-base) var(--ease),
+             padding var(--dur-base) var(--ease),
+             opacity var(--dur-fast) var(--ease);
+}
+#timeSection.show{
+  max-height:160px;padding-block:12px;border-bottom-width:1px;opacity:1;
+}
+.time-group{
+  opacity:0;transform:translateY(-2px);
+  transition:opacity var(--dur-fast) var(--ease),transform var(--dur-fast) var(--ease);
+}
+.time-group.show{opacity:1;transform:none;}
+.time-group[hidden]{display:none;}
+.time-fields{display:flex;align-items:center;gap:2px;}
+.time-fields input{
+  width:34px;height:32px;text-align:center;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  font-family:var(--font-mono);font-size:13px;color:var(--text);outline:none;
+}
+.time-fields input:focus{border-color:var(--accent);}
+.time-fields .colon{color:var(--text-tertiary);font-family:var(--font-mono);}
+.pop-actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;}
+
+/* Range order error */
+.order-err{font-size:12px;color:var(--danger);padding:0 14px 12px;display:none;}
+.order-err.show{display:block;}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:640px){
+  .canvas{padding:16px;}
+  .block{position:static!important;margin-bottom:24px;width:100%!important;}
+  .cal-day{min-height:44px;}
+  .time-fields input{height:44px;font-size:16px;width:40px;}
+  .finput{height:36px;}
+}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">
+  MOCKUP PARA APROBACIÓN — recompón/valida y aprueba antes de implementar · spec: docs/design/calendario-filtro-historial.md
+</div>
+
+<div class="toolbar">
+  <label>Tema</label>
+  <button id="themeBtn">🌙 Oscuro</button>
+  <span class="tb-sep"></span>
+  <label>Idioma</label>
+  <select id="langSel">
+    <option value="es">Español (es)</option>
+    <option value="de">Deutsch (de) — texto largo</option>
+    <option value="ar">العربية (ar) — RTL</option>
+    <option value="ja">日本語 (ja)</option>
+  </select>
+  <span class="tb-sep"></span>
+  <button id="editBtn">✥ Editar layout</button>
+  <button id="saveBtn">Guardar</button>
+  <button id="resetBtn">Restablecer</button>
+  <button id="exportBtn">Exportar layout</button>
+  <span class="tb-sep"></span>
+  <span style="color:var(--text-tertiary)">Popover montado siempre para verlo · clic en 📅 lo (des)oculta</span>
+</div>
+
+<div class="canvas" id="canvas">
+
+  <!-- BLOQUE A: FILTRO -->
+  <div class="block" id="blkFilter" data-x="40" data-y="20" style="left:40px;top:20px;width:660px;">
+    <span class="block-tag">A · Filtro historial</span>
+    <div class="filter">
+      <div class="fgroup">
+        <span class="flabel" data-i18n="coords">Coordenadas</span>
+        <div class="frow">
+          <div class="field"><span class="sub" data-i18n="x">X</span><input class="finput coord" value="" placeholder="0"></div>
+          <div class="field"><span class="sub" data-i18n="y">Y</span><input class="finput coord" value="" placeholder="0"></div>
+        </div>
+      </div>
+
+      <div class="fgroup">
+        <span class="flabel" data-i18n="dates">Fechas</span>
+        <div class="frow">
+          <div class="field">
+            <span class="sub" data-i18n="from">Desde</span>
+            <input class="finput date" id="inFrom" placeholder="YYYY-MM-DD HH:MM:SS">
+            <span class="err-msg" id="errFrom" style="display:none" role="alert" data-i18n="invalid">Formato YYYY-MM-DD HH:MM:SS</span>
+          </div>
+          <div class="field">
+            <span class="sub" data-i18n="to">Hasta</span>
+            <input class="finput date" id="inTo" placeholder="YYYY-MM-DD HH:MM:SS">
+            <span class="err-msg" id="errTo" style="display:none" role="alert" data-i18n="invalid">Formato YYYY-MM-DD HH:MM:SS</span>
+          </div>
+          <div class="field">
+            <span class="sub">&nbsp;</span>
+            <button class="cal-btn" id="calToggle" aria-haspopup="dialog" aria-label="Elegir rango de fechas" title="Elegir rango de fechas">
+              <!-- lucide Calendar -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <button class="btn-primary" id="applyFilter" data-i18n="apply">Aplicar</button>
+        <button class="btn-ghost-border" id="clearFilter" data-i18n="clear">Limpiar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE B: POPOVER -->
+  <div class="block" id="blkPopover" data-x="380" data-y="120" style="left:380px;top:120px;">
+    <span class="block-tag">B · Popover calendario de rango</span>
+    <div class="popover" role="dialog" aria-label="Elegir rango de fechas" id="popover">
+      <div class="pop-head">
+        <h3 data-i18n="rangeTitle">Rango de fechas</h3>
+        <button class="pop-x" id="popClose" aria-label="Cerrar">×</button>
+      </div>
+
+      <!-- Atajos -->
+      <div class="pop-section">
+        <div class="seclabel" data-i18n="shortcuts">Atajos</div>
+        <div class="shortcuts">
+          <button class="sc-btn" data-sc="hour"  data-i18n="scHour">Última hora</button>
+          <button class="sc-btn" data-sc="day"   data-i18n="scDay">Último día</button>
+          <button class="sc-btn" data-sc="monday" data-i18n="scMonday">Desde el lunes</button>
+        </div>
+      </div>
+
+      <!-- Calendario -->
+      <div class="pop-section">
+        <div class="cal-nav">
+          <button id="prevMonth" aria-label="Mes anterior">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="month" id="monthLabel">mayo 2026</span>
+          <button id="nextMonth" aria-label="Mes siguiente">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="cal-grid" id="calGrid" role="grid" aria-label="Calendario"></div>
+        <div class="cal-hint" id="calHint"></div>
+      </div>
+
+      <!-- Horas — OCULTAS hasta que se selecciona día(s). Cada extremo aparece por separado. -->
+      <div class="pop-section" id="timeSection" aria-hidden="true">
+        <div class="seclabel" data-i18n="time">Hora</div>
+        <div class="time-row">
+          <div class="time-group" id="timeFrom" hidden>
+            <span class="tl" data-i18n="from">Desde</span>
+            <div class="time-fields">
+              <input id="fromH" maxlength="2" inputmode="numeric" aria-label="Desde horas" placeholder="00">
+              <span class="colon">:</span>
+              <input id="fromM" maxlength="2" inputmode="numeric" aria-label="Desde minutos" placeholder="00">
+              <span class="colon">:</span>
+              <input id="fromS" maxlength="2" inputmode="numeric" aria-label="Desde segundos" placeholder="00">
+            </div>
+          </div>
+          <div class="time-group" id="timeTo" hidden>
+            <span class="tl" data-i18n="to">Hasta</span>
+            <div class="time-fields">
+              <input id="toH" maxlength="2" inputmode="numeric" aria-label="Hasta horas" placeholder="00">
+              <span class="colon">:</span>
+              <input id="toM" maxlength="2" inputmode="numeric" aria-label="Hasta minutos" placeholder="00">
+              <span class="colon">:</span>
+              <input id="toS" maxlength="2" inputmode="numeric" aria-label="Hasta segundos" placeholder="00">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="order-err" id="orderErr" role="alert" data-i18n="orderErr">La fecha "Desde" debe ser anterior o igual a "Hasta".</div>
+
+      <div class="pop-actions">
+        <button class="btn-ghost-border" id="popClear" data-i18n="clear">Limpiar</button>
+        <button class="btn-primary" id="popApply" data-i18n="applyRange">Aplicar rango</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* =========================================================================
+   i18n del mockup — solo lo necesario para validar visualmente. En la app real
+   todo viene de useI18n. Los meses/días salen de Intl.DateTimeFormat(lang).
+   ========================================================================= */
+const STR = {
+  es:{coords:"Coordenadas",x:"X",y:"Y",dates:"Fechas",from:"Desde",to:"Hasta",apply:"Aplicar",clear:"Limpiar",
+      invalid:"Formato YYYY-MM-DD HH:MM:SS",rangeTitle:"Rango de fechas",shortcuts:"Atajos",
+      scHour:"Última hora",scDay:"Último día",scMonday:"Desde el lunes",time:"Hora",applyRange:"Aplicar rango",
+      orderErr:'La fecha "Desde" debe ser anterior o igual a "Hasta".',pickEnd:"Elige la fecha final"},
+  de:{coords:"Koordinaten",x:"X",y:"Y",dates:"Datumsbereich",from:"Von",to:"Bis",apply:"Anwenden",clear:"Zurücksetzen",
+      invalid:"Format JJJJ-MM-TT HH:MM:SS",rangeTitle:"Datumsbereich",shortcuts:"Schnellauswahl",
+      scHour:"Letzte Stunde",scDay:"Letzter Tag",scMonday:"Seit Montag",time:"Uhrzeit",applyRange:"Bereich anwenden",
+      orderErr:'„Von" muss vor oder gleich „Bis" sein.',pickEnd:"Enddatum wählen"},
+  ar:{coords:"الإحداثيات",x:"س",y:"ص",dates:"التواريخ",from:"من",to:"إلى",apply:"تطبيق",clear:"مسح",
+      invalid:"الصيغة YYYY-MM-DD HH:MM:SS",rangeTitle:"نطاق التواريخ",shortcuts:"اختصارات",
+      scHour:"آخر ساعة",scDay:"آخر يوم",scMonday:"منذ الإثنين",time:"الوقت",applyRange:"تطبيق النطاق",
+      orderErr:'يجب أن يكون "من" قبل "إلى" أو مساويًا له.',pickEnd:"اختر تاريخ النهاية"},
+  ja:{coords:"座標",x:"X",y:"Y",dates:"日付",from:"開始",to:"終了",apply:"適用",clear:"クリア",
+      invalid:"形式 YYYY-MM-DD HH:MM:SS",rangeTitle:"日付範囲",shortcuts:"ショートカット",
+      scHour:"過去1時間",scDay:"過去24時間",scMonday:"今週の月曜から",time:"時刻",applyRange:"範囲を適用",
+      orderErr:'「開始」は「終了」以前である必要があります。',pickEnd:"終了日を選択"},
+};
+const RTL = new Set(["ar","he","fa"]);
+let lang = "es";
+
+/* =========================================================================
+   Helpers de fecha NAIVE VERBATIM — sin round-trip UTC (regla §8 del spec).
+   ========================================================================= */
+const pad = n => String(n).padStart(2,"0");
+// Date local -> "YYYY-MM-DD HH:MM:SS" usando getters LOCALES (nunca toISOString)
+function fmt(d){
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `
+       + `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+// "YYYY-MM-DD HH:MM:SS" -> {y,mo,d,h,mi,s} por split (NO new Date(str))
+const RE = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
+function parseStr(s){
+  const m = RE.exec((s||"").trim());
+  if(!m) return null;
+  return {y:+m[1],mo:+m[2],d:+m[3],h:+m[4],mi:+m[5],s:+m[6]};
+}
+// día (sin hora) a partir de y/mo/d -> Date local seguro (constructor por componentes)
+function dateOnly(y,mo,d){ return new Date(y, mo-1, d); }
+// índice de columna con semana = LUNES: (getDay()+6)%7  (lun=0 ... dom=6)
+function mondayIndex(dateObj){ return (dateObj.getDay()+6)%7; }
+
+/* =========================================================================
+   Estado del rango. from/to = {y,mo,d,h,mi,s} o null.
+   ========================================================================= */
+let viewYear, viewMonth; // mes mostrado (month 1-12)
+let from = null, to = null;
+let awaitingSecond = false; // un extremo elegido, esperando el segundo
+
+(function initView(){
+  const now = new Date();
+  viewYear = now.getFullYear(); viewMonth = now.getMonth()+1;
+})();
+
+/* ---- Intl: nombres de mes y días (semana LUNES) ---- */
+function monthName(y,mo){
+  return new Intl.DateTimeFormat(lang,{month:"long",year:"numeric"}).format(new Date(y,mo-1,1));
+}
+function dayNames(){
+  // 7 fechas de referencia empezando en un LUNES conocido (2024-01-01 fue lunes)
+  const base = new Date(2024,0,1); // lunes
+  const fmtD = new Intl.DateTimeFormat(lang,{weekday:"short"});
+  const out = [];
+  for(let i=0;i<7;i++){ const d=new Date(base); d.setDate(base.getDate()+i); out.push(fmtD.format(d)); }
+  return out;
+}
+function dayAria(y,mo,d){
+  return new Intl.DateTimeFormat(lang,{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date(y,mo-1,d));
+}
+
+/* ---- comparación de {y,mo,d} ---- */
+function cmpDay(a,b){
+  if(!a||!b) return 0;
+  const av=a.y*10000+a.mo*100+a.d, bv=b.y*10000+b.mo*100+b.d;
+  return av<bv?-1:av>bv?1:0;
+}
+function sameDay(a,b){ return a&&b&&a.y===b.y&&a.mo===b.mo&&a.d===b.d; }
+function inRange(day){
+  if(!from||!to) return false;
+  return cmpDay(day,from)>0 && cmpDay(day,to)<0;
+}
+
+/* =========================================================================
+   Render del calendario
+   ========================================================================= */
+function renderCal(){
+  document.getElementById("monthLabel").textContent = monthName(viewYear,viewMonth);
+  const grid = document.getElementById("calGrid");
+  grid.innerHTML = "";
+  // cabecera de días
+  dayNames().forEach(n=>{
+    const c=document.createElement("div"); c.className="cal-dow"; c.setAttribute("role","columnheader"); c.textContent=n; grid.appendChild(c);
+  });
+  const first = dateOnly(viewYear,viewMonth,1);
+  const offset = mondayIndex(first); // celdas vacías antes del día 1
+  const daysInMonth = new Date(viewYear,viewMonth,0).getDate();
+  const today = new Date(); const todayD={y:today.getFullYear(),mo:today.getMonth()+1,d:today.getDate()};
+
+  for(let i=0;i<offset;i++){ const e=document.createElement("div"); e.className="cal-day muted"; e.setAttribute("aria-hidden","true"); grid.appendChild(e); }
+  for(let d=1; d<=daysInMonth; d++){
+    const day={y:viewYear,mo:viewMonth,d};
+    const btn=document.createElement("button");
+    btn.className="cal-day"; btn.type="button"; btn.textContent=d;
+    btn.setAttribute("role","gridcell");
+    btn.setAttribute("aria-label", dayAria(viewYear,viewMonth,d));
+    if(sameDay(day,todayD)){ btn.classList.add("today"); btn.setAttribute("aria-current","date"); }
+    // pintado de rango
+    if(from && to){
+      if(sameDay(day,from)) btn.classList.add(sameDay(from,to)?"single":"range-start");
+      else if(sameDay(day,to)) btn.classList.add("range-end");
+      else if(inRange(day)) btn.classList.add("in-range");
+      if(sameDay(day,from)||sameDay(day,to)||inRange(day)) btn.setAttribute("aria-selected","true");
+    } else if(from && sameDay(day,from)){
+      btn.classList.add("single"); btn.setAttribute("aria-selected","true");
+    }
+    btn.addEventListener("click",()=>pickDay(day));
+    grid.appendChild(btn);
+  }
+  // hint
+  const hint=document.getElementById("calHint");
+  hint.textContent = awaitingSecond ? STR[lang].pickEnd : "";
+}
+
+/* selección de día: 1º clic = from; 2º = to (con auto-swap); 3º = reinicio */
+function pickDay(day){
+  if(!from || (from && to)){
+    from = {...day, h:from?from.h:0, mi:from?from.mi:0, s:from?from.s:0};
+    // conservar la hora ya tecleada en los inputs si existe
+    from.h = clampInt(val("fromH"),0,23,0); from.mi=clampInt(val("fromM"),0,59,0); from.s=clampInt(val("fromS"),0,59,0);
+    to = null; awaitingSecond = true;
+  } else {
+    // segundo clic
+    let f = {...from}, t = {...day};
+    if(cmpDay(t,f) < 0){ const tmp=f; f={...t,h:f.h,mi:f.mi,s:f.s}; t={...tmp}; } // auto-swap
+    // horas: from conserva input from; to toma input to o 23:59:59 si vacío
+    f.h=clampInt(val("fromH"),0,23,0); f.mi=clampInt(val("fromM"),0,59,0); f.s=clampInt(val("fromS"),0,59,0);
+    const hasToTime = val("toH")||val("toM")||val("toS");
+    t.h=clampInt(val("toH"),0,23,hasToTime?0:23); t.mi=clampInt(val("toM"),0,59,hasToTime?0:59); t.s=clampInt(val("toS"),0,59,hasToTime?0:59);
+    from=f; to=t; awaitingSecond=false;
+  }
+  syncTimeInputs(); syncTimeVisibility(); renderCal(); syncTextInputs(); updateApply();
+}
+
+function val(id){ return document.getElementById(id).value.trim(); }
+function clampInt(v,min,max,dflt){ if(v===""||isNaN(+v)) return dflt; return Math.max(min,Math.min(max,parseInt(v,10))); }
+
+/* escribe las horas del estado en los inputs HH:MM:SS */
+function syncTimeInputs(){
+  if(from){ document.getElementById("fromH").value=pad(from.h); document.getElementById("fromM").value=pad(from.mi); document.getElementById("fromS").value=pad(from.s); }
+  if(to){ document.getElementById("toH").value=pad(to.h); document.getElementById("toM").value=pad(to.mi); document.getElementById("toS").value=pad(to.s); }
+}
+
+/* =========================================================================
+   Visibilidad de la sección de Hora — APROBACIÓN: las filas HH:MM:SS están
+   OCULTAS hasta que hay día seleccionado. "Desde" aparece al fijar el primer
+   extremo; "Hasta" al fijar el segundo. Los atajos rellenan ambos, así que
+   muestran las dos. Al limpiar, se vuelven a ocultar.
+   Accesibilidad: oculto = hidden + aria-hidden (no anunciado a SR, fuera de
+   tabulación); visible = enfocable en orden coherente (Desde antes que Hasta).
+   ========================================================================= */
+function syncTimeVisibility(){
+  const section=document.getElementById("timeSection");
+  const gFrom=document.getElementById("timeFrom");
+  const gTo=document.getElementById("timeTo");
+  const anyFrom=!!from, anyTo=!!to;
+  // contenedor de sección: visible si hay al menos un extremo
+  const sectionVisible=anyFrom||anyTo;
+  section.classList.toggle("show",sectionVisible);
+  section.setAttribute("aria-hidden", sectionVisible?"false":"true");
+  // fila "Desde"
+  gFrom.hidden=!anyFrom;
+  // doble rAF para que la transición de opacity/transform corra tras quitar [hidden]
+  if(anyFrom){ requestAnimationFrame(()=>requestAnimationFrame(()=>gFrom.classList.add("show"))); }
+  else gFrom.classList.remove("show");
+  // fila "Hasta"
+  gTo.hidden=!anyTo;
+  if(anyTo){ requestAnimationFrame(()=>requestAnimationFrame(()=>gTo.classList.add("show"))); }
+  else gTo.classList.remove("show");
+}
+
+/* escribe el estado completo en los inputs de texto del filtro (YYYY-MM-DD HH:MM:SS) */
+function fmtPart(p){ return p? `${p.y}-${pad(p.mo)}-${pad(p.d)} ${pad(p.h)}:${pad(p.mi)}:${pad(p.s)}` : ""; }
+function syncTextInputs(){
+  document.getElementById("inFrom").value = fmtPart(from);
+  document.getElementById("inTo").value   = fmtPart(to);
+}
+
+/* =========================================================================
+   Atajos — calculan "ahora" en LOCAL, sin UTC (regla §6 y §8 del spec)
+   ========================================================================= */
+function applyShortcut(kind){
+  const now = new Date();
+  let f;
+  if(kind==="hour"){ f = new Date(now.getTime()-3600*1000); }
+  else if(kind==="day"){ f = new Date(now.getTime()-86400*1000); }
+  else { // monday: lunes de esta semana 00:00:00
+    const back = (now.getDay()+6)%7;
+    f = new Date(now.getFullYear(),now.getMonth(),now.getDate()-back,0,0,0);
+  }
+  from = {y:f.getFullYear(),mo:f.getMonth()+1,d:f.getDate(),h:f.getHours(),mi:f.getMinutes(),s:f.getSeconds()};
+  to   = {y:now.getFullYear(),mo:now.getMonth()+1,d:now.getDate(),h:now.getHours(),mi:now.getMinutes(),s:now.getSeconds()};
+  awaitingSecond=false;
+  viewYear=from.y; viewMonth=from.mo;
+  syncTimeInputs(); syncTimeVisibility(); renderCal(); syncTextInputs(); updateApply();
+}
+
+/* =========================================================================
+   Validación de orden from>to -> deshabilita Aplicar (igual mecánica que el
+   hasDateError actual de HistoryFilters, ampliada al orden)
+   ========================================================================= */
+function ordValue(p){ return p? p.y*1e10+p.mo*1e8+p.d*1e6+p.h*1e4+p.mi*1e2+p.s : null; }
+function updateApply(){
+  const f=parseStr(document.getElementById("inFrom").value);
+  const t=parseStr(document.getElementById("inTo").value);
+  const fTxt=document.getElementById("inFrom").value.trim();
+  const tTxt=document.getElementById("inTo").value.trim();
+  const fErr = fTxt!=="" && !f;
+  const tErr = tTxt!=="" && !t;
+  let ordErr=false;
+  if(f && t && (f.y*1e10+f.mo*1e8+f.d*1e6+f.h*1e4+f.mi*1e2+f.s) > (t.y*1e10+t.mo*1e8+t.d*1e6+t.h*1e4+t.mi*1e2+t.s)) ordErr=true;
+  document.getElementById("errFrom").style.display = fErr?"block":"none";
+  document.getElementById("errTo").style.display   = tErr?"block":"none";
+  document.getElementById("inFrom").classList.toggle("err", fErr||ordErr);
+  document.getElementById("inTo").classList.toggle("err", tErr||ordErr);
+  document.getElementById("orderErr").classList.toggle("show", ordErr);
+  const bad = fErr||tErr||ordErr;
+  document.getElementById("popApply").disabled = bad;
+  document.getElementById("applyFilter").disabled = bad;
+}
+
+/* =========================================================================
+   Wiring de eventos
+   ========================================================================= */
+document.getElementById("prevMonth").onclick=()=>{ viewMonth--; if(viewMonth<1){viewMonth=12;viewYear--;} renderCal(); };
+document.getElementById("nextMonth").onclick=()=>{ viewMonth++; if(viewMonth>12){viewMonth=1;viewYear++;} renderCal(); };
+document.querySelectorAll(".sc-btn").forEach(b=> b.onclick=()=>applyShortcut(b.dataset.sc));
+
+["fromH","fromM","fromS","toH","toM","toS"].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener("blur",()=>{
+    const max = id.endsWith("H")?23:59;
+    if(el.value!==""){ el.value=pad(clampInt(el.value,0,max,0)); }
+    // reflejar en estado y texto
+    if(from && id.startsWith("from")){ from.h=clampInt(val("fromH"),0,23,from.h); from.mi=clampInt(val("fromM"),0,59,from.mi); from.s=clampInt(val("fromS"),0,59,from.s); }
+    if(to && id.startsWith("to")){ to.h=clampInt(val("toH"),0,23,to.h); to.mi=clampInt(val("toM"),0,59,to.mi); to.s=clampInt(val("toS"),0,59,to.s); }
+    syncTextInputs(); updateApply();
+  });
+});
+
+// teclear directo en los inputs de texto del filtro -> refleja en el calendario
+function reflectFromText(){
+  const f=parseStr(document.getElementById("inFrom").value);
+  const t=parseStr(document.getElementById("inTo").value);
+  from = f? {y:f.y,mo:f.mo,d:f.d,h:f.h,mi:f.mi,s:f.s} : null;
+  to   = t? {y:t.y,mo:t.mo,d:t.d,h:t.h,mi:t.mi,s:t.s} : null;
+  awaitingSecond = !!(from && !to);
+  if(from){ viewYear=from.y; viewMonth=from.mo; }
+  syncTimeInputs(); syncTimeVisibility(); renderCal(); updateApply();
+}
+document.getElementById("inFrom").addEventListener("input",updateApply);
+document.getElementById("inTo").addEventListener("input",updateApply);
+document.getElementById("inFrom").addEventListener("blur",reflectFromText);
+document.getElementById("inTo").addEventListener("blur",reflectFromText);
+
+document.getElementById("popClear").onclick=()=>{
+  from=null; to=null; awaitingSecond=false;
+  ["fromH","fromM","fromS","toH","toM","toS"].forEach(id=>document.getElementById(id).value="");
+  syncTimeVisibility(); syncTextInputs(); renderCal(); updateApply();
+};
+document.getElementById("clearFilter").onclick=()=>{ document.getElementById("popClear").click(); };
+document.getElementById("popApply").onclick=()=>{ if(!document.getElementById("popApply").disabled) alert("Aplicar rango → "+ (fmtPart(from)||"(vacío)") +"  →  "+ (fmtPart(to)||"(vacío)") +"\\n(en la app: escribe en los inputs + onApply normaliza a ISO con T)"); };
+document.getElementById("applyFilter").onclick=()=>{ if(!document.getElementById("applyFilter").disabled) alert("Aplicar filtro (mismo onApply)"); };
+
+// toggle del popover (en el mockup está montado para verse)
+const popover = document.getElementById("blkPopover");
+document.getElementById("calToggle").onclick=()=>{ popover.style.display = popover.style.display==="none"?"block":"none"; };
+document.getElementById("popClose").onclick=()=>{ popover.style.display="none"; document.getElementById("calToggle").focus(); };
+
+/* =========================================================================
+   Idioma + RTL + tema
+   ========================================================================= */
+function applyLang(){
+  const dict=STR[lang];
+  document.querySelectorAll("[data-i18n]").forEach(el=>{ const k=el.dataset.i18n; if(dict[k]!==undefined) el.textContent=dict[k]; });
+  const rtl = RTL.has(lang);
+  document.documentElement.lang=lang;
+  document.documentElement.dir = rtl?"rtl":"ltr";
+  renderCal();
+}
+document.getElementById("langSel").onchange=e=>{ lang=e.target.value; applyLang(); };
+
+const themeBtn=document.getElementById("themeBtn");
+function isDark(){ return document.documentElement.dataset.theme==="dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme:dark)").matches); }
+themeBtn.onclick=()=>{ const dark=isDark(); document.documentElement.dataset.theme=dark?"light":"dark"; themeBtn.textContent=dark?"☀️ Claro":"🌙 Oscuro"; };
+themeBtn.textContent = isDark()?"☀️ Claro":"🌙 Oscuro";
+
+/* =========================================================================
+   Modo Editar (drag&drop + imán 8px) — convención playground del proyecto
+   ========================================================================= */
+const canvas=document.getElementById("canvas");
+let editing=false, drag=null;
+const GRID=8;
+const blocks=[document.getElementById("blkFilter"),document.getElementById("blkPopover")];
+
+document.getElementById("editBtn").onclick=function(){
+  editing=!editing; this.classList.toggle("active",editing);
+  canvas.classList.toggle("editing",editing);
+  blocks.forEach(b=>b.classList.toggle("editing",editing));
+};
+blocks.forEach(b=>{
+  b.addEventListener("mousedown",e=>{
+    if(!editing) return;
+    if(e.target.closest("button,input,select")) return;
+    const r=b.getBoundingClientRect();
+    drag={el:b,dx:e.clientX-r.left,dy:e.clientY-r.top}; b.classList.add("dragging"); e.preventDefault();
+  });
+});
+window.addEventListener("mousemove",e=>{
+  if(!drag) return;
+  const cr=canvas.getBoundingClientRect();
+  let x=e.clientX-cr.left-drag.dx+canvas.scrollLeft;
+  let y=e.clientY-cr.top-drag.dy+canvas.scrollTop;
+  x=Math.round(x/GRID)*GRID; y=Math.round(y/GRID)*GRID;
+  x=Math.max(0,x); y=Math.max(0,y);
+  drag.el.style.left=x+"px"; drag.el.style.top=y+"px";
+  drag.el.dataset.x=x; drag.el.dataset.y=y;
+});
+window.addEventListener("mouseup",()=>{ if(drag){ drag.el.classList.remove("dragging"); drag=null; } });
+
+const LS_KEY="tb-mock-calendario-filtro-layout";
+document.getElementById("saveBtn").onclick=()=>{
+  const layout={}; blocks.forEach(b=>layout[b.id]={x:b.dataset.x,y:b.dataset.y});
+  localStorage.setItem(LS_KEY,JSON.stringify(layout)); flash("Guardado");
+};
+document.getElementById("resetBtn").onclick=()=>{ localStorage.removeItem(LS_KEY); location.reload(); };
+document.getElementById("exportBtn").onclick=()=>{
+  const layout={}; blocks.forEach(b=>layout[b.id]={x:+b.dataset.x,y:+b.dataset.y});
+  const txt=JSON.stringify(layout,null,2);
+  navigator.clipboard?.writeText(txt).then(()=>flash("Layout copiado al portapapeles"),()=>{});
+  console.log("LAYOUT EXPORTADO:\\n"+txt); alert("Layout exportado (consola + portapapeles):\\n\\n"+txt);
+};
+(function loadLayout(){
+  try{ const s=JSON.parse(localStorage.getItem(LS_KEY)||"null"); if(!s) return;
+    blocks.forEach(b=>{ if(s[b.id]){ b.style.left=s[b.id].x+"px"; b.style.top=s[b.id].y+"px"; b.dataset.x=s[b.id].x; b.dataset.y=s[b.id].y; } });
+  }catch(e){}
+})();
+let flashTimer;
+function flash(msg){
+  let el=document.getElementById("__flash");
+  if(!el){ el=document.createElement("div"); el.id="__flash";
+    Object.assign(el.style,{position:"fixed",insetInline:"0",bottom:"24px",margin:"auto",width:"max-content",
+      background:"var(--btn-primary-bg)",color:"var(--btn-primary-text)",padding:"10px 16px",
+      borderRadius:"var(--radius-sm)",boxShadow:"var(--shadow-lg)",fontSize:"13px",zIndex:"600",
+      transition:"opacity var(--dur-base)",opacity:"0"});
+    document.body.appendChild(el); }
+  el.textContent=msg; el.style.opacity="1"; clearTimeout(flashTimer);
+  flashTimer=setTimeout(()=>el.style.opacity="0",1800);
+}
+
+/* ---- arranque ---- */
+applyLang();
+renderCal();
+syncTimeVisibility();   // estado inicial vacío → filas de hora ocultas
+updateApply();
+</script>
+</body>
+</html>

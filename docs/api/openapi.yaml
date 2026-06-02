@@ -16,6 +16,18 @@ servers:
 
 components:
   schemas:
+    DetailError:
+      type: object
+      description: |
+        Error estándar de FastAPI. El proyecto usa `detail` (no el formato
+        CABECERAS MÍNIMAS con `error.code`) porque los routers delegan en
+        HTTPException que serializa `detail`.
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Mensaje de error legible.
+
     SpeciesColumn:
       type: object
       required: [animal_ordinal, animal_name, icon_url]
@@ -88,6 +100,245 @@ components:
             $ref: "#/components/schemas/SpeciesEntry"
           description: Solo especies con tasa válida para este oasis. Ausencia = celda "—" en la UI.
 
+    ResourceBreakdown:
+      type: object
+      description: Desglose de recursos por tipo + total
+      required: [wood, clay, iron, crop, total]
+      properties:
+        wood:  { type: integer, minimum: 0 }
+        clay:  { type: integer, minimum: 0 }
+        iron:  { type: integer, minimum: 0 }
+        crop:  { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+
+    BalanceStats:
+      type: object
+      description: |
+        Balance agregado de un oasis (o global si sin filtro de coordenada).
+        Mismo shape que GET /attack-reports/stats/balance.
+      required: [range, total_reports, reports_without_tribe, lost, stolen, net]
+      properties:
+        range:
+          type: object
+          description: Rango de fechas cubierto por los reportes incluidos
+          properties:
+            from:  { type: [string, "null"], format: date-time }
+            to:    { type: [string, "null"], format: date-time }
+        total_reports:
+          type: integer
+          minimum: 0
+        reports_without_tribe:
+          type: integer
+          minimum: 0
+          description: Reportes cuya tribu no pudo resolverse (coste de bajas se omite para ellos)
+        lost:
+          $ref: "#/components/schemas/ResourceBreakdown"
+          description: Valor en recursos de las tropas atacantes muertas
+        stolen:
+          type: object
+          description: Recursos robados al oasis (botín + inventario del héroe)
+          required: [bounty, hero_inventory, total]
+          properties:
+            bounty:
+              $ref: "#/components/schemas/ResourceBreakdown"
+            hero_inventory:
+              $ref: "#/components/schemas/ResourceBreakdown"
+            total:
+              $ref: "#/components/schemas/ResourceBreakdown"
+        net:
+          type: integer
+          description: "stolen.total.total − lost.total (positivo = ganancia neta)"
+
+    AnimalAppearance:
+      type: object
+      description: Número de animales de cada especie observados en un reporte (shape EP-06 por oasis)
+      properties:
+        attacked_at:  { type: string, format: date-time }
+        animal_name:  { type: string }
+        present:      { type: [integer, "null"] }
+        killed:       { type: [integer, "null"] }
+        survived:     { type: [integer, "null"] }
+
+    GlobalAnimalAppearance:
+      type: object
+      description: |
+        Item del array animal_appearances[] de la respuesta global de EP-09.
+        Shape distinto a AnimalAppearance (EP-06): agrega estadísticas de aparición
+        sobre todos los reportes globales en lugar de mostrar un reporte individual.
+      required:
+        - animal_ordinal
+        - animal_name
+        - appearances
+        - eligible_reports
+        - max_present
+      properties:
+        animal_ordinal:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Identificador único de la especie (1=Rat..10)
+        animal_name:
+          type: string
+          description: Nombre crudo de la especie (texto del usuario, no localizado)
+        appearances:
+          type: integer
+          minimum: 1
+          description: Número de reportes globales en que present > 0 para esta especie
+        eligible_reports:
+          type: integer
+          minimum: 1
+          description: |
+            Denominador del % de aparición: número de reportes que pertenecen a oasis
+            donde esta especie ha aparecido alguna vez (present > 0 en algún reporte de
+            ese oasis). Invariante: eligible_reports >= appearances.
+            Valor mínimo 1 cuando appearances >= 1 (garantizado por diseño SQL).
+        avg_present:
+          type: [number, "null"]
+          format: float
+          description: Media de animales presentes en los reportes donde present > 0. Redondeado a 2 decimales; null si sin datos.
+        max_present:
+          type: integer
+          minimum: 1
+          description: Máximo de animales presentes en algún reporte con present > 0
+        min_present:
+          type: [integer, "null"]
+          minimum: 1
+          description: Mínimo de animales presentes en reportes con present > 0; null si sin datos (guardia defensiva)
+
+    GlobalAnimalRegenRate:
+      type: object
+      description: Tasa de regeneración estimada de una especie a nivel global (EP-09)
+      required:
+        - animal_ordinal
+        - animal_name
+        - avg_regen_per_hour
+        - valid_intervals
+      properties:
+        animal_ordinal:
+          type: integer
+          minimum: 1
+          maximum: 10
+        animal_name:
+          type: string
+        avg_regen_per_hour:
+          type: number
+          format: float
+          description: Media aritmética de tasas de regeneración globales (animales/hora). Redondeado a 2 decimales.
+        valid_intervals:
+          type: integer
+          minimum: 1
+          description: Número de intervalos válidos que contribuyeron a la tasa
+
+    GlobalOasisStatsResponse:
+      type: object
+      description: |
+        Respuesta de EP-09 GET /attack-reports/stats/global.
+        Agrega estadísticas de aparición y tasas de regeneración de todos los oasis conocidos.
+        200 siempre, incluso con BD vacía (arrays vacíos).
+      required:
+        - scope
+        - animal_appearances
+        - animal_regen_rates
+      properties:
+        scope:
+          type: string
+          enum: [global]
+          description: Siempre "global" en EP-09
+        animal_appearances:
+          type: array
+          items:
+            $ref: "#/components/schemas/GlobalAnimalAppearance"
+          description: |
+            Una entrada por especie que haya aparecido al menos una vez en toda la BD.
+            Array vacío si no hay reportes.
+        animal_regen_rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/GlobalAnimalRegenRate"
+          description: |
+            Tasa media de regeneración por especie a nivel global.
+            Array vacío si menos de 2 reportes totales.
+
+    RegeneratedAnimal:
+      type: object
+      properties:
+        animal_name:    { type: string }
+        prev_survived:  { type: [integer, "null"] }
+        regenerated:    { type: [integer, "null"] }
+        present:        { type: [integer, "null"] }
+
+    RepopulationGap:
+      type: object
+      description: Intervalo entre dos ataques consecutivos al mismo oasis
+      properties:
+        attacked_at:        { type: string, format: date-time }
+        prev_attacked_at:   { type: [string, "null"], format: date-time }
+        gap_seconds:        { type: [integer, "null"], minimum: 0 }
+        regenerated_animals:
+          type: array
+          items: { $ref: "#/components/schemas/RegeneratedAnimal" }
+
+    AnimalRegenRate:
+      type: object
+      description: Tasa de regeneración estimada de una especie para este oasis
+      properties:
+        animal_name:       { type: string }
+        avg_regen_per_hour: { type: [number, "null"], format: float }
+        valid_intervals:   { type: integer, minimum: 0 }
+
+    OasisStatsResponse:
+      type: object
+      description: |
+        Respuesta de EP-06 GET /attack-reports/stats/oasis.
+        Incluye estadísticas de aparición/repoblación y el balance de recursos del oasis.
+      required:
+        - coord_x_dest
+        - coord_y_dest
+        - total_attacks
+        - first_attack
+        - last_attack
+        - animal_appearances
+        - repopulation_gaps
+        - animal_regen_rates
+        - balance
+      properties:
+        coord_x_dest:
+          type: integer
+        coord_y_dest:
+          type: integer
+        total_attacks:
+          type: integer
+          minimum: 0
+        first_attack:
+          type: [string, "null"]
+          format: date-time
+          description: Fecha del primer ataque registrado; null si no hay reportes
+        last_attack:
+          type: [string, "null"]
+          format: date-time
+          description: Fecha del último ataque registrado; null si no hay reportes
+        animal_appearances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnimalAppearance"
+          description: Historial de animales presentes/muertos por reporte
+        repopulation_gaps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RepopulationGap"
+          description: Intervalos entre ataques consecutivos con cálculo de regeneración
+        animal_regen_rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnimalRegenRate"
+          description: Tasa media de regeneración por especie (vacío si menos de 2 ataques)
+        balance:
+          $ref: "#/components/schemas/BalanceStats"
+          description: |
+            Balance agregado del oasis: bajas (coste en recursos de tropas muertas),
+            recursos robados (botín + inventario del héroe) y neto.
+            Mismo shape y lógica que GET /attack-reports/stats/balance?x=…&y=….
+
     OasisComparisonResponse:
       type: object
       required: [computed_at, species_columns, oasis]
@@ -109,7 +360,462 @@ components:
             Oasis ordenados: has_rates=true primero, luego last_attack DESC dentro de cada grupo.
             Array vacío si BD sin reportes.
 
+    # ── EP-TD v3 schemas ────────────────────────────────────────────────────
+    # v3 (2026-06-02): sustituye la lista plana `animals` de v2 por `types[]` (5 secciones
+    # fijas por tipo de oasis inferido). TemporalDistributionWindow y
+    # TemporalDistributionAnimalEntry se conservan sin cambio; se añaden
+    # TemporalDistributionTypeSection y TemporalDistributionResponse se reescribe.
+
+    TemporalDistributionWindow:
+      type: object
+      description: |
+        Ventana de gaps (en minutos) correspondiente a la frecuencia solicitada.
+        Frontera: inclusiva por abajo, exclusiva por arriba [lower_min, upper_min).
+        Para interval_minutes=300 la ventana es abierta: [300, ∞).
+      required:
+        - lower_min
+        - upper_min
+        - is_open
+      properties:
+        lower_min:
+          type: integer
+          minimum: 1
+          description: Límite inferior de la ventana en minutos (inclusive).
+        upper_min:
+          type: [integer, "null"]
+          minimum: 1
+          description: |
+            Límite superior de la ventana en minutos (exclusive).
+            null solo para interval_minutes=300 (ventana abierta).
+        is_open:
+          type: boolean
+          description: true solo para interval_minutes=300 (ventana [300, ∞)).
+
+    TemporalDistributionAnimalEntry:
+      type: object
+      description: |
+        Estadísticas de un animal concreto dentro de una sección de tipo de oasis.
+        Solo aparecen animales con al menos un reporte (n_total > 0) en la sección.
+        n_total y n_valid se calculan sobre los gaps de oasis del tipo de esa sección.
+      required:
+        - animal_ordinal
+        - animal_name
+        - icon_url
+        - avg_present
+        - mode_present
+        - n_total
+        - n_valid
+      properties:
+        animal_ordinal:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Identificador único del animal (1=Rat..10, catálogo NATURE).
+        animal_name:
+          type: string
+          description: |
+            Nombre localizado del animal en el idioma solicitado por Accept-Language.
+            Fallback al animal_name crudo de la BD si el ordinal no está en el catálogo.
+        icon_url:
+          type: string
+          description: "Ruta del icono: /static/icons/nature_{animal_ordinal}.png"
+        avg_present:
+          type: [number, "null"]
+          format: float
+          description: |
+            Media de present redondeada a 2 decimales sobre los n_valid de esta sección.
+            null si n_valid=0 (todos los reportes del animal en esta sección son derrota).
+        mode_present:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+          description: |
+            Moda(s) de present entre los n_valid reportes válidos (Python Counter).
+            Lista vacía si n_valid=0. Si hay empate, contiene todos los valores ASC.
+        n_total:
+          type: integer
+          minimum: 0
+          description: |
+            Gaps de oasis de este tipo en la ventana donde aparece este animal
+            (incluye derrotas con present=null). Invariante: n_total >= n_valid.
+        n_valid:
+          type: integer
+          minimum: 0
+          description: |
+            Gaps con present IS NOT NULL en esta sección para este animal.
+            Son el denominador de avg_present y mode_present.
+
+    TemporalDistributionTypeSection:
+      type: object
+      description: |
+        Sección de una respuesta EP-TD v3 agrupada por tipo de oasis inferido.
+        Siempre presente en el array types[] aunque no haya datos (sección vacía).
+      required:
+        - oasis_type
+        - oasis_type_label
+        - n_oasis
+        - n_oasis_low_confidence
+        - n_reports_in_section
+        - animals
+      properties:
+        oasis_type:
+          type: string
+          enum: [hierro, arcilla, madera, cereal, sin_clasificar]
+          description: |
+            Clave canónica interna del tipo de oasis. Valores fijos:
+            "hierro" | "arcilla" | "madera" | "cereal" | "sin_clasificar".
+            El orden en el array types[] es siempre: hierro, arcilla, madera, cereal, sin_clasificar.
+        oasis_type_label:
+          type: string
+          enum: [Hierro, Barro, Madera, Cereal, "Sin clasificar"]
+          description: |
+            Etiqueta de presentación fija (no localizada, siempre en castellano).
+            OJO: la clave interna "arcilla" tiene label "Barro" (terminología del usuario).
+            Mapa fijo: hierro→"Hierro", arcilla→"Barro", madera→"Madera",
+            cereal→"Cereal", sin_clasificar→"Sin clasificar".
+        n_oasis:
+          type: integer
+          minimum: 0
+          description: |
+            Número de oasis distintos de este tipo con al menos un gap en la ventana.
+            0 si la sección está vacía.
+        n_oasis_low_confidence:
+          type: integer
+          minimum: 0
+          description: |
+            Cuántos de esos oasis tienen confidence="low" (< 3 bursts observados con
+            present > 0). 0 si ninguno o sección vacía. El frontend puede mostrar un
+            disclaimer "pocos datos" con este campo. Los oasis de baja confianza se
+            incluyen en su sección de tipo; no se mueven a sin_clasificar.
+        n_reports_in_section:
+          type: integer
+          minimum: 0
+          description: |
+            Número de gaps (report_ids distintos) de oasis de este tipo en la ventana.
+            0 si la sección está vacía.
+        animals:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemporalDistributionAnimalEntry"
+          description: |
+            Lista de animales con al menos un reporte en esta sección (n_total > 0).
+            Orden: animal_ordinal ASC. [] si n_reports_in_section=0.
+
+    TemporalDistributionResponse:
+      type: object
+      description: |
+        Respuesta de EP-TD v3 GET /attack-reports/stats/oasis/temporal-distribution.
+        El cliente elige UNA frecuencia de farmeo (interval_minutes) y recibe la
+        estadística de la ventana de gaps agrupada por tipo de oasis inferido.
+        Requiere Accept-Language (nombres de animal localizados).
+        200 siempre; types[] con 5 secciones vacías si la ventana no tiene datos.
+        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v3).
+      required:
+        - interval_minutes
+        - interval_label
+        - window
+        - n_reports_in_window
+        - types
+      properties:
+        interval_minutes:
+          type: integer
+          enum: [6, 7, 10, 15, 30, 60, 120, 180, 240, 300]
+          description: |
+            Frecuencia de farmeo solicitada (eco del parámetro; 240 si se usó el default).
+        interval_label:
+          type: string
+          enum: ["6 min", "7 min", "10 min", "15 min", "30 min", "1h", "2h", "3h", "4h", "5h+"]
+          description: |
+            Etiqueta legible de la frecuencia. El bin 300 lleva "5h+" para indicar
+            que la ventana es abierta. Valores fijos por interval_minutes:
+            6→"6 min", 7→"7 min", 10→"10 min", 15→"15 min", 30→"30 min",
+            60→"1h", 120→"2h", 180→"3h", 240→"4h", 300→"5h+".
+        window:
+          $ref: "#/components/schemas/TemporalDistributionWindow"
+        n_reports_in_window:
+          type: integer
+          minimum: 0
+          description: |
+            Número total de gaps en la ventana. Igual a la suma de n_reports_in_section
+            de las 5 secciones. Incluye reportes de derrota (present=null). 0 si vacío.
+        types:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/TemporalDistributionTypeSection"
+          description: |
+            Siempre exactamente 5 secciones en orden fijo:
+            [0] hierro, [1] arcilla, [2] madera, [3] cereal, [4] sin_clasificar.
+            Las secciones sin datos se incluyen con n_oasis=0, n_reports_in_section=0,
+            animals=[].
+
+    # ── EP-SPAWN schemas ────────────────────────────────────────────────────
+
+    AttackerPair:
+      type: object
+      description: Par (jugador, aldea) inferido de los blobs origin_village_name.
+      required: [player, village]
+      properties:
+        player:
+          type: string
+          description: |
+            Nombre del jugador extraído del blob (texto entre el tag de alianza y el
+            marcador "from village"). Fallback: "Desconocido".
+        village:
+          type: string
+          description: |
+            Nombre de la aldea, canonizado contra la tabla villages si hay coincidencia
+            por substring. Fallback: "Desconocido".
+
+    SpawnSpeciesEntry:
+      type: object
+      description: Composición y peor combinación para una especie concreta de un oasis.
+      required:
+        - animal_ordinal
+        - icon_url
+        - avg_present_per_burst
+        - max_present_per_burst
+        - is_anomaly
+        - spawn_timer_s
+        - worst_case_count
+        - def_infantry_contribution
+        - def_cavalry_contribution
+      properties:
+        animal_ordinal:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Identificador de la especie (1=rata..10=elefante). El frontend resuelve el nombre vía i18n.
+        icon_url:
+          type: string
+          description: "Ruta del icono: /static/icons/nature_{animal_ordinal}.png"
+        avg_present_per_burst:
+          type: number
+          format: float
+          description: |
+            Media de present en los reportes donde present > 0 para este animal
+            en este oasis. Redondeado a 1 decimal.
+        max_present_per_burst:
+          type: integer
+          minimum: 1
+          description: Máximo de present observado en algún reporte de este oasis.
+        is_anomaly:
+          type: boolean
+          description: |
+            true si el ordinal no pertenece al set base del inferred_type (animal
+            fuera del set normal del tipo de oasis inferido).
+        spawn_timer_s:
+          type: [integer, "null"]
+          description: Timer de spawn en segundos (de SPAWN_TIMER_S). null si el ordinal no está en el catálogo.
+        worst_case_count:
+          type: [integer, "null"]
+          description: |
+            Peor combinación: max_present_per_burst + floor(timer_min_s / spawn_timer_s).
+            null si inferred_type es null o la especie es anomalía (RN-WORST-05).
+        def_infantry_contribution:
+          type: [integer, "null"]
+          description: worst_case_count × def_infantry del animal. null si worst_case_count es null.
+        def_cavalry_contribution:
+          type: [integer, "null"]
+          description: worst_case_count × def_cavalry del animal. null si worst_case_count es null.
+
+    SpawnWorstCaseSummary:
+      type: object
+      description: Suma de contribuciones defensivas de todos los animales del set base (sin anomalías).
+      required: [def_infantry_total, def_cavalry_total]
+      properties:
+        def_infantry_total:
+          type: integer
+          minimum: 0
+          description: Suma de def_infantry_contribution de los animales del set (no anomalías).
+        def_cavalry_total:
+          type: integer
+          minimum: 0
+          description: Suma de def_cavalry_contribution de los animales del set (no anomalías).
+
+    SpawnOasisEntry:
+      type: object
+      description: Composición típica, peor combinación y estado de spawn para un oasis.
+      required:
+        - coord_x_dest
+        - coord_y_dest
+        - total_attacks
+        - last_attack
+        - inferred_type
+        - confidence
+        - spawn_status
+        - elapsed_seconds
+        - attackers
+        - species
+        - worst_case_summary
+      properties:
+        coord_x_dest:
+          type: integer
+          description: Coordenada X del oasis.
+        coord_y_dest:
+          type: integer
+          description: Coordenada Y del oasis.
+        total_attacks:
+          type: integer
+          minimum: 1
+          description: Número total de ataques registrados en BD para este oasis.
+        last_attack:
+          type: string
+          description: |
+            attacked_at del último reporte (ISO 8601 naive — hora local Travian, sin zona).
+          example: "2026-06-01T22:15:00"
+        inferred_type:
+          type: [string, "null"]
+          enum: ["hierro", "arcilla", "madera", "cereal", null]
+          description: |
+            Tipo de oasis inferido por similitud de Jaccard sobre los ordinales observados.
+            null si el oasis nunca ha mostrado animales (RN-TYP-05).
+        confidence:
+          type: [string, "null"]
+          enum: ["low", "medium", null]
+          description: |
+            Confianza en la inferencia: "low" (<3 reportes con present>0),
+            "medium" (≥3 reportes), null si inferred_type es null (RN-TYP-04/05).
+        spawn_status:
+          type: string
+          enum: ["respawning", "cooldown", "unknown"]
+          description: |
+            Estado del ciclo de spawn (Pieza 4):
+            "respawning" — oasis atacado recientemente, puede estar generando animales;
+            "cooldown"   — elapsed_seconds > 4 horas (umbral conservador v1);
+            "unknown"    — sin tipo inferido o sin suficientes reportes.
+        elapsed_seconds:
+          type: number
+          format: float
+          minimum: 0
+          description: |
+            Segundos transcurridos entre last_attack (ajustado a UTC con utc_offset)
+            y computed_at. Redondeado a 1 decimal. Mínimo 0 (EC-09).
+        attackers:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AttackerPair"
+          description: |
+            Lista DISTINCT de pares (player, village) inferidos de los blobs
+            origin_village_name. Ordenados por player A-Z, luego village A-Z.
+            Nunca vacío: mínimo [{"player":"Desconocido","village":"Desconocido"}]
+            si no hay pares extraíbles (RN-ACCT-05).
+        species:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpawnSpeciesEntry"
+          description: |
+            Solo animales con present > 0 alguna vez en este oasis.
+            Array vacío si el oasis nunca ha mostrado animales.
+        worst_case_summary:
+          oneOf:
+            - $ref: "#/components/schemas/SpawnWorstCaseSummary"
+            - type: "null"
+          description: |
+            Resumen defensivo del peor caso. null si inferred_type es null (RN-WORST-04).
+
+    SpawnCompositionResponse:
+      type: object
+      description: |
+        Respuesta de EP-SPAWN GET /attack-reports/stats/oasis/spawn-composition.
+        Composición típica por oasis, peor combinación a batir para el timer_min dado
+        y estado cooldown/respawn. Sin Accept-Language (ordinales; frontend resuelve nombres).
+        200 siempre, incluso con oasis: [].
+      required:
+        - computed_at
+        - timer_min
+        - oasis
+      properties:
+        computed_at:
+          type: string
+          format: date-time
+          description: Momento exacto del cálculo en el servidor (ISO 8601 UTC).
+        timer_min:
+          type: integer
+          enum: [6, 7, 10, 15]
+          description: Eco del parámetro timer_min recibido (intervalo en minutos).
+        oasis:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpawnOasisEntry"
+          description: |
+            Oasis con reportes en BD, ordenados: tipo inferido primero (null al final),
+            luego por last_attack DESC dentro de cada grupo.
+            Array vacío si BD sin reportes.
+
 paths:
+  /attack-reports/stats/global:
+    get:
+      summary: Estadísticas globales de todos los oasis combinados (EP-09)
+      description: |
+        Devuelve estadísticas agregadas de aparición de animales y tasas de regeneración
+        para todos los oasis conocidos en BD. Sin filtros, sin parámetros de entrada.
+
+        El campo `eligible_reports` de cada item de `animal_appearances[]` es el denominador
+        semánticamente correcto del % de aparición: número de reportes que pertenecen a oasis
+        donde esa especie ha aparecido alguna vez. Permite calcular
+        `appearances / eligible_reports × 100` en el frontend sin dilución por oasis irrelevantes.
+
+        Sin Accept-Language (datos numéricos; animal_name es texto crudo del usuario).
+        Siempre devuelve 200, incluso con BD vacía (arrays vacíos).
+
+        Ver spec docs/specs/bd-ataques-oasis-global-pct-aparicion.md §8.
+      operationId: get_global_oasis_stats
+      tags:
+        - attack-reports
+      responses:
+        "200":
+          description: Estadísticas globales calculadas (incluso si BD vacía)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalOasisStatsResponse"
+              examples:
+                con_datos:
+                  summary: Con datos (ejemplo numérico de referencia del spec)
+                  value:
+                    scope: "global"
+                    animal_appearances:
+                      - animal_ordinal: 1
+                        animal_name: "Rat"
+                        appearances: 8
+                        eligible_reports: 15
+                        avg_present: 7.50
+                        max_present: 15
+                        min_present: 3
+                      - animal_ordinal: 2
+                        animal_name: "Spider"
+                        appearances: 4
+                        eligible_reports: 4
+                        avg_present: 4.33
+                        max_present: 9
+                        min_present: 2
+                    animal_regen_rates:
+                      - animal_ordinal: 1
+                        animal_name: "Rat"
+                        avg_regen_per_hour: 3.45
+                        valid_intervals: 18
+                bd_vacia:
+                  summary: BD vacía
+                  value:
+                    scope: "global"
+                    animal_appearances: []
+                    animal_regen_rates: []
+        "500":
+          description: Error inesperado de BD
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: string
+              example:
+                detail: "Error interno al calcular las estadísticas globales."
+
   /attack-reports/stats/oasis/comparison:
     get:
       summary: Comparativa de tasas de reaparición por oasis (EP-10)
@@ -178,3 +884,954 @@ paths:
                     type: string
               example:
                 detail: "Error interno al calcular la comparativa de oasis."
+
+  # ---------------------------------------------------------------------------
+  # EP-SPAWN — Composición, peor combinación e inferencia de tipo por oasis
+  # ---------------------------------------------------------------------------
+  /attack-reports/stats/oasis/spawn-composition:
+    get:
+      summary: Composición de spawn, peor combinación a batir y estado cooldown/respawn por oasis (EP-SPAWN)
+      description: |
+        Calcula, para todos los oasis con reportes en BD:
+
+        1. **Composición típica** (Pieza 2): promedio y máximo de animales presentes por
+           especie por oasis, usando solo los reportes donde `present > 0`.
+        2. **Peor combinación a batir** (Pieza 3): dado un `timer_min`, calcula cuántos
+           animales pueden acumularse entre dos envíos consecutivos
+           (`max_present_per_burst + floor(timer_s / spawn_timer_s)`) y la fuerza
+           defensiva total resultante para el set base del oasis.
+        3. **Estado cooldown/respawn** (Pieza 4): clasifica cada oasis como "respawning"
+           (atacado recientemente, generando animales), "cooldown" (inactivo > 4 horas)
+           o "unknown" (sin tipo inferido o sin datos suficientes).
+
+        El tipo de oasis se infiere empíricamente mediante similitud de Jaccard sobre
+        los ordinales de animales observados con `present > 0`. Los nombres de animal
+        **no se devuelven**: el cliente los resuelve con el ordinal vía i18n
+        (`NATURE_{ordinal}` en `core/i18n/catalog/base/troops.json`).
+
+        Los atacantes por oasis (`attackers`) se extraen post-hoc de los blobs
+        `origin_village_name` (algoritmo §4.7 v2.6 del spec), sin tocar el parser ni
+        columnas de BD. Permite agrupar en el frontend: Jugador → Aldea → Oasis.
+
+        Sin `Accept-Language`. Sin prefijo `/api`.
+        200 siempre, incluso con `oasis: []` (BD vacía).
+
+        Ver spec `docs/specs/oasis-spawn-mechanics-stats.md` §8 EP-SPAWN.
+      operationId: get_oasis_spawn_composition
+      tags:
+        - attack-reports
+      parameters:
+        - name: timer_min
+          in: query
+          required: true
+          schema:
+            type: integer
+            enum: [6, 7, 10, 15]
+          description: |
+            Intervalo de timer en minutos elegido por el usuario.
+            Valores válidos: 6, 7, 10, 15.
+            Fuera del conjunto → 400 con detail legible.
+            Ausente o tipo no entero → 422 (FastAPI validation automática).
+      responses:
+        "200":
+          description: Composición calculada (incluso si BD vacía)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpawnCompositionResponse"
+              examples:
+                con_datos:
+                  summary: Dos oasis — uno con tipo inferido, otro sin datos
+                  value:
+                    computed_at: "2026-06-02T10:00:00.000000+00:00"
+                    timer_min: 6
+                    oasis:
+                      - coord_x_dest: -70
+                        coord_y_dest: 73
+                        total_attacks: 15
+                        last_attack: "2026-06-01T22:15:00"
+                        inferred_type: "cereal"
+                        confidence: "medium"
+                        spawn_status: "respawning"
+                        elapsed_seconds: 43200.0
+                        attackers:
+                          - { player: "CrazyMouse", village: "05 Caesar On Leave" }
+                          - { player: "GonnaDie",   village: "05" }
+                        species:
+                          - animal_ordinal: 9
+                            icon_url: "/static/icons/nature_9.png"
+                            avg_present_per_burst: 4.5
+                            max_present_per_burst: 7
+                            is_anomaly: false
+                            spawn_timer_s: 780
+                            worst_case_count: 7
+                            def_infantry_contribution: 980
+                            def_cavalry_contribution: 1400
+                          - animal_ordinal: 10
+                            icon_url: "/static/icons/nature_10.png"
+                            avg_present_per_burst: 2.0
+                            max_present_per_burst: 3
+                            is_anomaly: false
+                            spawn_timer_s: 840
+                            worst_case_count: 3
+                            def_infantry_contribution: 1320
+                            def_cavalry_contribution: 1560
+                        worst_case_summary:
+                          def_infantry_total: 2300
+                          def_cavalry_total: 2960
+                      - coord_x_dest: 12
+                        coord_y_dest: -45
+                        total_attacks: 1
+                        last_attack: "2026-05-28T10:00:00"
+                        inferred_type: null
+                        confidence: null
+                        spawn_status: "unknown"
+                        elapsed_seconds: 360000.0
+                        attackers:
+                          - { player: "GonnaDie", village: "02" }
+                        species: []
+                        worst_case_summary: null
+                bd_vacia:
+                  summary: BD vacía
+                  value:
+                    computed_at: "2026-06-02T10:00:00.000000+00:00"
+                    timer_min: 6
+                    oasis: []
+        "400":
+          description: timer_min fuera del conjunto {6, 7, 10, 15}
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+              example:
+                detail: "timer_min debe ser uno de: 6, 7, 10, 15. Recibido: 5"
+        "422":
+          description: timer_min ausente o tipo no entero (FastAPI validation automática)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+        "500":
+          description: Error inesperado de BD
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+              example:
+                detail: "Error interno al calcular la composición de spawn."
+
+  # ---------------------------------------------------------------------------
+  # EP-TD v3 — Estadísticas de animales por frecuencia de farmeo, segmentadas por tipo de oasis
+  # ---------------------------------------------------------------------------
+  /attack-reports/stats/oasis/temporal-distribution:
+    get:
+      summary: Estadísticas de animales por frecuencia de farmeo, por tipo de oasis (EP-TD v3)
+      description: |
+        El cliente elige UNA frecuencia de farmeo (interval_minutes) y recibe la
+        estadística de la ventana de gaps agrupada en 5 secciones fijas por tipo
+        de oasis inferido: hierro, arcilla, madera, cereal, sin_clasificar.
+
+        El tipo de oasis se infiere por Jaccard sobre los animales observados con
+        present > 0 (reutiliza infer_type de EP-SPAWN). Los oasis sin ningún animal
+        observado (solo derrotas) van a "sin_clasificar". Los oasis con < 3 bursts
+        observados (confidence="low") se incluyen en su sección con marca de baja
+        confianza (n_oasis_low_confidence).
+
+        El gap de un reporte es la diferencia en segundos entre attacked_at del
+        ataque actual y el inmediatamente anterior al mismo oasis
+        (LAG con PARTITION BY coord_x_dest, coord_y_dest).
+        Gaps < 360 s (< 6 min) se descartan silenciosamente.
+
+        Binning por umbral inferior (Opción B): el bin F corresponde a la ventana
+        [F*60, F_next*60) segundos. El bin 300 es abierto: [18000, ∞).
+
+        Requiere Accept-Language (nombres de animal localizados en cada sección).
+        200 siempre; las 5 secciones se devuelven aunque estén vacías.
+        n_reports_in_window = suma de n_reports_in_section de las 5 secciones.
+        Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v3).
+      operationId: get_animal_temporal_distribution
+      tags:
+        - attack-reports
+      parameters:
+        - name: interval_minutes
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 240
+          description: |
+            Frecuencia de farmeo en minutos. Valores válidos: 6, 7, 10, 15, 30, 60, 120, 180, 240, 300.
+            Default: 240 (4h). Cualquier otro entero → 400 con detail que lista los 10 valores.
+            No entero → 422 (FastAPI automático). Ausente → 200 con default 240.
+        - name: Accept-Language
+          in: header
+          required: true
+          schema:
+            type: string
+          description: |
+            Código de idioma (25 soportados en SUPPORTED_LANGUAGES).
+            Ausente o código no soportado → 400.
+            Ejemplos: es, en, it, de, fr.
+      responses:
+        "200":
+          description: |
+            Estadísticas calculadas para la ventana solicitada, agrupadas por tipo de oasis.
+            Las 5 secciones se incluyen siempre. n_reports_in_window=0 y todas las secciones
+            vacías si la ventana no tiene datos (no hay error).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemporalDistributionResponse"
+              examples:
+                con_datos_240_multitipo:
+                  summary: "interval_minutes=240 (4h), oasis hierro y arcilla con datos, resto vacías"
+                  value:
+                    interval_minutes: 240
+                    interval_label: "4h"
+                    window:
+                      lower_min: 240
+                      upper_min: 300
+                      is_open: false
+                    n_reports_in_window: 32
+                    types:
+                      - oasis_type: "hierro"
+                        oasis_type_label: "Hierro"
+                        n_oasis: 3
+                        n_oasis_low_confidence: 1
+                        n_reports_in_section: 18
+                        animals:
+                          - animal_ordinal: 1
+                            animal_name: "Rata"
+                            icon_url: "/static/icons/nature_1.png"
+                            avg_present: 2.50
+                            mode_present: [2]
+                            n_total: 18
+                            n_valid: 15
+                          - animal_ordinal: 4
+                            animal_name: "Murciélago"
+                            icon_url: "/static/icons/nature_4.png"
+                            avg_present: 1.20
+                            mode_present: [1]
+                            n_total: 12
+                            n_valid: 10
+                      - oasis_type: "arcilla"
+                        oasis_type_label: "Barro"
+                        n_oasis: 2
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 14
+                        animals:
+                          - animal_ordinal: 1
+                            animal_name: "Rata"
+                            icon_url: "/static/icons/nature_1.png"
+                            avg_present: 3.10
+                            mode_present: [3]
+                            n_total: 14
+                            n_valid: 12
+                      - oasis_type: "madera"
+                        oasis_type_label: "Madera"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "cereal"
+                        oasis_type_label: "Cereal"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "sin_clasificar"
+                        oasis_type_label: "Sin clasificar"
+                        n_oasis: 1
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                ventana_vacia_5secciones:
+                  summary: "Ventana sin datos — 5 secciones vacías (no es error)"
+                  value:
+                    interval_minutes: 6
+                    interval_label: "6 min"
+                    window:
+                      lower_min: 6
+                      upper_min: 7
+                      is_open: false
+                    n_reports_in_window: 0
+                    types:
+                      - oasis_type: "hierro"
+                        oasis_type_label: "Hierro"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "arcilla"
+                        oasis_type_label: "Barro"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "madera"
+                        oasis_type_label: "Madera"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "cereal"
+                        oasis_type_label: "Cereal"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "sin_clasificar"
+                        oasis_type_label: "Sin clasificar"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                bin_abierto_300:
+                  summary: "interval_minutes=300 (5h+), ventana abierta"
+                  value:
+                    interval_minutes: 300
+                    interval_label: "5h+"
+                    window:
+                      lower_min: 300
+                      upper_min: null
+                      is_open: true
+                    n_reports_in_window: 5
+                    types:
+                      - oasis_type: "hierro"
+                        oasis_type_label: "Hierro"
+                        n_oasis: 1
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 5
+                        animals:
+                          - animal_ordinal: 1
+                            animal_name: "Rata"
+                            icon_url: "/static/icons/nature_1.png"
+                            avg_present: 2.00
+                            mode_present: [2]
+                            n_total: 5
+                            n_valid: 5
+                      - oasis_type: "arcilla"
+                        oasis_type_label: "Barro"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "madera"
+                        oasis_type_label: "Madera"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "cereal"
+                        oasis_type_label: "Cereal"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+                      - oasis_type: "sin_clasificar"
+                        oasis_type_label: "Sin clasificar"
+                        n_oasis: 0
+                        n_oasis_low_confidence: 0
+                        n_reports_in_section: 0
+                        animals: []
+        "400":
+          description: |
+            interval_minutes no está en {6,7,10,15,30,60,120,180,240,300},
+            o Accept-Language ausente o con código no soportado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+              examples:
+                interval_minutes_invalido:
+                  value:
+                    detail: "interval_minutes debe ser uno de: 6, 7, 10, 15, 30, 60, 120, 180, 240, 300. Recibido: 45"
+                accept_language_ausente:
+                  value:
+                    detail: "Cabecera 'Accept-Language' obligatoria. Valores válidos: ['ar', 'bg', ...]"
+                idioma_no_soportado:
+                  value:
+                    detail: "Idioma 'zh' no soportado en Accept-Language. Valores válidos: ['ar', 'bg', ...]"
+        "422":
+          description: interval_minutes no es entero (FastAPI validation automática).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+        "500":
+          description: Error inesperado de BD.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+              example:
+                detail: "Error interno al calcular la distribución temporal de animales."
+
+  /attack-reports/stats/oasis:
+    get:
+      summary: Estadísticas de un oasis + balance de recursos (EP-06)
+      description: |
+        Devuelve el historial de aparición de animales, los intervalos de repoblación,
+        las tasas de regeneración estimadas **y el balance de recursos** (bajas en coste
+        de recursos + recursos robados + neto) del oasis identificado por x e y.
+
+        La clave `balance` se añadió en la iteración bd-ataques-oasis (2026-06-01) y
+        sigue el mismo shape que GET /attack-reports/stats/balance filtrado por coordenada.
+
+        Sin Accept-Language (datos numéricos; animal_name es texto crudo del usuario).
+        Requiere x e y. Si no hay reportes → 200 con total_attacks=0 y balance todo a cero.
+      operationId: get_oasis_stats
+      tags:
+        - attack-reports
+      parameters:
+        - name: x
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Coordenada X del oasis
+        - name: y
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Coordenada Y del oasis
+      responses:
+        "200":
+          description: Estadísticas del oasis (incluyendo balance), incluso si BD vacía para esas coords
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OasisStatsResponse"
+              examples:
+                sin_reportes:
+                  summary: Oasis sin reportes
+                  value:
+                    coord_x_dest: -999
+                    coord_y_dest: -999
+                    total_attacks: 0
+                    first_attack: null
+                    last_attack: null
+                    animal_appearances: []
+                    repopulation_gaps: []
+                    animal_regen_rates: []
+                    balance:
+                      range: { from: null, to: null }
+                      total_reports: 0
+                      reports_without_tribe: 0
+                      lost: { wood: 0, clay: 0, iron: 0, crop: 0, total: 0 }
+                      stolen:
+                        bounty: { wood: 0, clay: 0, iron: 0, crop: 0, total: 0 }
+                        hero_inventory: { wood: 0, clay: 0, iron: 0, crop: 0, total: 0 }
+                        total: { wood: 0, clay: 0, iron: 0, crop: 0, total: 0 }
+                      net: 0
+                con_reportes:
+                  summary: Oasis con reportes Gaulos (Swordsman×2 + Theutates Thunder×2)
+                  value:
+                    coord_x_dest: -59
+                    coord_y_dest: 25
+                    total_attacks: 1
+                    first_attack: "2026-05-15T08:30:00"
+                    last_attack: "2026-05-15T08:30:00"
+                    animal_appearances:
+                      - attacked_at: "2026-05-15T08:30:00"
+                        animal_name: "Rat"
+                        present: null
+                        killed: null
+                        survived: null
+                    repopulation_gaps:
+                      - attacked_at: "2026-05-15T08:30:00"
+                        prev_attacked_at: null
+                        gap_seconds: null
+                        regenerated_animals: []
+                    animal_regen_rates: []
+                    balance:
+                      range: { from: "2026-05-15T08:30:00", to: "2026-05-15T08:30:00" }
+                      total_reports: 1
+                      reports_without_tribe: 0
+                      lost: { wood: 980, clay: 1200, iron: 830, crop: 240, total: 3250 }
+                      stolen:
+                        bounty: { wood: 0, clay: 0, iron: 0, crop: 0, total: 0 }
+                        hero_inventory: { wood: 240, clay: 240, iron: 240, crop: 240, total: 960 }
+                        total: { wood: 240, clay: 240, iron: 240, crop: 240, total: 960 }
+                      net: -2290
+        "400":
+          description: Falta x o y
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+              example:
+                detail: "Los parámetros 'x' e 'y' son obligatorios."
+
+  # ---------------------------------------------------------------------------
+  # EP-N11 — Derivar selector CSS estructural desde outerHTML
+  # ---------------------------------------------------------------------------
+  /worlds/{world_id}/noise/derive-selector:
+    post:
+      tags: [noise]
+      summary: "EP-N11 — Derivar selector CSS estructural desde outerHTML"
+      description: |
+        Analiza el outerHTML de un elemento HTML y devuelve el mejor selector CSS
+        estructural según la heurística priorizada de RN-NP05.
+
+        No persiste nada — es un endpoint de preview para el wizard de rutas.
+
+        is_unique=True es heurístico: el selector es estable según la heurística
+        sobre el fragmento HTML proporcionado. No garantiza unicidad en el
+        documento real de Travian. La verificación definitiva es en runtime via
+        expected_url_after_click.
+
+        Spec noise-path-wizard.md §8.1 / RN-NP05.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo (debe existir).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outer_html]
+              properties:
+                outer_html:
+                  type: string
+                  minLength: 1
+                  description: |
+                    HTML completo del elemento (obtenido con 'Copiar outerHTML' en DevTools).
+                    Máximo 50 KB.
+            example:
+              outer_html: '<a href="/statistics" class="nav-link">Estadísticas</a>'
+      responses:
+        "200":
+          description: Selector derivado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [selector, is_unique, priority_level, method, warning, alternatives]
+                properties:
+                  selector:
+                    type: string
+                    description: Selector CSS estructural recomendado.
+                  is_unique:
+                    type: boolean
+                    description: |
+                      True si el selector se considera único en el fragmento analizado
+                      (heurístico — no garantiza unicidad en el documento real de Travian).
+                  priority_level:
+                    type: integer
+                    minimum: 1
+                    maximum: 9
+                    description: "Nivel de prioridad: 1=id, 2=name, 3=gid, 4=href_exact, 5=href_partial, 6=data_attr, 7=class_combo, 9=fallback."
+                  method:
+                    type: string
+                    enum: [id, name, gid, href_exact, href_partial, data_attr, class_combo, context_combo, fallback]
+                    description: Método de derivación usado.
+                  warning:
+                    type: [string, "null"]
+                    description: Aviso si is_unique=False o el selector tiene limitaciones.
+                  alternatives:
+                    type: array
+                    items: { type: string }
+                    description: Selectores alternativos (puede estar vacío).
+              examples:
+                id_valido:
+                  value:
+                    selector: "#statistics"
+                    is_unique: true
+                    priority_level: 1
+                    method: "id"
+                    warning: null
+                    alternatives: []
+                clases_css:
+                  value:
+                    selector: "a.nav-link.statistics"
+                    is_unique: false
+                    priority_level: 7
+                    method: "class_combo"
+                    warning: "Selector basado en clases CSS. Puede no ser único en el documento real de Travian."
+                    alternatives: ["a.nav-link"]
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Mundo no encontrado." }
+        "422":
+          description: "outer_html vacío, malformado o excede 50 KB."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              examples:
+                vacio:
+                  value: { detail: "outer_html no puede estar vacío." }
+                malformado:
+                  value: { detail: "El outerHTML no pudo parsearse como HTML válido." }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Error interno del servidor." }
+
+  # ---------------------------------------------------------------------------
+  # EP-N12 — Listar anclas semilla disponibles como origen de ruta
+  # ---------------------------------------------------------------------------
+  /worlds/{world_id}/noise/origins:
+    get:
+      tags: [noise]
+      summary: "EP-N12 — Listar anclas semilla disponibles como origen de ruta"
+      description: |
+        Devuelve las anclas semilla para usar como `origin` al crear rutas de ruido:
+
+        - generic_origins: las 9 anclas genéricas fijas del sistema (DORF1, DORF2, MAP,
+          STATISTICS, REPORTS, MESSAGES, VILLAGE_STATISTICS, OASIS_VIEW, ANY).
+        - village_origins: una ancla por cada aldea en la tabla villages del mundo.
+          Vacía si el parser del village-switcher nunca se ha ejecutado.
+        - villages_loaded: false si la tabla villages está vacía para este mundo.
+          Ejecutar EP-N13 para poblarla.
+
+        Cache-Control: no-store.
+        Spec noise-path-wizard.md §8.2 / RN-NP01 / RN-NP02.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo.
+      responses:
+        "200":
+          description: Lista de anclas semilla.
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              example: "no-store"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generic_origins, village_origins, villages_loaded]
+                properties:
+                  generic_origins:
+                    type: array
+                    description: Las 9 anclas genéricas fijas del sistema.
+                    items:
+                      type: object
+                      required: [value, label]
+                      properties:
+                        value:
+                          type: string
+                          description: Valor del enum NavigationOrigin.
+                        label:
+                          type: string
+                          description: Etiqueta descriptiva en español.
+                        path:
+                          type: [string, "null"]
+                          description: Ruta relativa de Travian. Null para ANY.
+                  village_origins:
+                    type: array
+                    description: Anclas por-aldea generadas desde la tabla villages.
+                    items:
+                      type: object
+                      required: [value, label, data_id, x, y, path]
+                      properties:
+                        value:
+                          type: string
+                          description: "'VILLAGE_<data_id>'"
+                        label:
+                          type: string
+                          description: Nombre de la aldea.
+                        data_id:
+                          type: integer
+                          description: Identificador de la aldea (newdid en Travian).
+                        x:
+                          type: integer
+                        y:
+                          type: integer
+                        path:
+                          type: string
+                          description: "'/dorf1.php?newdid=<data_id>'"
+                  villages_loaded:
+                    type: boolean
+                    description: True si villages tiene datos para este mundo.
+              example:
+                generic_origins:
+                  - { value: "DORF1",              label: "Recursos (aldea activa)",      path: "/dorf1.php" }
+                  - { value: "DORF2",              label: "Edificios (aldea activa)",     path: "/dorf2.php" }
+                  - { value: "MAP",                label: "Mapa mundial",                  path: "/karte.php" }
+                  - { value: "STATISTICS",         label: "Estadísticas globales",         path: "/statistics" }
+                  - { value: "REPORTS",            label: "Reportes",                      path: "/report" }
+                  - { value: "MESSAGES",           label: "Mensajes",                      path: "/messages" }
+                  - { value: "VILLAGE_STATISTICS", label: "Estadísticas de aldea",         path: "/village/statistics" }
+                  - { value: "OASIS_VIEW",         label: "Vista oasis en el mapa",        path: "/karte.php" }
+                  - { value: "ANY",                label: "Cualquier página (sin ancla)",  path: null }
+                village_origins:
+                  - { value: "VILLAGE_12345", label: "Merlinia", data_id: 12345, x: 42, y: -17, path: "/dorf1.php?newdid=12345" }
+                villages_loaded: true
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Mundo no encontrado." }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Error interno del servidor." }
+
+  # ---------------------------------------------------------------------------
+  # EP-N13 — Refrescar aldeas del village-switcher
+  # ---------------------------------------------------------------------------
+  /worlds/{world_id}/noise/refresh-villages:
+    post:
+      tags: [noise]
+      summary: "EP-N13 — Refrescar aldeas del village-switcher de Travian"
+      description: |
+        Instruye al WorldAgent del mundo a ejecutar el parser del village-switcher
+        de Travian y actualizar la tabla villages con las aldeas propias.
+
+        Requisitos:
+        - El mundo debe existir (404 si no).
+        - El WorldAgent debe estar RUNNING (409 si DISCONNECTED o no iniciado).
+
+        El parser solo lee el DOM (tab.evaluate), sin clicks ni navegación.
+        Operación síncrona — espera a que el parser complete antes de responder.
+        Las aldeas existentes no se borran (UPSERT). Las que dejan de aparecer
+        se mantienen en BD (anti-detección: el bot no reacciona en caliente).
+
+        Spec noise-path-wizard.md §8.3 / RN-NP03.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Body vacío o {} — no se procesa ningún campo.
+      responses:
+        "200":
+          description: Parser ejecutado. Devuelve la lista de aldeas encontradas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [villages_found, villages_data]
+                properties:
+                  villages_found:
+                    type: integer
+                    minimum: 0
+                    description: Número de aldeas encontradas y upserteadas.
+                  villages_data:
+                    type: array
+                    description: Lista de aldeas actualizadas.
+                    items:
+                      type: object
+                      required: [data_id, name, x, y]
+                      properties:
+                        data_id: { type: integer }
+                        name: { type: string }
+                        x: { type: integer }
+                        y: { type: integer }
+              example:
+                villages_found: 2
+                villages_data:
+                  - { data_id: 12345, name: "Merlinia", x: 42, y: -17 }
+                  - { data_id: 12346, name: "Forticia",  x: 43, y: -17 }
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Mundo no encontrado." }
+        "409":
+          description: El WorldAgent está desconectado o no ha sido iniciado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "El agente del mundo está desconectado. Inicia sesión primero para poder refrescar las aldeas." }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Error interno del servidor." }
+
+  # EP-N14 — Probar ruta de navegación en vivo
+  # ---------------------------------------------------------------------------
+  /worlds/{world_id}/noise/paths/{path_id}/test:
+    post:
+      tags: [noise]
+      summary: "EP-N14 — Probar ruta de navegación en vivo"
+      description: |
+        Ejecuta la ruta de navegación indicada en el Chrome real del bot y devuelve
+        un reporte paso a paso del resultado.
+
+        El test es NO DESTRUCTIVO: no modifica contadores de fallos, no marca rutas
+        como is_dead, no actualiza last_used_at y no ejecuta el dwell final.
+        Su único propósito es diagnóstico — permite al usuario verificar que una
+        ruta funciona antes de dejarla en producción.
+
+        IMPORTANTE: HTTP 200 tanto si la ruta pasó (overall="ok") como si falló
+        (overall="error"). El fallo es semántico; el endpoint se ejecutó
+        correctamente en ambos casos.
+
+        El browser queda en la última página visitada durante el test (RN-PT06).
+
+        Requiere que el WorldAgent del mundo esté activo (AgentState.RUNNING).
+        Devuelve 409 si el agente está desconectado o el browser está ocupado
+        con otra tarea (ejecutando ruido o refresh-villages).
+
+        Sin body: la ruta a probar se identifica por path_id en la URL.
+        Sin Accept-Language: el reporte no contiene texto localizable.
+
+        Spec noise-path-wizard.md §16.8 (EP-N14).
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo.
+        - name: path_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID de la ruta de navegación a probar.
+      responses:
+        "200":
+          description: |
+            Test ejecutado. overall="ok" si todos los pasos pasaron; "error" si
+            alguno falló (el endpoint ejecutó correctamente en ambos casos).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overall, aborted_at_step, anchor_navigated_to, steps, browser_note]
+                properties:
+                  overall:
+                    type: string
+                    enum: [ok, error]
+                    description: '"ok" si todos los pasos tuvieron éxito; "error" si alguno falló.'
+                  aborted_at_step:
+                    type: integer
+                    nullable: true
+                    description: step_order del paso donde abortó el test. null si overall=="ok".
+                  anchor_navigated_to:
+                    type: string
+                    nullable: true
+                    description: URL del ancla de origen antes del primer paso. null si origin=="ANY".
+                  steps:
+                    type: array
+                    description: Resultados de los pasos ejecutados (solo los intentados).
+                    items:
+                      type: object
+                      required: [step_order, action, selector, status]
+                      properties:
+                        step_order:
+                          type: integer
+                          description: Índice del paso (igual que NavigationStep.step_order).
+                        action:
+                          type: string
+                          description: Tipo de acción ejecutada (CLICK, WAIT_FOR_SELECTOR, etc.).
+                        selector:
+                          type: string
+                          description: Selector CSS del paso.
+                        status:
+                          type: string
+                          enum: [ok, error]
+                          description: '"ok" si el paso se ejecutó con éxito; "error" si falló.'
+                        reason:
+                          type: string
+                          nullable: true
+                          description: Motivo del fallo. null si status=="ok".
+                        current_url:
+                          type: string
+                          nullable: true
+                          description: URL del tab TRAS ejecutar el paso. null si no se pudo leer.
+                  browser_note:
+                    type: string
+                    description: Aviso fijo sobre el estado del browser tras el test.
+              examples:
+                ruta_ok:
+                  summary: Ruta ejecutada con éxito
+                  value:
+                    overall: "ok"
+                    aborted_at_step: null
+                    anchor_navigated_to: "https://ts1.travian.es/statistics"
+                    steps:
+                      - step_order: 0
+                        action: "CLICK"
+                        selector: "a[href='/statistics']"
+                        status: "ok"
+                        reason: null
+                        current_url: "https://ts1.travian.es/statistics"
+                    browser_note: "El browser queda en la última página visitada durante el test."
+                ruta_con_fallo:
+                  summary: Ruta con paso fallido (HTTP 200, overall error)
+                  value:
+                    overall: "error"
+                    aborted_at_step: 1
+                    anchor_navigated_to: "https://ts1.travian.es/statistics"
+                    steps:
+                      - step_order: 0
+                        action: "CLICK"
+                        selector: "a[href='/statistics']"
+                        status: "ok"
+                        reason: null
+                        current_url: "https://ts1.travian.es/statistics"
+                      - step_order: 1
+                        action: "CLICK"
+                        selector: "a[href*='gid=2']"
+                        status: "error"
+                        reason: "elemento no encontrado en el DOM"
+                        current_url: "https://ts1.travian.es/statistics"
+                    browser_note: "El browser queda en la última página visitada durante el test."
+                ruta_sin_pasos:
+                  summary: Ruta sin pasos (always ok)
+                  value:
+                    overall: "ok"
+                    aborted_at_step: null
+                    anchor_navigated_to: "https://ts1.travian.es/statistics"
+                    steps: []
+                    browser_note: "El browser queda en la última página visitada durante el test."
+        "404":
+          description: Mundo o ruta no encontrados.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              examples:
+                mundo_no_encontrado:
+                  value: { detail: "Mundo no encontrado." }
+                ruta_no_encontrada:
+                  value: { detail: "Ruta no encontrada." }
+        "409":
+          description: |
+            El WorldAgent está desconectado, no ha sido iniciado para este mundo,
+            o el browser está ocupado con otra tarea (ruido en ejecución o
+            refresh-villages en curso).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              examples:
+                agente_desconectado:
+                  value: { detail: "El agente del mundo está desconectado. Inicia sesión primero para poder probar la ruta." }
+                browser_ocupado:
+                  value: { detail: "El browser está ocupado con otra tarea. Espera a que finalice e inténtalo de nuevo." }
+        "500":
+          description: Error interno del servidor (browser no disponible, servidor del mundo no accesible, etc.).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+              example: { detail: "Error interno del servidor." }

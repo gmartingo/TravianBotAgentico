@@ -154,6 +154,50 @@ class AttackReportPort(ABC):
         Ver spec docs/specs/bd-ataques-oasis-balance-perdidos-robados.md.
         """
 
+    @abstractmethod
+    async def get_all_oasis_regen_comparison(self) -> dict:
+        """
+        Comparativa de tasas de reaparición y proyección de animales para todos los oasis.
+
+        Sin parámetros. 200 siempre, incluso con BD vacía (oasis:[], species_columns:[]).
+        Ver spec docs/specs/reaparicion-animales-oasis.md §8 EP-10 y §9.
+
+        Gap pre-existente regularizado en oasis-spawn-mechanics-stats §14 paso 0.
+        El adaptador ya implementaba este método (línea 1115); el port no lo declaraba.
+        """
+
+    @abstractmethod
+    async def get_oasis_spawn_composition(self, timer_min: int) -> dict:
+        """
+        Devuelve composición típica, inferencia de tipo, peor combinación a batir
+        (dado timer_min en minutos) y estado cooldown/respawn para todos los oasis.
+
+        timer_min: 6|7|10|15 (validado en el router antes de llamar al port).
+        200 siempre, incluso con oasis: [].
+        Ver spec docs/specs/oasis-spawn-mechanics-stats.md §8 EP-SPAWN y §9.
+        """
+
+    @abstractmethod
+    async def get_animal_temporal_distribution(
+        self,
+        interval_minutes: int,
+        lang: str,
+        translation_port,
+    ) -> dict:
+        """
+        Distribución empírica de animales por tipo de oasis para una cadencia de farmeo dada (v3).
+
+        interval_minutes: frecuencia en minutos. Valores válidos: 6|7|10|15|30|60|120|180|240|300.
+        lang: código de idioma validado (25 soportados).
+        translation_port: puerto de traducción para resolver nombres de animales.
+
+        Devuelve { interval_minutes, interval_label, window, n_reports_in_window, types }.
+        types: lista de 5 secciones fijas (hierro, arcilla, madera, cereal, sin_clasificar).
+        Cada sección contiene: oasis_type, oasis_type_label, n_oasis, n_oasis_low_confidence,
+        n_reports_in_section, animals[] (mismos campos que la lista plana de v2).
+        200 siempre. Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v3).
+        """
+
 
 class DuplicateReportError(Exception):
     """Se intenta guardar un reporte que ya existe en BD (clave única violada)."""

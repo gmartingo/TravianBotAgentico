@@ -16,8 +16,10 @@
  *   onClear    — () => void
  *   isFiltered — boolean (hay algún filtro activo)
  */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { Calendar } from 'lucide-react'
 import { useI18n } from '../../i18n/index.jsx'
+import { RangeCalendarPopover } from '../ui/RangeCalendarPopover.jsx'
 
 // Regex exacta según spec: YYYY-MM-DD HH:MM:SS
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
@@ -70,8 +72,11 @@ function FilterInput({ id, label, value, onChange, placeholder = '' }) {
   )
 }
 
-// ── Input de fecha con validación en vivo ────────────────────────────────────
-function DateFilterInput({ id, label, value, onChange, t }) {
+// ── Input de fecha con validación en vivo + calendario integrado ──────────────
+// El propio campo es el disparador del popover: hacer click en él (o en el icono
+// 📅 que lleva dentro) abre el calendario de rango. Teclear sigue funcionando
+// (el popover no roba el foco; es un editor visual de este mismo input).
+function DateFilterInput({ id, label, value, onChange, onOpen, onToggle, calOpen, inputRef, t }) {
   const valid = validateDate(value)
   const errorId = `${id}-error`
   return (
@@ -82,34 +87,78 @@ function DateFilterInput({ id, label, value, onChange, t }) {
       >
         {label}
       </label>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={t('ar.history.filter.date.placeholder')}
-        aria-invalid={!valid}
-        aria-describedby={!valid ? errorId : undefined}
-        style={{
-          height: '32px',
-          padding: '0 8px',
-          background: 'var(--surface)',
-          border: `1px solid ${!valid ? 'var(--danger)' : 'var(--border-strong)'}`,
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '13px',
-          color: 'var(--text)',
-          fontFamily: 'var(--font-mono)',
-          width: '155px',
-          boxSizing: 'border-box',
-          outline: 'none',
-        }}
-        onFocus={(e) => {
-          if (valid) e.currentTarget.style.borderColor = 'var(--accent)'
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.borderColor = valid ? 'var(--border-strong)' : 'var(--danger)'
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          id={id}
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onClick={onOpen}
+          placeholder={t('ar.history.filter.date.placeholder')}
+          aria-invalid={!valid}
+          aria-describedby={!valid ? errorId : undefined}
+          style={{
+            height: '32px',
+            // espacio a la derecha para el icono 📅 (propiedad lógica para RTL)
+            paddingBlock: '0',
+            paddingInlineStart: '8px',
+            paddingInlineEnd: '38px',
+            background: 'var(--surface)',
+            border: `1px solid ${!valid ? 'var(--danger)' : 'var(--border-strong)'}`,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '13px',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-mono)',
+            width: '170px',
+            boxSizing: 'border-box',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+          onFocus={(e) => {
+            if (valid) e.currentTarget.style.borderColor = 'var(--accent)'
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = valid ? 'var(--border-strong)' : 'var(--danger)'
+          }}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
+          aria-haspopup="dialog"
+          aria-expanded={calOpen}
+          aria-label={t('ar.history.filter.cal.title')}
+          title={t('ar.history.filter.cal.title')}
+          style={{
+            position: 'absolute',
+            insetInlineEnd: '3px',
+            top: '3px',
+            bottom: '3px',
+            width: '28px',
+            display: 'grid',
+            placeItems: 'center',
+            background: calOpen ? 'var(--accent-subtle)' : 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            color: valid ? (calOpen ? 'var(--accent-text)' : 'var(--text-secondary)') : 'var(--danger)',
+            cursor: 'pointer',
+            transition: 'background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--accent-subtle)'
+            e.currentTarget.style.borderColor = 'var(--accent)'
+            e.currentTarget.style.color = 'var(--accent-text)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = calOpen ? 'var(--accent-subtle)' : 'var(--surface-2)'
+            e.currentTarget.style.borderColor = calOpen ? 'var(--accent)' : 'var(--border)'
+            e.currentTarget.style.color = valid ? (calOpen ? 'var(--accent-text)' : 'var(--text-secondary)') : 'var(--danger)'
+          }}
+        >
+          <Calendar size={17} aria-hidden="true" />
+        </button>
+      </div>
       {!valid && (
         <span
           id={errorId}
@@ -123,18 +172,40 @@ function DateFilterInput({ id, label, value, onChange, t }) {
   )
 }
 
+// Valor entero ordenable de "YYYY-MM-DD HH:MM:SS" (para detectar from > to).
+function ordValue(val) {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec((val ?? '').trim())
+  if (!m) return null
+  return +m[1] * 1e10 + +m[2] * 1e8 + +m[3] * 1e6 + +m[4] * 1e4 + +m[5] * 1e2 + +m[6]
+}
+
 export function HistoryFilters({ filters, onChange, onApply, onClear, isFiltered }) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)  // acordeón en móvil
+  const [calOpen, setCalOpen] = useState(false)  // popover del calendario
+  const fieldsWrapRef = useRef(null)   // contenedor de los inputs (anclaje + click-fuera)
+  const fromInputRef = useRef(null)    // input "Desde" (recupera foco al cerrar)
+
+  const openCal = () => setCalOpen(true)
+  const toggleCal = () => setCalOpen((v) => !v)
 
   function set(key, val) {
     onChange({ ...filters, [key]: val })
   }
 
+  // El calendario escribe ambos extremos a la vez (editor visual de los inputs).
+  function setRange(fromVal, toVal) {
+    onChange({ ...filters, from_date: fromVal, to_date: toVal })
+  }
+
   // Hay error si algún campo de fecha tiene valor y no cumple la regex
   const fromInvalid = !validateDate(filters.from_date ?? '')
   const toInvalid   = !validateDate(filters.to_date ?? '')
-  const hasDateError = fromInvalid || toInvalid
+  // Orden inválido: ambos válidos y no vacíos pero from > to
+  const fromOrd = ordValue(filters.from_date)
+  const toOrd   = ordValue(filters.to_date)
+  const orderError = fromOrd !== null && toOrd !== null && fromOrd > toOrd
+  const hasDateError = fromInvalid || toInvalid || orderError
 
   function handleApply() {
     if (hasDateError) return
@@ -184,12 +255,19 @@ export function HistoryFilters({ filters, onChange, onApply, onClear, isFiltered
         <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
           {t('ar.history.filter.dates')}
         </span>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+        <div
+          ref={fieldsWrapRef}
+          style={{ position: 'relative', display: 'flex', gap: '6px', alignItems: 'flex-start' }}
+        >
           <DateFilterInput
             id="filter-from"
             label={t('ar.history.filter.from')}
             value={filters.from_date ?? ''}
             onChange={(v) => set('from_date', v)}
+            onOpen={openCal}
+            onToggle={toggleCal}
+            calOpen={calOpen}
+            inputRef={fromInputRef}
             t={t}
           />
           <DateFilterInput
@@ -197,9 +275,34 @@ export function HistoryFilters({ filters, onChange, onApply, onClear, isFiltered
             label={t('ar.history.filter.to')}
             value={filters.to_date ?? ''}
             onChange={(v) => set('to_date', v)}
+            onOpen={openCal}
+            onToggle={toggleCal}
+            calOpen={calOpen}
             t={t}
           />
+          {/* Popover de rango — anclado al grupo de campos, no a un botón suelto */}
+          {calOpen && (
+            <RangeCalendarPopover
+              fromText={filters.from_date ?? ''}
+              toText={filters.to_date ?? ''}
+              onChange={setRange}
+              onApply={handleApply}
+              onClose={() => setCalOpen(false)}
+              t={t}
+              lang={lang}
+              triggerRef={fieldsWrapRef}
+              focusReturnRef={fromInputRef}
+            />
+          )}
         </div>
+        {orderError && (
+          <span
+            role="alert"
+            style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '2px' }}
+          >
+            {t('ar.history.filter.cal.orderError')}
+          </span>
+        )}
       </div>
 
       {/* Botones — DA-CL31: Aplicar disabled si hay error de formato */}

@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario — Estadísticas de spawn de oasis | TravianBot</title>
+  <style>
+    /* === Variables (tema claro — igual al sistema de diseño del proyecto) === */
+    :root {
+      --bg: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-2: #F0F0F2;
+      --border: #D8D8DC;
+      --text: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #A0A0A5;
+      --accent: #8A6418;
+      --accent-text: #8A6418;
+      --accent-subtle: #F4ECD8;
+      --accent-subtle-border: #D6B87A;
+      --success: #1A7F37;
+      --danger: #C9352C;
+      --warning: #D4900A;
+      --info: #0068CC;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* === Base === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    /* === Layout === */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    /* === Sidebar === */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 0 24px;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 4px 8px 6px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: background .12s, color .12s;
+    }
+    .sidebar-link:hover { background: var(--surface-2); color: var(--text); }
+    .sidebar-link.active { background: var(--accent-subtle); color: var(--accent-text); font-weight: 600; }
+    .sidebar-sub { padding-left: 12px; }
+    .sidebar-back {
+      display: block;
+      padding: 6px 8px 6px 20px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-decoration: none;
+      margin-bottom: 8px;
+    }
+    .sidebar-back:hover { color: var(--text-secondary); }
+
+    /* === Main === */
+    .main {
+      min-width: 0;
+      padding: 48px 56px 80px;
+      max-width: 820px;
+    }
+
+    /* === Encabezado de sección === */
+    .page-header { margin-bottom: 40px; }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 580px;
+      line-height: 1.65;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .breadcrumb a { color: var(--text-tertiary); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--accent-text); }
+
+    /* === Secciones del manual === */
+    .manual-section {
+      margin-bottom: 56px;
+      scroll-margin-top: 24px;
+    }
+    .manual-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .manual-section h2 .section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      background: var(--accent-subtle);
+      color: var(--accent-text);
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .manual-section > p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.7;
+    }
+    .manual-section h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 10px;
+    }
+    .manual-section p + p { margin-top: 10px; }
+
+    /* === Separador de sección === */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    /* === Captura de pantalla === */
+    .screenshot-wrap {
+      margin: 20px 0 28px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .screenshot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .screenshot-caption {
+      padding: 10px 16px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .screenshot-caption strong { color: var(--text); }
+
+    /* === Callout / nota === */
+    .callout {
+      display: flex;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 16px 0;
+    }
+    .callout-icon { font-size: 16px; flex-shrink: 0; line-height: 1.4; }
+    .callout.info { background: #EBF4FF; border: 1px solid #B8D9F8; color: #0068CC; }
+    .callout.tip  { background: var(--accent-subtle); border: 1px solid var(--accent-subtle-border); color: var(--accent-text); }
+    .callout.warn { background: #FFF8E6; border: 1px solid #F0D080; color: #7A5800; }
+    .callout p { margin: 0; }
+
+    /* === Lista de pasos === */
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 16px 0 24px; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .steps li::before {
+      content: counter(step);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    /* === Tabla de referencia === */
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0 24px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border-bottom: 2px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .ref-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text);
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+    .ref-table .mono {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* === Badge inline === */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .badge.green  { background: #E6F4EC; color: var(--success); border: 1px solid #B4DEC4; }
+    .badge.red    { background: #FCE8E6; color: var(--danger);  border: 1px solid #F0B8B4; }
+    .badge.grey   { background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+    .badge.gold   { background: var(--accent-subtle); color: var(--accent-text); border: 1px solid var(--accent-subtle-border); }
+    .badge.blue   { background: #EBF4FF; color: var(--info); border: 1px solid #B8D9F8; }
+
+    /* === Punto de estado === */
+    .status-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .status-dot::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.green::before  { background: var(--success); }
+    .status-dot.red::before    { background: var(--danger); }
+    .status-dot.grey::before   { background: var(--text-tertiary); }
+
+    /* === Anotación de UI (caja de etiqueta sobre captura) === */
+    .annotation-list { list-style: none; padding: 0; margin: 0 0 20px; }
+    .annotation-list li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .annotation-list li:last-child { border-bottom: none; }
+    .annotation-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      height: 20px;
+      padding: 0 6px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+      font-family: var(--font-mono);
+    }
+    .annotation-key.gold { background: var(--accent); }
+
+    /* === Marca de agua === */
+    .watermark {
+      margin-top: 80px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    /* === Responsive === */
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 24px 20px 60px; }
+      .page-header h1 { font-size: 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" role="navigation" aria-label="Índice del manual">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+
+    <a class="sidebar-back" href="index.html">← Volver al índice</a>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Otros manuales</div>
+      <a class="sidebar-link" href="index.html">Inicio</a>
+      <a class="sidebar-link" href="es/index.html">Cuentas y mundos</a>
+      <a class="sidebar-link" href="farm-lists.html">Listas de vacas</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Estadísticas de spawn</div>
+      <a class="sidebar-link active" href="#vista-general">1. Vista general</a>
+      <a class="sidebar-link" href="#leyenda">2. Leyenda de spawn</a>
+      <a class="sidebar-link" href="#balance">3. Balance de operaciones</a>
+      <div class="sidebar-sub">
+        <a class="sidebar-link" href="#balance-filtros">Filtros de fecha</a>
+      </div>
+      <a class="sidebar-link" href="#planificador">4. Planificador de combate</a>
+      <div class="sidebar-sub">
+        <a class="sidebar-link" href="#selector-intervalo">Selector de intervalo</a>
+        <a class="sidebar-link" href="#jerarquia">Jerarquía de oasis</a>
+        <a class="sidebar-link" href="#filas-media-peor">Filas Media y Peor</a>
+        <a class="sidebar-link" href="#tipo-confianza">Tipo inferido y confianza</a>
+        <a class="sidebar-link" href="#estados">Estados de spawn</a>
+        <a class="sidebar-link" href="#anomalias">Anomalías</a>
+        <a class="sidebar-link" href="#multijugador">Varios jugadores</a>
+      </div>
+      <a class="sidebar-link" href="#globales">5. Estadísticas globales</a>
+      <a class="sidebar-link" href="#lista-oasis">6. Lista de oasis</a>
+      <a class="sidebar-link" href="#modo-oscuro">7. Modo oscuro</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Otros manuales</div>
+      <a class="sidebar-link" href="farm-lists.html">Listas de vacas</a>
+      <a class="sidebar-link" href="es/index.html">Cuentas y mundos</a>
+    </div>
+  </aside>
+
+  <!-- ── Contenido principal ──────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="page-header">
+      <div class="breadcrumb">
+        <a href="index.html">Manual</a> &rsaquo; Reportes de oasis &rsaquo; Estadísticas
+      </div>
+      <h1>Estadísticas de mecánica de spawn de oasis</h1>
+      <p>
+        Esta sección del bot analiza los reportes de combate que has acumulado atacando oasis
+        para responder una pregunta clave: <strong>¿cuántos animales voy a encontrar la próxima
+        vez que ataque?</strong> Aprende a leer cada panel para planificar tus oleadas con
+        precisión.
+      </p>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 1 — Vista general
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="vista-general">
+      <h2><span class="section-num">1</span> Vista general de la pestaña Estadísticas</h2>
+      <p>
+        Entra a <strong>Reportes de oasis</strong> desde el menú lateral y haz clic en la
+        pestaña <strong>Estadísticas</strong>. La página carga de forma independiente: si un
+        panel tarda o falla, el resto sigue funcionando.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-01-vista-general.png" alt="Vista general de la pestaña Estadísticas: leyenda colapsada, balance, selector de intervalo y primer jugador visible">
+        <div class="screenshot-caption">
+          <strong>Vista general.</strong> De arriba abajo: barra de pestañas (Ingresar / Historial / <em>Estadísticas</em> activa),
+          panel Leyenda colapsado, Balance de operaciones, y el inicio del Planificador de combate con el selector de intervalo.
+        </div>
+      </div>
+
+      <p>
+        Los cinco bloques que encontrarás en esta pestaña, en ese orden, son:
+      </p>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Panel</th>
+            <th>Para qué sirve</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">1</td>
+            <td><strong>Leyenda de spawn</strong></td>
+            <td>Referencia educativa: timers por animal y sets de animales por tipo de oasis. Colapsable.</td>
+          </tr>
+          <tr>
+            <td class="mono">2</td>
+            <td><strong>Balance de operaciones</strong></td>
+            <td>Recursos perdidos (tropas enviadas) vs. robados en un rango de fechas.</td>
+          </tr>
+          <tr>
+            <td class="mono">3</td>
+            <td><strong>Planificador de combate</strong></td>
+            <td>El núcleo: para cada oasis, combinación típica (Media) y peor caso posible (Peor) según el intervalo de envío que elijas.</td>
+          </tr>
+          <tr>
+            <td class="mono">4</td>
+            <td><strong>Estadísticas globales</strong></td>
+            <td>Distribución de apariciones de animales en todos los oasis observados.</td>
+          </tr>
+          <tr>
+            <td class="mono">5</td>
+            <td><strong>Lista de oasis</strong></td>
+            <td>Tabla navegable de todos los oasis con reportes: coordenadas, número de ataques y fecha del último.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9670;</span>
+        <p>
+          Si acabas de entrar al bot y aún no has ingerido ningún reporte, la leyenda se desplegará
+          automáticamente para explicarte qué datos necesitas importar primero. Usa la pestaña
+          <strong>Ingresar</strong> para pegar tus reportes de combate.
+        </p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 2 — Leyenda / Mecánica de spawn
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="leyenda">
+      <h2><span class="section-num">2</span> Panel "Leyenda / Mecánica de spawn de oasis"</h2>
+      <p>
+        Este panel es una referencia que explica cómo funciona el juego. No requiere datos: su
+        contenido es fijo. Está colapsado por defecto en visitas sucesivas para no ocupar pantalla,
+        pero puedes abrirlo en cualquier momento haciendo clic en su encabezado.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-02-leyenda-expandida.png" alt="Panel Leyenda expandido mostrando la tabla de timers de aparición con los 10 animales y sus tiempos">
+        <div class="screenshot-caption">
+          <strong>Leyenda expandida — tabla de timers.</strong> Cada animal tiene un timer fijo
+          (en servidor x1). Los animales de orden más alto tardan más en reaparecer pero dan más recursos.
+        </div>
+      </div>
+
+      <h3>Tabla de timers de aparición</h3>
+      <p>
+        Cada animal reaparece en un oasis con un timer fijo, contando desde que fue eliminado en
+        el último ataque. En un servidor estándar (x1) los tiempos son:
+      </p>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Animal</th>
+            <th>Orden</th>
+            <th class="mono">Timer (min)</th>
+            <th>Lo que implica</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Rata</td><td>1</td><td class="mono">5:00</td><td>Reaparece muy rápido; con intervalo de 6 min ya puede estar de vuelta.</td></tr>
+          <tr><td>Araña</td><td>2</td><td class="mono">6:00</td><td>Al límite del intervalo de 6 min.</td></tr>
+          <tr><td>Serpiente</td><td>3</td><td class="mono">7:00</td><td>Solo reaparece si tu intervalo es 7 min o más.</td></tr>
+          <tr><td>Murciélago</td><td>4</td><td class="mono">8:00</td><td rowspan="2">Necesitas intervalo 10 min o más para verlos en el peor caso.</td></tr>
+          <tr><td>Jabalí</td><td>5</td><td class="mono">9:00</td></tr>
+          <tr><td>Lobo</td><td>6</td><td class="mono">10:00</td><td>Con 10 min de intervalo, a partir de aquí todos pueden reaparecer.</td></tr>
+          <tr><td>Oso</td><td>7</td><td class="mono">11:00</td><td rowspan="4">Solo reaparecen si tu intervalo es 15 min.</td></tr>
+          <tr><td>Crocodilo</td><td>8</td><td class="mono">12:00</td></tr>
+          <tr><td>Tigre</td><td>9</td><td class="mono">13:00</td></tr>
+          <tr><td>Elefante</td><td>10</td><td class="mono">14:00</td></tr>
+        </tbody>
+      </table>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-03-leyenda-sets.png" alt="Tabla de sets normales por tipo de oasis: Hierro con Rata/Araña/Murciélago, Arcilla con Rata/Araña/Jabalí, Madera con Jabalí/Lobo/Oso, Cereal con todos los animales">
+        <div class="screenshot-caption">
+          <strong>Sets normales por tipo de oasis.</strong> Cada tipo tiene su "fauna habitual". Cereal es el único
+          que puede contener cualquier animal, incluyendo los de orden alto.
+        </div>
+      </div>
+
+      <h3>Sets normales por tipo de oasis</h3>
+      <p>
+        El tipo de oasis (hierro, arcilla, madera, cereal) determina qué animales "pertenecen" a
+        ese oasis de manera habitual. El bot usa esta información para inferir el tipo cuando
+        no lo conoce con certeza, y para distinguir los animales normales de los anómalos.
+      </p>
+
+      <table class="ref-table">
+        <thead>
+          <tr><th>Tipo</th><th>Animales del set normal</th><th>Nota</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Hierro</strong></td>
+            <td>Rata, Araña, Murciélago</td>
+            <td>Set pequeño, animales de bajo orden.</td>
+          </tr>
+          <tr>
+            <td><strong>Arcilla</strong></td>
+            <td>Rata, Araña, Jabalí</td>
+            <td>Similar a hierro pero con Jabalí en vez de Murciélago.</td>
+          </tr>
+          <tr>
+            <td><strong>Madera</strong></td>
+            <td>Jabalí, Lobo, Oso</td>
+            <td>Animales de orden medio-alto; más fuertes que hierro/arcilla.</td>
+          </tr>
+          <tr>
+            <td><strong>Cereal</strong></td>
+            <td>Rata, Araña, Serpiente, Murciélago, Jabalí, Lobo, Oso, Crocodilo, Tigre, Elefante</td>
+            <td>Set universal: puede aparecer cualquier animal. Potencialmente el más peligroso.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <span class="callout-icon">&#9432;</span>
+        <p>
+          <strong>Anomalía:</strong> un animal observado fuera del set normal de su tipo de oasis.
+          Puede aparecer esporádicamente por causas del juego. El bot lo marca con el badge
+          <span class="badge gold">anom.</span> y lo excluye del cálculo de peor caso, ya que
+          no es un comportamiento predecible.
+        </p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 3 — Balance de operaciones
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="balance">
+      <h2><span class="section-num">3</span> Balance de operaciones</h2>
+      <p>
+        El balance responde: <em>¿estoy ganando o perdiendo recursos con mis ataques a oasis?</em>
+        Suma todos los recursos robados y todos los perdidos (en tropas) dentro del rango de fechas
+        que establezcas.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-01-vista-general.png" alt="Panel Balance de operaciones mostrando recursos perdidos y robados por tipo, con el neto positivo destacado en verde">
+        <div class="screenshot-caption">
+          <strong>Balance de operaciones.</strong> Columna roja = perdido (coste de tropas caídas),
+          columna verde = robado. El neto en la última fila indica el beneficio real.
+        </div>
+      </div>
+
+      <h3 id="balance-filtros">Filtros de fecha</h3>
+      <p>
+        Los campos <strong>Desde</strong> y <strong>Hasta</strong> permiten acotar el período
+        analizado. Si los dejas vacíos, el balance muestra todos los reportes disponibles en la
+        base de datos (sin filtro de fecha).
+      </p>
+
+      <ul class="steps">
+        <li>Haz clic en el campo <strong>Desde</strong> y escribe la fecha y hora de inicio en formato <code>YYYY-MM-DD HH:MM</code>.</li>
+        <li>Repite en <strong>Hasta</strong> con la fecha de fin.</li>
+        <li>Pulsa <strong>Aplicar</strong> para recalcular el balance con ese rango.</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9670;</span>
+        <p>
+          Si el neto es negativo, significa que has perdido más en tropas de lo que has robado
+          en ese período. Suele ocurrir en oasis de cereal o cuando el intervalo de envío es
+          demasiado corto y encuentras animales ya repuestos.
+        </p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 4 — Planificador de combate
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="planificador">
+      <h2><span class="section-num">4</span> Planificador de combate por oasis</h2>
+      <p>
+        Este es el panel central de la pestaña. Combina lo que el bot ha observado en tus
+        reportes históricos con la mecánica de spawn para darte dos cifras por oasis:
+        cuántos animales sueles encontrar (<strong>Media</strong>) y cuántos encontrarías
+        en el peor caso posible (<strong>Peor</strong>), según el intervalo de tiempo que
+        pase entre tus envíos.
+      </p>
+
+      <!-- ── Selector de intervalo ──────────────────────────────────────── -->
+      <h3 id="selector-intervalo">El selector de intervalo (6 / 7 / 10 / 15 min)</h3>
+      <p>
+        Antes de leer cualquier cifra, elige el intervalo que representa <em>el tiempo que
+        pasa entre el último ataque a un oasis y el siguiente</em>. Cuanto mayor sea el
+        intervalo, más animales habrán tenido tiempo de reaparecer y mayor será la columna
+        <strong>Peor</strong>.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-04-planificador-selector.png" alt="Selector de intervalo con las cuatro opciones (6 / 7 / 10 / 15 min) y la opción 10 min activa en dorado">
+        <div class="screenshot-caption">
+          <strong>Selector de intervalo — 10 min activo (valor por defecto).</strong>
+          La opción activa aparece con fondo dorado y borde resaltado. Las demás están disponibles con un clic.
+        </div>
+      </div>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-05-intervalo-6min.png" alt="Selector con 6 min activo; la columna Peor muestra valores distintos a los de 10 min">
+        <div class="screenshot-caption">
+          <strong>Con 6 min seleccionado</strong> la columna <strong>Peor</strong> cambia: solo los animales
+          con timer &le; 6 min (Rata y Araña) pueden reaparecer. Los valores de Peor bajan respecto
+          al intervalo de 10 min.
+        </div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Intervalo</th>
+            <th>Animales que pueden reaparecer</th>
+            <th>Cuándo usarlo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>6 min</strong></td>
+            <td>Rata (5 min), Araña (6 min)</td>
+            <td>Envíos muy frecuentes, farm de oasis pequeños.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>7 min</strong></td>
+            <td>Rata, Araña, Serpiente (7 min)</td>
+            <td>Farm rápido que alcanza la Serpiente.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>10 min</strong></td>
+            <td>Rata a Lobo (todos con timer &le; 10 min)</td>
+            <td>El caso más habitual en farm automatizado. <strong>Valor por defecto.</strong></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>15 min</strong></td>
+            <td>Todos los animales (hasta Elefante con 14 min)</td>
+            <td>Oleadas lentas o servidores con bono de velocidad bajo.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── Jerarquía Jugador → Aldea → Oasis ──────────────────────────── -->
+      <h3 id="jerarquia">Jerarquía Jugador &rarr; Aldea &rarr; Oasis</h3>
+      <p>
+        Los oasis se agrupan en tres niveles. El bot construye esta jerarquía a partir de la
+        información de los reportes: cada reporte indica desde qué aldea de qué jugador salió
+        el ataque.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-04-planificador-selector.png" alt="Jerarquía con CrazyMouse expandido mostrando sus aldeas (00, 01, 05) y GonnaDie empezando a mostrarse">
+        <div class="screenshot-caption">
+          <strong>Nivel 1 (Jugador) y nivel 2 (Aldea).</strong> Cada jugador muestra cuántas aldeas
+          tiene con reportes. Cada aldea muestra cuántos oasis ha atacado desde ella.
+          Un oasis atacado desde varias aldeas aparece repetido bajo cada una.
+        </div>
+      </div>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-06-gonnadie-jerarquia.png" alt="GonnaDie expandido con su aldea 00 y varios oasis, cada uno con sus filas Media y Peor">
+        <div class="screenshot-caption">
+          <strong>GonnaDie — aldea 00 con 48 oasis.</strong> GonnaDie es el jugador con más
+          datos históricos. Sus oasis de hierro y arcilla muestran tipo inferido con media confianza.
+          El estado "Desconocido" (punto gris) indica que no ha habido ataques recientes
+          suficientes para saber si el oasis está en cooldown o ya repoblado.
+        </div>
+      </div>
+
+      <ul class="annotation-list">
+        <li>
+          <span class="annotation-key">J</span>
+          <span><strong>Jugador</strong> — sección colapsable con el nombre del jugador y el número de aldeas. Expandida por defecto. Clic en el encabezado para colapsar.</span>
+        </li>
+        <li>
+          <span class="annotation-key">A</span>
+          <span><strong>Aldea</strong> — dentro de cada jugador, las aldeas que han generado reportes. El número a la derecha indica cuántos oasis distintos ha atacado esa aldea.</span>
+        </li>
+        <li>
+          <span class="annotation-key">O</span>
+          <span><strong>Oasis</strong> — bloque con coordenadas, tipo inferido, nivel de confianza, estado de spawn, y las filas Media / Peor.</span>
+        </li>
+      </ul>
+
+      <!-- ── Filas Media y Peor ──────────────────────────────────────────── -->
+      <h3 id="filas-media-peor">Filas Media y Peor</h3>
+      <p>
+        Cada bloque de oasis muestra dos filas de chips de animales. Leerlas correctamente es
+        la clave para preparar tu oleada.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-07-media-peor.png" alt="Dos oasis con sus filas MEDIA y PEOR; la fila Media tiene chip anom. en dorado para el murciélago; la fila Peor no incluye ese animal">
+        <div class="screenshot-caption">
+          <strong>Filas Media y Peor por oasis.</strong> Cada chip muestra el icono del animal y
+          el número de individuos. El badge dorado "anom." aparece en Media cuando ese animal está
+          fuera de su set normal. La fila Peor excluye los anómalos porque son impredecibles.
+        </div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Fila</th>
+            <th>Qué muestra</th>
+            <th>Cómo interpretarlo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MEDIA</strong></td>
+            <td>
+              El <em>máximo</em> número de individuos de ese animal que el bot ha visto en
+              una sola ráfaga de ataques. Incluye animales anómalos (marcados con
+              <span class="badge gold">anom.</span>).
+            </td>
+            <td>
+              Es el "techo observado". Si mandas tropas suficientes para esta fila, cubrirás
+              el historial real. Pero puede haber un peor caso que aún no hayas visto.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>PEOR</strong></td>
+            <td>
+              La peor combinación teórica posible para el intervalo seleccionado. Calcula
+              cuántos individuos podrían haber reaparecido completamente según su timer.
+              <strong>No incluye animales anómalos.</strong>
+            </td>
+            <td>
+              Dimensiona tus tropas para este número si quieres cubrir el caso más adverso
+              <em>predecible</em>. Los anómalos se excluyen porque son esporádicos.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <span class="callout-icon">&#9888;</span>
+        <p>
+          Los números en la fila <strong>Peor</strong> son <em>conteos absolutos</em> de
+          animales, no multiplicadores. Si ves "25" en Rata, significa que en el peor caso
+          pueden estar presentes 25 ratas, no 25 veces la media.
+        </p>
+      </div>
+
+      <!-- ── Tipo inferido y confianza ───────────────────────────────────── -->
+      <h3 id="tipo-confianza">Tipo inferido y nivel de confianza</h3>
+      <p>
+        A menudo el bot no sabe el tipo oficial de un oasis (esa información solo aparece en
+        el mapa del juego). En su lugar, <em>infiere</em> el tipo comparando los animales
+        observados con los sets conocidos de hierro, arcilla, madera y cereal, usando un
+        algoritmo de similitud (similitud de Jaccard).
+      </p>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Confianza</th>
+            <th>Significado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge green">alta confianza</span></td>
+            <td>El set de animales observado encaja muy bien con un solo tipo. El tipo inferido es fiable.</td>
+          </tr>
+          <tr>
+            <td><span class="badge gold">media confianza</span></td>
+            <td>Hay cierto solapamiento entre tipos. El más probable está indicado, pero podría ser otro.</td>
+          </tr>
+          <tr>
+            <td><span class="badge grey">baja confianza</span></td>
+            <td>El set observado no encaja claramente con ningún tipo. Faltan datos o es un cereal atípico.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── Estados de spawn ────────────────────────────────────────────── -->
+      <h3 id="estados">Estado de spawn del oasis</h3>
+      <p>
+        Junto al tipo aparece el estado actual del oasis, calculado a partir del tiempo que ha
+        pasado desde el último ataque registrado.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-08-estado-cooldown.png" alt="Varios oasis de CrazyMouse con estado Cooldown en rojo y punto rojo junto al texto">
+        <div class="screenshot-caption">
+          <strong>Estado Cooldown.</strong> El oasis fue atacado recientemente y aún no ha tenido
+          tiempo de repoblarse. El punto rojo y el texto en rojo lo indican.
+          Atacar en cooldown significa encontrar pocos o ningún animal.
+        </div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Estado</th>
+            <th>Indicador visual</th>
+            <th>Qué significa</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Repoblando</strong></td>
+            <td><span class="status-dot green">Repoblando</span></td>
+            <td>
+              Ha pasado suficiente tiempo desde el último ataque. Los animales han tenido
+              tiempo de reaparecer. Es el momento óptimo para atacar.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Cooldown</strong></td>
+            <td><span class="status-dot red">Cooldown</span></td>
+            <td>
+              El oasis fue atacado recientemente y aún no ha pasado el umbral de repoblación.
+              Atacar ahora encontrará muy pocos animales.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Desconocido</strong></td>
+            <td><span class="status-dot grey">Desconocido</span></td>
+            <td>
+              No hay información suficiente para determinar el estado (ataque muy antiguo o
+              primer reporte). Asumir precaución.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── Anomalías ────────────────────────────────────────────────────── -->
+      <h3 id="anomalias">Animales anómalos</h3>
+      <p>
+        Cuando el bot observa un animal que <em>no pertenece</em> al set normal del tipo
+        inferido de ese oasis, lo marca con el badge dorado <span class="badge gold">anom.</span>.
+        Este animal aparece en la fila <strong>Media</strong> (porque fue visto en la
+        realidad) pero queda <strong>excluido de la fila Peor</strong> (porque su presencia
+        no es predecible ni sistemática).
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-07-media-peor.png" alt="Oasis de arcilla con Murciélago marcado como anom. en la fila Media; la fila Peor no incluye el Murciélago">
+        <div class="screenshot-caption">
+          <strong>Badge "anom." en la fila Media.</strong> El Murciélago (orden 4) no pertenece
+          al set de Arcilla. Ha sido observado, por eso aparece en Media, pero la fila Peor
+          lo omite al no ser un comportamiento esperado.
+        </div>
+      </div>
+
+      <div class="callout info">
+        <span class="callout-icon">&#9432;</span>
+        <p>
+          Si ves muchos animales anómalos en un oasis, puede indicar que el tipo inferido
+          es incorrecto (confianza baja) o que ese oasis tiene un comportamiento realmente
+          atípico en el servidor. En ese caso, dimensiona tus tropas también para la
+          fila Media.
+        </p>
+      </div>
+
+      <!-- ── Varios jugadores ────────────────────────────────────────────── -->
+      <h3 id="multijugador">Varios jugadores en el mismo planificador</h3>
+      <p>
+        El planificador muestra todos los jugadores que han generado reportes, cada uno con
+        su sección propia. Esto permite al operador del bot gestionar varias cuentas desde
+        una sola instancia: los datos de cada cuenta permanecen separados y claramente
+        identificados.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-09-tres-jugadores.png" alt="Parte final del planificador con los oasis de GonnaDie al fondo, SharpHorseman con 1 aldea, y el inicio del panel de estadísticas globales">
+        <div class="screenshot-caption">
+          <strong>Tres jugadores separados: GonnaDie, SharpHorseman y (arriba) CrazyMouse.</strong>
+          Cada uno tiene sus propias aldeas y oasis. La nota inferior indica que los animales
+          anómalos no se incluyen en Peor.
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9670;</span>
+        <p>
+          Los jugadores aparecen en orden alfabético, con "Desconocido" siempre al final.
+          Las aldeas dentro de cada jugador también se ordenan alfabéticamente.
+        </p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 5 — Estadísticas globales
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="globales">
+      <h2><span class="section-num">5</span> Estadísticas globales de todos los oasis</h2>
+      <p>
+        Este panel agrega la información de todos los oasis con reportes para darte una visión
+        de conjunto: qué animales han sido observados y con qué frecuencia, independientemente
+        de a qué oasis concreto pertenecen.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-11-global-stats.png" alt="Panel Estadísticas globales con la sección de apariciones y el inicio de la lista de 138 oasis con sus coordenadas, número de ataques y fecha del último ataque">
+        <div class="screenshot-caption">
+          <strong>Estadísticas globales y lista de oasis.</strong> Arriba: 10 animales observados
+          en total, con los más frecuentes listados (Rat, Spider, Bat). Abajo: la lista de los
+          138 oasis con reportes, ordenados por actividad.
+        </div>
+      </div>
+
+      <p>
+        La sección <strong>Apariciones globales de animales</strong> puede expandirse (clic en
+        el encabezado) para ver la distribución completa por especie. El resumen muestra los
+        tres más habituales.
+      </p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 6 — Lista de oasis
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="lista-oasis">
+      <h2><span class="section-num">6</span> Lista de oasis individuales</h2>
+      <p>
+        Debajo de las estadísticas globales aparece la lista completa de oasis con reportes.
+        Cada fila muestra las coordenadas del oasis, el número de ataques registrados y la fecha
+        del último ataque. Puedes filtrar por coordenadas usando los campos X e Y.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-11-global-stats.png" alt="Lista de oasis con campos de filtro por coordenadas X e Y y filas de oasis con sus datos">
+        <div class="screenshot-caption">
+          <strong>Lista de 138 oasis con reportes.</strong> Cada fila es expandible (clic en la flecha derecha)
+          para ver el detalle de ese oasis. El filtro de coordenadas permite localizar uno concreto rápidamente.
+        </div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         SECCIÓN 7 — Modo oscuro
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="modo-oscuro">
+      <h2><span class="section-num">7</span> Modo oscuro</h2>
+      <p>
+        Toda la pantalla de Estadísticas funciona en modo oscuro. El toggle de tema está en
+        la esquina superior derecha de la barra de navegación (icono de luna / sol). El bot
+        recuerda tu preferencia entre sesiones.
+      </p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/spawn-10-modo-oscuro.png" alt="La misma vista del planificador con el tema oscuro activo: fondo grafito, texto claro, badges dorados y rojos sobre superficie oscura">
+        <div class="screenshot-caption">
+          <strong>Modo oscuro.</strong> Las superficies pasan a grafito oscuro, los textos a tonos claros.
+          Los colores de estado (verde para repoblando, rojo para cooldown, dorado para activo) se
+          mantienen legibles en ambos temas.
+        </div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         FLUJO RÁPIDO — Guía paso a paso de uso habitual
+         ══════════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="flujo-rapido">
+      <h2><span class="section-num">&#9654;</span> Flujo de uso habitual</h2>
+      <p>
+        Guía condensada para planificar una oleada de ataques a oasis desde cero.
+      </p>
+
+      <ol class="steps">
+        <li>
+          Ve a <strong>Reportes de oasis &rsaquo; Ingresar</strong> y pega los reportes de
+          combate recientes. Cuantos más reportes, más precisa será la columna Media.
+        </li>
+        <li>
+          Abre la pestaña <strong>Estadísticas</strong>.
+        </li>
+        <li>
+          En el <strong>Planificador de combate</strong>, elige el <strong>intervalo de envío</strong>
+          que corresponde a tu ciclo de farm (normalmente 10 min).
+        </li>
+        <li>
+          Localiza el jugador y la aldea desde la que envías. Abre la aldea para ver sus oasis.
+        </li>
+        <li>
+          Para cada oasis, lee la fila <strong>Peor</strong> con el intervalo elegido. Ese es
+          el número de tropas que necesitas para cubrir el peor caso predecible.
+        </li>
+        <li>
+          Si el oasis tiene estado <span class="status-dot red">Cooldown</span>, espera antes
+          de atacar: encontrarás pocos animales y no compensa el viaje.
+        </li>
+        <li>
+          Si un animal tiene el badge <span class="badge gold">anom.</span>, considéralo un
+          extra ocasional; no cuentes con él ni lo temas de forma sistemática.
+        </li>
+      </ol>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Marca de agua
+         ══════════════════════════════════════════════════════════════════════ -->
+    <div class="watermark">
+      <p>
+        &#128278; Última revisión: 2026-06-02 &mdash; Manual generado con capturas reales de la app
+        (138 oasis, jugadores: CrazyMouse, GonnaDie, SharpHorseman). Capturas obtenidas con
+        Puppeteer-core contra localhost:5173.
+      </p>
+      <p style="margin-top:6px">
+        Ver también:
+        <a href="farm-lists.html" style="color:var(--accent-text);text-decoration:none">Manual de Farm Lists</a> &middot;
+        <a href="es/index.html" style="color:var(--accent-text);text-decoration:none">Manual de Cuentas y Mundos</a> &middot;
+        <a href="../README.md" style="color:var(--accent-text);text-decoration:none">Documentación técnica</a>
+      </p>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

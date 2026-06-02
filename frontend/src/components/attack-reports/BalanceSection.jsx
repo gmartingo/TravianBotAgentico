@@ -22,9 +22,12 @@
  *   lang — string (idioma activo)
  *   t    — función de traducción
  */
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, Fragment } from 'react'
+import { Calendar } from 'lucide-react'
 import { api } from '../../api/client.js'
 import { Spinner } from '../ui/uiUtils.jsx'
+import { ResIcon, GameIcon } from '../combat/TravianReport.jsx'
+import { RangeCalendarPopover } from '../ui/RangeCalendarPopover.jsx'
 
 // ── Validación de fecha (mismo patrón que HistoryFilters) ────────────────────
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
@@ -39,8 +42,11 @@ function toISO(val) {
   return val.trim().replace(' ', 'T')
 }
 
-// ── Input de fecha con validación en vivo ────────────────────────────────────
-function DateInput({ id, label, value, onChange, t }) {
+// ── Input de fecha con validación en vivo + calendario integrado ──────────────
+// Mismo patrón que HistoryFilters.DateFilterInput: el campo es el disparador del
+// popover (click en él o en el icono 📅 abre el calendario de rango); teclear sigue
+// funcionando (el popover no roba el foco; es un editor visual de este input).
+function DateInput({ id, label, value, onChange, onOpen, onToggle, calOpen, inputRef, t }) {
   const valid = isDateValid(value)
   const errorId = `${id}-err`
   return (
@@ -57,35 +63,77 @@ function DateInput({ id, label, value, onChange, t }) {
       >
         {label}
       </label>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={t('ar.balance.filter.placeholder')}
-        aria-invalid={!valid}
-        aria-describedby={!valid ? errorId : undefined}
-        style={{
-          height: '32px',
-          padding: '0 8px',
-          background: 'var(--surface)',
-          border: `1px solid ${!valid ? 'var(--danger)' : 'var(--border-strong)'}`,
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '13px',
-          color: 'var(--text)',
-          fontFamily: 'var(--font-mono)',
-          width: '155px',
-          boxSizing: 'border-box',
-          outline: 'none',
-          // inputs ≥ 16px en móvil (anti-zoom iOS)
-        }}
-        onFocus={(e) => {
-          if (valid) e.currentTarget.style.borderColor = 'var(--accent)'
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.borderColor = valid ? 'var(--border-strong)' : 'var(--danger)'
-        }}
-      />
+      <div style={{ position: 'relative' }}>
+        <input
+          id={id}
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onClick={onOpen}
+          placeholder={t('ar.balance.filter.placeholder')}
+          aria-invalid={!valid}
+          aria-describedby={!valid ? errorId : undefined}
+          style={{
+            height: '32px',
+            paddingBlock: '0',
+            paddingInlineStart: '8px',
+            paddingInlineEnd: '38px',
+            background: 'var(--surface)',
+            border: `1px solid ${!valid ? 'var(--danger)' : 'var(--border-strong)'}`,
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '13px',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-mono)',
+            width: '170px',
+            boxSizing: 'border-box',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+          onFocus={(e) => {
+            if (valid) e.currentTarget.style.borderColor = 'var(--accent)'
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = valid ? 'var(--border-strong)' : 'var(--danger)'
+          }}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
+          aria-haspopup="dialog"
+          aria-expanded={calOpen}
+          aria-label={t('ar.history.filter.cal.title')}
+          title={t('ar.history.filter.cal.title')}
+          style={{
+            position: 'absolute',
+            insetInlineEnd: '3px',
+            top: '3px',
+            bottom: '3px',
+            width: '28px',
+            display: 'grid',
+            placeItems: 'center',
+            background: calOpen ? 'var(--accent-subtle)' : 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            color: valid ? (calOpen ? 'var(--accent-text)' : 'var(--text-secondary)') : 'var(--danger)',
+            cursor: 'pointer',
+            transition: 'background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--accent-subtle)'
+            e.currentTarget.style.borderColor = 'var(--accent)'
+            e.currentTarget.style.color = 'var(--accent-text)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = calOpen ? 'var(--accent-subtle)' : 'var(--surface-2)'
+            e.currentTarget.style.borderColor = calOpen ? 'var(--accent)' : 'var(--border)'
+            e.currentTarget.style.color = valid ? (calOpen ? 'var(--accent-text)' : 'var(--text-secondary)') : 'var(--danger)'
+          }}
+        >
+          <Calendar size={17} aria-hidden="true" />
+        </button>
+      </div>
       {!valid && (
         <span
           id={errorId}
@@ -222,7 +270,8 @@ function fmtN(n, lang) {
 }
 
 // ── Grid de datos (Perdido / Robado) ─────────────────────────────────────────
-function BalanceGrid({ data, lang, t }) {
+// Exportado para reutilizar el mismo bloque en el detalle por-oasis (OasisStatsPanel).
+export function BalanceGrid({ data, lang, t }) {
   const { lost, stolen } = data
 
   // Robado total = bounty + hero_inventory
@@ -250,6 +299,8 @@ function BalanceGrid({ data, lang, t }) {
     fontVariantNumeric: 'tabular-nums',
     fontSize: '13px',
     textAlign: 'end',
+    padding: '5px 0',
+    borderBottom: '1px solid var(--border)',
   }
 
   const headerStyle = {
@@ -266,89 +317,69 @@ function BalanceGrid({ data, lang, t }) {
     fontSize: '13px',
     color: 'var(--text-secondary)',
     padding: '5px 0',
+    borderBottom: '1px solid var(--border)',
   }
 
-  const totalRowStyle = {
+  const totalCellStyle = {
     fontFamily: 'var(--font-mono)',
     fontVariantNumeric: 'tabular-nums',
     fontSize: '13px',
     fontWeight: 600,
     textAlign: 'end',
     borderTop: '1px solid var(--border)',
-    paddingTop: '6px',
-    marginTop: '4px',
+    paddingTop: '8px',
+    marginTop: '2px',
   }
 
   return (
     <div>
-      {/* Grid 3 columnas: Perdido | divisor | Robado */}
-      {/* En móvil colapsa a 1 columna */}
+      {/* Tabla comparativa: recurso | Perdido | Robado (una sola etiqueta por fila) */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, auto)',
-          gap: '0 16px',
-          alignItems: 'start',
+          gridTemplateColumns: 'auto 1fr 1fr',
+          columnGap: '20px',
+          alignItems: 'center',
         }}
       >
-        {/* Cabecera col 1: Perdido */}
-        <div style={{ ...headerStyle, textAlign: 'end' }}>
-          {t('ar.balance.col.lost')}
-        </div>
-        {/* Divisor */}
+        {/* Cabecera */}
         <div />
-        {/* Cabecera col 3: Robado */}
-        <div style={{ ...headerStyle, textAlign: 'end' }}>
-          {t('ar.balance.col.stolen')}
-        </div>
+        <div style={{ ...headerStyle, color: 'var(--danger)' }}>{t('ar.balance.col.lost')}</div>
+        <div style={{ ...headerStyle, color: 'var(--success)' }}>{t('ar.balance.col.stolen')}</div>
 
         {/* Filas de recursos */}
         {resources.map(({ key, label, lv, sv }) => (
-          <>
-            {/* Perdido */}
-            <div key={`lost-${key}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ ...labelStyle, padding: 0 }}>{label}</span>
-              <span
-                aria-label={`${label} ${t('ar.balance.col.lost').toLowerCase()}: ${fmtN(lv, lang)}`}
-                style={{ ...cellStyle }}
-              >
-                {fmtN(lv, lang)}
-              </span>
-            </div>
-            {/* Divisor vertical */}
-            <div key={`div-${key}`} style={{ borderLeft: '1px solid var(--border)', margin: '0 4px', padding: '4px 0', borderBottom: '1px solid var(--border)' }} />
-            {/* Robado */}
-            <div key={`stolen-${key}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ ...labelStyle, padding: 0 }}>{label}</span>
-              <span
-                aria-label={`${label} ${t('ar.balance.col.stolen').toLowerCase()}: ${fmtN(sv, lang)}`}
-                style={{ ...cellStyle }}
-              >
-                {fmtN(sv, lang)}
-              </span>
-            </div>
-          </>
+          <Fragment key={key}>
+            <span style={{ ...labelStyle, display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+              <ResIcon res={key} size={15} label={label} />
+              {label}
+            </span>
+            <span
+              aria-label={`${label} ${t('ar.balance.col.lost').toLowerCase()}: ${fmtN(lv, lang)}`}
+              style={cellStyle}
+            >
+              {fmtN(lv, lang)}
+            </span>
+            <span
+              aria-label={`${label} ${t('ar.balance.col.stolen').toLowerCase()}: ${fmtN(sv, lang)}`}
+              style={cellStyle}
+            >
+              {fmtN(sv, lang)}
+            </span>
+          </Fragment>
         ))}
 
         {/* Fila Total */}
-        <div style={{ ...totalRowStyle, display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'inherit' }}>
-            {t('ar.balance.row.total')}
-          </span>
-          <span style={{ color: lostTotal > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
-            {fmtN(lostTotal, lang)}
-          </span>
-        </div>
-        {/* Divisor total */}
-        <div style={{ borderLeft: '1px solid var(--border)', margin: '0 4px', borderTop: '1px solid var(--border)', paddingTop: '6px', marginTop: '4px' }} />
-        <div style={{ ...totalRowStyle, display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'inherit' }}>
-            {t('ar.balance.row.total')}
-          </span>
-          <span style={{ color: stolenTotal > 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
-            {fmtN(stolenTotal, lang)}
-          </span>
-        </div>
+        <span style={{ ...totalCellStyle, textAlign: 'start', fontSize: '12px', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+          <GameIcon name="stat_resources_sum" size={15} alt={t('ar.balance.row.total')} />
+          {t('ar.balance.row.total')}
+        </span>
+        <span style={{ ...totalCellStyle, color: lostTotal > 0 ? 'var(--danger)' : 'var(--text-secondary)' }}>
+          {fmtN(lostTotal, lang)}
+        </span>
+        <span style={{ ...totalCellStyle, color: stolenTotal > 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
+          {fmtN(stolenTotal, lang)}
+        </span>
       </div>
 
       {/* Fila de Neto — DA-CL03/04: mayor tamaño tipográfico, color semántico */}
@@ -394,6 +425,14 @@ export function BalanceSection({ lang, t }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+
+  // Calendario de rango (mismo popover que Historial)
+  const [calOpen, setCalOpen] = useState(false)
+  const fieldsWrapRef = useRef(null)
+  const fromInputRef = useRef(null)
+  const openCal = () => setCalOpen(true)
+  const toggleCal = () => setCalOpen((v) => !v)
+  const setRange = (f, tp) => { setFromDate(f); setToDate(tp) }
 
   const fromValid = isDateValid(fromDate)
   const toValid   = isDateValid(toDate)
@@ -510,22 +549,46 @@ export function BalanceSection({ lang, t }) {
             alignItems: 'flex-end',
           }}
         >
-          {/* Desde */}
-          <DateInput
-            id="balance-from"
-            label={t('ar.balance.filter.from')}
-            value={fromDate}
-            onChange={setFromDate}
-            t={t}
-          />
-          {/* Hasta */}
-          <DateInput
-            id="balance-to"
-            label={t('ar.balance.filter.to')}
-            value={toDate}
-            onChange={setToDate}
-            t={t}
-          />
+          {/* Desde / Hasta + popover de calendario anclado al grupo */}
+          <div
+            ref={fieldsWrapRef}
+            style={{ position: 'relative', display: 'flex', gap: '10px', alignItems: 'flex-end' }}
+          >
+            <DateInput
+              id="balance-from"
+              label={t('ar.balance.filter.from')}
+              value={fromDate}
+              onChange={setFromDate}
+              onOpen={openCal}
+              onToggle={toggleCal}
+              calOpen={calOpen}
+              inputRef={fromInputRef}
+              t={t}
+            />
+            <DateInput
+              id="balance-to"
+              label={t('ar.balance.filter.to')}
+              value={toDate}
+              onChange={setToDate}
+              onOpen={openCal}
+              onToggle={toggleCal}
+              calOpen={calOpen}
+              t={t}
+            />
+            {calOpen && (
+              <RangeCalendarPopover
+                fromText={fromDate}
+                toText={toDate}
+                onChange={setRange}
+                onApply={handleApply}
+                onClose={() => setCalOpen(false)}
+                t={t}
+                lang={lang}
+                triggerRef={fieldsWrapRef}
+                focusReturnRef={fromInputRef}
+              />
+            )}
+          </div>
           {/* Botones */}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
             <button
