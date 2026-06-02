@@ -32,6 +32,8 @@
 | [`backend/referencia-funciones/translation-port.md`](backend/referencia-funciones/translation-port.md) | Métodos del puerto `TranslationPort` y su implementación `JsonTranslationAdapter` |
 | [`backend/referencia-funciones/api-i18n-helpers.md`](backend/referencia-funciones/api-i18n-helpers.md) | Helpers del exception handler y dependencias de la API (`_mask_frame_locals`, `_build_trace`, `_extract_lang`, `get_language`, `get_translation_port`) |
 | [`backend/referencia-funciones/sesion.md`](backend/referencia-funciones/sesion.md) | Referencia rápida de `SessionRegistry`, `LoginUseCase`, `LogoutUseCase`, `get_account_password_cipher`, `get_world_runtime_port` y `LoginFailedError` |
+| [`backend/referencia-funciones/attack-report-temporal-distribution.md`](backend/referencia-funciones/attack-report-temporal-distribution.md) | `get_animal_temporal_distribution` — port, adapter (LAG+bucketizado+moda), endpoint EP-TD, cliente JS |
+| [`backend/referencia-funciones/oasis-spawn-composition.md`](backend/referencia-funciones/oasis-spawn-composition.md) | Feature oasis-spawn-mechanics: catálogo de spawn (`SPAWN_TIMER_S`, `OASIS_TYPE_SETS`, `COOLDOWN_THRESHOLD_S`), `get_oasis_spawn_composition`, helpers `_infer_type` (Jaccard), `_spawn_status`, `_worst_case_count`, `_extract_player_village_from_blob`, `_infer_attackers`, frontend `SpawnMechanicsPanel` y `OasisCombatPlannerPanel` |
 
 ---
 
@@ -60,6 +62,7 @@
 | [`funcionalidades/cuentas-mundos.md`](funcionalidades/cuentas-mundos.md) | Registro y gestión de cuentas y mundos + sesión del bot de extremo a extremo (negocio: reglas, flujos, restricciones) |
 | [`funcionalidades/sesion.md`](funcionalidades/sesion.md) | Sesión del bot: login/logout/estado, seguridad de credenciales, nota de operación sobre `TRAVIAN_BOT_SECRET_KEY` |
 | [`funcionalidades/farm-lists.md`](funcionalidades/farm-lists.md) | Farm lists y farm stats: qué son las listas de vacas, problema que resuelve el bot, actores, opciones configurables (schedulers), 16 reglas de negocio (RN-01 a RN-16), seguimiento de botín, estados de vaca, límites conocidos |
+| [`funcionalidades/oasis-spawn-mechanics.md`](funcionalidades/oasis-spawn-mechanics.md) | Mecánica de spawn de oasis: objetivo de negocio, mecánica real del juego (timers fijos, sets, cooldown), las 4 piezas (panel educativo, composición típica, peor combinación, estado cooldown/respawn), reglas de negocio, cómo leer el panel, deuda técnica conocida |
 
 ---
 
@@ -71,6 +74,7 @@
 | [`api/cuentas-mundos.md`](api/cuentas-mundos.md) | `POST/GET/PUT/DELETE /accounts`, `POST/GET/DELETE /accounts/{id}/worlds` — CRUD de cuentas y mundos |
 | [`api/sesion.md`](api/sesion.md) | `POST`, `DELETE`, `GET /accounts/{id}/worlds/{id}/session` — login, logout y estado de sesión del bot |
 | [`api/human-sessions.md`](api/human-sessions.md) | `GET/PUT /worlds/{id}/session/...` — timeline horario, override de modo y cancelación de override (Human Sessions) |
+| `docs/api/openapi.yaml` + `docs/api/API.md` | Contrato completo de la API (attack-reports EP-01..EP-TD, farm, catalog, noise, etc.) — fuente de verdad de máquina |
 
 ---
 
@@ -89,4 +93,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-05-31 (añadido api/human-sessions.md — endpoints Human Sessions incluyendo nuevo DELETE /worlds/{id}/session/override)
+🔖 Última revisión: 2026-06-02 (añadido referencia-funciones/oasis-spawn-composition.md — EP-SPAWN con catálogo de spawn, inferencia Jaccard, peor combinación, cooldown/respawn, atribución player/village; añadido funcionalidades/oasis-spawn-mechanics.md — documento de negocio de la mecánica de spawn)
