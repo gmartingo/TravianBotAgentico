@@ -54,43 +54,12 @@ function formatCoordsDisplay(x, y) {
   return `(${cx}|${cy})`
 }
 
-function formatBounty(n, lang) {
-  if (n == null) return '—'
-  return new Intl.NumberFormat(lang).format(Math.round(n))
-}
-
 // Formatea la fecha verbatim del último ataque (hora Travian, sin zona)
 function formatLastAttack(isoStr) {
   return formatDateVerbatim(isoStr)
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-
-function SkeletonRows() {
-  return (
-    <>
-      {[80, 70, 90].map((w, i) => (
-        <tr key={i} aria-hidden="true" style={{ borderBottom: '1px solid var(--border)' }}>
-          <td style={{ padding: '10px 12px' }}>
-            <div style={{ height: '12px', background: 'var(--surface-2)', borderRadius: '4px', width: `${w}px`, animation: 'shimmer 1.4s infinite', backgroundImage: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%' }} />
-          </td>
-          <td style={{ padding: '10px 12px' }}>
-            <div style={{ height: '12px', background: 'var(--surface-2)', borderRadius: '4px', width: '30px', animation: 'shimmer 1.4s infinite', backgroundImage: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%' }} />
-          </td>
-          <td style={{ padding: '10px 12px' }}>
-            <div style={{ height: '12px', background: 'var(--surface-2)', borderRadius: '4px', width: '120px', animation: 'shimmer 1.4s infinite', backgroundImage: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%' }} />
-          </td>
-          <td className="hidden md:table-cell" style={{ padding: '10px 12px' }}>
-            <div style={{ height: '12px', background: 'var(--surface-2)', borderRadius: '4px', width: '60px', animation: 'shimmer 1.4s infinite', backgroundImage: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%' }} />
-          </td>
-          <td style={{ padding: '10px 12px', width: '32px' }} />
-        </tr>
-      ))}
-    </>
-  )
-}
-
-// ── Tarjeta móvil para una fila ───────────────────────────────────────────────
+// ── Tarjeta de un oasis (una por coordenada, todos los tamaños) ───────────────
 
 function OasisCard({ item, isSelected, onToggle, lang, t }) {
   const coordStr = formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)
@@ -304,15 +273,24 @@ export function OasisList({ lang, onGoToIngest, t }) {
             <FilterField label="y" value="" onChange={() => {}} disabled />
           </div>
         </fieldset>
-        <div style={{ overflowX: 'auto' }}>
-          <table role="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <OasisTableHead t={t} />
-            </thead>
-            <tbody>
-              <SkeletonRows />
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              aria-hidden="true"
+              style={{
+                height: '64px',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface)',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 12px',
+              }}
+            >
+              <div style={{ height: '14px', width: `${90 - i * 12}px`, borderRadius: '4px', backgroundImage: 'linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite' }} />
+            </div>
+          ))}
         </div>
         <style>{skeletonStyles}</style>
       </div>
@@ -537,262 +515,62 @@ export function OasisList({ lang, onGoToIngest, t }) {
         </div>
       )}
 
-      {/* ── Tabla (md+) ───────────────────────────────────────────────────── */}
+      {/* ── Tarjetas (una por coordenada, en todos los tamaños) ──────────── */}
       {filteredItems.length > 0 && (
-        <>
-          <div className="hidden md:block" style={{ overflowX: 'auto' }}>
-            <table
-              role="table"
-              style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}
-            >
-              <thead>
-                <OasisTableHead t={t} />
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => {
-                  const key = oasisKey(item)
-                  const isSel = selectedKey === key
-                  const det = detailData[key] ?? {}
-                  const coordStr = formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)
-                  const dateStr  = formatLastAttack(item.last_attack)
-                  const detailId = `oasis-detail-${item.coord_x_dest}-${item.coord_y_dest}`
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {filteredItems.map((item) => {
+            const key = oasisKey(item)
+            const isSel = selectedKey === key
+            const det = detailData[key] ?? {}
+            const detailId = `oasis-detail-${item.coord_x_dest}-${item.coord_y_dest}`
 
-                  return (
-                    <>
-                      {/* Fila de oasis */}
-                      <tr
-                        key={key}
-                        role="row"
-                        ref={isSel ? selectedRowRef : null}
-                        tabIndex={0}
-                        aria-expanded={isSel}
-                        aria-controls={detailId}
-                        onClick={() => handleRowToggle(item)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            handleRowToggle(item)
-                          }
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          outline: 'none',
-                          transition: 'background var(--dur-fast)',
-                        }}
-                        onFocus={(e) => { e.currentTarget.style.outline = '2px solid var(--accent)'; e.currentTarget.style.outlineOffset = '-2px' }}
-                        onBlur={(e) => { e.currentTarget.style.outline = 'none' }}
-                        onMouseEnter={(e) => { if (!isSel) Array.from(e.currentTarget.cells).forEach((c) => { c.style.background = 'var(--surface-2)' }) }}
-                        onMouseLeave={(e) => { if (!isSel) Array.from(e.currentTarget.cells).forEach((c) => { c.style.background = '' }) }}
-                      >
-                        {/* Coords */}
-                        <td style={{
-                          padding: '10px 12px',
-                          borderBottom: isSel ? 'none' : '1px solid var(--border)',
-                          background: isSel ? 'var(--accent-subtle)' : '',
-                          borderInlineStart: isSel ? '2px solid var(--accent)' : '2px solid transparent',
-                          paddingInlineStart: isSel ? '10px' : '10px',
-                          transition: 'background var(--dur-fast)',
-                        }}>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500, color: 'var(--text)' }}>
-                            {coordStr}
-                          </span>
-                        </td>
-                        {/* Ataques */}
-                        <td style={{
-                          padding: '10px 12px',
-                          textAlign: 'end',
-                          fontFamily: 'var(--font-mono)',
-                          fontVariantNumeric: 'tabular-nums',
-                          color: 'var(--text-secondary)',
-                          borderBottom: isSel ? 'none' : '1px solid var(--border)',
-                          background: isSel ? 'var(--accent-subtle)' : '',
-                          transition: 'background var(--dur-fast)',
-                        }}>
-                          {item.attack_count}
-                        </td>
-                        {/* Último ataque */}
-                        <td style={{
-                          padding: '10px 12px',
-                          color: 'var(--text-secondary)',
-                          borderBottom: isSel ? 'none' : '1px solid var(--border)',
-                          background: isSel ? 'var(--accent-subtle)' : '',
-                          transition: 'background var(--dur-fast)',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {dateStr}
-                        </td>
-                        {/* Botín total (P2 — oculto en móvil) */}
-                        <td className="hidden md:table-cell" style={{
-                          padding: '10px 12px',
-                          textAlign: 'end',
-                          fontFamily: 'var(--font-mono)',
-                          fontVariantNumeric: 'tabular-nums',
-                          color: 'var(--text-secondary)',
-                          borderBottom: isSel ? 'none' : '1px solid var(--border)',
-                          background: isSel ? 'var(--accent-subtle)' : '',
-                          transition: 'background var(--dur-fast)',
-                        }}>
-                          {formatBounty(item.total_bounty, lang)}
-                        </td>
-                        {/* Chevron */}
-                        <td style={{
-                          padding: '10px 12px',
-                          width: '32px',
-                          textAlign: 'end',
-                          borderBottom: isSel ? 'none' : '1px solid var(--border)',
-                          background: isSel ? 'var(--accent-subtle)' : '',
-                          transition: 'background var(--dur-fast)',
-                        }}>
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '20px',
-                              height: '20px',
-                              color: isSel ? 'var(--accent-text)' : 'var(--text-tertiary)',
-                              fontSize: '12px',
-                              transform: isSel ? 'rotate(0deg)' : 'rotate(-90deg)',
-                              transition: 'transform var(--dur-fast), color var(--dur-fast)',
-                            }}
-                          >
-                            ▼
-                          </span>
-                        </td>
-                      </tr>
-
-                      {/* Fila de detalle expandido */}
-                      {isSel && (
-                        <tr key={`${key}-detail`} role="row">
-                          <td
-                            id={detailId}
-                            colSpan={5}
-                            role="region"
-                            aria-label={`${t('ar.stats.detail.region')} ${formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)}`}
-                            style={{
-                              padding: 0,
-                              borderBottom: '1px solid var(--border)',
-                            }}
-                          >
-                            <div
-                              style={{
-                                padding: '20px',
-                                background: 'var(--surface-2)',
-                                borderTop: '1px solid var(--border)',
-                              }}
-                            >
-                              {det.loading && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-tertiary)', fontSize: '13px' }}>
-                                  <Spinner size={16} />
-                                  {t('ar.stats.detail.loading')}
-                                </div>
-                              )}
-                              {det.error && (
-                                <div
-                                  role="alert"
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '12px 14px',
-                                    background: 'var(--danger-subtle, rgba(201,53,44,.08))',
-                                    border: '1px solid var(--danger)',
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontSize: '13px',
-                                  }}
-                                >
-                                  <span style={{ color: 'var(--danger)', fontWeight: 700, flexShrink: 0 }}>✕</span>
-                                  <span style={{ flex: 1 }}>{det.error}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRetryDetail(item)}
-                                    style={{
-                                      background: 'var(--btn-primary-bg)',
-                                      color: 'var(--btn-primary-text)',
-                                      border: 'none',
-                                      borderRadius: 'var(--radius-sm)',
-                                      padding: '4px 10px',
-                                      fontSize: '12px',
-                                      cursor: 'pointer',
-                                      fontFamily: 'inherit',
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    {t('ar.stats.detail.retry')}
-                                  </button>
-                                </div>
-                              )}
-                              {det.data && !det.loading && (
-                                <OasisStatsPanel data={det.data} lang={lang} />
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Tarjetas (< md) ──────────────────────────────────────────── */}
-          <div className="md:hidden" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {filteredItems.map((item) => {
-              const key = oasisKey(item)
-              const isSel = selectedKey === key
-              const det = detailData[key] ?? {}
-              const detailId = `oasis-detail-mobile-${item.coord_x_dest}-${item.coord_y_dest}`
-
-              return (
-                <div key={key}>
-                  <OasisCard
-                    item={item}
-                    isSelected={isSel}
-                    onToggle={() => handleRowToggle(item)}
-                    lang={lang}
-                    t={t}
-                  />
-                  {/* Panel expandido en tarjeta */}
-                  {isSel && (
-                    <div
-                      id={detailId}
-                      role="region"
-                      aria-label={`${t('ar.stats.detail.region')} ${formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)}`}
-                      style={{
-                        padding: '16px',
-                        background: 'var(--surface-2)',
-                        border: '1px solid var(--border)',
-                        borderTop: 'none',
-                        borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
-                      }}
-                    >
-                      {det.loading && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-tertiary)', fontSize: '13px' }}>
-                          <Spinner size={16} />
-                          {t('ar.stats.detail.loading')}
-                        </div>
-                      )}
-                      {det.error && (
-                        <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                          <span style={{ color: 'var(--danger)', fontWeight: 700 }}>✕</span>
-                          <span style={{ flex: 1 }}>{det.error}</span>
-                          <button type="button" onClick={() => handleRetryDetail(item)} style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                            {t('ar.stats.detail.retry')}
-                          </button>
-                        </div>
-                      )}
-                      {det.data && !det.loading && (
-                        <OasisStatsPanel data={det.data} lang={lang} />
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
+            return (
+              <div key={key}>
+                <OasisCard
+                  item={item}
+                  isSelected={isSel}
+                  onToggle={() => handleRowToggle(item)}
+                  lang={lang}
+                  t={t}
+                />
+                {/* Panel expandido: detalle agregado del oasis */}
+                {isSel && (
+                  <div
+                    id={detailId}
+                    role="region"
+                    aria-label={`${t('ar.stats.detail.region')} ${formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)}`}
+                    style={{
+                      padding: '16px',
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--border)',
+                      borderTop: 'none',
+                      borderRadius: '0 0 var(--radius-sm) var(--radius-sm)',
+                    }}
+                  >
+                    {det.loading && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+                        <Spinner size={16} />
+                        {t('ar.stats.detail.loading')}
+                      </div>
+                    )}
+                    {det.error && (
+                      <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                        <span style={{ color: 'var(--danger)', fontWeight: 700 }}>✕</span>
+                        <span style={{ flex: 1 }}>{det.error}</span>
+                        <button type="button" onClick={() => handleRetryDetail(item)} style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {t('ar.stats.detail.retry')}
+                        </button>
+                      </div>
+                    )}
+                    {det.data && !det.loading && (
+                      <OasisStatsPanel data={det.data} lang={lang} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       <style>{`
@@ -847,30 +625,6 @@ function FilterField({ label, value, onChange, onKeyDown, disabled, active }) {
         onBlur={(e) => { e.currentTarget.style.borderColor = active ? 'var(--accent)' : 'var(--border-strong)'; e.currentTarget.style.outline = 'none' }}
       />
     </div>
-  )
-}
-
-function OasisTableHead({ t }) {
-  const thStyle = (align = 'start') => ({
-    padding: '7px 12px',
-    textAlign: align,
-    fontSize: '11px',
-    color: 'var(--text-tertiary)',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    whiteSpace: 'nowrap',
-    background: 'var(--surface-2)',
-    borderBottom: '1px solid var(--border)',
-  })
-  return (
-    <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-      <th scope="col" style={thStyle('start')}>{t('ar.stats.list.col.oasis')}</th>
-      <th scope="col" style={thStyle('end')}>{t('ar.stats.list.col.attacks')}</th>
-      <th scope="col" style={thStyle('start')}>{t('ar.stats.list.col.lastAttack')}</th>
-      <th scope="col" className="hidden md:table-cell" style={thStyle('end')}>{t('ar.stats.list.col.bounty')}</th>
-      <th scope="col" style={{ ...thStyle('end'), width: '32px' }}></th>
-    </tr>
   )
 }
 
