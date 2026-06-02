@@ -51,6 +51,7 @@
 |---|---|
 | [`manual-usuario/index.html`](manual-usuario/index.html) | **Manual de usuario (HTML con capturas reales)** — landing con selector de idioma. Disponible en **español** (`manual-usuario/es/`) e **inglés** (`manual-usuario/en/`), cada uno con sus capturas en su idioma (estructura preparada para los 25 idiomas). Cubre: pantalla de Cuentas, crear cuenta (asistente), detalle y mundos, añadir mundo, arrancar sesión, editar/borrar, idioma y tema. Ábrelo en el navegador. |
 | [`manual-usuario/farm-lists.html`](manual-usuario/farm-lists.html) | **Manual de listas de vacas (HTML con capturas reales)** — cubre: acceso a la sección Farm Lists desde el mundo, tabla de listas con columnas, drawer Slots (chips de estado + tabla de vacas + acordeón de historial por vaca), drawer Stats (distribución + ranking), drawer Historial (paginado), envío manual, estados de vaca y sus insignias, menú de acciones (activar/desactivar/sonda), gestión de schedulers, y sincronización desde Travian. Capturas reales del 2026-05-28. |
+| [`manual-usuario/oasis-spawn.html`](manual-usuario/oasis-spawn.html) | **Manual de estadísticas de spawn de oasis (HTML con capturas reales)** — cubre: vista general de la pestaña Estadísticas, panel Leyenda/Mecánica (timers por animal, sets por tipo de oasis), Balance de operaciones, Planificador de combate (selector de intervalo 6/7/10/15 min, jerarquía Jugador→Aldea→Oasis, filas Media y Peor, tipo inferido + confianza, estados Cooldown/Repoblando/Desconocido, anomalías), Estadísticas globales, Lista de oasis, y modo oscuro. 11 capturas reales del 2026-06-02 (138 oasis; jugadores GonnaDie, CrazyMouse, SharpHorseman). |
 
 ---
 
@@ -93,4 +94,4 @@
 - Al añadir módulo, feature o endpoint: enlazarlo desde este README.
 - Al detectar divergencia código/spec: documentarla en el documento afectado bajo el encabezado **Divergencias código/spec**.
 
-🔖 Última revisión: 2026-06-02 (añadido referencia-funciones/oasis-spawn-composition.md — EP-SPAWN con catálogo de spawn, inferencia Jaccard, peor combinación, cooldown/respawn, atribución player/village; añadido funcionalidades/oasis-spawn-mechanics.md — documento de negocio de la mecánica de spawn)
+🔖 Última revisión: 2026-06-02 (añadido referencia-funciones/oasis-spawn-composition.md — EP-SPAWN con catálogo de spawn, inferencia Jaccard, peor combinación, cooldown/respawn, atribución player/village; añadido funcionalidades/oasis-spawn-mechanics.md — documento de negocio de la mecánica de spawn; añadido manual-usuario/oasis-spawn.html — manual de usuario con 11 capturas reales de la pestaña Estadísticas de spawn)
