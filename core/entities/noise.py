@@ -99,9 +99,12 @@ class NoiseDestination:
     last_used_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        if self.frequency_weight <= 0:
+        # RN-FW07 (GUARDIAN — NO NEGOCIABLE): rango cerrado [0.1, 5.0].
+        # Un peso fuera de este rango convierte el pathing en predecible y detectable.
+        if not (0.1 <= self.frequency_weight <= 5.0):
             raise ValueError(
-                f"frequency_weight debe ser > 0 (recibido: {self.frequency_weight})"
+                "navigation_weight debe estar entre 0.1 y 5.0 "
+                "(anti-detección: pesos extremos hacen el ruido predecible)"
             )
         if not self.url_pattern.strip():
             raise ValueError("url_pattern no puede estar vacío")
@@ -187,33 +190,45 @@ class NoiseConfig:
     """
     Configuración de ruido por mundo.
 
-    Valores por defecto:
+    Valores por defecto (v2 — intervalo directo en segundos):
       - noise_enabled = True
-      - HARDCORE: 80-150 req/h
-      - PASIVO:   15-40  req/h
-      - dwell:    2-30 s
+      - HARDCORE: intervalo 30–90 s entre navegaciones
+      - PASIVO:   intervalo 180–1200 s entre navegaciones
+      - dwell:    2–30 s
+
+    Spec noise-frequency-and-destination-weight.md §7.1 (reemplaza req_per_hour).
     """
     world_id: int
     noise_enabled: bool = True
-    hardcore_total_req_per_hour_min: int = 80
-    hardcore_total_req_per_hour_max: int = 150
-    passive_total_req_per_hour_min: int = 15
-    passive_total_req_per_hour_max: int = 40
+    hardcore_interval_min_seconds: int = 30       # antes: hardcore_total_req_per_hour_min=80
+    hardcore_interval_max_seconds: int = 90       # antes: hardcore_total_req_per_hour_max=150
+    passive_interval_min_seconds: int = 180       # antes: passive_total_req_per_hour_min=15
+    passive_interval_max_seconds: int = 1200      # antes: passive_total_req_per_hour_max=40
     dwell_min_seconds: float = 2.0
     dwell_max_seconds: float = 30.0
 
     def __post_init__(self) -> None:
-        if self.hardcore_total_req_per_hour_min <= 0:
-            raise ValueError("hardcore_total_req_per_hour_min debe ser > 0")
-        if self.hardcore_total_req_per_hour_max < self.hardcore_total_req_per_hour_min:
+        # RN-FW02 (GUARDIAN — NO NEGOCIABLE): mínimo 30 s para cualquier intervalo.
+        # Piso blindado en la entidad (fuente de verdad del core), no solo en la API.
+        _MIN_INTERVAL = 30
+        for attr, val in [
+            ("hardcore_interval_min_seconds", self.hardcore_interval_min_seconds),
+            ("hardcore_interval_max_seconds", self.hardcore_interval_max_seconds),
+            ("passive_interval_min_seconds",  self.passive_interval_min_seconds),
+            ("passive_interval_max_seconds",  self.passive_interval_max_seconds),
+        ]:
+            if val < _MIN_INTERVAL:
+                raise ValueError(
+                    f"El intervalo mínimo es 30 segundos (00:30) — anti-detección "
+                    f"({attr} recibido: {val})"
+                )
+        if self.hardcore_interval_max_seconds < self.hardcore_interval_min_seconds:
             raise ValueError(
-                "hardcore_total_req_per_hour_max debe ser >= hardcore_total_req_per_hour_min"
+                "hardcore_interval_max_seconds debe ser >= hardcore_interval_min_seconds"
             )
-        if self.passive_total_req_per_hour_min <= 0:
-            raise ValueError("passive_total_req_per_hour_min debe ser > 0")
-        if self.passive_total_req_per_hour_max < self.passive_total_req_per_hour_min:
+        if self.passive_interval_max_seconds < self.passive_interval_min_seconds:
             raise ValueError(
-                "passive_total_req_per_hour_max debe ser >= passive_total_req_per_hour_min"
+                "passive_interval_max_seconds debe ser >= passive_interval_min_seconds"
             )
         if self.dwell_min_seconds < 0:
             raise ValueError("dwell_min_seconds debe ser >= 0")

@@ -67,7 +67,7 @@ def _setup_world(c: TestClient, server: str = "https://ts1.travian.es/") -> tupl
 # ---------------------------------------------------------------------------
 
 def test_EP_N01_get_config_defaults(client):
-    """Devuelve defaults si el mundo no tiene configuración previa."""
+    """Devuelve defaults v2 (campos interval) si el mundo no tiene configuración previa."""
     c = client
     _, world_id = _setup_world(c)
 
@@ -76,12 +76,16 @@ def test_EP_N01_get_config_defaults(client):
 
     data = r.json()
     assert data["noise_enabled"] is True
-    assert data["hardcore_total_req_per_hour_min"] == 80
-    assert data["hardcore_total_req_per_hour_max"] == 150
-    assert data["passive_total_req_per_hour_min"] == 15
-    assert data["passive_total_req_per_hour_max"] == 40
+    # Campos v2 — spec noise-frequency-and-destination-weight.md §8.1
+    assert data["hardcore_interval_min_seconds"] == 30
+    assert data["hardcore_interval_max_seconds"] == 90
+    assert data["passive_interval_min_seconds"] == 180
+    assert data["passive_interval_max_seconds"] == 1200
     assert data["dwell_min_seconds"] == 2.0
     assert data["dwell_max_seconds"] == 30.0
+    # Campos deprecated NO deben aparecer en el contrato
+    assert "hardcore_total_req_per_hour_min" not in data
+    assert "passive_total_req_per_hour_min" not in data
 
     # Cache-Control: no-store
     assert "no-store" in r.headers.get("cache-control", "")
@@ -111,7 +115,19 @@ def test_EP_N02_patch_config_partial(client):
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["noise_enabled"] is False
-    assert data["hardcore_total_req_per_hour_min"] == 80  # conservado
+    assert data["hardcore_interval_min_seconds"] == 30  # conservado (default)
+
+    # Solo actualizar intervalo HARDCORE
+    r = c.put(
+        f"/worlds/{world_id}/noise/config",
+        json={"hardcore_interval_min_seconds": 300, "hardcore_interval_max_seconds": 440},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["hardcore_interval_min_seconds"] == 300
+    assert data["hardcore_interval_max_seconds"] == 440
+    assert data["noise_enabled"] is False  # conservado del PATCH anterior
+    assert data["passive_interval_min_seconds"] == 180  # conservado
 
     # Solo actualizar dwell
     r = c.put(
@@ -122,7 +138,7 @@ def test_EP_N02_patch_config_partial(client):
     data = r.json()
     assert data["dwell_min_seconds"] == 5.0
     assert data["dwell_max_seconds"] == 60.0
-    assert data["noise_enabled"] is False  # conservado del PATCH anterior
+    assert data["hardcore_interval_min_seconds"] == 300  # conservado del PATCH anterior
 
 
 def test_EP_N02_no_fields_returns_422(client):
@@ -170,7 +186,7 @@ def test_EP_N03_list_respects_filters(client):
             "url_pattern": "/karte.php",
             "label": "Mapa",
             "category": "MAP",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
             "is_safe": True,
         },
     )
@@ -190,7 +206,7 @@ def test_EP_N03_list_respects_filters(client):
             "url_pattern": "/nachrichten.php",
             "label": "Mensajes",
             "category": "MESSAGES",
-            "frequency_weight": 2.0,
+            "navigation_weight": 2.0,
         },
     )
     assert r2.status_code == 201
@@ -218,7 +234,7 @@ def test_EP_N04_create_destination_ok(client):
             "url_pattern": "/karte.php",
             "label": "Mapa mundial",
             "category": "MAP",
-            "frequency_weight": 2.5,
+            "navigation_weight": 2.5,
             "is_safe": True,
         },
     )
@@ -226,7 +242,7 @@ def test_EP_N04_create_destination_ok(client):
     data = r.json()
     assert data["url_pattern"] == "/karte.php"
     assert data["category"] == "MAP"
-    assert data["frequency_weight"] == 2.5
+    assert data["navigation_weight"] == 2.5
     assert data["is_dead"] is False
     assert data["consecutive_failures_count"] == 0
 
@@ -242,7 +258,7 @@ def test_EP_N04_invalid_url_javascript_scheme_422(client):
             "url_pattern": "javascript:alert(1)",
             "label": "XSS",
             "category": "OTHER",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
         },
     )
     assert r.status_code == 422, r.text
@@ -259,7 +275,7 @@ def test_EP_N04_invalid_url_protocol_relative_422(client):
             "url_pattern": "//evil.com/steal",
             "label": "Ataque",
             "category": "OTHER",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
         },
     )
     assert r.status_code == 422, r.text
@@ -276,7 +292,7 @@ def test_EP_N04_invalid_url_relative_no_slash_422(client):
             "url_pattern": "karte.php",
             "label": "Sin slash",
             "category": "MAP",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
         },
     )
     assert r.status_code == 422, r.text
@@ -293,7 +309,7 @@ def test_EP_N04_invalid_url_external_domain_422(client):
             "url_pattern": "https://google.com/attack",
             "label": "Externo",
             "category": "OTHER",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
         },
     )
     assert r.status_code == 422, r.text
@@ -308,7 +324,7 @@ def test_EP_N04_duplicate_url_pattern_422(client):
         "url_pattern": "/karte.php",
         "label": "Mapa",
         "category": "MAP",
-        "frequency_weight": 1.0,
+        "navigation_weight": 1.0,
     }
     r = c.post(f"/worlds/{world_id}/noise/destinations", json=body)
     assert r.status_code == 201
@@ -332,7 +348,7 @@ def test_EP_N05_patch_destination_partial(client):
             "url_pattern": "/karte.php",
             "label": "Mapa original",
             "category": "MAP",
-            "frequency_weight": 1.0,
+            "navigation_weight": 1.0,
         },
     )
     assert r.status_code == 201
@@ -346,7 +362,7 @@ def test_EP_N05_patch_destination_partial(client):
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["label"] == "Mapa actualizado"
-    assert data["frequency_weight"] == 1.0  # conservado
+    assert data["navigation_weight"] == 1.0  # conservado
     assert data["category"] == "MAP"        # conservado (inmutable)
 
 
@@ -368,7 +384,7 @@ def test_EP_N05_cross_world_404(client):
     # Crear destino en world_id_1
     r = c.post(
         f"/worlds/{world_id_1}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
     )
     assert r.status_code == 201
     dest_id = r.json()["id"]
@@ -392,7 +408,7 @@ def test_EP_N06_delete_destination(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -415,7 +431,7 @@ def test_EP_N07_list_paths_empty(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -441,7 +457,7 @@ def test_EP_N07_cross_world_404(client):
 
     r = c.post(
         f"/worlds/{world_id_1}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -460,7 +476,7 @@ def test_EP_N08_create_path_ok(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -502,7 +518,7 @@ def test_EP_N08_empty_steps_422(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -521,7 +537,7 @@ def _create_dest_and_path(c: TestClient, world_id: int) -> tuple[int, int]:
     """Crea destino + ruta para tests de EP-N09/N10."""
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "frequency_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 

@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS noise_destinations (
                                           'MAP','OASIS_INFO','PLAYER_PROFILE',
                                           'MESSAGES','REPORTS','BUILDING_VIEW','OTHER'
                                       )),
-    frequency_weight          REAL    NOT NULL DEFAULT 1.0 CHECK (frequency_weight > 0),
+    frequency_weight          REAL    NOT NULL DEFAULT 1.0
+                                      CHECK (frequency_weight >= 0.1 AND frequency_weight <= 5.0),
     is_safe                   INTEGER NOT NULL DEFAULT 1,
     is_dead                   INTEGER NOT NULL DEFAULT 0,
     consecutive_failures_count INTEGER NOT NULL DEFAULT 0,
@@ -121,12 +122,16 @@ CREATE TABLE IF NOT EXISTS world_noise_config (
     world_id                         INTEGER PRIMARY KEY
                                              REFERENCES worlds(id) ON DELETE CASCADE,
     noise_enabled                    INTEGER NOT NULL DEFAULT 1,
-    hardcore_total_req_per_hour_min  INTEGER NOT NULL DEFAULT 80,
-    hardcore_total_req_per_hour_max  INTEGER NOT NULL DEFAULT 150,
-    passive_total_req_per_hour_min   INTEGER NOT NULL DEFAULT 15,
-    passive_total_req_per_hour_max   INTEGER NOT NULL DEFAULT 40,
+    hardcore_total_req_per_hour_min  INTEGER NOT NULL DEFAULT 80,   -- deprecated: ver hardcore_interval_min_seconds
+    hardcore_total_req_per_hour_max  INTEGER NOT NULL DEFAULT 150,  -- deprecated: ver hardcore_interval_max_seconds
+    passive_total_req_per_hour_min   INTEGER NOT NULL DEFAULT 15,   -- deprecated: ver passive_interval_min_seconds
+    passive_total_req_per_hour_max   INTEGER NOT NULL DEFAULT 40,   -- deprecated: ver passive_interval_max_seconds
     dwell_min_seconds                REAL    NOT NULL DEFAULT 2.0,
-    dwell_max_seconds                REAL    NOT NULL DEFAULT 30.0
+    dwell_max_seconds                REAL    NOT NULL DEFAULT 30.0,
+    hardcore_interval_min_seconds    INTEGER DEFAULT NULL,
+    hardcore_interval_max_seconds    INTEGER DEFAULT NULL,
+    passive_interval_min_seconds     INTEGER DEFAULT NULL,
+    passive_interval_max_seconds     INTEGER DEFAULT NULL
 );
 """
 
@@ -268,6 +273,132 @@ async def _migrate_noise_steps_add_expected_url(
         logger.info("NoiseSQLiteAdapter: migración M-NP02 completada (expected_url_after_click añadida)")
     except aiosqlite.OperationalError:
         pass  # columna ya existe — migración ya corrió antes
+
+
+async def _migrate_noise_config_add_interval_fields(
+    conn: aiosqlite.Connection,
+) -> None:
+    """
+    Migración M-FW01: añadir cuatro columnas de intervalo (en segundos) a world_noise_config.
+
+    Los campos *_req_per_hour_* se conservan como deprecated para compatibilidad hacia atrás.
+    Los nuevos campos se añaden con DEFAULT NULL; la migración lazy en get_or_create_noise_config
+    los inicializa con los defaults de NoiseConfig si son NULL.
+
+    Idempotente: ALTER TABLE falla silenciosamente si la columna ya existe.
+
+    Spec noise-frequency-and-destination-weight.md §7.2, §14 Paso 1.
+    """
+    for col in [
+        "hardcore_interval_min_seconds",
+        "hardcore_interval_max_seconds",
+        "passive_interval_min_seconds",
+        "passive_interval_max_seconds",
+    ]:
+        try:
+            await conn.execute(
+                f"ALTER TABLE world_noise_config ADD COLUMN {col} INTEGER DEFAULT NULL"
+            )
+        except aiosqlite.OperationalError:
+            pass  # columna ya existe — migración idempotente
+
+    await conn.commit()
+    logger.debug("NoiseSQLiteAdapter: migración M-FW01 asegurada (interval fields)")
+
+
+async def _migrate_noise_destinations_tighten_weight_check(
+    conn: aiosqlite.Connection,
+) -> None:
+    """
+    Migración M-FW04: endurecer el CHECK de frequency_weight en noise_destinations
+    de `> 0` a `>= 0.1 AND <= 5.0` (requisito guardian RN-FW07).
+
+    SQLite no soporta ALTER COLUMN ni DROP CONSTRAINT, así que se usa el
+    procedimiento oficial de 12 pasos con foreign_keys=OFF.
+
+    Idempotente: si el CHECK ya es `>= 0.1 AND <= 5.0`, no toca nada.
+
+    Spec noise-frequency-and-destination-weight.md §7.3, RN-FW07 (GUARDIAN).
+    """
+    # Leer el DDL actual de noise_destinations
+    rows = await conn.execute_fetchall(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='noise_destinations'",
+    )
+    if not rows:
+        # La tabla no existe aún; ensure_tables la creará con el CHECK correcto
+        return
+
+    current_sql: str = rows[0]["sql"] or ""
+
+    # Si ya tiene el CHECK endurecido, nada que hacer
+    if "frequency_weight >= 0.1" in current_sql or "frequency_weight >= 0.10" in current_sql:
+        return
+
+    logger.info(
+        "NoiseSQLiteAdapter: migrando noise_destinations — endureciendo CHECK de frequency_weight"
+    )
+
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    await conn.execute("SAVEPOINT m_fw04")
+
+    try:
+        await conn.execute("""
+            CREATE TABLE noise_destinations_new (
+                id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+                world_id                  INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+                url_pattern               TEXT    NOT NULL,
+                label                     TEXT    NOT NULL,
+                category                  TEXT    NOT NULL
+                                                  CHECK (category IN (
+                                                      'MAP','OASIS_INFO','PLAYER_PROFILE',
+                                                      'MESSAGES','REPORTS','BUILDING_VIEW','OTHER'
+                                                  )),
+                frequency_weight          REAL    NOT NULL DEFAULT 1.0
+                                                  CHECK (frequency_weight >= 0.1 AND frequency_weight <= 5.0),
+                is_safe                   INTEGER NOT NULL DEFAULT 1,
+                is_dead                   INTEGER NOT NULL DEFAULT 0,
+                consecutive_failures_count INTEGER NOT NULL DEFAULT 0,
+                created_at                TEXT    NOT NULL,
+                last_used_at              TEXT,
+                UNIQUE (world_id, url_pattern)
+            )
+        """)
+
+        # Copiar datos, clampando el peso al nuevo rango [0.1, 5.0]
+        await conn.execute("""
+            INSERT INTO noise_destinations_new
+                   (id, world_id, url_pattern, label, category, frequency_weight,
+                    is_safe, is_dead, consecutive_failures_count, created_at, last_used_at)
+            SELECT  id, world_id, url_pattern, label, category,
+                    MAX(0.1, MIN(5.0, frequency_weight)),
+                    is_safe, is_dead, consecutive_failures_count, created_at, last_used_at
+              FROM  noise_destinations
+        """)
+
+        await conn.execute("DROP TABLE noise_destinations")
+        await conn.execute(
+            "ALTER TABLE noise_destinations_new RENAME TO noise_destinations"
+        )
+
+        # Recrear índice
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_noise_destinations_world
+                ON noise_destinations(world_id, is_dead, is_safe)
+        """)
+
+        await conn.execute("PRAGMA foreign_key_check")
+        await conn.execute("RELEASE SAVEPOINT m_fw04")
+
+    except Exception:
+        await conn.execute("ROLLBACK TO SAVEPOINT m_fw04")
+        await conn.execute("RELEASE SAVEPOINT m_fw04")
+        raise
+
+    finally:
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    await conn.commit()
+    logger.info("NoiseSQLiteAdapter: migración M-FW04 completada (CHECK frequency_weight endurecido)")
 
 
 async def _repair_noise_steps_broken_fk(
@@ -570,15 +701,29 @@ def _row_to_path(row: aiosqlite.Row, steps: list[NavigationStep]) -> NavigationP
 
 
 def _row_to_config(row: aiosqlite.Row) -> NoiseConfig:
+    """
+    Convierte una fila de world_noise_config a NoiseConfig (v2 — campos interval).
+    Los campos deprecated *_req_per_hour_* no se leen.
+
+    Spec noise-frequency-and-destination-weight.md §7.1, §9.1.
+    """
+    row_dict = dict(row)
+    defaults = NoiseConfig(world_id=row_dict["world_id"])
+
+    hc_min = row_dict.get("hardcore_interval_min_seconds")
+    hc_max = row_dict.get("hardcore_interval_max_seconds")
+    pa_min = row_dict.get("passive_interval_min_seconds")
+    pa_max = row_dict.get("passive_interval_max_seconds")
+
     return NoiseConfig(
-        world_id=row["world_id"],
-        noise_enabled=bool(row["noise_enabled"]),
-        hardcore_total_req_per_hour_min=row["hardcore_total_req_per_hour_min"],
-        hardcore_total_req_per_hour_max=row["hardcore_total_req_per_hour_max"],
-        passive_total_req_per_hour_min=row["passive_total_req_per_hour_min"],
-        passive_total_req_per_hour_max=row["passive_total_req_per_hour_max"],
-        dwell_min_seconds=row["dwell_min_seconds"],
-        dwell_max_seconds=row["dwell_max_seconds"],
+        world_id=row_dict["world_id"],
+        noise_enabled=bool(row_dict["noise_enabled"]),
+        hardcore_interval_min_seconds=hc_min if hc_min is not None else defaults.hardcore_interval_min_seconds,
+        hardcore_interval_max_seconds=hc_max if hc_max is not None else defaults.hardcore_interval_max_seconds,
+        passive_interval_min_seconds=pa_min if pa_min is not None else defaults.passive_interval_min_seconds,
+        passive_interval_max_seconds=pa_max if pa_max is not None else defaults.passive_interval_max_seconds,
+        dwell_min_seconds=row_dict["dwell_min_seconds"],
+        dwell_max_seconds=row_dict["dwell_max_seconds"],
     )
 
 
@@ -627,6 +772,10 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         await _migrate_noise_steps_add_expected_url(self._conn)
         # M-NP03: auto-reparación de FK rota (debe correr después de M-NP01 y M-NP02)
         await _repair_noise_steps_broken_fk(self._conn)
+        # M-FW01: añadir campos de intervalo a world_noise_config
+        await _migrate_noise_config_add_interval_fields(self._conn)
+        # M-FW04: endurecer CHECK de frequency_weight en noise_destinations
+        await _migrate_noise_destinations_tighten_weight_check(self._conn)
 
         logger.debug("NoiseSQLiteAdapter: tablas y migraciones aseguradas")
 
@@ -663,38 +812,83 @@ class NoiseSQLiteAdapter(NoiseDbPort):
     # ------------------------------------------------------------------
 
     async def get_or_create_noise_config(self, world_id: int) -> NoiseConfig:
+        """
+        Lee (o crea con defaults) la configuración de ruido del mundo.
+
+        Migración lazy (EC-FW01, §9.1): si los campos *_interval_*_seconds son NULL
+        (BD antigua), los inicializa con los defaults de NoiseConfig y los persiste.
+
+        Spec noise-frequency-and-destination-weight.md §9.1.
+        """
         rows = await self._conn.execute_fetchall(
             """
             SELECT world_id, noise_enabled,
-                   hardcore_total_req_per_hour_min, hardcore_total_req_per_hour_max,
-                   passive_total_req_per_hour_min,  passive_total_req_per_hour_max,
-                   dwell_min_seconds, dwell_max_seconds
+                   dwell_min_seconds, dwell_max_seconds,
+                   hardcore_interval_min_seconds, hardcore_interval_max_seconds,
+                   passive_interval_min_seconds,  passive_interval_max_seconds
               FROM world_noise_config
              WHERE world_id = ?
             """,
             (world_id,),
         )
         if rows:
-            return _row_to_config(rows[0])
+            row = rows[0]
+            row_dict = dict(row)
 
-        # Crear con defaults
+            hc_min = row_dict.get("hardcore_interval_min_seconds")
+            hc_max = row_dict.get("hardcore_interval_max_seconds")
+            pa_min = row_dict.get("passive_interval_min_seconds")
+            pa_max = row_dict.get("passive_interval_max_seconds")
+
+            # Migración lazy: si algún campo es NULL, inicializar con defaults y persistir
+            if any(v is None for v in [hc_min, hc_max, pa_min, pa_max]):
+                defaults = NoiseConfig(world_id=world_id)
+                hc_min = hc_min if hc_min is not None else defaults.hardcore_interval_min_seconds
+                hc_max = hc_max if hc_max is not None else defaults.hardcore_interval_max_seconds
+                pa_min = pa_min if pa_min is not None else defaults.passive_interval_min_seconds
+                pa_max = pa_max if pa_max is not None else defaults.passive_interval_max_seconds
+                await self._conn.execute(
+                    """
+                    UPDATE world_noise_config
+                       SET hardcore_interval_min_seconds = ?,
+                           hardcore_interval_max_seconds = ?,
+                           passive_interval_min_seconds  = ?,
+                           passive_interval_max_seconds  = ?
+                     WHERE world_id = ?
+                    """,
+                    (hc_min, hc_max, pa_min, pa_max, world_id),
+                )
+                await self._conn.commit()
+
+            return NoiseConfig(
+                world_id=world_id,
+                noise_enabled=bool(row_dict["noise_enabled"]),
+                hardcore_interval_min_seconds=hc_min,
+                hardcore_interval_max_seconds=hc_max,
+                passive_interval_min_seconds=pa_min,
+                passive_interval_max_seconds=pa_max,
+                dwell_min_seconds=row_dict["dwell_min_seconds"],
+                dwell_max_seconds=row_dict["dwell_max_seconds"],
+            )
+
+        # Nueva instalación: crear con todos los defaults
         config = NoiseConfig(world_id=world_id)
         await self._conn.execute(
             """
             INSERT INTO world_noise_config
               (world_id, noise_enabled,
-               hardcore_total_req_per_hour_min, hardcore_total_req_per_hour_max,
-               passive_total_req_per_hour_min,  passive_total_req_per_hour_max,
+               hardcore_interval_min_seconds, hardcore_interval_max_seconds,
+               passive_interval_min_seconds,  passive_interval_max_seconds,
                dwell_min_seconds, dwell_max_seconds)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 world_id,
                 int(config.noise_enabled),
-                config.hardcore_total_req_per_hour_min,
-                config.hardcore_total_req_per_hour_max,
-                config.passive_total_req_per_hour_min,
-                config.passive_total_req_per_hour_max,
+                config.hardcore_interval_min_seconds,
+                config.hardcore_interval_max_seconds,
+                config.passive_interval_min_seconds,
+                config.passive_interval_max_seconds,
                 config.dwell_min_seconds,
                 config.dwell_max_seconds,
             ),
@@ -703,28 +897,37 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         return config
 
     async def update_noise_config(self, config: NoiseConfig) -> NoiseConfig:
-        # Asegurarse de que existe; si no, get_or_create la crea con defaults
-        existing = await self.get_or_create_noise_config(config.world_id)
+        """
+        Persiste la configuración de ruido (campos interval v2).
 
-        # Aplicar PATCH: campos de config sobreescriben los actuales
+        Asegura que la fila existe primero (get_or_create).
+        Solo actualiza los campos *_interval_*_seconds y los campos comunes;
+        los campos deprecated *_req_per_hour_* no se tocan.
+
+        Spec noise-frequency-and-destination-weight.md §14 Paso 3.
+        """
+        # Asegurarse de que existe; si no, get_or_create la crea con defaults
+        await self.get_or_create_noise_config(config.world_id)
+
+        # Aplicar PATCH: solo campos v2
         await self._conn.execute(
             """
             UPDATE world_noise_config
                SET noise_enabled = ?,
-                   hardcore_total_req_per_hour_min = ?,
-                   hardcore_total_req_per_hour_max = ?,
-                   passive_total_req_per_hour_min  = ?,
-                   passive_total_req_per_hour_max  = ?,
+                   hardcore_interval_min_seconds = ?,
+                   hardcore_interval_max_seconds = ?,
+                   passive_interval_min_seconds  = ?,
+                   passive_interval_max_seconds  = ?,
                    dwell_min_seconds = ?,
                    dwell_max_seconds = ?
              WHERE world_id = ?
             """,
             (
                 int(config.noise_enabled),
-                config.hardcore_total_req_per_hour_min,
-                config.hardcore_total_req_per_hour_max,
-                config.passive_total_req_per_hour_min,
-                config.passive_total_req_per_hour_max,
+                config.hardcore_interval_min_seconds,
+                config.hardcore_interval_max_seconds,
+                config.passive_interval_min_seconds,
+                config.passive_interval_max_seconds,
                 config.dwell_min_seconds,
                 config.dwell_max_seconds,
                 config.world_id,
@@ -788,9 +991,12 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         frequency_weight: float,
         is_safe: bool = True,
     ) -> NoiseDestination:
-        # Validar frequency_weight
-        if frequency_weight <= 0:
-            raise ValueError(f"frequency_weight debe ser > 0 (recibido: {frequency_weight}).")
+        # Validar frequency_weight — la entidad también lo valida, pero defensa en profundidad
+        if not (0.1 <= frequency_weight <= 5.0):
+            raise ValueError(
+                f"navigation_weight debe estar entre 0.1 y 5.0 "
+                f"(anti-detección: pesos extremos hacen el ruido predecible)."
+            )
 
         # Obtener world_server para validación de dominio
         world_server = await self._get_world_server(world_id)
@@ -850,8 +1056,11 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         new_fw    = frequency_weight if frequency_weight is not None else existing.frequency_weight
         new_safe  = is_safe if is_safe is not None else existing.is_safe
 
-        if new_fw <= 0:
-            raise ValueError(f"frequency_weight debe ser > 0 (recibido: {new_fw}).")
+        if not (0.1 <= new_fw <= 5.0):
+            raise ValueError(
+                f"navigation_weight debe estar entre 0.1 y 5.0 "
+                f"(anti-detección: pesos extremos hacen el ruido predecible)."
+            )
 
         await self._conn.execute(
             """
@@ -921,6 +1130,17 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         Selección ponderada por frequency_weight entre destinos seguros y activos.
         Excluye is_dead=True y is_safe=False.
         Devuelve None si no hay candidatos.
+
+        GUARDIAN (RN-FW07) — CONDICIÓN NO NEGOCIABLE:
+        Cuando hay 2+ destinos elegibles, aplica un clamp de probabilidad efectiva
+        al 60% por destino para que ningún destino capture la mayoría aplastante
+        de las visitas aunque tenga el peso máximo (5.0) y los demás el mínimo (0.1).
+
+        Ejemplo peor caso: pesos [5.0, 0.1, 0.1, 0.1, 0.1]
+          - Probabilidad cruda dominante: 5/(5+0.4) ≈ 93% → inaceptable
+          - Tras clamp a 60%: dominante=60%, exceso (33%) redistribuido proporcionalmente
+
+        Con un único destino elegible: siempre va a él (no es una firma — no hay elección).
         """
         destinations = await self.list_destinations(
             world_id, include_dead=False, include_unsafe=False
@@ -928,9 +1148,40 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         if not destinations:
             return None
 
-        weights = [d.frequency_weight for d in destinations]
-        # random.choices hace selección ponderada
-        selected = random.choices(destinations, weights=weights, k=1)[0]
+        # Con un solo destino no hay sorteo posible
+        if len(destinations) == 1:
+            return destinations[0]
+
+        # Construir pesos normalizados
+        raw_weights = [d.frequency_weight for d in destinations]
+        total = sum(raw_weights)
+        probs = [w / total for w in raw_weights]
+
+        # GUARDIAN: clamp de probabilidad efectiva al 60%
+        _MAX_PROB = 0.60
+        changed = True
+        while changed:
+            changed = False
+            over = [(i, p) for i, p in enumerate(probs) if p > _MAX_PROB]
+            if not over:
+                break
+            for idx, p in over:
+                excess = p - _MAX_PROB
+                probs[idx] = _MAX_PROB
+                # Redistribuir el exceso proporcionalmente al resto
+                rest_total = sum(probs[j] for j in range(len(probs)) if j != idx)
+                if rest_total > 0:
+                    for j in range(len(probs)):
+                        if j != idx:
+                            probs[j] += excess * (probs[j] / rest_total)
+                changed = True
+
+        # Asegurar suma == 1 (corrección de errores de punto flotante)
+        s = sum(probs)
+        if s > 0:
+            probs = [p / s for p in probs]
+
+        selected = random.choices(destinations, weights=probs, k=1)[0]
         return selected
 
     # ------------------------------------------------------------------

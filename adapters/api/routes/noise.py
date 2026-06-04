@@ -131,22 +131,42 @@ async def _verify_path_belongs_to_world(
 # ---------------------------------------------------------------------------
 
 class NoiseConfigResponse(BaseModel):
+    """
+    Respuesta EP-N01 / EP-N02.
+
+    Campos v2 (intervalo en segundos). Los campos deprecated *_req_per_hour_*
+    se eliminan del contrato (spec noise-frequency-and-destination-weight.md §8.1).
+    """
     world_id: int
     noise_enabled: bool
-    hardcore_total_req_per_hour_min: int
-    hardcore_total_req_per_hour_max: int
-    passive_total_req_per_hour_min: int
-    passive_total_req_per_hour_max: int
+    hardcore_interval_min_seconds: int
+    hardcore_interval_max_seconds: int
+    passive_interval_min_seconds: int
+    passive_interval_max_seconds: int
     dwell_min_seconds: float
     dwell_max_seconds: float
 
 
+# Piso de intervalo en la API (igual que en la entidad — defensa en profundidad).
+# RN-FW02 (GUARDIAN): mínimo 30 s.
+_API_MIN_INTERVAL = 30
+
+
 class NoiseConfigUpdateRequest(BaseModel):
+    """
+    Body EP-N02 (PATCH parcial).
+
+    Todos los campos son opcionales; al menos uno debe estar presente.
+    La validación cruzada mín≤máx se hace en el handler (§10) para el caso de PATCH
+    parcial donde solo llega uno de los dos (se combina con el valor actual de BD).
+
+    RN-FW02 (GUARDIAN): piso de 30 s en los campos de intervalo.
+    """
     noise_enabled: Optional[bool] = None
-    hardcore_total_req_per_hour_min: Optional[int] = Field(default=None, ge=1)
-    hardcore_total_req_per_hour_max: Optional[int] = Field(default=None, ge=1)
-    passive_total_req_per_hour_min: Optional[int] = Field(default=None, ge=1)
-    passive_total_req_per_hour_max: Optional[int] = Field(default=None, ge=1)
+    hardcore_interval_min_seconds: Optional[int] = Field(default=None, ge=_API_MIN_INTERVAL)
+    hardcore_interval_max_seconds: Optional[int] = Field(default=None, ge=_API_MIN_INTERVAL)
+    passive_interval_min_seconds: Optional[int] = Field(default=None, ge=_API_MIN_INTERVAL)
+    passive_interval_max_seconds: Optional[int] = Field(default=None, ge=_API_MIN_INTERVAL)
     dwell_min_seconds: Optional[float] = Field(default=None, ge=0)
     dwell_max_seconds: Optional[float] = Field(default=None, ge=0)
 
@@ -154,10 +174,10 @@ class NoiseConfigUpdateRequest(BaseModel):
     def at_least_one_field(self) -> "NoiseConfigUpdateRequest":
         if all(v is None for v in [
             self.noise_enabled,
-            self.hardcore_total_req_per_hour_min,
-            self.hardcore_total_req_per_hour_max,
-            self.passive_total_req_per_hour_min,
-            self.passive_total_req_per_hour_max,
+            self.hardcore_interval_min_seconds,
+            self.hardcore_interval_max_seconds,
+            self.passive_interval_min_seconds,
+            self.passive_interval_max_seconds,
             self.dwell_min_seconds,
             self.dwell_max_seconds,
         ]):
@@ -167,18 +187,22 @@ class NoiseConfigUpdateRequest(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def check_ranges(self) -> "NoiseConfigUpdateRequest":
-        if (self.hardcore_total_req_per_hour_min is not None
-                and self.hardcore_total_req_per_hour_max is not None
-                and self.hardcore_total_req_per_hour_max < self.hardcore_total_req_per_hour_min):
+    def check_ranges_when_both_present(self) -> "NoiseConfigUpdateRequest":
+        """
+        Validación cruzada mín≤máx cuando AMBOS campos del par están en el body.
+        Si solo llega uno, la validación se completa en el handler contra BD.
+        """
+        if (self.hardcore_interval_min_seconds is not None
+                and self.hardcore_interval_max_seconds is not None
+                and self.hardcore_interval_max_seconds < self.hardcore_interval_min_seconds):
             raise ValueError(
-                "hardcore_total_req_per_hour_max debe ser >= hardcore_total_req_per_hour_min."
+                "hardcore_interval_max_seconds debe ser >= hardcore_interval_min_seconds."
             )
-        if (self.passive_total_req_per_hour_min is not None
-                and self.passive_total_req_per_hour_max is not None
-                and self.passive_total_req_per_hour_max < self.passive_total_req_per_hour_min):
+        if (self.passive_interval_min_seconds is not None
+                and self.passive_interval_max_seconds is not None
+                and self.passive_interval_max_seconds < self.passive_interval_min_seconds):
             raise ValueError(
-                "passive_total_req_per_hour_max debe ser >= passive_total_req_per_hour_min."
+                "passive_interval_max_seconds debe ser >= passive_interval_min_seconds."
             )
         if (self.dwell_min_seconds is not None
                 and self.dwell_max_seconds is not None
@@ -190,12 +214,18 @@ class NoiseConfigUpdateRequest(BaseModel):
 
 
 class NoiseDestinationResponse(BaseModel):
+    """
+    Respuesta EP-N03/N04/N05.
+
+    El campo interno frequency_weight se expone como navigation_weight en el contrato
+    (spec noise-frequency-and-destination-weight.md §8.3–8.5, RN-FW06).
+    """
     id: int
     world_id: int
     url_pattern: str
     label: str
     category: str
-    frequency_weight: float
+    navigation_weight: float   # alias de frequency_weight — RN-FW06
     is_safe: bool
     is_dead: bool
     consecutive_failures_count: int
@@ -204,23 +234,41 @@ class NoiseDestinationResponse(BaseModel):
 
 
 class CreateDestinationRequest(BaseModel):
+    """
+    Body EP-N04.
+    navigation_weight: alias de frequency_weight. Rango [0.1, 5.0] — GUARDIAN RN-FW07.
+    """
     url_pattern: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
     category: NoiseCategory
-    frequency_weight: float = Field(default=1.0, gt=0)
+    navigation_weight: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=5.0,
+        description="Peso de navegación. Rango [0.1, 5.0] — anti-detección (RN-FW07).",
+    )
     is_safe: bool = True
 
 
 class UpdateDestinationRequest(BaseModel):
+    """
+    Body EP-N05 (PATCH parcial).
+    navigation_weight: alias de frequency_weight. Rango [0.1, 5.0] — GUARDIAN RN-FW07.
+    """
     label: Optional[str] = Field(default=None, min_length=1)
-    frequency_weight: Optional[float] = Field(default=None, gt=0)
+    navigation_weight: Optional[float] = Field(
+        default=None,
+        ge=0.1,
+        le=5.0,
+        description="Peso de navegación. Rango [0.1, 5.0] — anti-detección (RN-FW07).",
+    )
     is_safe: Optional[bool] = None
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "UpdateDestinationRequest":
-        if all(v is None for v in [self.label, self.frequency_weight, self.is_safe]):
+        if all(v is None for v in [self.label, self.navigation_weight, self.is_safe]):
             raise ValueError(
-                "El body debe contener al menos uno de: label, frequency_weight, is_safe."
+                "El body debe contener al menos uno de: label, navigation_weight, is_safe."
             )
         return self
 
@@ -477,7 +525,7 @@ def _dest_to_response(dest: NoiseDestination) -> NoiseDestinationResponse:
         url_pattern=dest.url_pattern,
         label=dest.label,
         category=dest.category.value,
-        frequency_weight=dest.frequency_weight,
+        navigation_weight=dest.frequency_weight,   # alias RN-FW06
         is_safe=dest.is_safe,
         is_dead=dest.is_dead,
         consecutive_failures_count=dest.consecutive_failures_count,
@@ -521,10 +569,10 @@ def _config_to_response(config: NoiseConfig) -> NoiseConfigResponse:
     return NoiseConfigResponse(
         world_id=config.world_id,
         noise_enabled=config.noise_enabled,
-        hardcore_total_req_per_hour_min=config.hardcore_total_req_per_hour_min,
-        hardcore_total_req_per_hour_max=config.hardcore_total_req_per_hour_max,
-        passive_total_req_per_hour_min=config.passive_total_req_per_hour_min,
-        passive_total_req_per_hour_max=config.passive_total_req_per_hour_max,
+        hardcore_interval_min_seconds=config.hardcore_interval_min_seconds,
+        hardcore_interval_max_seconds=config.hardcore_interval_max_seconds,
+        passive_interval_min_seconds=config.passive_interval_min_seconds,
+        passive_interval_max_seconds=config.passive_interval_max_seconds,
         dwell_min_seconds=config.dwell_min_seconds,
         dwell_max_seconds=config.dwell_max_seconds,
     )
@@ -613,42 +661,67 @@ async def update_noise_config(
             detail="Error interno del servidor.",
         ) from exc
 
-    # PATCH: aplicar solo los campos presentes en el body
-    updated = NoiseConfig(
-        world_id=world_id,
-        noise_enabled=(
-            body.noise_enabled if body.noise_enabled is not None
-            else existing.noise_enabled
-        ),
-        hardcore_total_req_per_hour_min=(
-            body.hardcore_total_req_per_hour_min
-            if body.hardcore_total_req_per_hour_min is not None
-            else existing.hardcore_total_req_per_hour_min
-        ),
-        hardcore_total_req_per_hour_max=(
-            body.hardcore_total_req_per_hour_max
-            if body.hardcore_total_req_per_hour_max is not None
-            else existing.hardcore_total_req_per_hour_max
-        ),
-        passive_total_req_per_hour_min=(
-            body.passive_total_req_per_hour_min
-            if body.passive_total_req_per_hour_min is not None
-            else existing.passive_total_req_per_hour_min
-        ),
-        passive_total_req_per_hour_max=(
-            body.passive_total_req_per_hour_max
-            if body.passive_total_req_per_hour_max is not None
-            else existing.passive_total_req_per_hour_max
-        ),
-        dwell_min_seconds=(
-            body.dwell_min_seconds if body.dwell_min_seconds is not None
-            else existing.dwell_min_seconds
-        ),
-        dwell_max_seconds=(
-            body.dwell_max_seconds if body.dwell_max_seconds is not None
-            else existing.dwell_max_seconds
-        ),
+    # PATCH: resolver valores finales combinando body + estado actual de BD
+    new_hc_min = (
+        body.hardcore_interval_min_seconds
+        if body.hardcore_interval_min_seconds is not None
+        else existing.hardcore_interval_min_seconds
     )
+    new_hc_max = (
+        body.hardcore_interval_max_seconds
+        if body.hardcore_interval_max_seconds is not None
+        else existing.hardcore_interval_max_seconds
+    )
+    new_pa_min = (
+        body.passive_interval_min_seconds
+        if body.passive_interval_min_seconds is not None
+        else existing.passive_interval_min_seconds
+    )
+    new_pa_max = (
+        body.passive_interval_max_seconds
+        if body.passive_interval_max_seconds is not None
+        else existing.passive_interval_max_seconds
+    )
+
+    # Validación cruzada PATCH parcial (§10): si solo llegó uno del par, verificar
+    # contra el valor actual de BD. Cubre el caso EC-FW08 del spec.
+    if new_hc_max < new_hc_min:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="hardcore_interval_max_seconds debe ser >= hardcore_interval_min_seconds.",
+        )
+    if new_pa_max < new_pa_min:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="passive_interval_max_seconds debe ser >= passive_interval_min_seconds.",
+        )
+
+    try:
+        updated = NoiseConfig(
+            world_id=world_id,
+            noise_enabled=(
+                body.noise_enabled if body.noise_enabled is not None
+                else existing.noise_enabled
+            ),
+            hardcore_interval_min_seconds=new_hc_min,
+            hardcore_interval_max_seconds=new_hc_max,
+            passive_interval_min_seconds=new_pa_min,
+            passive_interval_max_seconds=new_pa_max,
+            dwell_min_seconds=(
+                body.dwell_min_seconds if body.dwell_min_seconds is not None
+                else existing.dwell_min_seconds
+            ),
+            dwell_max_seconds=(
+                body.dwell_max_seconds if body.dwell_max_seconds is not None
+                else existing.dwell_max_seconds
+            ),
+        )
+    except ValueError as exc:
+        # La entidad puede lanzar ValueError si algún campo < 30 s (piso guardian)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
     try:
         result = await noise_db.update_noise_config(updated)
@@ -740,7 +813,7 @@ async def create_destination(
             url_pattern=body.url_pattern,
             label=body.label,
             category=body.category,
-            frequency_weight=body.frequency_weight,
+            frequency_weight=body.navigation_weight,   # alias: navigation_weight → frequency_weight
             is_safe=body.is_safe,
         )
     except ValueError as exc:
@@ -785,7 +858,7 @@ async def update_destination(
         updated = await noise_db.update_destination(
             dest_id=dest_id,
             label=body.label,
-            frequency_weight=body.frequency_weight,
+            frequency_weight=body.navigation_weight,   # alias: navigation_weight → frequency_weight
             is_safe=body.is_safe,
         )
     except ValueError as exc:

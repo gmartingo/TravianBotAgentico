@@ -221,9 +221,9 @@ class TestPickRandomSafeDestination:
     """Verifica distribución ponderada por frequency_weight (n=1000)."""
 
     def test_respects_weights(self):
-        """Destino con peso 9 aparece ~9x más que el destino con peso 1."""
+        """Destino con peso 5.0 aparece más que el destino con peso 1.0 (dentro del nuevo rango)."""
         dest_rare   = make_destination(id=1, frequency_weight=1.0, label="Rare")
-        dest_common = make_destination(id=2, frequency_weight=9.0, label="Common")
+        dest_common = make_destination(id=2, frequency_weight=5.0, label="Common")
 
         destinations = [dest_rare, dest_common]
         weights = [d.frequency_weight for d in destinations]
@@ -232,17 +232,14 @@ class TestPickRandomSafeDestination:
         count_common = sum(1 for d in results if d.id == 2)
         count_rare   = sum(1 for d in results if d.id == 1)
 
-        # Con peso 9:1, debería salir 9x más. Toleramos 15% de varianza.
-        assert count_common > count_rare * 5, (
+        # Con peso 5:1, debería salir ~5x más. Toleramos varianza amplia.
+        assert count_common > count_rare * 2, (
             f"Se esperaba que 'Common' saliera mucho más que 'Rare', "
             f"pero fue {count_common} vs {count_rare}"
         )
 
     def test_returns_none_when_empty(self):
         """None cuando la lista de destinos válidos está vacía."""
-        # Simula que list_destinations devuelve []
-        # pick_random_safe_destination usa random.choices, que lanza si la lista está vacía
-        # Verificamos directamente la rama "no destinations"
         result = None  # simula la condición
         assert result is None
 
@@ -297,20 +294,23 @@ class TestCalculateNextNoiseGap:
             assert gap < 5.0, f"Gap en burst demasiado largo: {gap:.2f}s"
 
     def test_silence_gaps_are_capped(self):
-        """En estado silence, los gaps están capados entre 20 y 600 segundos."""
+        """
+        En estado silence (forzado), los gaps están en el rango válido.
+        Con config defaults (hc_min=30, hc_max=90):
+          cap = [max(30, 30)*uniform(1.0,1.15), min(7200, 90*4)] = [~30-34.5, 360]
+        El burst produce gaps en [0.5, 4.0] — también válidos pero < 30 s.
+        Verificamos que en silence los gaps son >= 30 y <= 360+1%.
+        """
         config = NoiseConfig(world_id=1)
         agent = _make_agent()
-        agent._noise_in_burst = False
-        agent._noise_burst_remaining = 0
 
-        # Generar suficientes gaps para que caiga en silence en algún intento
-        # (puede entrar en burst; nos interesa que cuando sea silence esté en rango)
         for _ in range(50):
             agent._noise_in_burst = False
             agent._noise_burst_remaining = 0
             gap = agent._calculate_next_noise_gap(SessionMode.HARDCORE, config)
-            assert gap >= 0.4, f"Gap demasiado corto: {gap:.2f}s"
-            assert gap <= 605.0, f"Gap fuera del rango máximo: {gap:.2f}s"
+            # Gap de silence: entre el piso (~30 s con jitter) y el techo 360 s
+            assert gap >= 29.0, f"Gap de silence demasiado corto: {gap:.2f}s"
+            assert gap <= 365.0, f"Gap fuera del rango máximo de silence: {gap:.2f}s"
 
 
 # ===========================================================================
@@ -587,43 +587,42 @@ class TestExecuteNoiseAction:
 # ===========================================================================
 
 class TestIsNoiseBelowMinThreshold:
-    """Tests de _is_noise_below_min_threshold (RN-HS24ter)."""
+    """Tests de _is_noise_below_min_threshold (RN-HS24ter — reescrito con campos interval)."""
 
-    def test_returns_true_when_ratio_below_40_pct(self):
-        """Si la tasa efectiva cae <40% del target mínimo en la ventana, devuelve True."""
-        config = NoiseConfig(
-            world_id=1,
-            hardcore_total_req_per_hour_min=80,
-            hardcore_total_req_per_hour_max=150,
-        )
+    def test_returns_true_when_no_navigations(self):
+        """Sin ninguna navegación en la ventana → True (definitivamente por debajo)."""
+        config = NoiseConfig(world_id=1)  # defaults: hc_max=90
         agent = _make_agent()
         agent._active_mode = SessionMode.HARDCORE
 
-        # Ventana de 15 minutos (900 s), con solo 1 navegación hecha
-        # Target en 30 min = 80 / 2 = 40
-        # Efectivo en 30 min = 1 * (1800/900) = 2
-        # 2 < 40 * 0.40 = 16 → True
         agent._noise_window_start = datetime.now() - timedelta(seconds=900)
-        agent._noise_recent_count = 1
+        agent._noise_recent_count = 0
 
         assert agent._is_noise_below_min_threshold(config) is True
 
-    def test_returns_false_when_ratio_above_40_pct(self):
-        """Si la tasa efectiva >= 40% del target, devuelve False."""
-        config = NoiseConfig(
-            world_id=1,
-            hardcore_total_req_per_hour_min=10,
-            hardcore_total_req_per_hour_max=20,
-        )
+    def test_returns_true_when_effective_interval_too_large(self):
+        """
+        Intervalo efectivo > 2.5×iv_max → True.
+        config hc_max=90 s, 1 navegación en 900 s → intervalo=900 s > 2.5×90=225 s → True.
+        """
+        config = NoiseConfig(world_id=1)  # hc_max=90
         agent = _make_agent()
         agent._active_mode = SessionMode.HARDCORE
 
-        # Ventana de 15 min (900 s), con 10 navegaciones
-        # Target en 30 min = 10 / 2 = 5
-        # Efectivo en 30 min = 10 * (1800/900) = 20
-        # 20 >= 5 * 0.40 = 2 → False
         agent._noise_window_start = datetime.now() - timedelta(seconds=900)
-        agent._noise_recent_count = 10
+        agent._noise_recent_count = 1  # 900/1 = 900 > 225 → True
+
+        assert agent._is_noise_below_min_threshold(config) is True
+
+    def test_returns_false_when_ratio_ok(self):
+        """Intervalo efectivo <= 2.5×iv_max → False (ratio aceptable)."""
+        config = NoiseConfig(world_id=1)  # hc_max=90
+        agent = _make_agent()
+        agent._active_mode = SessionMode.HARDCORE
+
+        # 10 navegaciones en 900 s → intervalo=90 s ≤ 2.5×90=225 → False
+        agent._noise_window_start = datetime.now() - timedelta(seconds=900)
+        agent._noise_recent_count = 10  # 900/10 = 90 ≤ 225 → False
 
         assert agent._is_noise_below_min_threshold(config) is False
 
@@ -711,11 +710,11 @@ class TestNoiseWarmup:
 # ===========================================================================
 
 class TestNoiseDestinationValidation:
-    """Tests de __post_init__ en NoiseDestination."""
+    """Tests de __post_init__ en NoiseDestination (v2: rango [0.1, 5.0] — RN-FW07)."""
 
     def test_weight_zero_raises(self):
-        """frequency_weight = 0 lanza ValueError."""
-        with pytest.raises(ValueError, match="frequency_weight"):
+        """frequency_weight = 0 lanza ValueError (fuera del rango [0.1, 5.0])."""
+        with pytest.raises(ValueError, match="navigation_weight"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="/x", label="X",
                 category=NoiseCategory.OTHER, frequency_weight=0.0,
@@ -723,11 +722,30 @@ class TestNoiseDestinationValidation:
 
     def test_weight_negative_raises(self):
         """frequency_weight negativo lanza ValueError."""
-        with pytest.raises(ValueError, match="frequency_weight"):
+        with pytest.raises(ValueError, match="navigation_weight"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="/x", label="X",
                 category=NoiseCategory.OTHER, frequency_weight=-1.0,
             )
+
+    def test_weight_above_5_raises(self):
+        """frequency_weight > 5.0 lanza ValueError (guardian RN-FW07)."""
+        with pytest.raises(ValueError, match="navigation_weight"):
+            NoiseDestination(
+                id=1, world_id=1, url_pattern="/x", label="X",
+                category=NoiseCategory.OTHER, frequency_weight=5.01,
+            )
+
+    def test_weight_at_boundaries_ok(self):
+        """Los límites exactos 0.1 y 5.0 son válidos."""
+        NoiseDestination(
+            id=1, world_id=1, url_pattern="/x", label="X",
+            category=NoiseCategory.OTHER, frequency_weight=0.1,
+        )
+        NoiseDestination(
+            id=2, world_id=1, url_pattern="/y", label="Y",
+            category=NoiseCategory.OTHER, frequency_weight=5.0,
+        )
 
     def test_empty_url_raises(self):
         """url_pattern vacío lanza ValueError."""
@@ -768,7 +786,7 @@ class TestNavigationStepValidation:
 # ===========================================================================
 
 class TestNoiseConfigValidation:
-    """Tests de __post_init__ en NoiseConfig."""
+    """Tests de __post_init__ en NoiseConfig (v2 — campos interval)."""
 
     def test_dwell_max_less_than_min_raises(self):
         """dwell_max_seconds < dwell_min_seconds lanza ValueError."""
@@ -776,13 +794,23 @@ class TestNoiseConfigValidation:
             NoiseConfig(world_id=1, dwell_min_seconds=10.0, dwell_max_seconds=5.0)
 
     def test_hardcore_max_less_than_min_raises(self):
-        """hardcore max < min lanza ValueError."""
-        with pytest.raises(ValueError, match="hardcore_total_req_per_hour_max"):
+        """hardcore interval_max < interval_min lanza ValueError."""
+        with pytest.raises(ValueError, match="hardcore_interval_max_seconds"):
             NoiseConfig(
                 world_id=1,
-                hardcore_total_req_per_hour_min=100,
-                hardcore_total_req_per_hour_max=50,
+                hardcore_interval_min_seconds=100,
+                hardcore_interval_max_seconds=50,
             )
+
+    def test_interval_below_30_raises(self):
+        """Intervalo < 30 s (piso guardian RN-FW02) lanza ValueError."""
+        with pytest.raises(ValueError, match="30"):
+            NoiseConfig(world_id=1, hardcore_interval_min_seconds=29)
+
+    def test_interval_at_30_ok(self):
+        """Intervalo exactamente en 30 s es válido (límite inclusivo)."""
+        config = NoiseConfig(world_id=1, hardcore_interval_min_seconds=30)
+        assert config.hardcore_interval_min_seconds == 30
 
 
 # ===========================================================================
