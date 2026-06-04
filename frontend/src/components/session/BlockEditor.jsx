@@ -9,6 +9,8 @@
  *  - apiError {string|null} — mensaje de error 422 de la API
  *  - onChange {function} — fn(newBlocks) → el padre actualiza su estado local
  *  - onSave {function}   — fn(blocks) → dispara el PUT
+ *  - onCopyToDays {function} — fn(weekdays[]) → aplica este día a otros días (presets)
+ *  - copying {boolean}   — algún preset de copia en curso
  *
  * Reglas del spec:
  *  - start del primer bloque = 00:00 (fijo, no editable)
@@ -49,8 +51,8 @@ function BlockRow({ block, index, totalBlocks, onChange, onRemove }) {
 
   const modeCls = block.mode?.toLowerCase() === 'hardcore'
     ? 'var(--mode-hardcore)'
-    : block.mode?.toLowerCase() === 'idle'
-      ? 'var(--mode-idle)'
+    : block.mode?.toLowerCase() === 'pasivo'
+      ? 'var(--mode-pasivo)'
       : 'var(--mode-disconnected)'
 
   return (
@@ -121,7 +123,7 @@ function BlockRow({ block, index, totalBlocks, onChange, onRemove }) {
           }}
         >
           <option value="hardcore">{t('session.mode.hardcore')}</option>
-          <option value="idle">{t('session.mode.idle')}</option>
+          <option value="pasivo">{t('session.mode.pasivo')}</option>
           <option value="disconnected">{t('session.mode.disconnected')}</option>
         </select>
       </td>
@@ -165,7 +167,14 @@ function BlockRow({ block, index, totalBlocks, onChange, onRemove }) {
 
 // ── BlockEditor ───────────────────────────────────────────────────────────────
 
-export function BlockEditor({ blocks, isDefault, dayLabel, saving, apiError, onChange, onSave }) {
+// Conjuntos de días destino de los presets de copia (0=lun … 6=dom)
+const COPY_PRESETS = [
+  { key: 'copyAll',      labelKey: 'session.editor.copyAll',      weekdays: [0, 1, 2, 3, 4, 5, 6] },
+  { key: 'copyWeekdays', labelKey: 'session.editor.copyWeekdays', weekdays: [0, 1, 2, 3, 4] },
+  { key: 'copyWeekend',  labelKey: 'session.editor.copyWeekend',  weekdays: [5, 6] },
+]
+
+export function BlockEditor({ blocks, isDefault, dayLabel, saving, apiError, onChange, onSave, onCopyToDays, copying = false }) {
   const { t } = useI18n()
 
   const validation = validateCoverage(blocks)
@@ -321,6 +330,58 @@ export function BlockEditor({ blocks, isDefault, dayLabel, saving, apiError, onC
 
       {/* Indicador de cobertura */}
       <TimelineCoverageIndicator validation={validation} />
+
+      {/* Presets de copia: aplicar este día a otros días */}
+      {onCopyToDays && (
+        <div style={{
+          marginTop: '14px', paddingTop: '14px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {t('session.editor.copyTo')}
+          </span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {COPY_PRESETS.map(({ key, labelKey, weekdays }) => {
+              const disabled = !validation.ok || saving || copying
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && onCopyToDays(weekdays)}
+                  title={!validation.ok ? t('session.editor.coverage.gap', { from: '', to: '' }) : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 12px',
+                    border: '1px dashed var(--border-strong)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'transparent',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'inherit', fontSize: '12px', fontWeight: 500,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.45 : 1,
+                    minHeight: '32px',
+                    transition: 'background var(--dur-fast), color var(--dur-fast)',
+                  }}
+                  onMouseEnter={e => {
+                    if (disabled) return
+                    e.currentTarget.style.background = 'var(--surface-2)'
+                    e.currentTarget.style.color = 'var(--text)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = 'var(--text-secondary)'
+                  }}
+                >
+                  {copying ? <Spinner size={12} /> : null}
+                  {t(labelKey)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Footer: error de API + botón guardar */}
       <div style={{

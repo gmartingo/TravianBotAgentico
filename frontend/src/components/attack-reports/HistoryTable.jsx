@@ -23,16 +23,12 @@ import { useI18n } from '../../i18n/index.jsx'
 import { DeletePopover } from '../ui/DeletePopover.jsx'
 import { Spinner } from '../ui/uiUtils.jsx'
 import { formatDateVerbatim } from '../../utils/formatDateVerbatim.js'
+import { formatCoord } from '../../utils/coordUtils.js'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatCoord(n) {
-  if (n == null) return '—'
-  return n < 0 ? `−${Math.abs(n)}` : `${n}`
-}
-
 function formatCoords(x, y) {
-  return `(${formatCoord(x)}|${formatCoord(y)})`
+  return formatCoord(x, y)
 }
 
 // attacked_at es verbatim (hora del servidor Travian) — no pasar por new Date()

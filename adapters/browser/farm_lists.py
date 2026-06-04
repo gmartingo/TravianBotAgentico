@@ -183,6 +183,7 @@ def _js_get_expand_rect(list_id: int) -> str:
     const wrapper = el?.closest('.farmListWrapper');
     const btn = wrapper?.querySelector('.farmListHeader a.expandCollapse');
     if (!btn) return null;
+    btn.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }});
     const r = btn.getBoundingClientRect();
     return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
 }})()
@@ -309,6 +310,7 @@ def _js_get_context_menu_trigger_rect(slot_id: int) -> str:
         if (!row) return null;
         const trigger = row.querySelector('td.openContextMenu > a');
         if (!trigger) return null;
+        trigger.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }});
         const r = trigger.getBoundingClientRect();
         return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
     }})()
@@ -331,6 +333,7 @@ def _js_get_menu_entry_rect(slot_id: int, entry: str) -> str:
         if (!menu) return null;
         const btn = menu.querySelector('button.entry.{entry}');
         if (!btn) return null;
+        btn.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }});
         const r = btn.getBoundingClientRect();
         return {{ x: r.left, y: r.top, width: r.width, height: r.height }};
     }})()

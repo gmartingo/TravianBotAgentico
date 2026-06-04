@@ -38,8 +38,8 @@
   /* Tokens de modo de sesión (Human Sessions — reutilizan semánticos) */
   --mode-hardcore:          var(--success);
   --mode-hardcore-subtle:   rgba(36, 138, 61, 0.12);
-  --mode-idle:              var(--info);
-  --mode-idle-subtle:       rgba(10, 111, 204, 0.10);
+  --mode-pasivo:              var(--info);
+  --mode-pasivo-subtle:       rgba(10, 111, 204, 0.10);
   --mode-disconnected:      #8E8E93;
   --mode-disconnected-subtle: rgba(142, 142, 147, 0.10);
 
@@ -105,8 +105,8 @@
     /* Tokens de modo de sesión — oscuro */
     --mode-hardcore:          var(--success);
     --mode-hardcore-subtle:   rgba(52, 199, 89, 0.12);
-    --mode-idle:              var(--info);
-    --mode-idle-subtle:       rgba(10, 132, 255, 0.12);
+    --mode-pasivo:              var(--info);
+    --mode-pasivo-subtle:       rgba(10, 132, 255, 0.12);
     --mode-disconnected:      #8E8E93;
     --mode-disconnected-subtle: rgba(142, 142, 147, 0.14);
 
@@ -145,8 +145,8 @@
   /* Tokens de modo de sesión — data-theme="dark" */
   --mode-hardcore:          var(--success);
   --mode-hardcore-subtle:   rgba(52, 199, 89, 0.12);
-  --mode-idle:              var(--info);
-  --mode-idle-subtle:       rgba(10, 132, 255, 0.12);
+  --mode-pasivo:              var(--info);
+  --mode-pasivo-subtle:       rgba(10, 132, 255, 0.12);
   --mode-disconnected:      #8E8E93;
   --mode-disconnected-subtle: rgba(142, 142, 147, 0.14);
 
@@ -184,8 +184,8 @@
   /* Tokens de modo de sesión — data-theme="light" */
   --mode-hardcore:          var(--success);
   --mode-hardcore-subtle:   rgba(36, 138, 61, 0.12);
-  --mode-idle:              var(--info);
-  --mode-idle-subtle:       rgba(10, 111, 204, 0.10);
+  --mode-pasivo:              var(--info);
+  --mode-pasivo-subtle:       rgba(10, 111, 204, 0.10);
   --mode-disconnected:      #8E8E93;
   --mode-disconnected-subtle: rgba(142, 142, 147, 0.10);
 

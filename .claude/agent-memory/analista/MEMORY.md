@@ -13,6 +13,9 @@
 - [project-oasis-farming](project_oasis_farming.md) — Oasis farming: roles en FarmScheduler, grupos, máquina 3 estados; v2 §1b/RN-O09 actualizado para 3 modos human-sessions
 - [project-human-sessions](project_human_sessions.md) — Human-sessions v2.1: 3 modos (HARDCORE/PASIVO/DISCONNECTED); PASIVO con probabilidad+factor; DISCONNECTED cierra Chrome+relogin; huecos→DISCONNECTED auto
 - [project-task-order-randomization](project_task_order_randomization.md) — Helper ordered() para aleatorizar orden de colecciones (33/33/33 DEFAULT/REVERSED/SHUFFLE); bot_config tabla genérica
-- [project-bd-ataques-oasis](project_bd_ataques_oasis.md) — BD reportes de ataques a oasis: 0 colisiones NATURE index, 3 tablas, LAG(), correcciones C1-C7 APIs validadas — incluye patrones recurrentes para futuros specs
+- [project-bd-ataques-oasis](project_bd_ataques_oasis.md) — BD reportes de ataques a oasis + EP-TD v4: max_present/avg_bounty/total_animals/oasis_coords; denominadores decididos; C1-C7 APIs
 - [project-extension-chrome](project_extension_chrome.md) — Extensión Chrome MV3 captura reportes: CORS via service worker (sin delta backend), host_permissions lista TLDs, restricción anti-detección, EP-02 reutilizado
 - [project-human-click](project_human_click.md) — human-click v2.3: Fitts [200-800ms], curvatura 10-25%, human_drift_toward, asyncio.Lock por tab; deltas ready-for-impl sobre base v2.2.1 implementada
+- [project-oasis-spawn-mechanics](project_oasis_spawn_mechanics.md) — Spec v2.6: catálogo spawn, Jaccard tipo, peor combo, cooldown; attackers [{player,village}] sustituye origin_villages; frontend Jugador→Aldea→Oasis
+- [project-noise-path-wizard](project_noise_path_wizard.md) — Noise Path Wizard: anclas semilla, wizard manual, derive-selector; delta sobre noise implementado; apis pendientes (EP-N11/N12/N13)
+- [project-noise-frequency-weight](project_noise_frequency_weight.md) — Frecuencia ruido MM:SS por modo + navigation_weight por destino; reemplaza req_per_hour; gates guardian+apis pendientes

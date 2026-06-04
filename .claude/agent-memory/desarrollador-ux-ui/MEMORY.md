@@ -9,3 +9,6 @@
 - [patterns-world-space](patterns-world-space.md) — S9 WorldSpacePage: shell sidebar+world-header+bottom-bar, FarmListsTab, FarmListDrawer, ProbeMenu inline, huecos API conocidos
 - [patterns-farm-feedback](patterns-farm-feedback.md) — S10 feedback UI: SchedulerSubPanel accordion, SchedulerDashboard drill-down, SendFeedback, StatsPanel, huecos API toggle/timestamp
 - [patterns-human-sessions](patterns-human-sessions.md) — S11 Human Sessions: pestaña Sesión, tokens modo, componentes session/, validateCoverage, API client métodos nuevos
+- [patterns-oasis-spawn](patterns-oasis-spawn.md) — S-SPAWN: SpawnMechanicsPanel+OasisCompositionPanel+WorstCasePlannerPanel, catálogo JS, claves NATURE_N, carga EP-SPAWN compartida
+- [patterns-noise-tab](patterns-noise-tab.md) — S-NOISE: pestaña Ruido, wizard de rutas, Toggle/MinMaxInput, DeletePopover inline, EP-N01..N13
+- [patterns-animal-frequency](patterns-animal-frequency.md) — AnimalFrequencyPanel: normalización array→objeto, arcilla→barro, ResIcon para botín, coordUtils, tablist ARIA con flechas

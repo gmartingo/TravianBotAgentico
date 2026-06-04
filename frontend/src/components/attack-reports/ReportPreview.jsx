@@ -18,15 +18,10 @@
  */
 import { TravianReport } from '../combat/TravianReport.jsx'
 import { formatDateVerbatim } from '../../utils/formatDateVerbatim.js'
-
-function formatCoord(n) {
-  // Coordenada con signo, guión largo − (U+2212) para negativos
-  if (n == null) return '—'
-  return n < 0 ? `−${Math.abs(n)}` : `${n}`
-}
+import { formatCoord } from '../../utils/coordUtils.js'
 
 function formatCoords(x, y) {
-  return `(${formatCoord(x)}|${formatCoord(y)})`
+  return formatCoord(x, y)
 }
 
 // attacked_at es verbatim (hora del servidor Travian) — no pasar por new Date()

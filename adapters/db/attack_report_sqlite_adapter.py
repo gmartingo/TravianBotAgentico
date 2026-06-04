@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 import aiosqlite
@@ -887,8 +887,10 @@ class AttackReportSQLiteAdapter(AttackReportPort):
         Reutiliza _calc_regen_rates con los gaps de todos los oasis concatenados.
 
         Ver spec docs/specs/bd-ataques-oasis-stats-global.md §9 EP-09.
+        Modificado: añade eligible_reports (denominador del % de aparición) por animal.
+        Ver spec docs/specs/bd-ataques-oasis-global-pct-aparicion.md §9 Paso 1b.
         """
-        # ── Paso 1: Apariciones globales ──────────────────────────────────────
+        # ── Paso 1a: Apariciones globales (SIN CAMBIO) ────────────────────────
         # WHERE present > 0: excluye animales con 0 unidades observadas.
         # MIN(CASE WHEN present > 0 THEN present END): excluye ceros del mínimo.
         async with self._conn.execute(
@@ -908,6 +910,46 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             """,
         ) as cursor:
             appearance_rows = await cursor.fetchall()
+
+        # ── Paso 1b: Denominador por animal (NUEVO) ───────────────────────────
+        # Para cada animal_ordinal:
+        #   1. Identificar oasis donde ese animal ha aparecido alguna vez (ever_present):
+        #      subconsulta DISTINCT sobre (coord_x_dest, coord_y_dest, animal_ordinal)
+        #      WHERE present > 0.
+        #   2. Contar TODOS los reportes de esos oasis (sin filtro de present).
+        #      Incluye los reportes donde el animal estaba a 0 ese día, porque en ese
+        #      oasis sí puede aparecer.
+        #   3. COUNT(DISTINCT r_eligible.id) evita contar el mismo reporte dos veces
+        #      (garantía formal; en este schema cada reporte tiene coords únicas).
+        # present = NULL (reportes de derrota) no satisface present > 0, quedando excluido
+        # tanto del numerador (appearances) como del denominador (eligible_reports).
+        async with self._conn.execute(
+            """
+            SELECT
+                a_ever.animal_ordinal,
+                COUNT(DISTINCT r_eligible.id) AS eligible_reports
+            FROM (
+                SELECT DISTINCT
+                    r2.coord_x_dest,
+                    r2.coord_y_dest,
+                    a2.animal_ordinal
+                FROM attack_report_animals a2
+                JOIN attack_reports r2 ON r2.id = a2.report_id
+                WHERE a2.present > 0
+            ) a_ever
+            JOIN attack_reports r_eligible
+                ON  r_eligible.coord_x_dest = a_ever.coord_x_dest
+                AND r_eligible.coord_y_dest = a_ever.coord_y_dest
+            GROUP BY a_ever.animal_ordinal
+            """,
+        ) as cursor:
+            eligible_rows = await cursor.fetchall()
+
+        # Construir dict ordinal → eligible_reports para join O(1)
+        eligible_by_ordinal: dict[int, int] = {
+            row["animal_ordinal"]: row["eligible_reports"]
+            for row in eligible_rows
+        }
 
         # ── Paso 2: Regen con LAG particionado por (oasis, animal) ────────────
         # PARTITION BY (coord_x_dest, coord_y_dest, animal_ordinal):
@@ -994,16 +1036,23 @@ class AttackReportSQLiteAdapter(AttackReportPort):
         animal_regen_rates = _calc_regen_rates(repopulation_gaps)
 
         # ── Paso 6: Construir y devolver el dict de respuesta ─────────────────
+        # MODIFICADO: añadir eligible_reports a cada item de animal_appearances.
+        # Si el ordinal no está en eligible_by_ordinal (caso teórico imposible porque
+        # si hay appearances >= 1 hay ever_present), devuelve None.
+        # El frontend maneja None como "sin denominador" (EC-P10).
+        # Orden de campos: animal_ordinal, animal_name, appearances, eligible_reports,
+        # avg_present, max_present, min_present (fiel al contrato openapi.yaml).
         return {
             "scope": "global",
             "animal_appearances": [
                 {
-                    "animal_ordinal": row["animal_ordinal"],
-                    "animal_name": row["animal_name"],
-                    "appearances": row["appearances"],
-                    "avg_present": round(row["avg_present"], 2) if row["avg_present"] is not None else None,
-                    "max_present": row["max_present"],
-                    "min_present": row["min_present_nonzero"],  # puede ser None (guardia defensiva)
+                    "animal_ordinal":   row["animal_ordinal"],
+                    "animal_name":      row["animal_name"],
+                    "appearances":      row["appearances"],
+                    "eligible_reports": eligible_by_ordinal.get(row["animal_ordinal"]),
+                    "avg_present":      round(row["avg_present"], 2) if row["avg_present"] is not None else None,
+                    "max_present":      row["max_present"],
+                    "min_present":      row["min_present_nonzero"],  # puede ser None (guardia defensiva)
                 }
                 for row in appearance_rows
             ],
@@ -1455,3 +1504,919 @@ class AttackReportSQLiteAdapter(AttackReportPort):
             },
             "net": stolen_total - lost_total,
         }
+
+    # ---------------------------------------------------------------------------
+    # EP-SPAWN — Composición, tipo inferido, peor combinación y estado cooldown
+    # ---------------------------------------------------------------------------
+
+    async def get_oasis_spawn_composition(self, timer_min: int) -> dict:
+        """
+        Devuelve composición típica, inferencia de tipo, peor combinación a batir
+        (dado timer_min en minutos) y estado cooldown/respawn para todos los oasis.
+
+        timer_min: 6|7|10|15 — validado en el router antes de llegar aquí.
+        200 siempre, incluso con oasis: [].
+
+        Ver spec docs/specs/oasis-spawn-mechanics-stats.md §8 EP-SPAWN y §9.
+        Añadido en la feature oasis-spawn-mechanics-stats (2026-06-02).
+        """
+        from core.game_data.oasis_spawn_catalog import (
+            SPAWN_TIMER_S,
+            OASIS_TYPE_SETS,
+            COOLDOWN_THRESHOLD_S,
+        )
+
+        computed_at = datetime.now(timezone.utc)
+        timer_s = timer_min * 60  # convertir a segundos
+
+        # ── Paso 1: Cargar stats de defensa de animales nature ─────────────────
+        # Preferir game_data_port si está disponible (TR-07 / RN-CAT-02).
+        # En el adaptador no tenemos acceso directo a app.state, así que cargamos
+        # directamente del JSON. Si en el futuro se inyecta el port, se sustituye.
+        # TODO(Pieza 5 fase 2): retirar avg_regen_per_hour junto con la migración de frontend
+        nature_def = _load_nature_defense_stats()
+
+        # ── Paso 2: Composición por (oasis, animal) — solo present > 0 (RN-COMP-01) ─
+        comp_sql = """
+            SELECT
+                r.coord_x_dest,
+                r.coord_y_dest,
+                a.animal_ordinal,
+                AVG(a.present)  AS avg_present,
+                MAX(a.present)  AS max_present,
+                COUNT(*)        AS burst_count
+            FROM attack_report_animals a
+            JOIN attack_reports r ON r.id = a.report_id
+            WHERE a.present > 0
+            GROUP BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+            ORDER BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+        """
+
+        # ── Paso 3: Metadatos por oasis — total_attacks, last_attack, utc_offset ─
+        meta_sql = """
+            SELECT
+                coord_x_dest,
+                coord_y_dest,
+                COUNT(*)         AS total_attacks,
+                MAX(attacked_at) AS last_attack,
+                utc_offset       AS last_utc_offset
+            FROM attack_reports
+            GROUP BY coord_x_dest, coord_y_dest
+            ORDER BY coord_x_dest, coord_y_dest
+        """
+        # Nota: utc_offset de la fila con MAX(attacked_at) obtenido con subconsulta
+        # correlacionada o con esta simplificación: la mayoría de oasis tienen un
+        # único offset. Si varía, se toma el del último reporte de forma aproximada.
+        # En v1 se acepta esta simplificación (EC-13).
+        meta_sql_precise = """
+            SELECT
+                a.coord_x_dest,
+                a.coord_y_dest,
+                a.total_attacks,
+                a.last_attack,
+                b.utc_offset AS last_utc_offset
+            FROM (
+                SELECT
+                    coord_x_dest,
+                    coord_y_dest,
+                    COUNT(*)         AS total_attacks,
+                    MAX(attacked_at) AS last_attack
+                FROM attack_reports
+                GROUP BY coord_x_dest, coord_y_dest
+            ) a
+            JOIN attack_reports b
+              ON b.coord_x_dest = a.coord_x_dest
+             AND b.coord_y_dest = a.coord_y_dest
+             AND b.attacked_at  = a.last_attack
+            GROUP BY a.coord_x_dest, a.coord_y_dest
+        """
+
+        # ── Paso 3b (v2.5): Atribución por reportes — DOS queries, una sola vez ──
+        # La query farm_coords_sql (JOIN farm_slots→farm_lists→villages) y el dict
+        # coords_to_villages fueron ELIMINADOS en v2.5. Bug v2.4 documentado en el
+        # Registro §17 del spec: aldea "05" invisible porque sus oasis aparecían en
+        # farm lists de 00/01/02/03 → la regla "primario gana" los atribuía a ellas.
+        # Atribución ahora EXCLUSIVAMENTE por blobs de reportes reales (RN-CITY-01 v2.5).
+        # Anti N+1: dos queries ejecutadas UNA sola vez, resultado indexado en dicts
+        # para cruce O(1) en Python (RN-CITY-07).
+
+        # Villages conocidas para canonización (a) — RN-CITY-02 v2.5
+        # TODO: filtrar por world_id cuando attack_reports.world_id deje de ser NULL (TR-11)
+        async with self._conn.execute("SELECT name FROM villages") as cursor:
+            all_village_names: list[str] = [r["name"] for r in await cursor.fetchall()]
+
+        # Blobs de origin_village_name por oasis para canonización (a) y extracción (b) — RN-CITY-03 v2.5
+        blobs_sql = """
+            SELECT coord_x_dest, coord_y_dest,
+                   GROUP_CONCAT(DISTINCT origin_village_name) AS blobs_raw
+            FROM attack_reports
+            GROUP BY coord_x_dest, coord_y_dest
+        """
+
+        async with self._conn.execute(comp_sql) as cursor:
+            comp_rows = await cursor.fetchall()
+        async with self._conn.execute(meta_sql_precise) as cursor:
+            meta_rows = await cursor.fetchall()
+        async with self._conn.execute(blobs_sql) as cursor:
+            blob_rows = await cursor.fetchall()
+
+        # Indexar blobs de origin_village_name por oasis (RN-CITY-03 v2.5)
+        blobs_by_oasis: dict[tuple[int, int], list[str]] = {}
+        for row in blob_rows:
+            k = (row["coord_x_dest"], row["coord_y_dest"])
+            raw = row["blobs_raw"] or ""
+            blobs_by_oasis[k] = [b for b in raw.split(",") if b]
+
+        # ── Paso 4: Indexar composición por (coord_x, coord_y) ────────────────
+        comp_by_oasis: dict[tuple, list[dict]] = {}
+        for row in comp_rows:
+            key = (row["coord_x_dest"], row["coord_y_dest"])
+            comp_by_oasis.setdefault(key, []).append({
+                "animal_ordinal": row["animal_ordinal"],
+                "avg_present":    round(row["avg_present"], 1),
+                "max_present":    int(row["max_present"]),
+                "burst_count":    int(row["burst_count"]),
+            })
+
+        # ── Paso 5-9: Construir la respuesta por oasis ─────────────────────────
+        oasis_entries = []
+        for meta in meta_rows:
+            cx = meta["coord_x_dest"]
+            cy = meta["coord_y_dest"]
+            key = (cx, cy)
+            comp_list = comp_by_oasis.get(key, [])
+            observed: set[int] = {c["animal_ordinal"] for c in comp_list}
+
+            # Inferir tipo y confianza (RN-TYP-01..05, EC-05, EC-07, EC-11)
+            tipo, confidence = infer_type(observed, comp_list)
+
+            set_base: set[int] = OASIS_TYPE_SETS.get(tipo, set()) if tipo else set()
+
+            # Calcular elapsed_seconds (RN-CD-01, EC-09)
+            last_attack_str: str = meta["last_attack"]
+            utc_offset_str: str | None = meta["last_utc_offset"]
+            elapsed_s = _calc_elapsed_seconds(
+                last_attack_str, utc_offset_str, computed_at
+            )
+
+            # Clasificar estado (RN-CD-02..04)
+            status = _spawn_status(elapsed_s, tipo, OASIS_TYPE_SETS, SPAWN_TIMER_S, COOLDOWN_THRESHOLD_S)
+
+            # Calcular composición de especies y peor combinación
+            species_list = []
+            def_inf_total = 0
+            def_cav_total = 0
+
+            for comp in comp_list:
+                ordinal = comp["animal_ordinal"]
+                is_anomaly = (tipo is not None) and (ordinal not in set_base)
+
+                # Peor combinación (RN-WORST-01..05)
+                wc = _worst_case_count(
+                    ordinal, comp["max_present"], tipo, is_anomaly, timer_s, SPAWN_TIMER_S
+                )
+
+                def_inf = nature_def.get(ordinal, {}).get("def_infantry", 0)
+                def_cav = nature_def.get(ordinal, {}).get("def_cavalry", 0)
+                def_inf_contrib = (wc * def_inf) if wc is not None else None
+                def_cav_contrib = (wc * def_cav) if wc is not None else None
+
+                # Acumular en summary solo animales del set base (RN-WORST-05)
+                if not is_anomaly and def_inf_contrib is not None:
+                    def_inf_total += def_inf_contrib
+                    def_cav_total += def_cav_contrib
+
+                species_list.append({
+                    "animal_ordinal":           ordinal,
+                    "icon_url":                 f"/static/icons/nature_{ordinal}.png",
+                    "avg_present_per_burst":    comp["avg_present"],
+                    "max_present_per_burst":    comp["max_present"],
+                    "is_anomaly":               is_anomaly,
+                    "spawn_timer_s":            SPAWN_TIMER_S.get(ordinal),
+                    "worst_case_count":         wc,
+                    "def_infantry_contribution": def_inf_contrib,
+                    "def_cavalry_contribution":  def_cav_contrib,
+                })
+
+            worst_summary = (
+                {"def_infantry_total": def_inf_total, "def_cavalry_total": def_cav_total}
+                if tipo is not None else None
+            )
+
+            oasis_entries.append({
+                "coord_x_dest":    cx,
+                "coord_y_dest":    cy,
+                "total_attacks":   meta["total_attacks"],
+                "last_attack":     last_attack_str,
+                "inferred_type":   tipo,
+                "confidence":      confidence,
+                "spawn_status":    status,
+                "elapsed_seconds": round(max(0.0, elapsed_s), 1),
+                "attackers": _infer_attackers(
+                    key, blobs_by_oasis, all_village_names
+                ),  # v2.6: pares (player, village) DISTINCT, ordenados A-Z (§4.7, RN-GROUP-01)
+                "species":         species_list,
+                "worst_case_summary": worst_summary,
+            })
+
+        # Ordenar: oasis con tipo inferido primero, luego por last_attack DESC
+        oasis_entries.sort(key=lambda e: e["last_attack"], reverse=True)
+        oasis_entries.sort(key=lambda e: e["inferred_type"] is None)
+
+        return {
+            "computed_at": computed_at.isoformat(),
+            "timer_min":   timer_min,
+            "oasis":       oasis_entries,
+        }
+
+    # ---------------------------------------------------------------------------
+    # EP-TD — Distribución temporal de animales por intervalo de farmeo (v3)
+    # ---------------------------------------------------------------------------
+
+    async def get_animal_temporal_distribution(
+        self,
+        interval_minutes: int,
+        lang: str,
+        translation_port,
+    ) -> dict:
+        """
+        Distribución empírica de animales por tipo de oasis para una cadencia dada (v4).
+
+        interval_minutes: frecuencia en minutos. Valores válidos: 6|7|10|15|30|60|120|180|240|300.
+        lang: código de idioma validado (25 soportados).
+        translation_port: puerto de traducción para resolver nombres de animales.
+
+        Binning por umbral inferior (Opción B): la ventana de F es [F*60, F_next*60) en segundos.
+        Ventana de 300: [18000, ∞) abierta por arriba.
+        Gaps < 360s (< 6 min) se descartan silenciosamente.
+
+        Infiere el tipo de cada oasis (hierro/arcilla/madera/cereal/sin_clasificar) usando
+        infer_type() (elevada desde _infer_type en v3). Reutiliza la misma query de
+        composición que EP-SPAWN para garantizar consistencia de clasificación.
+
+        Devuelve { interval_minutes, interval_label, window, n_reports_in_window, types }.
+        types: 5 secciones fijas (hierro, arcilla, madera, cereal, sin_clasificar).
+        Cada sección incluye (v4):
+          - max_present: int|null en cada animal (máximo sobre n_valid)
+          - total_animals: {avg, mode, max, n_valid, n_total} — suma de present por reporte,
+            regla TODO-O-NADA: excluye reportes con cualquier present=NULL de n_valid
+          - avg_bounty: {wood, clay, iron, crop, total} — media sobre TODOS los reportes
+            de la sección (denominador = n_reports_in_section, incluye derrotas con bounty=0)
+          - oasis_coords: [{x, y}] — oasis distintos del tipo ordenados (y ASC, x ASC)
+        200 siempre. Ver spec docs/specs/bd-ataques-oasis-temporal-distribution.md §8 EP-TD (v4).
+        """
+        # ── Constantes de módulo — tabla de bins (minutos), etiquetas y tipos (v3) ─
+        _WINDOWS: dict[int, tuple[int, int | None]] = {
+            6:   (6,   7),
+            7:   (7,   10),
+            10:  (10,  15),
+            15:  (15,  30),
+            30:  (30,  60),
+            60:  (60,  120),
+            120: (120, 180),
+            180: (180, 240),
+            240: (240, 300),
+            300: (300, None),  # abierto por arriba
+        }
+        _LABELS: dict[int, str] = {
+            6: "6 min", 7: "7 min", 10: "10 min", 15: "15 min", 30: "30 min",
+            60: "1h", 120: "2h", 180: "3h", 240: "4h", 300: "5h+",
+        }
+        # Labels de presentación v3 — "arcilla" → "Barro" (RN-TD18)
+        _TYPE_LABELS: dict[str | None, str] = {
+            "hierro": "Hierro",
+            "arcilla": "Barro",
+            "madera": "Madera",
+            "cereal": "Cereal",
+            None: "Sin clasificar",
+        }
+        # Orden fijo de las 5 secciones: None = sin_clasificar al final (RN-TD17)
+        _TYPE_ORDER: list[str | None] = ["hierro", "arcilla", "madera", "cereal", None]
+
+        lower_min, upper_min = _WINDOWS[interval_minutes]
+        lower_sec = lower_min * 60
+        upper_sec = upper_min * 60 if upper_min is not None else None
+        is_open = (upper_sec is None)
+        interval_label = _LABELS[interval_minutes]
+
+        # ── Paso 1 (v3): Inferir tipo por oasis — misma query que EP-SPAWN ───────
+        # Construye oasis_type_map: {(cx, cy): (tipo, confidence)} para cruzar con gaps.
+        # Oasis sin ningún present>0 (solo derrotas) no aparecen → tipo=None (EC-TD20).
+        comp_sql = """
+            SELECT
+                r.coord_x_dest,
+                r.coord_y_dest,
+                a.animal_ordinal,
+                COUNT(*) AS burst_count
+            FROM attack_report_animals a
+            JOIN attack_reports r ON r.id = a.report_id
+            WHERE a.present > 0
+            GROUP BY r.coord_x_dest, r.coord_y_dest, a.animal_ordinal
+        """
+        async with self._conn.execute(comp_sql) as cursor:
+            comp_rows = await cursor.fetchall()
+
+        # Agrupar composición por oasis
+        comp_by_oasis: dict[tuple[int, int], list[dict]] = defaultdict(list)
+        for row in comp_rows:
+            comp_by_oasis[(row["coord_x_dest"], row["coord_y_dest"])].append({
+                "animal_ordinal": row["animal_ordinal"],
+                "burst_count":    int(row["burst_count"]),
+            })
+
+        # Llamar a infer_type (función pública de módulo, elevada en v3 — RN-TD14)
+        oasis_type_map: dict[tuple[int, int], tuple[str | None, str | None]] = {}
+        for (cx, cy), comp_list in comp_by_oasis.items():
+            observed: set[int] = {c["animal_ordinal"] for c in comp_list}
+            tipo, confidence = infer_type(observed, comp_list)
+            oasis_type_map[(cx, cy)] = (tipo, confidence)
+
+        # ── Paso 2: Calcular gaps con LAG (ampliado con coord_x/y para cruzar con mapa) ─
+        # CRÍTICO: el LAG debe calcularse a nivel de REPORTE (una fila por ataque al oasis),
+        # no a nivel de animal-reporte. Si el JOIN con animals se hace ANTES del LAG,
+        # attack_reports tendría múltiples filas por reporte (una por animal) y el LAG
+        # tomaría el animal anterior del mismo reporte en lugar del reporte anterior.
+        # Solución: CTE que calcula los gaps a nivel de reporte, luego JOIN con animals.
+        # v4: la CTE incluye bounty_wood/clay/iron/crop del reporte para avg_bounty (RN-TD22,
+        # RN-TD25). El botín aparece repetido en cada fila de animal del JOIN, pero se
+        # deduplica en Python usando type_bounty[tipo] = dict{report_id → (w,c,i,cr)}.
+        gap_sql = """
+            WITH report_gaps AS (
+                SELECT
+                    r.id            AS report_id,
+                    r.coord_x_dest,
+                    r.coord_y_dest,
+                    r.attacked_at,
+                    r.bounty_wood,
+                    r.bounty_clay,
+                    r.bounty_iron,
+                    r.bounty_crop,
+                    CAST(
+                        (UNIXEPOCH(r.attacked_at) -
+                         UNIXEPOCH(LAG(r.attacked_at) OVER w)) AS INTEGER
+                    ) AS gap_seconds
+                FROM attack_reports r
+                WINDOW w AS (
+                    PARTITION BY r.coord_x_dest, r.coord_y_dest
+                    ORDER BY r.attacked_at
+                )
+            )
+            SELECT
+                rg.report_id,
+                rg.coord_x_dest,
+                rg.coord_y_dest,
+                rg.bounty_wood,
+                rg.bounty_clay,
+                rg.bounty_iron,
+                rg.bounty_crop,
+                a.animal_ordinal,
+                a.animal_name,
+                a.present,
+                rg.gap_seconds
+            FROM report_gaps rg
+            JOIN attack_report_animals a ON a.report_id = rg.report_id
+            ORDER BY a.animal_ordinal, rg.coord_x_dest, rg.coord_y_dest, rg.attacked_at
+        """
+        async with self._conn.execute(gap_sql) as cursor:
+            raw_rows = await cursor.fetchall()
+
+        # ── Paso 3: Filtrar gaps inválidos (RN-TD02, RN-TD04, EC-TD07) ──────────
+        # Descarta: NULL (primer ataque), <= 0 (relojes inconsistentes), < 360 (< 6 min)
+        valid_rows = [
+            row for row in raw_rows
+            if row["gap_seconds"] is not None
+            and row["gap_seconds"] > 0
+            and row["gap_seconds"] >= 360
+        ]
+
+        # ── Paso 4: Filtrar por la ventana de la frecuencia solicitada (RN-TD03) ──
+        if is_open:
+            window_rows = [r for r in valid_rows if r["gap_seconds"] >= lower_sec]
+        else:
+            window_rows = [
+                r for r in valid_rows
+                if lower_sec <= r["gap_seconds"] < upper_sec
+            ]
+
+        # ── Paso 5 (v3): Etiquetar cada gap con el tipo de su oasis ──────────────
+        # Si el oasis no está en oasis_type_map → tipo=None → "sin_clasificar" (EC-TD20)
+        def _get_tipo_confidence(row) -> tuple[str | None, str | None]:
+            return oasis_type_map.get(
+                (row["coord_x_dest"], row["coord_y_dest"]), (None, None)
+            )
+
+        # ── Paso 6 (v3+v4): Agrupar por (tipo, animal_ordinal) ──────────────────
+        # type_oasis_ids[tipo]: set de (cx,cy) con al menos un gap en la ventana
+        # type_oasis_low[tipo]: set de (cx,cy) con confidence="low"
+        # type_groups[tipo][ordinal]: { n_total, valids, name_raw }
+        # type_report_ids[tipo]: set de report_ids distintos en la sección
+        # --- v4: estructuras auxiliares para avg_bounty y total_animals ---
+        # type_bounty[tipo]: dict{report_id → (wood, clay, iron, crop)} — deduplicado
+        #   por report_id (RN-TD25: el botín NO se acumula por fila de animal, sino
+        #   UNA VEZ por reporte distinto dentro de la sección).
+        # type_report_nulls[tipo]: dict{report_id → bool} — True si algún animal del
+        #   reporte tiene present=NULL (regla TODO-O-NADA de RN-TD21).
+        # type_report_sums[tipo]: dict{report_id → int} — suma de present no nulos del
+        #   reporte para ese tipo (se usa solo si any_null=False al final).
+        type_oasis_ids:    dict = defaultdict(set)
+        type_oasis_low:    dict = defaultdict(set)
+        type_groups:       dict = defaultdict(
+            lambda: defaultdict(lambda: {"n_total": 0, "valids": [], "name_raw": ""})
+        )
+        type_report_ids:   dict = defaultdict(set)
+        type_bounty:       dict = defaultdict(dict)       # {tipo: {rid: (w,c,i,cr)}}
+        type_report_nulls: dict = defaultdict(dict)       # {tipo: {rid: bool}}
+        type_report_sums:  dict = defaultdict(dict)       # {tipo: {rid: int}}
+
+        for row in window_rows:
+            tipo, confidence = _get_tipo_confidence(row)
+            cx, cy = row["coord_x_dest"], row["coord_y_dest"]
+            rid = row["report_id"]
+
+            type_oasis_ids[tipo].add((cx, cy))
+            if confidence == "low":
+                type_oasis_low[tipo].add((cx, cy))
+            type_report_ids[tipo].add(rid)
+
+            # v4: botín — deduplicar por report_id (RN-TD25)
+            if rid not in type_bounty[tipo]:
+                type_bounty[tipo][rid] = (
+                    row["bounty_wood"],
+                    row["bounty_clay"],
+                    row["bounty_iron"],
+                    row["bounty_crop"],
+                )
+
+            # v4: total_animals — acumular sum/any_null por reporte (RN-TD21)
+            present_val = row["present"]
+            if rid not in type_report_nulls[tipo]:
+                type_report_nulls[tipo][rid] = False
+                type_report_sums[tipo][rid] = 0
+            if present_val is None:
+                type_report_nulls[tipo][rid] = True   # marca: este reporte tiene NULL
+            else:
+                type_report_sums[tipo][rid] += present_val
+
+            ordinal = row["animal_ordinal"]
+            type_groups[tipo][ordinal]["n_total"] += 1
+            if present_val is not None:  # RN-TD05: NULL (derrota) excluido de media/moda
+                type_groups[tipo][ordinal]["valids"].append(present_val)
+            if not type_groups[tipo][ordinal]["name_raw"]:
+                type_groups[tipo][ordinal]["name_raw"] = row["animal_name"]
+
+        # ── Paso 7: Resolver nombres localizados vía translation_port ──────────
+        # El dict devuelto por JsonTranslationAdapter usa la clave "nombre" (no "name").
+        # El enum se accede como Tribe.NATURE (mayúsculas), no Tribe.nature.
+        names_by_ordinal: dict[int, str] = {}
+        try:
+            name_entries = translation_port.get_troop_names_by_tribe(Tribe.NATURE, lang)
+            names_by_ordinal = {entry["ordinal"]: entry["nombre"] for entry in name_entries}
+        except Exception:
+            logger.warning(
+                "get_animal_temporal_distribution: fallo al resolver nombres para lang=%s",
+                lang,
+            )
+
+        # ── Paso 8: Helpers para construir los campos de cada sección ────────────
+
+        def _build_animals(tipo: str | None) -> list[dict]:
+            """Lista de animales con estadísticas (v4: incluye max_present, RN-TD20)."""
+            result = []
+            for ordinal in sorted(type_groups[tipo].keys()):
+                data = type_groups[tipo][ordinal]
+                n_valid = len(data["valids"])
+
+                # Media redondeada a 2 decimales (RN-TD06)
+                avg_present = (
+                    round(sum(data["valids"]) / n_valid, 2) if n_valid > 0 else None
+                )
+
+                # Moda en Python con Counter; empates → lista ordenada ASC (RN-TD07)
+                if n_valid > 0:
+                    counter = Counter(data["valids"])
+                    max_count = max(counter.values())
+                    mode_present = sorted(k for k, v in counter.items() if v == max_count)
+                else:
+                    mode_present = []
+
+                # v4: máximo de present sobre n_valid (RN-TD20)
+                max_present = max(data["valids"]) if n_valid > 0 else None
+
+                # Nombre localizado con fallback al nombre de BD (EC-TD16)
+                localized_name = names_by_ordinal.get(ordinal, data["name_raw"])
+
+                result.append({
+                    "animal_ordinal": ordinal,
+                    "animal_name": localized_name,
+                    "icon_url": f"/static/icons/nature_{ordinal}.png",
+                    "avg_present": avg_present,
+                    "mode_present": mode_present,
+                    "max_present": max_present,
+                    "n_total": data["n_total"],
+                    "n_valid": n_valid,
+                })
+            return result
+
+        def _build_avg_bounty(tipo: str | None) -> dict:
+            """
+            Media del botín por sección. Denominador = n_reports_in_section (RN-TD22).
+            Incluye derrotas con bounty=0 (DDL NOT NULL DEFAULT 0).
+            avg_bounty.total = media del total (w+c+i+cr) por reporte, NO suma de medias
+            individuales (RN-TD23). Enteros redondeados (redondeo bancario Python 3).
+            Sección vacía → todos a 0 (EC-TD33).
+            """
+            bounty_dict = type_bounty[tipo]   # {rid: (w,c,i,cr)}
+            report_ids_section = type_report_ids[tipo]
+            n = len(report_ids_section)
+            if n == 0:
+                return {"wood": 0, "clay": 0, "iron": 0, "crop": 0, "total": 0}
+
+            sum_w = sum_c = sum_i = sum_cr = sum_total = 0
+            for rid in report_ids_section:
+                if rid in bounty_dict:
+                    w, c, i, cr = bounty_dict[rid]
+                else:
+                    # El reporte cayó en la ventana pero no tiene entrada en bounty_dict
+                    # (no debería ocurrir porque el SELECT incluye bounty en report_gaps,
+                    # pero defensivamente tratamos como 0).
+                    w = c = i = cr = 0
+                sum_w  += w
+                sum_c  += c
+                sum_i  += i
+                sum_cr += cr
+                sum_total += w + c + i + cr
+
+            return {
+                "wood":  round(sum_w  / n),
+                "clay":  round(sum_c  / n),
+                "iron":  round(sum_i  / n),
+                "crop":  round(sum_cr / n),
+                "total": round(sum_total / n),
+            }
+
+        def _build_total_animals(tipo: str | None) -> dict:
+            """
+            Distribución del total de animales por reporte (suma de present de todos los
+            animales del reporte). Regla TODO-O-NADA (RN-TD21): si cualquier animal del
+            reporte tiene present=NULL, ese reporte se excluye de n_valid.
+            n_total = n_reports_in_section (invariante).
+            Sección vacía → {avg:null, mode:[], max:null, n_valid:0, n_total:0}.
+            """
+            report_ids_section = type_report_ids[tipo]
+            n_total = len(report_ids_section)
+            if n_total == 0:
+                return {"avg": None, "mode": [], "max": None, "n_valid": 0, "n_total": 0}
+
+            # Recoger totales válidos (reportes sin ningún NULL en sus animales)
+            valid_totals: list[int] = []
+            nulls_dict = type_report_nulls[tipo]
+            sums_dict  = type_report_sums[tipo]
+            for rid in report_ids_section:
+                # Si el reporte no apareció en el bucle de window_rows para este tipo
+                # (defensivo) → tratarlo como any_null=True (excluir de n_valid).
+                any_null = nulls_dict.get(rid, True)
+                if not any_null:
+                    valid_totals.append(sums_dict.get(rid, 0))
+
+            n_valid = len(valid_totals)
+            if n_valid == 0:
+                return {"avg": None, "mode": [], "max": None, "n_valid": 0, "n_total": n_total}
+
+            avg = round(sum(valid_totals) / n_valid, 2)
+            counter = Counter(valid_totals)
+            max_count = max(counter.values())
+            mode = sorted(k for k, v in counter.items() if v == max_count)
+            maximum = max(valid_totals)
+
+            return {"avg": avg, "mode": mode, "max": maximum, "n_valid": n_valid, "n_total": n_total}
+
+        def _build_oasis_coords(tipo: str | None) -> list[dict]:
+            """
+            Lista de coordenadas de oasis distintos del tipo con al menos un gap en
+            la ventana. Serializa type_oasis_ids[tipo] ordenado (y ASC, x ASC) (RN-TD24).
+            Sección vacía → [].
+            """
+            oasis_set = type_oasis_ids[tipo]
+            if not oasis_set:
+                return []
+            return [
+                {"x": cx, "y": cy}
+                for cx, cy in sorted(oasis_set, key=lambda coord: (coord[1], coord[0]))
+            ]
+
+        # ── Paso 9 (v3+v4): Construir array types con las 5 secciones fijas (RN-TD17) ─
+        # Orden fijo: hierro → arcilla → madera → cereal → sin_clasificar
+        # v4: cada sección incluye oasis_coords, avg_bounty, total_animals (RN-TD20..25)
+        types: list[dict] = []
+        for tipo in _TYPE_ORDER:
+            oasis_type_key = tipo if tipo is not None else "sin_clasificar"
+            types.append({
+                "oasis_type":             oasis_type_key,
+                "oasis_type_label":       _TYPE_LABELS[tipo],
+                "n_oasis":                len(type_oasis_ids[tipo]),
+                "n_oasis_low_confidence": len(type_oasis_low[tipo]),
+                "n_reports_in_section":   len(type_report_ids[tipo]),
+                "oasis_coords":           _build_oasis_coords(tipo),
+                "avg_bounty":             _build_avg_bounty(tipo),
+                "total_animals":          _build_total_animals(tipo),
+                "animals":                _build_animals(tipo),
+            })
+
+        # ── Paso 10: n_reports_in_window = suma de las 5 secciones (RN-TD19) ────
+        n_reports_in_window = sum(len(type_report_ids[t]) for t in _TYPE_ORDER)
+
+        # ── Paso 11: Construir respuesta raíz ────────────────────────────────────
+        return {
+            "interval_minutes": interval_minutes,
+            "interval_label": interval_label,
+            "window": {
+                "lower_min": lower_min,
+                "upper_min": upper_min,
+                "is_open": is_open,
+            },
+            "n_reports_in_window": n_reports_in_window,
+            "types": types,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Helpers de módulo — EP-SPAWN (spawn composition)
+# ---------------------------------------------------------------------------
+
+def _load_nature_defense_stats() -> dict[int, dict[str, int]]:
+    """
+    Carga los stats de defensa de animales de naturaleza desde
+    seeds/game_data/troop_stats.json (tribe == "nature").
+
+    Devuelve { ordinal: { "def_infantry": N, "def_cavalry": N } }.
+
+    RN-CAT-02: si el fichero no existe o es inválido, devuelve dict vacío
+    (el cálculo de worst_case continúa con def=0 en lugar de fallar).
+    """
+    import os
+    import json as _json
+
+    # Ruta relativa al directorio raíz del proyecto (2 niveles arriba de adapters/)
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = os.path.join(base_dir, "seeds", "game_data", "troop_stats.json")
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = _json.load(f)
+    except (FileNotFoundError, ValueError):
+        logger.warning("_load_nature_defense_stats: no se pudo cargar %s", path)
+        return {}
+
+    result: dict[int, dict[str, int]] = {}
+    for entry in data:
+        if entry.get("tribe") == "nature":
+            ordinal = entry.get("ordinal")
+            if ordinal is not None:
+                result[int(ordinal)] = {
+                    "def_infantry": int(entry.get("def_infantry", 0)),
+                    "def_cavalry":  int(entry.get("def_cavalry",  0)),
+                }
+    return result
+
+
+def infer_type(
+    observed_ordinales: set[int],
+    comp_list: list[dict],
+) -> tuple[str | None, str | None]:
+    """
+    Infiere el tipo de oasis por similitud de Jaccard |∩|/|∪| (RN-TYP-02 v2).
+
+    Función pública de módulo (elevada desde _infer_type en v3) para que tanto
+    EP-SPAWN como EP-TD la reutilicen sin duplicar el cálculo de Jaccard (RN-TD14).
+
+    En caso de empate: tipo con menor cardinal de set; si persiste, alfabético (EC-07).
+    Confianza: "low" si <3 bursts con present>0, "medium" si >=3 (RN-TYP-04/05).
+
+    Devuelve (tipo, confidence). Si observed vacío → (None, None) (RN-TYP-05).
+    """
+    from core.game_data.oasis_spawn_catalog import OASIS_TYPE_SETS
+
+    if not observed_ordinales:
+        return (None, None)
+
+    # RN-TYP-02 (v2): similitud de Jaccard (|∩| / |∪|), NO solapamiento bruto.
+    # El solapamiento bruto hacía que "cereal" (set universal {1..10}) ganara casi
+    # siempre y anulaba la detección de anomalías. Jaccard penaliza el set universal:
+    # un oasis de hierro {1,2,4} da 1.0 con hierro y 0.3 con cereal → gana hierro; y
+    # un cocodrilo en un oasis de arcilla {1,2,5,8} clasifica como arcilla con el
+    # cocodrilo (ordinal 8) marcado como anomalía. Ver spec §4.2 / EC-07 / EC-11.
+    scores: dict[str, float] = {}
+    for tipo, set_base in OASIS_TYPE_SETS.items():
+        union = observed_ordinales | set_base
+        scores[tipo] = len(observed_ordinales & set_base) / len(union) if union else 0.0
+
+    max_score = max(scores.values())
+    if max_score == 0.0:
+        # Sin intersección con ningún set (EC-11): elegir el más específico
+        # (menor cardinal de set) y, si persiste, alfabético.
+        candidates = list(OASIS_TYPE_SETS.keys())
+    else:
+        candidates = [t for t, s in scores.items() if s == max_score]
+    candidates.sort(key=lambda t: (len(OASIS_TYPE_SETS[t]), t))
+    tipo = candidates[0]
+
+    # Confianza basada en total de bursts (sumatorio de burst_count) (RN-TYP-04)
+    total_bursts = sum(c["burst_count"] for c in comp_list)
+    confidence = "medium" if total_bursts >= 3 else "low"
+
+    return (tipo, confidence)
+
+
+def _calc_elapsed_seconds(
+    last_attack_str: str,
+    utc_offset_str: str | None,
+    computed_at,
+) -> float:
+    """
+    Calcula los segundos transcurridos entre last_attack (hora local del servidor)
+    y computed_at (UTC).
+
+    Reutiliza _parse_utc_offset (RN-CD-01 / spec §14 paso 3).
+    EC-09: si el resultado es negativo (reloj adelantado), devuelve 0.0.
+    """
+    try:
+        # attacked_at es naive (hora local del servidor), sin zona horaria
+        local_dt = datetime.fromisoformat(last_attack_str)
+        offset_td = _parse_utc_offset(utc_offset_str) if utc_offset_str else timedelta(0)
+        # Convertir a UTC restando el offset: hora_utc = hora_local - offset
+        attack_utc = local_dt - offset_td
+        # Hacer aware para comparar con computed_at (UTC aware)
+        attack_utc_aware = attack_utc.replace(tzinfo=timezone.utc)
+        elapsed = (computed_at - attack_utc_aware).total_seconds()
+    except Exception:
+        logger.warning("_calc_elapsed_seconds: no se pudo parsear '%s'", last_attack_str)
+        elapsed = 0.0
+    return max(0.0, elapsed)
+
+
+def _spawn_status(
+    elapsed_s: float,
+    tipo: str | None,
+    oasis_type_sets: dict,
+    spawn_timer_s: dict,
+    cooldown_threshold_s: int,
+) -> str:
+    """
+    Clasifica el estado de spawn del oasis (RN-CD-02..04).
+
+    - "respawning": elapsed_s <= max(timers del set base)
+    - "cooldown":   elapsed_s > cooldown_threshold_s (4h por defecto)
+    - "unknown":    tipo no inferido o zona intermedia
+
+    RN-CD-04: si tipo es None → "unknown".
+    """
+    if tipo is None:
+        return "unknown"
+
+    set_base = oasis_type_sets.get(tipo, set())
+    relevant_timers = [spawn_timer_s[o] for o in set_base if o in spawn_timer_s]
+    if not relevant_timers:
+        return "unknown"
+
+    umbral_respawning = max(relevant_timers)  # el animal más lento (RN-CD-03)
+    if elapsed_s <= umbral_respawning:
+        return "respawning"
+    elif elapsed_s > cooldown_threshold_s:
+        return "cooldown"
+    else:
+        return "unknown"  # zona intermedia indeterminada (RN-CD-03 nota)
+
+
+def _worst_case_count(
+    animal_ordinal: int,
+    max_present: int,
+    tipo: str | None,
+    is_anomaly: bool,
+    timer_s: int,
+    spawn_timer_s: dict,
+) -> int | None:
+    """
+    Calcula el conteo de animales en el peor caso para un animal del set base.
+
+    RN-WORST-01: spawns_en_intervalo = floor(timer_s / SPAWN_TIMER_S[o])
+    RN-WORST-02: peor_combo = max_present + spawns_en_intervalo
+    RN-WORST-04: si tipo es None → None
+    RN-WORST-05: anomalías → None (excluidas del cálculo)
+    """
+    if tipo is None or is_anomaly:
+        return None
+    spawn_t = spawn_timer_s.get(animal_ordinal, 0)
+    if spawn_t == 0:
+        return None
+    extra_spawns = math.floor(timer_s / spawn_t)
+    return max_present + extra_spawns
+
+
+# ---------------------------------------------------------------------------
+# Constante de marcadores "from village" multi-idioma — EP-SPAWN v2.6
+# ---------------------------------------------------------------------------
+# Cada entrada es el literal que precede al nombre de aldea en origin_village_name.
+# Para añadir un idioma: añadir su marcador aquí sin tocar la lógica principal.
+# El marcador inglés "from village" está VERIFICADO con datos reales del usuario.
+# Los demás son best-effort/extensibles — ver RN-CITY-12 en el spec.
+_FROM_VILLAGE_MARKERS: tuple[str, ...] = (
+    "from village",      # inglés      (servidor del usuario — verificado)
+    "aus dem Dorf",      # alemán
+    "desde la aldea",    # español
+    "du village",        # francés
+    "из деревни",        # ruso
+    "dalla village",     # italiano (placeholder — extender si se verifica)
+    "من قرية",           # árabe
+    "van het dorp",      # neerlandés
+    "från byn",          # sueco
+    "z vesnice",         # checo
+    "из села",           # serbio/ucraniano (variante cirílica)
+)
+
+
+def _extract_player_village_from_blob(
+    blob: str,
+    all_village_names: list[str],
+) -> list[tuple[str, str]]:
+    """
+    Extrae todos los pares (player, village) de un blob origin_village_name.
+
+    Algoritmo v2.6 (§4.7 del spec):
+      A. Quitar tag de alianza "[...] " si existe.
+      B. Buscar primer marcador en _FROM_VILLAGE_MARKERS (case-insensitive).
+         - Si encontrado y player+village no vacíos:
+             player = texto antes del marcador (stripped)
+             village_raw = texto después del marcador (stripped)
+         - Si no encontrado o player/village vacíos:
+             player = "Desconocido", village_raw = None
+      C. Canonizar village_raw contra all_village_names (substring, mayor longitud gana).
+         - Si village_raw es None: intentar canonizar el blob entero (resto).
+         - Si canonización da varios de igual longitud: un par por cada canónico.
+         - Si canonización no da nada: usar village_raw directamente (o "Desconocido").
+
+    Devuelve lista de pares (player, village). Nunca vacía:
+    mínimo [("Desconocido", "Desconocido")].
+
+    RN-ACCT-01..07, RN-CITY-01..12, EC-ACCT-01..06, EC-CITY-01..12.
+    """
+    # A. Quitar tag de alianza
+    resto = blob.strip()
+    if resto.startswith("["):
+        closing = resto.find("]")
+        if closing != -1:
+            resto = resto[closing + 1:].strip()
+
+    # B. Buscar marcador
+    resto_lower = resto.lower()
+    player: str = "Desconocido"
+    village_raw: str | None = None
+    for marker in _FROM_VILLAGE_MARKERS:
+        idx = resto_lower.find(marker.lower())
+        if idx != -1:
+            player_candidate = resto[:idx].strip()
+            village_candidate = resto[idx + len(marker):].strip()
+            if player_candidate and village_candidate:
+                player = player_candidate
+                village_raw = village_candidate
+                break
+            # Si player_candidate vacío o village_candidate vacío: blob inválido (EC-ACCT-06)
+
+    # C. Canonizar village
+    search_in = village_raw if village_raw is not None else resto
+    matches = [vname for vname in all_village_names if vname in search_in]
+    if matches:
+        max_len = max(len(m) for m in matches)
+        canonical = [m for m in matches if len(m) == max_len]
+        return [(player, c) for c in canonical]
+
+    # Sin canonización: usar village_raw o "Desconocido"
+    village = village_raw if village_raw else "Desconocido"
+    return [(player, village)]
+
+
+def _infer_attackers(
+    key: tuple[int, int],
+    blobs_by_oasis: dict[tuple[int, int], list[str]],
+    all_village_names: list[str],
+) -> list[dict[str, str]]:
+    """
+    Devuelve la lista DISTINCT de pares {player, village} para un oasis,
+    ordenada por player A-Z y luego village A-Z.
+
+    Nunca vacía: mínimo [{"player":"Desconocido","village":"Desconocido"}].
+
+    Reemplaza _infer_origin_villages() de v2.5 (§4.7 v2.6, RN-GROUP-01,
+    RN-ACCT-05, RN-CITY-01 v2.6). El JOIN farm_slots sigue eliminado.
+    """
+    blobs = blobs_by_oasis.get(key, [])
+    found: set[tuple[str, str]] = set()
+
+    for blob in blobs:
+        pairs = _extract_player_village_from_blob(blob, all_village_names)
+        found.update(pairs)
+
+    if not found:
+        return [{"player": "Desconocido", "village": "Desconocido"}]
+
+    sorted_pairs = sorted(found, key=lambda p: (p[0], p[1]))
+    return [{"player": p, "village": v} for p, v in sorted_pairs]

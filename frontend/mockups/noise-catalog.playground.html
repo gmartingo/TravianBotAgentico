@@ -1,0 +1,2760 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Catálogo de Ruido Humano de Navegación (Pestaña "Ruido") v2
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador.
+
+  VISTAS TABLA (sin cambios vs v1):
+    1. Lista de destinos — normal (datos, ruido activo)
+    2. Config global expandida
+    3. Formulario de nuevo destino (inline)
+    4. Tabla con destino muerto (is_dead=true)
+    5. Tabla vacía (sin destinos)
+    6. Estado cargando (skeleton)
+    7. Error de API
+
+  VISTAS WIZARD (nuevas en v2):
+    8.  Drawer — Wizard paso 0: origen (aldeas cargadas)
+    9.  Drawer — Wizard paso 0: origen (villages_loaded=false)
+   10.  Drawer — Formulario añadir paso (outerHTML vacío)
+   11.  Drawer — Feedback selector ÚNICO (is_unique=true)
+   12.  Drawer — Feedback selector NO ÚNICO (is_unique=false + alternativas)
+   13.  Drawer — Feedback selector ERROR (422 HTML malformado)
+   14.  Drawer — Lista de pasos acumulados (2 pasos, listos para guardar)
+   15.  Drawer — Guardando ruta (spinner)
+   16.  Drawer — Actualizando aldeas (spinner EP-N13)
+   17.  Drawer — Error 409 bot desconectado
+
+  VISTAS RUTAS EXISTENTES (actualizadas en v2):
+   18.  Drawer — Lista rutas: una activa, una is_dead
+   19.  Drawer — Ruta expandida: resumen solo lectura
+   20.  Drawer — Editor pasos (BlockEditor) con columna URL esperada
+
+  Controles:
+    — Toggle tema (claro / oscuro)
+    — Selector de vista
+    — Modo Editar: drag & drop con imán de 8px
+    — Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec: docs/design/noise-catalog-ui.md (v2)
+  Spec funcional wizard: docs/specs/noise-path-wizard.md (implementado)
+  Spec funcional base:   docs/specs/human-sessions.md §17 (implementado)
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Ruido (playground)</title>
+<style>
+/* ===== TOKENS ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--success-subtle:rgba(36,138,61,.12);
+  --danger:#C9352C;--danger-subtle:rgba(201,53,44,.08);
+  --info:#0A6FCC;--info-subtle:rgba(10,111,204,.10);
+  --mode-hardcore:var(--success);--mode-hardcore-subtle:rgba(36,138,61,.12);
+  --mode-idle:var(--info);--mode-idle-subtle:rgba(10,111,204,.10);
+  --mode-disconnected:#8E8E93;--mode-disconnected-subtle:rgba(142,142,147,.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --sidebar-w:180px;--topbar-h:52px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --mode-hardcore-subtle:rgba(52,199,89,.12);--mode-idle-subtle:rgba(10,132,255,.12);
+  --mode-disconnected-subtle:rgba(142,142,147,.14);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --mode-hardcore:var(--success);--mode-hardcore-subtle:rgba(52,199,89,.12);
+  --mode-idle:var(--info);--mode-idle-subtle:rgba(10,132,255,.12);
+  --mode-disconnected:#8E8E93;--mode-disconnected-subtle:rgba(142,142,147,.14);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+button,select,input,textarea{font-family:inherit;}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:200;
+  font-size:12px;position:sticky;top:0;
+}
+.toolbar-label{color:var(--text-secondary);font-size:11px;white-space:nowrap;}
+.toolbar select,.toolbar button{
+  font-family:inherit;font-size:12px;padding:4px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+}
+.toolbar button{transition:background var(--dur-fast);}
+.toolbar button:hover{background:var(--surface-2);}
+.toolbar button.active{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.toolbar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+.grow{flex:1;}
+
+/* ===== APP SHELL ===== */
+.app-shell{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ===== FAKE TOPBAR ===== */
+.fake-topbar{
+  height:var(--topbar-h);display:flex;align-items:center;gap:12px;
+  padding:0 20px;background:var(--surface);
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.tb-square{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0;
+}
+.tb-center{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;overflow:hidden;}
+.tb-email{color:var(--accent-text);font-family:var(--font-mono);font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tb-sep{color:var(--text-disabled);}
+.tb-status{display:flex;align-items:center;gap:4px;color:var(--success);}
+.tb-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.tb-server{color:var(--text-secondary);font-family:var(--font-mono);font-size:12px;}
+.tb-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+
+/* ===== FAKE SIDEBAR ===== */
+.fake-sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;padding:12px 8px;gap:2px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);font-size:14px;color:var(--text);
+  cursor:pointer;position:relative;border:none;background:transparent;
+  width:100%;text-align:start;
+  transition:background var(--dur-fast) var(--ease);
+}
+.nav-item.active{background:var(--accent-subtle);color:var(--accent-text);font-weight:500;}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.nav-item:not(.active):hover{background:var(--surface-2);}
+.nav-item.disabled{color:var(--text-disabled);cursor:not-allowed;}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.7;}
+.nav-soon{font-size:10px;color:var(--text-disabled);margin-inline-start:auto;}
+
+/* ===== MAIN CONTENT ===== */
+.main-content{flex:1;min-width:0;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:20px;}
+
+/* ===== DRAG & DROP ===== */
+.drag-canvas{position:relative;min-height:600px;width:100%;}
+.drag-block{position:absolute;cursor:grab;user-select:none;min-width:240px;}
+.drag-block:active{cursor:grabbing;z-index:100;}
+.drag-block.dragging{opacity:.85;box-shadow:var(--shadow-lg);}
+.drag-handle{
+  position:absolute;top:-1px;inset-inline-start:-1px;inset-inline-end:-1px;
+  height:22px;cursor:grab;border-radius:var(--radius-md) var(--radius-md) 0 0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);border-bottom:1px dashed var(--border);
+  opacity:0;transition:opacity var(--dur-fast);z-index:2;
+}
+.drag-block:hover .drag-handle,.drag-block.dragging .drag-handle{opacity:1;}
+.drag-handle-dots{color:var(--text-tertiary);font-size:10px;letter-spacing:2px;}
+.drag-block .card,.drag-block .noise-table-wrap,.drag-block .config-panel{pointer-events:none;}
+
+/* ===== CARDS ===== */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:16px 20px;
+}
+.card-title{
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:12px;
+}
+
+/* ===== TOGGLE (noise_enabled) ===== */
+.toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer;}
+.toggle-track{
+  width:36px;height:20px;border-radius:var(--radius-full);
+  background:var(--border-strong);position:relative;
+  transition:background var(--dur-fast);flex-shrink:0;
+}
+.toggle-track.on{background:var(--success);}
+.toggle-thumb{
+  position:absolute;top:2px;inset-inline-start:2px;
+  width:16px;height:16px;border-radius:50%;background:var(--surface);
+  transition:inset-inline-start var(--dur-fast),left var(--dur-fast);
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+.toggle-track.on .toggle-thumb{inset-inline-start:18px;}
+.toggle-label{font-size:13px;font-weight:500;}
+.toggle-label.on{color:var(--success);}
+.toggle-label.off{color:var(--text-secondary);}
+
+/* ===== CONFIG PANEL ===== */
+.config-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+}
+.config-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;cursor:pointer;
+  border-bottom:1px solid transparent;
+  transition:border-color var(--dur-fast),background var(--dur-fast);
+}
+.config-header.open{border-bottom-color:var(--border);background:var(--surface-2);}
+.config-header:hover{background:var(--surface-2);}
+.config-chevron{
+  width:16px;height:16px;flex-shrink:0;color:var(--text-secondary);
+  transition:transform var(--dur-base) var(--ease);
+}
+.config-chevron.open{transform:rotate(90deg);}
+.config-header-title{font-size:14px;font-weight:500;flex:1;}
+.config-body{
+  padding:16px 20px;display:flex;flex-direction:column;gap:16px;
+  overflow:hidden;max-height:0;transition:max-height var(--dur-base) var(--ease);
+}
+.config-body.open{max-height:400px;}
+.config-row{display:flex;flex-direction:column;gap:6px;}
+.config-row-label{font-size:12px;color:var(--text-secondary);font-weight:500;}
+.config-row-hint{font-size:11px;color:var(--text-tertiary);}
+.minmax-wrap{display:flex;align-items:center;gap:8px;}
+.minmax-input{
+  width:72px;padding:5px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-family:var(--font-mono);
+  font-size:13px;font-variant-numeric:tabular-nums;
+}
+.minmax-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.minmax-input.error{border-color:var(--danger);}
+.minmax-sep{color:var(--text-secondary);font-size:13px;padding:0 2px;}
+.minmax-error{font-size:11px;color:var(--danger);margin-top:2px;}
+.config-footer{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  padding-top:4px;
+}
+.config-anti-hint{font-size:11px;color:var(--text-tertiary);padding:0 20px 12px;}
+
+/* ===== BADGE / CHIP ===== */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:var(--radius-full);
+  font-size:11px;font-weight:500;letter-spacing:.03em;white-space:nowrap;
+}
+.badge-map{background:var(--info-subtle);color:var(--info);}
+.badge-oasis{background:var(--success-subtle);color:var(--success);}
+.badge-profile{background:var(--accent-subtle);color:var(--accent-text);}
+.badge-messages{background:var(--mode-idle-subtle);color:var(--mode-idle);}
+.badge-reports,.badge-building,.badge-other{background:var(--surface-2);color:var(--text-secondary);}
+.badge-dead{background:var(--danger-subtle);color:var(--danger);}
+.badge-active{background:var(--success-subtle);color:var(--success);}
+.badge-inactive{background:var(--surface-2);color:var(--text-secondary);}
+.badge-origin{background:var(--surface-2);color:var(--text-secondary);}
+
+/* ===== DESTINATIONS TABLE WRAPPER ===== */
+.noise-table-wrap{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;
+}
+.noise-table-toolbar{
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.noise-table-toolbar-title{font-size:14px;font-weight:600;flex:1;}
+.filter-select{
+  font-family:inherit;font-size:12px;padding:4px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+}
+.checkbox-label{
+  display:flex;align-items:center;gap:5px;font-size:12px;
+  color:var(--text-secondary);cursor:pointer;user-select:none;
+}
+.checkbox-label input{cursor:pointer;}
+.noise-table{width:100%;border-collapse:collapse;}
+.noise-table th{
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);padding:8px 12px;text-align:start;
+  border-bottom:1px solid var(--border);background:var(--surface-2);
+}
+.noise-table th.right{text-align:end;}
+.noise-table td{
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  vertical-align:middle;
+}
+.noise-table tr:last-child td{border-bottom:none;}
+.noise-table tr:hover td{background:var(--surface-2);}
+.noise-table tr.dead-row td{background:rgba(201,53,44,.03);}
+.dest-name{
+  font-size:14px;font-weight:500;color:var(--accent-text);
+  cursor:pointer;display:flex;align-items:center;gap:5px;
+}
+.dest-name:hover{color:var(--accent-hover);}
+.dest-url{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+.dead-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:11px;color:var(--danger);font-weight:500;margin-top:3px;
+}
+.weight-val{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;}
+.safe-icon{font-size:14px;}
+.safe-icon.yes{color:var(--success);}
+.safe-icon.no{color:var(--text-tertiary);}
+.paths-count{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;}
+.paths-count.zero{color:var(--text-tertiary);}
+.btn-delete-row{
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-tertiary);cursor:pointer;
+  display:grid;place-items:center;font-size:14px;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.btn-delete-row:hover{background:var(--danger-subtle);color:var(--danger);}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:48px;text-align:center;
+}
+.empty-state-icon{font-size:32px;opacity:.5;}
+.empty-state-title{font-size:14px;font-weight:500;color:var(--text-secondary);}
+.empty-state-hint{font-size:12px;color:var(--text-tertiary);}
+
+/* ===== ADD DESTINATION FORM (inline) ===== */
+.add-form{
+  background:var(--surface-2);border-top:1px solid var(--border);
+  padding:16px 20px;display:flex;flex-direction:column;gap:12px;
+}
+.add-form-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-field{display:flex;flex-direction:column;gap:4px;}
+.form-field label{font-size:11px;font-weight:500;color:var(--text-secondary);}
+.form-input{
+  padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;
+}
+.form-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.form-input.error{border-color:var(--danger);}
+.form-error{font-size:11px;color:var(--danger);}
+.form-hint{font-size:11px;color:var(--text-tertiary);}
+.form-select{
+  padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;
+}
+.form-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:4px;}
+
+/* ===== BUTTONS ===== */
+.btn-primary{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 16px;border:none;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;}
+.btn-secondary{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:13px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-secondary:hover{background:var(--surface-2);}
+.btn-ghost{
+  padding:5px 10px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;
+  font-family:inherit;transition:background var(--dur-fast),color var(--dur-fast);
+}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);}
+
+/* ===== SPINNER ===== */
+.spinner{
+  width:16px;height:16px;border:2px solid var(--border);
+  border-top-color:var(--text-secondary);border-radius:50%;
+  animation:spin .8s linear infinite;display:inline-block;
+}
+.spinner-sm{width:12px;height:12px;border-width:1.5px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skeleton{background:var(--surface-2);border-radius:var(--radius-sm);
+  animation:pulse 1.4s ease-in-out infinite alternate;}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
+
+/* ===== LOADING / ERROR STATES ===== */
+.loading-container{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:48px;color:var(--text-secondary);font-size:13px;
+}
+.error-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;padding:32px;text-align:center;
+}
+.error-state-icon{font-size:28px;}
+.error-state-msg{font-size:13px;color:var(--text-secondary);max-width:300px;}
+.btn-retry{
+  padding:6px 16px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;
+}
+.btn-retry:hover{background:var(--surface-2);}
+
+/* ===== DRAWER ===== */
+.drawer-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;
+  animation:fadeIn var(--dur-base) var(--ease) forwards;
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.drawer-panel{
+  position:fixed;inset-block:0;inset-inline-end:0;
+  width:440px;max-width:100%;
+  background:var(--surface);border-inline-start:1px solid var(--border);
+  box-shadow:var(--shadow-lg);z-index:301;
+  display:flex;flex-direction:column;
+  animation:slideIn var(--dur-base) var(--ease) forwards;
+  overflow:hidden;
+}
+@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.drawer-header{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:16px 20px 14px;border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.drawer-close{
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  display:grid;place-items:center;font-size:16px;flex-shrink:0;
+  transition:background var(--dur-fast);
+}
+.drawer-close:hover{background:var(--surface-2);}
+.drawer-title-wrap{flex:1;}
+.drawer-title{font-size:16px;font-weight:600;}
+.drawer-subtitle{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+.drawer-meta{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;}
+.drawer-body{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px;}
+.drawer-section{display:flex;flex-direction:column;gap:10px;}
+.drawer-section-title{
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-secondary);padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+.drawer-field-row{display:flex;align-items:center;gap:12px;}
+.drawer-field-label{font-size:12px;color:var(--text-secondary);min-width:80px;}
+.drawer-field-value{font-size:13px;color:var(--text);flex:1;}
+.drawer-field-value.mono{font-family:var(--font-mono);}
+.drawer-field-value.readonly{color:var(--text-tertiary);font-style:italic;}
+.drawer-footer{
+  padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;justify-content:flex-end;gap:8px;
+}
+
+/* ===== PATHS LIST ===== */
+.paths-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.paths-list{display:flex;flex-direction:column;gap:8px;}
+.path-card{
+  border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;
+  background:var(--surface);
+}
+.path-card.inactive{opacity:.7;}
+.path-header{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.path-header:hover{background:var(--surface-2);}
+.path-expand-icon{
+  width:16px;height:16px;flex-shrink:0;color:var(--text-secondary);
+  transition:transform var(--dur-base) var(--ease);display:grid;place-items:center;font-size:12px;
+}
+.path-expand-icon.open{transform:rotate(90deg);}
+.path-label{font-size:13px;font-weight:500;flex:1;}
+.path-active-toggle{cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11px;}
+.path-body{
+  border-top:1px solid var(--border);padding:12px;
+  background:var(--surface-2);
+  overflow:hidden;max-height:0;
+  transition:max-height var(--dur-slow) var(--ease);
+}
+.path-body.open{max-height:600px;}
+
+/* ===== STEP EDITOR ===== */
+.step-table{width:100%;border-collapse:collapse;}
+.step-table th{
+  font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);padding:5px 6px;text-align:start;
+  border-bottom:1px solid var(--border);background:var(--surface);
+}
+.step-table th.right{text-align:end;}
+.step-table td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.step-table tr:last-child td{border-bottom:none;}
+.step-order{font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);text-align:center;width:24px;}
+.step-select,.step-input{
+  font-size:12px;padding:3px 6px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+}
+.step-select{min-width:130px;}
+.step-input{width:100%;}
+.step-input-sm{width:56px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+.step-input.error{border-color:var(--danger);}
+.step-editor-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);
+}
+.step-add-btn{
+  display:flex;align-items:center;gap:5px;font-size:12px;
+  padding:5px 10px;border:1px dashed var(--border-strong);border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.step-add-btn:hover{background:var(--surface);color:var(--text);}
+.step-validation-error{
+  display:flex;align-items:center;gap:5px;
+  padding:6px 10px;border-radius:var(--radius-sm);
+  background:var(--danger-subtle);border:1px solid var(--danger);
+  font-size:11px;color:var(--danger);margin-top:6px;
+}
+
+/* ===== WIZARD STYLES (v2) ===== */
+.wizard-panel{
+  background:var(--surface-2);border:1px dashed var(--border-strong);
+  border-radius:var(--radius-md);padding:14px 16px;
+  display:flex;flex-direction:column;gap:12px;
+}
+.wizard-panel-title{
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:2px;
+}
+.wizard-field{display:flex;flex-direction:column;gap:4px;}
+.wizard-field label{font-size:11px;font-weight:500;color:var(--text-secondary);}
+.wizard-textarea{
+  padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:12px;
+  font-family:var(--font-mono);resize:vertical;min-height:72px;
+  line-height:1.5;
+}
+.wizard-textarea:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.wizard-textarea.error{border-color:var(--danger);}
+.wizard-hint{font-size:11px;color:var(--text-tertiary);line-height:1.4;}
+.wizard-collapsible-header{
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  font-size:11px;color:var(--text-secondary);user-select:none;
+}
+.wizard-collapsible-body{display:none;margin-top:6px;}
+.wizard-collapsible-body.open{display:block;}
+.wizard-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px;}
+
+/* Feedback de selector derivado */
+.derive-feedback{
+  border-radius:var(--radius-sm);padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.derive-feedback.unique{
+  background:var(--success-subtle);border:1px solid var(--success);
+}
+.derive-feedback.not-unique{
+  background:rgba(138,100,24,.08);border:1px solid var(--accent);
+}
+.derive-feedback.error{
+  background:var(--danger-subtle);border:1px solid var(--danger);
+}
+.derive-selector-val{
+  font-family:var(--font-mono);font-size:13px;font-weight:500;
+  color:var(--text);word-break:break-all;
+}
+.derive-meta{font-size:11px;color:var(--text-secondary);}
+.derive-status-unique{font-size:12px;color:var(--success);font-weight:500;}
+.derive-status-not-unique{font-size:12px;color:var(--accent-text);font-weight:500;}
+.derive-status-error{font-size:12px;color:var(--danger);font-weight:500;}
+.derive-alternatives{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;}
+.derive-alt-btn{
+  padding:3px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text-secondary);font-size:11px;
+  font-family:var(--font-mono);cursor:pointer;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.derive-alt-btn:hover{background:var(--surface-2);color:var(--text);}
+.derive-alt-btn.selected{background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent);}
+.derive-manual-row{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.derive-manual-input{
+  flex:1;padding:4px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:12px;font-family:var(--font-mono);
+}
+.derive-manual-input.error{border-color:var(--danger);}
+.derive-manual-error{font-size:11px;color:var(--danger);margin-top:2px;}
+
+/* Wizard steps list (pasos acumulados) */
+.wizard-steps-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+.wizard-step-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:12px;
+}
+.wizard-step-order{
+  font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);
+  min-width:16px;text-align:center;
+}
+.wizard-step-action{font-weight:500;color:var(--text-secondary);min-width:44px;}
+.wizard-step-selector{
+  font-family:var(--font-mono);font-size:11px;color:var(--text);flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.wizard-step-url{font-family:var(--font-mono);font-size:11px;color:var(--info);}
+
+/* Origin selector */
+.origin-select{
+  font-family:inherit;font-size:13px;padding:6px 10px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;width:100%;
+}
+.origin-select:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.origin-no-villages{
+  font-size:11px;color:var(--text-tertiary);margin-top:4px;
+  display:flex;align-items:center;gap:8px;
+}
+.btn-refresh-villages{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text-secondary);font-size:11px;cursor:pointer;
+  font-family:inherit;
+  transition:background var(--dur-fast);
+}
+.btn-refresh-villages:hover{background:var(--surface-2);}
+
+/* Error 409 inline */
+.error-409{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:var(--radius-sm);
+  background:var(--danger-subtle);border:1px solid var(--danger);
+  font-size:11px;color:var(--danger);
+}
+
+/* Ruta is_dead en lista */
+.path-card.dead-path{border-color:var(--danger);background:var(--danger-subtle);}
+.path-card.dead-path .path-label{color:var(--danger);}
+.dead-path-meta{display:flex;align-items:center;gap:8px;margin-top:4px;padding:0 12px 8px;}
+.btn-reactivate{
+  padding:4px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text-secondary);font-size:11px;cursor:pointer;
+  font-family:inherit;
+  transition:background var(--dur-fast);
+}
+.btn-reactivate:hover{background:var(--surface-2);}
+
+/* Paso resumen (solo lectura) */
+.step-summary{display:flex;flex-direction:column;gap:5px;padding:8px 12px;background:var(--surface);}
+.step-summary-item{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);
+}
+.step-summary-item:last-child{border-bottom:none;}
+.step-summary-order{font-family:var(--font-mono);color:var(--text-tertiary);min-width:20px;}
+.step-summary-action{color:var(--text-secondary);min-width:56px;font-weight:500;}
+.step-summary-selector{font-family:var(--font-mono);color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.step-summary-expected{font-family:var(--font-mono);color:var(--info);font-size:11px;white-space:nowrap;}
+
+/* ===== v4 — EDITAR RUTA: RENAME INLINE + OVERFLOW MENU ===== */
+
+/* Icono lápiz: visible solo en hover de la cabecera (o siempre en la vista mockup) */
+.rename-pencil-btn{
+  appearance:none;border:none;background:transparent;cursor:pointer;
+  padding:3px;color:var(--text-tertiary);border-radius:var(--radius-sm);
+  display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  opacity:0;transition:opacity var(--dur-fast);
+}
+.path-header:hover .rename-pencil-btn,
+.rename-pencil-btn:focus-visible{opacity:1;}
+/* En las vistas demo del mockup lo forzamos visible */
+.rename-pencil-btn.demo-visible{opacity:1;}
+
+/* Input inline de renombrado */
+.rename-input{
+  flex:1;padding:4px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:13px;
+}
+.rename-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.rename-input.error{border-color:var(--danger);}
+
+/* Botones ✓ y ✕ del inline rename */
+.rename-confirm,.rename-cancel{
+  width:24px;height:24px;flex-shrink:0;
+  border-radius:var(--radius-sm);font-size:13px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-family:inherit;transition:background var(--dur-fast);
+}
+.rename-confirm{
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--text-secondary);
+}
+.rename-confirm:hover:not(:disabled){background:var(--surface-2);color:var(--success);}
+.rename-confirm:disabled{opacity:.45;cursor:not-allowed;}
+.rename-cancel{
+  border:none;background:transparent;color:var(--text-tertiary);
+}
+.rename-cancel:hover{background:var(--surface-2);}
+
+/* Error inline bajo el input de renombrado */
+.rename-error-msg{
+  width:100%;padding-inline-start:8px;font-size:11px;color:var(--danger);margin-top:2px;
+}
+
+/* Botón [Editar pasos] en cabecera (mismo estilo que [Probar]) */
+.btn-edit-steps{
+  display:inline-flex;align-items:center;gap:4px;
+  height:24px;padding:0 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:11px;cursor:pointer;flex-shrink:0;
+  transition:background var(--dur-fast);
+}
+.btn-edit-steps:hover{background:var(--surface-2);}
+
+/* Botón ⋯ (overflow menu) — reemplaza al ✕ */
+.btn-overflow{
+  width:26px;height:26px;border:none;background:transparent;cursor:pointer;
+  color:var(--text-tertiary);border-radius:var(--radius-sm);
+  display:flex;align-items:center;justify-content:center;font-size:16px;letter-spacing:1px;
+  flex-shrink:0;transition:background var(--dur-fast),color var(--dur-fast);
+}
+.btn-overflow:hover{background:var(--surface-2);color:var(--text);}
+
+/* Mini popover del menú overflow */
+.overflow-menu{
+  position:absolute;top:calc(100% + 4px);inset-inline-end:0;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-sm);box-shadow:var(--shadow-md);
+  min-width:160px;z-index:50;padding:4px 0;
+}
+.overflow-menu-item{
+  width:100%;text-align:start;padding:8px 12px;
+  border:none;background:transparent;
+  font-size:13px;font-family:inherit;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.overflow-menu-item.danger{color:var(--danger);}
+.overflow-menu-item:hover{background:var(--danger-subtle);}
+
+/* ===== LAYOUT EXPORT PANEL ===== */
+#export-panel{
+  position:fixed;inset-inline-end:16px;bottom:80px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
+  padding:14px;width:320px;z-index:400;display:none;
+}
+#export-panel h3{font-size:13px;font-weight:600;margin-bottom:8px;}
+#export-textarea{
+  width:100%;height:120px;resize:vertical;font-family:var(--font-mono);font-size:11px;
+  padding:8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text);
+}
+.export-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px;}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR ===== -->
+<div class="toolbar" role="toolbar" aria-label="Controles del playground">
+  <span class="toolbar-label">TravianBot Playground</span>
+  <span style="font-size:11px;color:var(--text-tertiary)">Ruido</span>
+  <div class="toolbar-sep"></div>
+
+  <span class="toolbar-label">Tema:</span>
+  <button id="btn-theme" aria-label="Cambiar tema">Claro</button>
+
+  <div class="toolbar-sep"></div>
+
+  <span class="toolbar-label">Vista:</span>
+  <select id="view-select" aria-label="Seleccionar vista">
+    <optgroup label="Tabla de destinos">
+      <option value="1">1 — Lista normal (ruido activo)</option>
+      <option value="2">2 — Config global expandida</option>
+      <option value="3">3 — Formulario nuevo destino</option>
+      <option value="4">4 — Destino muerto (is_dead)</option>
+      <option value="5">5 — Tabla vacía</option>
+      <option value="6">6 — Cargando (skeleton)</option>
+      <option value="7">7 — Error de API</option>
+    </optgroup>
+    <optgroup label="Wizard de rutas (nuevo v2)">
+      <option value="8">8 — Wizard paso 0: origen (aldeas cargadas)</option>
+      <option value="9">9 — Wizard paso 0: origen (sin aldeas)</option>
+      <option value="10">10 — Wizard: formulario paso (outerHTML vacío)</option>
+      <option value="11">11 — Wizard: feedback selector ÚNICO</option>
+      <option value="12">12 — Wizard: feedback selector NO ÚNICO</option>
+      <option value="13">13 — Wizard: feedback selector ERROR 422</option>
+      <option value="14">14 — Wizard: pasos acumulados (2 pasos)</option>
+      <option value="15">15 — Wizard: guardando ruta (spinner)</option>
+      <option value="16">16 — Wizard: actualizando aldeas (EP-N13)</option>
+      <option value="17">17 — Wizard: error 409 bot desconectado</option>
+    </optgroup>
+    <optgroup label="Rutas existentes (actualizado v2)">
+      <option value="18">18 — Rutas: activa + is_dead</option>
+      <option value="19">19 — Ruta expandida: resumen solo lectura</option>
+      <option value="20">20 — Editor pasos (BlockEditor + URL esperada)</option>
+    </optgroup>
+    <optgroup label="Probar ruta — EP-N14 (nuevo v3)">
+      <option value="21">21 — PathCard idle: botón "Probar" disponible</option>
+      <option value="22">22 — PathCard loading: "Probando..." + caption</option>
+      <option value="23">23 — PathTestResultPanel OK: todos los pasos verdes</option>
+      <option value="24">24 — PathTestResultPanel ERROR: fallo en paso 1</option>
+      <option value="25">25 — PathCard aviso 409 inline (bot desconectado)</option>
+    </optgroup>
+    <optgroup label="Editar ruta — v4 (renombrar + acciones descubribles)">
+      <option value="26">26 — PathCard v4 idle: cabecera rediseñada (hover = ✎ visible)</option>
+      <option value="27">27 — PathCard v4 renombrando: input inline + ✓/✕</option>
+      <option value="28">28 — PathCard v4 guardando renombrado: spinner</option>
+      <option value="29">29 — PathCard v4 error al renombrar: borde rojo + mensaje</option>
+      <option value="30">30 — PathCard v4 menú ⋯ abierto: popover eliminar</option>
+    </optgroup>
+  </select>
+
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-edit" aria-label="Activar modo edición" aria-pressed="false">Editar</button>
+  <button id="btn-save-layout" aria-label="Guardar layout">Guardar</button>
+  <button id="btn-reset" aria-label="Restablecer layout">Restablecer</button>
+  <button id="btn-export" aria-label="Exportar layout JSON">Exportar</button>
+
+  <div class="grow"></div>
+  <span style="font-size:11px;color:var(--text-tertiary)">docs/design/noise-catalog-ui.md (v4)</span>
+</div>
+
+<!-- ===== APP SHELL ===== -->
+<div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+
+  <!-- Fake topbar -->
+  <div class="fake-topbar" role="banner">
+    <div class="tb-square" aria-hidden="true">T</div>
+    <div class="tb-center">
+      <span class="tb-email">usuario@ejemplo.com</span>
+      <span class="tb-sep">·</span>
+      <span class="tb-status"><span class="tb-dot"></span>Corriendo</span>
+      <span class="tb-sep">·</span>
+      <span class="tb-server">ts1.travian.com</span>
+    </div>
+    <div class="tb-actions">
+      <span style="font-size:12px;color:var(--text-secondary)">Gauls</span>
+    </div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- Fake sidebar -->
+    <nav class="fake-sidebar" aria-label="Navegación del mundo">
+      <button class="nav-item" aria-label="Dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" aria-label="Agentes">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        Agentes
+      </button>
+      <button class="nav-item" aria-label="Farm Lists">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="16" y2="12"/></svg>
+        Farm Lists
+      </button>
+      <button class="nav-item" aria-label="Sesión">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        Sesión
+      </button>
+      <button class="nav-item active" aria-label="Ruido" aria-current="page">
+        <!-- IconNoise: ondas wifi irregulares -->
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 12.5 a9 9 0 0 1 14 0"/>
+          <path d="M8 15.5 a5 5 0 0 1 8 0"/>
+          <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+        Ruido
+      </button>
+      <button class="nav-item disabled" aria-disabled="true" aria-label="Calculadora (próximamente)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="10" y2="16"/><line x1="14" y1="16" x2="16" y2="16"/></svg>
+        Calculadora
+        <span class="nav-soon">Pronto</span>
+      </button>
+    </nav>
+
+    <!-- Main content area -->
+    <main class="main-content" id="main-content" role="main" aria-label="Catálogo de Ruido">
+      <div class="drag-canvas" id="drag-canvas">
+        <!-- Vista 1: Lista normal -->
+        <div class="drag-block" id="block-view1" style="left:0;top:0;width:100%;max-width:900px;" data-view="1">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+
+          <!-- Config panel colapsado + Tabla de destinos -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+
+            <!-- Config panel (colapsado por defecto — toggle visible) -->
+            <div class="config-panel">
+              <div class="config-header" id="config-header-v1" role="button" aria-expanded="false" aria-controls="config-body-v1" tabindex="0">
+                <!-- Chevron -->
+                <svg class="config-chevron" id="config-chevron-v1" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+                <span class="config-header-title">Configuración de ruido</span>
+                <!-- Toggle noise_enabled (siempre visible) -->
+                <div class="toggle-wrap" role="switch" aria-checked="true" aria-label="Ruido habilitado" tabindex="0" onclick="event.stopPropagation()">
+                  <div class="toggle-track on" id="toggle-v1">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                  <span class="toggle-label on" id="toggle-label-v1">Activo</span>
+                </div>
+              </div>
+              <div class="config-body" id="config-body-v1">
+                <div class="config-row">
+                  <div class="config-row-label">HARDCORE — peticiones/hora</div>
+                  <div class="minmax-wrap">
+                    <input type="number" class="minmax-input" value="80" aria-label="Mínimo HARDCORE" min="1">
+                    <span class="minmax-sep">—</span>
+                    <input type="number" class="minmax-input" value="150" aria-label="Máximo HARDCORE" min="1">
+                  </div>
+                </div>
+                <div class="config-row">
+                  <div class="config-row-label">PASIVO — peticiones/hora</div>
+                  <div class="minmax-wrap">
+                    <input type="number" class="minmax-input" value="15" aria-label="Mínimo PASIVO" min="1">
+                    <span class="minmax-sep">—</span>
+                    <input type="number" class="minmax-input" value="40" aria-label="Máximo PASIVO" min="1">
+                  </div>
+                </div>
+                <div class="config-row">
+                  <div class="config-row-label">Tiempo en página (dwell)</div>
+                  <div class="minmax-wrap">
+                    <input type="number" class="minmax-input" value="2.0" step="0.5" aria-label="Dwell mínimo" min="0" style="width:80px;">
+                    <span class="minmax-sep">—</span>
+                    <input type="number" class="minmax-input" value="30.0" step="0.5" aria-label="Dwell máximo" min="0" style="width:80px;">
+                    <span style="font-size:12px;color:var(--text-secondary);margin-inline-start:4px;">s</span>
+                  </div>
+                </div>
+                <div class="config-footer">
+                  <button class="btn-ghost">Cancelar</button>
+                  <button class="btn-primary" disabled><span>Guardar configuración</span></button>
+                </div>
+              </div>
+              <div class="config-anti-hint" id="config-hint-v1" style="display:none;">
+                La variedad de navegación reduce la huella estadística del bot.
+              </div>
+            </div>
+
+            <!-- Destinations table -->
+            <div class="noise-table-wrap">
+              <div class="noise-table-toolbar">
+                <span class="noise-table-toolbar-title">Destinos de navegación</span>
+                <select class="filter-select" aria-label="Filtrar por categoría">
+                  <option>Todas las categorías</option>
+                  <option>Mapa</option>
+                  <option>Info oasis</option>
+                  <option>Perfil</option>
+                  <option>Mensajes</option>
+                  <option>Reportes</option>
+                  <option>Edificios</option>
+                  <option>Otros</option>
+                </select>
+                <label class="checkbox-label">
+                  <input type="checkbox" aria-label="Mostrar destinos muertos">
+                  Mostrar muertos
+                </label>
+                <button class="btn-primary" style="font-size:12px;padding:5px 12px;" aria-label="Añadir destino">+ Añadir destino</button>
+              </div>
+              <table class="noise-table" aria-label="Destinos de navegación de ruido">
+                <thead>
+                  <tr>
+                    <th scope="col">Nombre / URL</th>
+                    <th scope="col">Categoría</th>
+                    <th scope="col" class="right">Peso</th>
+                    <th scope="col">Seguro</th>
+                    <th scope="col" class="right">Rutas</th>
+                    <th scope="col" style="width:36px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div class="dest-name" role="button" tabindex="0" aria-label="Ver rutas de Mapa mundial">Mapa mundial</div>
+                      <div class="dest-url">/karte.php</div>
+                    </td>
+                    <td><span class="badge badge-map">Mapa</span></td>
+                    <td style="text-align:end;"><span class="weight-val">2.0</span></td>
+                    <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                    <td style="text-align:end;"><span class="paths-count">2</span></td>
+                    <td><button class="btn-delete-row" aria-label="Eliminar Mapa mundial">✕</button></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div class="dest-name" role="button" tabindex="0" aria-label="Ver rutas de Estadísticas globales">Estadísticas globales</div>
+                      <div class="dest-url">/stats.php</div>
+                    </td>
+                    <td><span class="badge badge-reports">Reportes</span></td>
+                    <td style="text-align:end;"><span class="weight-val">1.0</span></td>
+                    <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                    <td style="text-align:end;"><span class="paths-count zero">0</span></td>
+                    <td><button class="btn-delete-row" aria-label="Eliminar Estadísticas globales">✕</button></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div class="dest-name" role="button" tabindex="0" aria-label="Ver rutas de Mensajes">Mensajes</div>
+                      <div class="dest-url">/nachrichten.php</div>
+                    </td>
+                    <td><span class="badge badge-messages">Mensajes</span></td>
+                    <td style="text-align:end;"><span class="weight-val">0.5</span></td>
+                    <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                    <td style="text-align:end;"><span class="paths-count">1</span></td>
+                    <td><button class="btn-delete-row" aria-label="Eliminar Mensajes">✕</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Vista 2: Config expandida -->
+        <div class="drag-block" id="block-view2" style="left:0;top:0;width:100%;max-width:700px;display:none;" data-view="2">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div class="config-panel">
+            <div class="config-header open" role="button" aria-expanded="true">
+              <svg class="config-chevron open" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+              <span class="config-header-title">Configuración de ruido</span>
+              <div class="toggle-wrap" role="switch" aria-checked="true" aria-label="Ruido habilitado" tabindex="0">
+                <div class="toggle-track on"><div class="toggle-thumb"></div></div>
+                <span class="toggle-label on">Activo</span>
+              </div>
+            </div>
+            <div class="config-body open">
+              <div class="config-row">
+                <div class="config-row-label">HARDCORE — peticiones/hora</div>
+                <div class="minmax-wrap">
+                  <input type="number" class="minmax-input" value="80" min="1" aria-label="Mínimo HARDCORE">
+                  <span class="minmax-sep">—</span>
+                  <input type="number" class="minmax-input" value="120" min="1" aria-label="Máximo HARDCORE">
+                </div>
+                <div class="config-row-hint">Valor cambiado (era 150)</div>
+              </div>
+              <div class="config-row">
+                <div class="config-row-label">PASIVO — peticiones/hora</div>
+                <div class="minmax-wrap">
+                  <input type="number" class="minmax-input" value="15" min="1" aria-label="Mínimo PASIVO">
+                  <span class="minmax-sep">—</span>
+                  <input type="number" class="minmax-input" value="40" min="1" aria-label="Máximo PASIVO">
+                </div>
+              </div>
+              <div class="config-row">
+                <div class="config-row-label">Tiempo en página (dwell)</div>
+                <div class="minmax-wrap">
+                  <input type="number" class="minmax-input" value="2.0" step="0.5" min="0" aria-label="Dwell mínimo" style="width:80px;">
+                  <span class="minmax-sep">—</span>
+                  <input type="number" class="minmax-input" value="30.0" step="0.5" min="0" aria-label="Dwell máximo" style="width:80px;">
+                  <span style="font-size:12px;color:var(--text-secondary);margin-inline-start:4px;">s</span>
+                </div>
+              </div>
+              <div class="config-footer">
+                <button class="btn-ghost">Cancelar</button>
+                <button class="btn-primary"><span>Guardar configuración</span></button>
+              </div>
+            </div>
+            <div class="config-anti-hint">
+              La variedad de navegación reduce la huella estadística del bot.
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 3: Formulario nuevo destino -->
+        <div class="drag-block" id="block-view3" style="left:0;top:0;width:100%;max-width:900px;display:none;" data-view="3">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="noise-table-wrap">
+              <div class="noise-table-toolbar">
+                <span class="noise-table-toolbar-title">Destinos de navegación</span>
+                <button class="btn-primary" style="font-size:12px;padding:5px 12px;">+ Añadir destino</button>
+              </div>
+              <!-- Formulario inline -->
+              <div class="add-form">
+                <div class="add-form-title">Nuevo destino</div>
+                <div class="form-grid">
+                  <div class="form-field">
+                    <label for="f-url">URL (patrón)</label>
+                    <input type="text" id="f-url" class="form-input" placeholder="/karte.php" value="/karte.php">
+                    <span class="form-hint">Ruta relativa o URL completa del servidor Travian.</span>
+                  </div>
+                  <div class="form-field">
+                    <label for="f-label">Etiqueta</label>
+                    <input type="text" id="f-label" class="form-input" placeholder="Mapa mundial" value="Mapa mundial">
+                  </div>
+                  <div class="form-field">
+                    <label for="f-cat">Categoría</label>
+                    <select id="f-cat" class="form-select">
+                      <option value="MAP" selected>Mapa</option>
+                      <option value="OASIS_INFO">Info oasis</option>
+                      <option value="PLAYER_PROFILE">Perfil</option>
+                      <option value="MESSAGES">Mensajes</option>
+                      <option value="REPORTS">Reportes</option>
+                      <option value="BUILDING_VIEW">Edificios</option>
+                      <option value="OTHER">Otros</option>
+                    </select>
+                  </div>
+                  <div class="form-field">
+                    <label for="f-weight">Peso de frecuencia</label>
+                    <input type="number" id="f-weight" class="form-input" value="2.0" step="0.1" min="0.1" style="width:100px;">
+                    <span class="form-hint">Mayor peso = más visitas relativas.</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="checkbox" checked aria-label="Destino seguro">
+                    Seguro (el bot navega aunque no sea el origen esperado)
+                  </label>
+                </div>
+                <div class="form-footer">
+                  <button class="btn-ghost">Cancelar</button>
+                  <button class="btn-primary">Crear destino</button>
+                </div>
+              </div>
+              <!-- Fila existente para contexto -->
+              <table class="noise-table">
+                <tbody>
+                  <tr>
+                    <td><div class="dest-name">Estadísticas globales</div><div class="dest-url">/stats.php</div></td>
+                    <td><span class="badge badge-reports">Reportes</span></td>
+                    <td style="text-align:end;"><span class="weight-val">1.0</span></td>
+                    <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                    <td style="text-align:end;"><span class="paths-count zero">0</span></td>
+                    <td><button class="btn-delete-row">✕</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 4: Destino muerto -->
+        <div class="drag-block" id="block-view4" style="left:0;top:0;width:100%;max-width:900px;display:none;" data-view="4">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div class="noise-table-wrap">
+            <div class="noise-table-toolbar">
+              <span class="noise-table-toolbar-title">Destinos de navegación</span>
+              <label class="checkbox-label">
+                <input type="checkbox" checked>
+                Mostrar muertos
+              </label>
+              <button class="btn-primary" style="font-size:12px;padding:5px 12px;">+ Añadir destino</button>
+            </div>
+            <table class="noise-table">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre / URL</th>
+                  <th scope="col">Categoría</th>
+                  <th scope="col" class="right">Peso</th>
+                  <th scope="col">Seguro</th>
+                  <th scope="col" class="right">Rutas</th>
+                  <th scope="col" style="width:36px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <div class="dest-name">Mapa mundial</div>
+                    <div class="dest-url">/karte.php</div>
+                  </td>
+                  <td><span class="badge badge-map">Mapa</span></td>
+                  <td style="text-align:end;"><span class="weight-val">2.0</span></td>
+                  <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                  <td style="text-align:end;"><span class="paths-count">2</span></td>
+                  <td><button class="btn-delete-row">✕</button></td>
+                </tr>
+                <tr class="dead-row">
+                  <td>
+                    <div class="dest-name" style="display:flex;align-items:center;gap:5px;">
+                      <span style="color:var(--danger);font-size:13px;" aria-hidden="true">⚠</span>
+                      <span style="color:var(--danger);">Perfil rival XYZ</span>
+                    </div>
+                    <div class="dest-url">/spieler.php?uid=42313</div>
+                    <div class="dead-chip">
+                      <span class="badge badge-dead">Muerto</span>
+                      <span style="font-family:var(--font-mono);font-size:11px;color:var(--danger);">· 5 fallos</span>
+                    </div>
+                  </td>
+                  <td><span class="badge badge-profile">Perfil</span></td>
+                  <td style="text-align:end;"><span class="weight-val" style="color:var(--text-tertiary);">0.5</span></td>
+                  <td><span class="safe-icon no" aria-label="Inseguro">✗</span></td>
+                  <td style="text-align:end;"><span class="paths-count">1</span></td>
+                  <td><button class="btn-delete-row" aria-label="Eliminar Perfil rival XYZ">✕</button></td>
+                </tr>
+                <tr>
+                  <td>
+                    <div class="dest-name">Mensajes</div>
+                    <div class="dest-url">/nachrichten.php</div>
+                  </td>
+                  <td><span class="badge badge-messages">Mensajes</span></td>
+                  <td style="text-align:end;"><span class="weight-val">0.5</span></td>
+                  <td><span class="safe-icon yes" aria-label="Seguro">✓</span></td>
+                  <td style="text-align:end;"><span class="paths-count">1</span></td>
+                  <td><button class="btn-delete-row">✕</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <div style="padding:8px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-tertiary);">
+              1 destino oculto (muerto). Activa "Mostrar muertos" para verlos.
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 5: Tabla vacía -->
+        <div class="drag-block" id="block-view5" style="left:0;top:0;width:100%;max-width:900px;display:none;" data-view="5">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div class="noise-table-wrap">
+            <div class="noise-table-toolbar">
+              <span class="noise-table-toolbar-title">Destinos de navegación</span>
+              <button class="btn-primary" style="font-size:12px;padding:5px 12px;">+ Añadir destino</button>
+            </div>
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="40" height="40" style="color:var(--text-tertiary)"><path d="M5 12.5 a9 9 0 0 1 14 0"/><path d="M8 15.5 a5 5 0 0 1 8 0"/><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+              </div>
+              <div class="empty-state-title">Sin destinos de navegación todavía.</div>
+              <div class="empty-state-hint">Añade destinos para que el bot navegue de forma más humana.</div>
+              <button class="btn-primary" style="margin-top:4px;">Añadir primer destino</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             VISTAS 6-7: Tabla estados (renumeradas)
+             ========================================== -->
+        <!-- Vista 6: Skeleton loading (era vista 9) -->
+        <div class="drag-block" id="block-view6" style="left:0;top:0;width:100%;max-width:900px;display:none;" data-view="6">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="skeleton" style="height:52px;border-radius:var(--radius-md);"></div>
+            <div class="noise-table-wrap">
+              <div class="noise-table-toolbar">
+                <span class="noise-table-toolbar-title">Destinos de navegación</span>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <div class="skeleton" style="height:14px;width:160px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:60px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:30px;border-radius:3px;margin-inline-start:auto;"></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <div class="skeleton" style="height:14px;width:140px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:70px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:20px;border-radius:3px;margin-inline-start:auto;"></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <div class="skeleton" style="height:14px;width:180px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:50px;border-radius:3px;"></div>
+                  <div class="skeleton" style="height:14px;width:25px;border-radius:3px;margin-inline-start:auto;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 7: Error de API (era vista 10) -->
+        <div class="drag-block" id="block-view7" style="left:0;top:0;width:100%;max-width:900px;display:none;" data-view="7">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div class="noise-table-wrap">
+            <div class="noise-table-toolbar">
+              <span class="noise-table-toolbar-title">Destinos de navegación</span>
+            </div>
+            <div class="error-state">
+              <div class="error-state-icon">⚠</div>
+              <div class="error-state-msg">No se pudo cargar el catálogo de ruido. Verifica que el backend esté activo.</div>
+              <button class="btn-retry">Reintentar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             VISTAS 8-17: WIZARD DE RUTAS (nuevo v2)
+             ========================================== -->
+
+        <!-- HELPER: shell del drawer reutilizado en vistas 8-20 -->
+        <!-- Vista 8: Wizard paso 0 — selección de origen (aldeas cargadas) -->
+        <div class="drag-block" id="block-view8" style="left:0;top:0;width:100%;display:none;" data-view="8">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:560px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.4;"><div class="noise-table-wrap" style="height:80px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close" aria-label="Cerrar">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div class="drawer-subtitle">/statistics</div>
+                  <div class="drawer-meta"><span class="badge badge-reports">Reportes</span></div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <!-- Editar destino (compacto) -->
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Editar destino</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div class="form-field"><label style="font-size:11px;color:var(--text-secondary);">Etiqueta</label><input type="text" class="form-input" value="Estadísticas globales" style="font-size:12px;"></div>
+                    <div class="form-field"><label style="font-size:11px;color:var(--text-secondary);">Peso</label><input type="number" class="form-input" value="1.0" style="font-family:var(--font-mono);font-size:12px;"></div>
+                  </div>
+                </div>
+                <!-- WIZARD — Paso 0: origen (aldeas cargadas) -->
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Nueva ruta</div>
+                  <div class="wizard-panel">
+                    <div class="wizard-field">
+                      <label for="wiz8-label">Etiqueta de la ruta</label>
+                      <input type="text" id="wiz8-label" class="form-input" placeholder="p.ej. Ir a estadísticas de aldea" style="font-size:13px;">
+                    </div>
+                    <div class="wizard-field">
+                      <label for="wiz8-origin">Origen (punto de partida del bot)</label>
+                      <select id="wiz8-origin" class="origin-select" aria-label="Seleccionar origen">
+                        <optgroup label="Páginas de Travian">
+                          <option value="DORF1">Recursos (aldea activa) — /dorf1.php</option>
+                          <option value="DORF2">Edificios (aldea activa) — /dorf2.php</option>
+                          <option value="MAP">Mapa mundial — /karte.php</option>
+                          <option value="STATISTICS" selected>Estadísticas globales — /statistics</option>
+                          <option value="REPORTS">Reportes — /report</option>
+                          <option value="MESSAGES">Mensajes — /messages</option>
+                          <option value="VILLAGE_STATISTICS">Estadísticas de aldea — /village/statistics</option>
+                          <option value="OASIS_VIEW">Vista oasis en el mapa — /karte.php</option>
+                          <option value="ANY">Cualquier página (sin ancla)</option>
+                        </optgroup>
+                        <optgroup label="Mis aldeas">
+                          <option value="VILLAGE_12345">Merlinia (12345) — /dorf1.php?newdid=12345</option>
+                          <option value="VILLAGE_12346">Forticia (12346) — /dorf1.php?newdid=12346</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                    <div class="wizard-footer">
+                      <button class="btn-ghost" style="font-size:12px;">Limpiar wizard</button>
+                      <button class="btn-primary" style="font-size:12px;padding:5px 14px;">Añadir primer paso →</button>
+                    </div>
+                  </div>
+                </div>
+                <!-- Rutas existentes -->
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (0)</div>
+                  <div style="padding:12px 0;font-size:12px;color:var(--text-tertiary);">Sin rutas todavía. Usa el wizard de arriba para crear la primera.</div>
+                </div>
+              </div>
+              <div class="drawer-footer">
+                <button class="btn-ghost">Cancelar</button>
+                <button class="btn-primary">Guardar cambios</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 9: Wizard paso 0 — origen (villages_loaded=false) -->
+        <div class="drag-block" id="block-view9" style="left:0;top:0;width:100%;display:none;" data-view="9">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:520px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.4;"><div class="noise-table-wrap" style="height:80px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close" aria-label="Cerrar">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Mapa mundial</div>
+                  <div class="drawer-subtitle">/karte.php</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Nueva ruta</div>
+                  <div class="wizard-panel">
+                    <div class="wizard-field">
+                      <label>Etiqueta de la ruta</label>
+                      <input type="text" class="form-input" value="Ir al mapa y ver mi zona" style="font-size:13px;">
+                    </div>
+                    <div class="wizard-field">
+                      <label>Origen (punto de partida del bot)</label>
+                      <select class="origin-select" aria-label="Seleccionar origen">
+                        <optgroup label="Páginas de Travian">
+                          <option value="MAP" selected>Mapa mundial — /karte.php</option>
+                          <option value="DORF1">Recursos (aldea activa)</option>
+                          <option value="ANY">Cualquier página (sin ancla)</option>
+                        </optgroup>
+                        <optgroup label="Mis aldeas">
+                          <option disabled>Sin aldeas cargadas</option>
+                        </optgroup>
+                      </select>
+                      <!-- Aviso villages_loaded=false -->
+                      <div class="origin-no-villages">
+                        <span>Sin aldeas cargadas.</span>
+                        <button class="btn-refresh-villages" aria-label="Actualizar aldeas">
+                          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" width="12" height="12" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M15 8A7 7 0 0 0 2 4"/></svg>
+                          Actualizar aldeas
+                        </button>
+                        <span style="color:var(--text-tertiary);">(requiere sesión activa)</span>
+                      </div>
+                    </div>
+                    <div class="wizard-footer">
+                      <button class="btn-ghost" style="font-size:12px;">Limpiar wizard</button>
+                      <button class="btn-primary" style="font-size:12px;padding:5px 14px;">Añadir primer paso →</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="drawer-footer">
+                <button class="btn-ghost">Cancelar</button>
+                <button class="btn-primary">Guardar cambios</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 10: Wizard — Formulario añadir paso (outerHTML vacío) -->
+        <div class="drag-block" id="block-view10" style="left:0;top:0;width:100%;display:none;" data-view="10">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:560px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">Nueva ruta: "Ir a estadísticas de aldea" · Origen: STATISTICS</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Paso 1 — Añadir click</div>
+                  <div class="wizard-panel">
+                    <div class="wizard-field">
+                      <label>URL actual (solo contexto, no se guarda)</label>
+                      <input type="text" class="form-input" placeholder="/statistics" style="font-size:12px;font-family:var(--font-mono);">
+                    </div>
+                    <div class="wizard-field">
+                      <label>Descripción del botón/enlace</label>
+                      <input type="text" class="form-input" placeholder="p.ej. enlace Estadísticas de aldea en menú lateral" style="font-size:12px;">
+                    </div>
+                    <div class="wizard-field">
+                      <label>outerHTML del elemento a clicar</label>
+                      <textarea class="wizard-textarea" placeholder="Pega aquí el outerHTML del elemento (botón derecho → Inspeccionar → clic derecho sobre el elemento → Copiar → Copiar outerHTML)."></textarea>
+                    </div>
+                    <!-- URL esperada — colapsable -->
+                    <div>
+                      <div class="wizard-collapsible-header" role="button" tabindex="0" aria-expanded="false">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12" aria-hidden="true"><polyline points="6 4 10 8 6 12"/></svg>
+                        URL esperada tras el click (opcional)
+                      </div>
+                      <div class="wizard-collapsible-body">
+                        <input type="text" class="form-input" placeholder="/village/statistics" style="font-size:12px;font-family:var(--font-mono);margin-top:4px;">
+                        <div class="wizard-hint" style="margin-top:4px;">Si el bot llega a otra URL tras el click, la ruta se marcará como fallida.</div>
+                      </div>
+                    </div>
+                    <div class="wizard-footer">
+                      <button class="btn-ghost" style="font-size:12px;">Cancelar paso</button>
+                      <button class="btn-primary" disabled style="font-size:12px;padding:5px 14px;" aria-label="Derivar selector (requiere outerHTML)">Derivar selector</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 11: Wizard — Feedback selector ÚNICO -->
+        <div class="drag-block" id="block-view11" style="left:0;top:0;width:100%;display:none;" data-view="11">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:520px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">Paso 1 — Revisando selector derivado</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Paso 1 — Selector derivado</div>
+                  <!-- Contexto del paso -->
+                  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+                    <strong>Elemento:</strong> enlace "Estadísticas de aldea" en menú lateral<br>
+                    <strong>outerHTML:</strong> <code style="font-size:11px;">&lt;a href="/village/statistics"&gt;...&lt;/a&gt;</code>
+                  </div>
+                  <!-- Feedback ÚNICO -->
+                  <div class="derive-feedback unique" role="status" aria-live="polite">
+                    <div>
+                      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;">Selector derivado</div>
+                      <div class="derive-selector-val">a[href='/village/statistics']</div>
+                    </div>
+                    <div class="derive-meta">Método: href_exact · Nivel 4</div>
+                    <div class="derive-status-unique">✓ Único en el fragmento analizado</div>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+                    <button class="btn-secondary" style="font-size:12px;">Escribir manualmente</button>
+                    <button class="btn-primary" style="font-size:12px;padding:5px 14px;">Confirmar selector</button>
+                  </div>
+                  <div class="wizard-hint" style="margin-top:8px;">El selector se verifica definitivamente en runtime mediante la URL esperada.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 12: Wizard — Feedback selector NO ÚNICO -->
+        <div class="drag-block" id="block-view12" style="left:0;top:0;width:100%;display:none;" data-view="12">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:580px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Mapa mundial</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">Paso 1 — Revisando selector derivado</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Paso 1 — Selector derivado</div>
+                  <!-- Feedback NO ÚNICO -->
+                  <div class="derive-feedback not-unique" role="alert">
+                    <div>
+                      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;">Selector derivado</div>
+                      <div class="derive-selector-val">div.menu a</div>
+                    </div>
+                    <div class="derive-meta">Método: class_combo · Nivel 7</div>
+                    <div class="derive-status-not-unique">⚠ No único en el fragmento. Verifica en Travian.</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">No se encontró un selector único estable. El bot puede clicar el elemento incorrecto.</div>
+                  </div>
+                  <!-- Alternativas -->
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Alternativas:</div>
+                    <div class="derive-alternatives">
+                      <button class="derive-alt-btn selected" aria-pressed="true">a.nav-link</button>
+                      <button class="derive-alt-btn" aria-pressed="false">#nav a</button>
+                    </div>
+                  </div>
+                  <!-- Input manual -->
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:4px;">O escribe tu selector estructural:</div>
+                    <div class="derive-manual-row">
+                      <input type="text" class="derive-manual-input" value="a.nav-link" placeholder="CSS selector">
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+                    <button class="btn-secondary" style="font-size:12px;">Reintentar con otro HTML</button>
+                    <button class="btn-primary" style="font-size:12px;padding:5px 14px;">Confirmar selector</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 13: Wizard — Feedback selector ERROR 422 -->
+        <div class="drag-block" id="block-view13" style="left:0;top:0;width:100%;display:none;" data-view="13">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:480px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Mapa mundial</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Paso 1 — Error al analizar HTML</div>
+                  <div class="derive-feedback error" role="alert">
+                    <div class="derive-status-error">✕ Error al analizar el HTML</div>
+                    <div style="font-size:12px;color:var(--danger);">El outerHTML no pudo parsearse como HTML válido.</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">Asegúrate de copiar el outerHTML completo del elemento desde DevTools (no solo el texto visible).</div>
+                  </div>
+                  <div class="wizard-field" style="margin-top:12px;">
+                    <label>outerHTML del elemento a clicar</label>
+                    <textarea class="wizard-textarea error" style="height:56px;">&lt;not valid html...</textarea>
+                    <div style="font-size:11px;color:var(--danger);margin-top:3px;">El contenido no es HTML válido.</div>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+                    <button class="btn-primary" style="font-size:12px;padding:5px 14px;">Reintentar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 14: Wizard — Lista de pasos acumulados (2 pasos) -->
+        <div class="drag-block" id="block-view14" style="left:0;top:0;width:100%;display:none;" data-view="14">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:560px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">Nueva ruta: "Ir a estadísticas de tropas" · Origen: STATISTICS</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Pasos de la ruta (2)</div>
+                  <!-- Lista de pasos acumulados -->
+                  <div class="wizard-steps-list" aria-label="Pasos añadidos a la ruta">
+                    <div class="wizard-step-item">
+                      <span class="wizard-step-order">0</span>
+                      <span class="wizard-step-action">CLICK</span>
+                      <span class="wizard-step-selector">a[href='/village/statistics']</span>
+                      <span class="wizard-step-url">→ /village/statistics</span>
+                      <button class="btn-delete-row" aria-label="Eliminar paso 0" style="margin-inline-start:4px;">✕</button>
+                    </div>
+                    <div class="wizard-step-item">
+                      <span class="wizard-step-order">1</span>
+                      <span class="wizard-step-action">CLICK</span>
+                      <span class="wizard-step-selector">a[href*='/troops']</span>
+                      <span class="wizard-step-url">→ /village/statistics/troops</span>
+                      <button class="btn-delete-row" aria-label="Eliminar paso 1" style="margin-inline-start:4px;">✕</button>
+                    </div>
+                  </div>
+                  <!-- Botón añadir paso -->
+                  <button class="step-add-btn" style="margin-top:10px;" aria-label="Añadir otro paso">+ Añadir otro paso</button>
+                  <!-- Footer guardar -->
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);">
+                    <button class="btn-ghost" style="font-size:12px;">Limpiar wizard</button>
+                    <button class="btn-primary" style="font-size:12px;padding:5px 16px;">Guardar ruta</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 15: Wizard — Guardando ruta (spinner) -->
+        <div class="drag-block" id="block-view15" style="left:0;top:0;width:100%;display:none;" data-view="15">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:480px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Pasos de la ruta (2)</div>
+                  <div class="wizard-steps-list" style="opacity:.5;pointer-events:none;">
+                    <div class="wizard-step-item"><span class="wizard-step-order">0</span><span class="wizard-step-action">CLICK</span><span class="wizard-step-selector">a[href='/village/statistics']</span></div>
+                    <div class="wizard-step-item"><span class="wizard-step-order">1</span><span class="wizard-step-action">CLICK</span><span class="wizard-step-selector">a[href*='/troops']</span></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);">
+                    <button class="btn-ghost" style="font-size:12px;" disabled>Limpiar wizard</button>
+                    <button class="btn-primary" style="font-size:12px;padding:5px 16px;" disabled aria-busy="true">
+                      <span class="spinner spinner-sm" style="margin-inline-end:6px;"></span>
+                      Guardando...
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 16: Wizard — Actualizando aldeas (EP-N13) -->
+        <div class="drag-block" id="block-view16" style="left:0;top:0;width:100%;display:none;" data-view="16">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:460px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Mapa mundial</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Nueva ruta</div>
+                  <div class="wizard-panel">
+                    <div class="wizard-field">
+                      <label>Etiqueta de la ruta</label>
+                      <input type="text" class="form-input" value="Ir al mapa desde mi aldea">
+                    </div>
+                    <div class="wizard-field">
+                      <label>Origen</label>
+                      <select class="origin-select" disabled>
+                        <optgroup label="Páginas de Travian">
+                          <option value="MAP" selected>Mapa mundial</option>
+                        </optgroup>
+                        <optgroup label="Mis aldeas">
+                          <option disabled>Sin aldeas cargadas</option>
+                        </optgroup>
+                      </select>
+                      <div class="origin-no-villages">
+                        <span>Sin aldeas cargadas.</span>
+                        <button class="btn-refresh-villages" disabled aria-busy="true">
+                          <span class="spinner spinner-sm"></span>
+                          Actualizando...
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 17: Wizard — Error 409 bot desconectado -->
+        <div class="drag-block" id="block-view17" style="left:0;top:0;width:100%;display:none;" data-view="17">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:460px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Mapa mundial</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Nueva ruta</div>
+                  <div class="wizard-panel">
+                    <div class="wizard-field">
+                      <label>Origen</label>
+                      <select class="origin-select">
+                        <optgroup label="Páginas de Travian">
+                          <option value="MAP" selected>Mapa mundial</option>
+                        </optgroup>
+                        <optgroup label="Mis aldeas">
+                          <option disabled>Sin aldeas cargadas</option>
+                        </optgroup>
+                      </select>
+                      <div class="origin-no-villages" style="flex-direction:column;align-items:flex-start;gap:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                          <span>Sin aldeas cargadas.</span>
+                          <button class="btn-refresh-villages">Actualizar aldeas</button>
+                        </div>
+                        <!-- Error 409 inline -->
+                        <div class="error-409" role="alert">
+                          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7"/><line x1="8" y1="5" x2="8" y2="8"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
+                          El bot está desconectado. Inicia sesión primero.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             VISTAS 18-20: RUTAS EXISTENTES (v2)
+             ========================================== -->
+
+        <!-- Vista 18: Rutas existentes — activa + is_dead -->
+        <div class="drag-block" id="block-view18" style="left:0;top:0;width:100%;display:none;" data-view="18">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:560px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Mapa mundial</div>
+                  <div class="drawer-subtitle">/karte.php</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <!-- Wizard (colapsado / en reposo) -->
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Nueva ruta</div>
+                  <div class="wizard-panel" style="opacity:.6;">
+                    <div class="wizard-field">
+                      <label>Etiqueta de la ruta</label>
+                      <input type="text" class="form-input" placeholder="p.ej. Ir al mapa desde mapa" style="font-size:13px;">
+                    </div>
+                    <div class="wizard-field">
+                      <label>Origen</label>
+                      <select class="origin-select">
+                        <option value="MAP" selected>Mapa mundial — /karte.php</option>
+                      </select>
+                    </div>
+                    <div class="wizard-footer">
+                      <span></span>
+                      <button class="btn-primary" disabled style="font-size:12px;padding:5px 14px;">Añadir primer paso →</button>
+                    </div>
+                  </div>
+                </div>
+                <!-- Rutas existentes -->
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (2)</div>
+                  <div class="paths-list">
+                    <!-- Ruta activa -->
+                    <div class="path-card">
+                      <div class="path-header" role="button" aria-expanded="false">
+                        <span class="path-expand-icon" aria-hidden="true">▶</span>
+                        <span class="path-label">Ir al mapa y ver tile</span>
+                        <span class="badge badge-origin">MAP</span>
+                        <span class="badge badge-active">Activa</span>
+                        <button class="btn-delete-row" aria-label="Eliminar ruta">✕</button>
+                      </div>
+                    </div>
+                    <!-- Ruta is_dead -->
+                    <div class="path-card dead-path">
+                      <div class="path-header" role="button" aria-expanded="false">
+                        <span class="path-expand-icon" aria-hidden="true">▶</span>
+                        <span class="path-label">⚠ Ruta con tile roto</span>
+                        <span class="badge badge-origin">DORF1</span>
+                        <span class="badge badge-dead">Muerta</span>
+                        <button class="btn-delete-row" aria-label="Eliminar ruta">✕</button>
+                      </div>
+                      <div class="dead-path-meta">
+                        <span style="font-family:var(--font-mono);font-size:11px;color:var(--danger);">3 fallos consecutivos</span>
+                        <button class="btn-reactivate">Reactivar</button>
+                        <span style="font-size:11px;color:var(--text-tertiary);flex:1;">Reactiva si corregiste el selector.</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="drawer-footer">
+                <button class="btn-ghost">Cancelar</button>
+                <button class="btn-primary">Guardar cambios</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 19: Ruta expandida — resumen solo lectura -->
+        <div class="drag-block" id="block-view19" style="left:0;top:0;width:100%;display:none;" data-view="19">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:520px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes</div>
+                  <div class="paths-list">
+                    <!-- Ruta expandida con resumen R/O -->
+                    <div class="path-card">
+                      <div class="path-header" role="button" aria-expanded="true" aria-controls="steps-ro-19">
+                        <span class="path-expand-icon open" aria-hidden="true">▶</span>
+                        <span class="path-label">Ir a estadísticas de tropas</span>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">Activa</span>
+                        <button class="btn-delete-row">✕</button>
+                      </div>
+                      <div class="path-body open" id="steps-ro-19">
+                        <!-- Resumen de pasos solo lectura -->
+                        <div class="step-summary" aria-label="Pasos de la ruta">
+                          <div class="step-summary-item">
+                            <span class="step-summary-order">0</span>
+                            <span class="step-summary-action">CLICK</span>
+                            <span class="step-summary-selector">a[href='/village/statistics']</span>
+                            <span class="step-summary-expected">→ /village/statistics</span>
+                          </div>
+                          <div class="step-summary-item">
+                            <span class="step-summary-order">1</span>
+                            <span class="step-summary-action">CLICK</span>
+                            <span class="step-summary-selector">a[href*='/troops']</span>
+                            <span class="step-summary-expected">→ /village/statistics/troops</span>
+                          </div>
+                          <div class="step-summary-item">
+                            <span class="step-summary-order">2</span>
+                            <span class="step-summary-action">WAIT</span>
+                            <span class="step-summary-selector">#troopsTable</span>
+                            <span class="step-summary-expected" style="color:var(--text-tertiary);">sin URL esperada</span>
+                          </div>
+                        </div>
+                        <div style="display:flex;justify-content:flex-end;padding:8px 12px;border-top:1px solid var(--border);">
+                          <button class="btn-secondary" style="font-size:12px;padding:4px 12px;">Editar pasos</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 20: Editor de pasos (BlockEditor con columna URL esperada) -->
+        <div class="drag-block" id="block-view20" style="left:0;top:0;width:100%;display:none;" data-view="20">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:500px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:540px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">Editando pasos de "Ir a estadísticas de tropas" (avanzado)</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="path-body open" style="max-height:none;background:transparent;border:none;padding:0;">
+                    <div style="overflow-x:auto;">
+                      <table class="step-table" aria-label="Editor de pasos">
+                        <thead>
+                          <tr>
+                            <th scope="col" class="right" style="width:24px;">#</th>
+                            <th scope="col">Acción</th>
+                            <th scope="col">Selector</th>
+                            <th scope="col">Valor</th>
+                            <th scope="col" class="right" style="width:56px;">ms min</th>
+                            <th scope="col" class="right" style="width:56px;">ms max</th>
+                            <th scope="col" style="min-width:120px;">URL esperada</th>
+                            <th scope="col" style="width:28px;"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td class="step-order">0</td>
+                            <td><select class="step-select" style="min-width:90px;" aria-label="Acción paso 0"><option selected>CLICK</option><option>WAIT_FOR_SELECTOR</option><option>SCROLL_TO</option><option>HOVER</option></select></td>
+                            <td><input type="text" class="step-input" value="a[href='/village/statistics']" aria-label="Selector paso 0"></td>
+                            <td><input type="text" class="step-input" value="" style="width:50px;" aria-label="Valor paso 0"></td>
+                            <td><input type="number" class="step-input step-input-sm" value="500" min="0" aria-label="ms min paso 0"></td>
+                            <td><input type="number" class="step-input step-input-sm" value="900" min="0" aria-label="ms max paso 0"></td>
+                            <td><input type="text" class="step-input" value="/village/statistics" style="font-family:var(--font-mono);font-size:11px;" aria-label="URL esperada paso 0" placeholder="/ruta"></td>
+                            <td><button class="btn-delete-row" aria-label="Eliminar paso 0">✕</button></td>
+                          </tr>
+                          <tr>
+                            <td class="step-order">1</td>
+                            <td><select class="step-select" style="min-width:90px;" aria-label="Acción paso 1"><option selected>CLICK</option><option>WAIT_FOR_SELECTOR</option><option>SCROLL_TO</option><option>HOVER</option></select></td>
+                            <td><input type="text" class="step-input" value="a[href*='/troops']" aria-label="Selector paso 1"></td>
+                            <td><input type="text" class="step-input" value="" style="width:50px;" aria-label="Valor paso 1"></td>
+                            <td><input type="number" class="step-input step-input-sm error" value="1200" min="0" aria-label="ms min paso 1"></td>
+                            <td><input type="number" class="step-input step-input-sm error" value="900" min="0" aria-label="ms max paso 1"></td>
+                            <td><input type="text" class="step-input" value="/village/statistics/troops" style="font-family:var(--font-mono);font-size:11px;" aria-label="URL esperada paso 1" placeholder="/ruta"></td>
+                            <td><button class="btn-delete-row" aria-label="Eliminar paso 1">✕</button></td>
+                          </tr>
+                          <tr>
+                            <td class="step-order">2</td>
+                            <td><select class="step-select" style="min-width:90px;" aria-label="Acción paso 2"><option>CLICK</option><option selected>WAIT_FOR_SELECTOR</option><option>SCROLL_TO</option><option>HOVER</option></select></td>
+                            <td><input type="text" class="step-input" value="#troopsTable" aria-label="Selector paso 2"></td>
+                            <td><input type="text" class="step-input" value="5000" style="width:50px;" aria-label="Valor paso 2" placeholder="timeout"></td>
+                            <td><input type="number" class="step-input step-input-sm" value="200" min="0" aria-label="ms min paso 2"></td>
+                            <td><input type="number" class="step-input step-input-sm" value="500" min="0" aria-label="ms max paso 2"></td>
+                            <td><input type="text" class="step-input" value="" style="font-family:var(--font-mono);font-size:11px;" aria-label="URL esperada paso 2" placeholder="vacío = sin verificación"></td>
+                            <td><button class="btn-delete-row" aria-label="Eliminar paso 2">✕</button></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="step-validation-error" role="alert">
+                      ⚠ ms max (900) debe ser ≥ ms min (1200) en el paso 1.
+                    </div>
+                    <div class="step-editor-footer">
+                      <button class="step-add-btn">+ Añadir paso</button>
+                      <div style="display:flex;gap:6px;">
+                        <button class="btn-ghost">Cancelar</button>
+                        <button class="btn-primary" disabled style="font-size:12px;padding:5px 12px;">Guardar cambios</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notas de migración v1→v2:
+             - Vistas 1-5 sin cambios.
+             - Vistas 9 (skeleton) y 10 (error API) de v1 → ahora son 6 y 7.
+             - Vistas 6, 7, 8 de v1 (drawers con editor directo) → eliminadas.
+             - Nuevas vistas 8-17: wizard de rutas.
+             - Nuevas vistas 18-20: rutas existentes con is_dead y editor avanzado.
+        -->
+
+        <!-- ==========================================
+             VISTAS 21-25: PROBAR RUTA — EP-N14 (v3)
+             ========================================== -->
+
+        <!-- Vista 21: PathCard idle — botón "Probar" disponible (ruta activa + ruta muerta) -->
+        <div class="drag-block" id="block-view21" style="left:0;top:0;width:100%;display:none;" data-view="21">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:440px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                  <div class="drawer-subtitle">/statistics</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (2)</div>
+                  <div class="paths-list">
+                    <!-- Ruta activa con botón Probar -->
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;textAlign:start;fontFamily:inherit;fontSize:13px;fontWeight:500;color:var(--text);flex:1;">
+                          Ir a estadísticas de tropas
+                        </button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <!-- Botón Probar idle -->
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;" aria-label="Probar ruta">
+                          Probar
+                        </button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);" aria-label="Expandir ruta">▼</button>
+                        <button class="btn-delete-row" aria-label="Eliminar ruta">✕</button>
+                      </div>
+                    </div>
+                    <!-- Ruta muerta con botón Probar (EC-PT01: test disponible incluso en rutas muertas) -->
+                    <div class="path-card dead-path">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="color:var(--danger);flex-shrink:0;">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;fontFamily:inherit;fontSize:13px;fontWeight:500;color:var(--text-secondary);flex:1;">
+                          Ruta con selector roto
+                        </button>
+                        <span class="badge badge-origin">DORF1</span>
+                        <span class="badge badge-dead">○ Muerta · 3 fallos</span>
+                        <!-- Reactivar -->
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">
+                          Reactivar
+                        </button>
+                        <!-- Botón Probar idle (disponible en rutas muertas) -->
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;" aria-label="Probar ruta">
+                          Probar
+                        </button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);" aria-label="Expandir ruta">▼</button>
+                        <button class="btn-delete-row" aria-label="Eliminar ruta">✕</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 22: PathCard loading — "Probando..." con spinner + caption -->
+        <div class="drag-block" id="block-view22" style="left:0;top:0;width:100%;display:none;" data-view="22">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:360px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;fontFamily:inherit;fontSize:13px;fontWeight:500;color:var(--text);flex:1;">
+                          Ir a estadísticas de tropas
+                        </button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <!-- Botón en estado loading -->
+                        <button disabled aria-busy="true" style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text-secondary);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:not-allowed;opacity:.7;" aria-label="Probando ruta">
+                          <span class="spinner spinner-sm" style="width:10px;height:10px;"></span>
+                          Probando...
+                        </button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-delete-row" aria-label="Eliminar ruta">✕</button>
+                        <!-- Caption segunda línea: aviso de duración -->
+                        <span style="width:100%;font-size:11px;color:var(--text-tertiary);padding-inline-start:4px;margin-top:2px;">
+                          Puede tardar hasta 60 s — navegación real en el bot.
+                        </span>
+                        <!-- Nodo aria-live oculto (representado visualmente como caption aquí) -->
+                        <span aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 23: PathTestResultPanel — Estado OK (todos los pasos verdes) -->
+        <div class="drag-block" id="block-view23" style="left:0;top:0;width:100%;display:none;" data-view="23">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:520px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <!-- Cabecera: botón Probar vuelve a idle -->
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="font-size:13px;font-weight:500;color:var(--text);flex:1;">Ir a estadísticas de tropas</span>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Probar</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-delete-row">✕</button>
+                      </div>
+                      <!-- PathTestResultPanel — estado OK -->
+                      <div role="region" aria-label="Resultado del test de la ruta" style="border-top:1px solid var(--border);background:var(--surface-2);padding:10px 12px;">
+                        <!-- Header del resultado -->
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                          <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(36,138,61,.10);color:var(--success);border-radius:var(--radius-full);padding:2px 8px;font-size:12px;font-weight:600;">
+                            ✓ Ruta OK
+                          </span>
+                          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);">3.241 s</span>
+                          <button style="margin-inline-start:auto;appearance:none;border:none;background:transparent;color:var(--accent-text);cursor:pointer;font-family:inherit;font-size:12px;text-decoration:underline;">Cerrar resultado</button>
+                        </div>
+                        <hr style="margin:0 0 8px;border:none;border-top:1px solid var(--border);">
+                        <!-- Filas de pasos OK -->
+                        <div style="display:flex;flex-direction:column;gap:0;">
+                          <!-- Paso 0 OK -->
+                          <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+                            <span style="color:var(--success);flex-shrink:0;width:14px;">✓</span>
+                            <span style="font-family:var(--font-mono);color:var(--text-tertiary);font-size:11px;width:14px;text-align:right;">0</span>
+                            <span style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);flex-shrink:0;">CLICK</span>
+                            <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;">a[href='/village/statistics']</code>
+                            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;" title="https://ts1.travian.es/statistics">→ /statistics</span>
+                          </div>
+                          <!-- Paso 1 OK -->
+                          <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+                            <span style="color:var(--success);flex-shrink:0;width:14px;">✓</span>
+                            <span style="font-family:var(--font-mono);color:var(--text-tertiary);font-size:11px;width:14px;text-align:right;">1</span>
+                            <span style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);flex-shrink:0;">CLICK</span>
+                            <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;">a[href*='/troops']</code>
+                            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;" title="https://ts1.travian.es/village/statistics/troops">→ /village/statistics/troops</span>
+                          </div>
+                          <!-- Paso 2 OK sin URL esperada -->
+                          <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;font-size:12px;">
+                            <span style="color:var(--success);flex-shrink:0;width:14px;">✓</span>
+                            <span style="font-family:var(--font-mono);color:var(--text-tertiary);font-size:11px;width:14px;text-align:right;">2</span>
+                            <span style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);flex-shrink:0;">WAIT</span>
+                            <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;">#troopsTable</code>
+                            <!-- Sin current_url para WAIT — no se muestra la flecha -->
+                          </div>
+                        </div>
+                        <!-- browser_note desde el response -->
+                        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--text-tertiary);font-style:italic;">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          <span>El browser queda en la última página visitada durante el test.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 24: PathTestResultPanel — Estado ERROR (fallo en paso 1, paso 2 no ejecutado) -->
+        <div class="drag-block" id="block-view24" style="left:0;top:0;width:100%;display:none;" data-view="24">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:540px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap">
+                  <div class="drawer-title">Estadísticas globales</div>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <!-- Cabecera con botón Probar en idle (resultado ya recibido) -->
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="font-size:13px;font-weight:500;color:var(--text);flex:1;">Ir a estadísticas de tropas</span>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Probar</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-delete-row">✕</button>
+                      </div>
+                      <!-- PathTestResultPanel — estado ERROR -->
+                      <div role="region" aria-label="Resultado del test de la ruta" style="border-top:1px solid var(--border);background:var(--surface-2);padding:10px 12px;">
+                        <!-- Header del resultado con chip de error -->
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                          <span style="display:inline-flex;align-items:center;gap:4px;background:rgba(201,53,44,.10);color:var(--danger);border-radius:var(--radius-full);padding:2px 8px;font-size:12px;font-weight:600;">
+                            ✕ Falló en el paso 1
+                          </span>
+                          <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);">1.832 s</span>
+                          <button style="margin-inline-start:auto;appearance:none;border:none;background:transparent;color:var(--accent-text);cursor:pointer;font-family:inherit;font-size:12px;text-decoration:underline;">Cerrar resultado</button>
+                        </div>
+                        <hr style="margin:0 0 8px;border:none;border-top:1px solid var(--border);">
+                        <div style="display:flex;flex-direction:column;gap:0;">
+                          <!-- Paso 0 OK -->
+                          <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+                            <span style="color:var(--success);flex-shrink:0;width:14px;">✓</span>
+                            <span style="font-family:var(--font-mono);color:var(--text-tertiary);font-size:11px;width:14px;text-align:right;">0</span>
+                            <span style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);flex-shrink:0;">CLICK</span>
+                            <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;">a[href='/village/statistics']</code>
+                            <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="https://ts1.travian.es/statistics">→ /statistics</span>
+                          </div>
+                          <!-- Paso 1 ERROR (aborted_at_step=1) — dos líneas: selector + motivo -->
+                          <div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+                            <div style="display:flex;align-items:baseline;gap:6px;width:100%;">
+                              <span style="color:var(--danger);flex-shrink:0;width:14px;">✕</span>
+                              <span style="font-family:var(--font-mono);color:var(--danger);font-size:11px;width:14px;text-align:right;">1</span>
+                              <span style="background:rgba(201,53,44,.08);border:1px solid rgba(201,53,44,.25);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--danger);flex-shrink:0;">CLICK</span>
+                              <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;color:var(--text);">a[href*='gid=37']</code>
+                            </div>
+                            <!-- Motivo del error -->
+                            <div style="padding-inline-start:calc(14px + 14px + 6px*2);width:100%;">
+                              <span style="font-size:11px;color:var(--danger);">elemento no encontrado en el DOM</span>
+                            </div>
+                            <!-- URL antes del intento -->
+                            <div style="padding-inline-start:calc(14px + 14px + 6px*2);width:100%;">
+                              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);" title="https://ts1.travian.es/statistics">→ https://ts1.travian.es/statistics</span>
+                            </div>
+                          </div>
+                          <!-- Paso 2 NO EJECUTADO (inferido de path.steps) -->
+                          <div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;font-size:12px;opacity:.4;">
+                            <span style="color:var(--text-disabled);flex-shrink:0;width:14px;">─</span>
+                            <span style="font-family:var(--font-mono);color:var(--text-disabled);font-size:11px;width:14px;text-align:right;">2</span>
+                            <span style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-full);padding:0 5px;font-family:var(--font-mono);font-size:10px;color:var(--text-disabled);flex-shrink:0;">WAIT</span>
+                            <code style="font-family:var(--font-mono);font-size:11px;flex:1;word-break:break-all;color:var(--text-disabled);">#troopsTable</code>
+                            <span style="font-size:11px;color:var(--text-disabled);font-style:italic;white-space:nowrap;">no ejecutado</span>
+                          </div>
+                        </div>
+                        <!-- browser_note -->
+                        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:flex-start;font-size:11px;color:var(--text-tertiary);font-style:italic;">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          <span>El browser queda en la última página visitada durante el test.</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 25: PathCard — Aviso 409 inline (bot desconectado o browser ocupado) -->
+        <div class="drag-block" id="block-view25" style="left:0;top:0;width:100%;display:none;" data-view="25">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:360px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (2)</div>
+                  <div class="paths-list">
+                    <!-- Ruta activa con aviso 409 inline -->
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="font-size:13px;font-weight:500;color:var(--text);flex:1;">Ir a estadísticas de tropas</span>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <!-- Botón Probar vuelve a idle tras el 409 -->
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Probar</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-delete-row">✕</button>
+                        <!-- Aviso 409 inline — segunda línea en la cabecera -->
+                        <div role="alert" style="display:flex;align-items:center;gap:6px;width:100%;padding-inline-start:4px;margin-top:2px;font-size:12px;color:var(--text-secondary);">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;color:var(--text-tertiary);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          El agente del mundo está desconectado. Inicia sesión primero.
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Segunda variante: mismo layout pero con mensaje de browser ocupado -->
+                    <div class="path-card" style="margin-top:12px;border-top:2px dashed var(--border);padding-top:8px;">
+                      <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;font-style:italic;">Variante — Browser ocupado (mismo tratamiento visual):</div>
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="font-size:13px;font-weight:500;color:var(--text);flex:1;">Ir al mapa desde aldea</span>
+                        <span class="badge badge-origin">DORF1</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Probar</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-delete-row">✕</button>
+                        <div role="alert" style="display:flex;align-items:center;gap:6px;width:100%;padding-inline-start:4px;margin-top:2px;font-size:12px;color:var(--text-secondary);">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0;color:var(--text-tertiary);"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          El browser está ocupado con otra tarea. Espera a que finalice e inténtalo de nuevo.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 26: PathCard v4 idle — cabecera rediseñada (hover: ✎ visible, Editar pasos en cabecera, ⋯ en lugar de ✕) -->
+        <div class="drag-block" id="block-view26" style="left:0;top:0;width:100%;display:none;" data-view="26">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:400px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (2)</div>
+                  <!-- Nota aclaratoria -->
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px dashed var(--border);">
+                    <strong>v4 — Cabecera rediseñada:</strong> el icono ✎ es visible al hacer hover (aquí se fuerza visible para la demo). "Editar pasos" está en la cabecera. El ✕ es ahora el botón ⋯.
+                  </div>
+                  <div class="paths-list">
+                    <!-- Ruta activa — cabecera v4 idle (lápiz forzado visible para demo) -->
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;background:var(--surface-2);/* hover simulado */">
+                        <!-- Label + lápiz ✎ -->
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);flex:1;text-align:start;" aria-expanded="false">
+                          Ir a estadísticas de tropas
+                        </button>
+                        <button class="rename-pencil-btn demo-visible" aria-label="Renombrar ruta" title="Renombrar ruta">
+                          <!-- Pencil icon 12px -->
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <!-- Botón Probar -->
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;" aria-label="Probar ruta">
+                          Probar
+                        </button>
+                        <!-- Botón Editar pasos (NUEVO: en cabecera, siempre visible) -->
+                        <button class="btn-edit-steps" aria-label="Editar pasos de la ruta">
+                          Editar pasos
+                        </button>
+                        <!-- Chevron expand -->
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);" aria-label="Expandir ruta" aria-expanded="false">▼</button>
+                        <!-- Botón ⋯ overflow (NUEVO: reemplaza al ✕) -->
+                        <div style="position:relative;">
+                          <button class="btn-overflow" aria-label="Más acciones" aria-haspopup="true">⋯</button>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Ruta muerta — cabecera v4 con Reactivar -->
+                    <div class="path-card dead-path">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <span style="color:var(--danger);flex-shrink:0;">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;font-family:inherit;font-size:13px;font-weight:500;color:var(--text-secondary);flex:1;text-align:start;" aria-expanded="false">
+                          Ruta con selector roto
+                        </button>
+                        <button class="rename-pencil-btn demo-visible" aria-label="Renombrar ruta" title="Renombrar ruta">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <span class="badge badge-origin">DORF1</span>
+                        <span class="badge badge-dead">○ Muerta · 3 fallos</span>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Reactivar</button>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;" aria-label="Probar ruta">Probar</button>
+                        <button class="btn-edit-steps">Editar pasos</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-overflow" aria-label="Más acciones">⋯</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 27: PathCard v4 — Renombrando (input inline activo, botones ✓/✕) -->
+        <div class="drag-block" id="block-view27" style="left:0;top:0;width:100%;display:none;" data-view="27">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:360px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <!-- Cabecera en modo edición inline del label -->
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <!-- Input inline con autoFocus simulado (borde accent) -->
+                        <input
+                          class="rename-input"
+                          type="text"
+                          value="Ir a estadísticas de tropas"
+                          aria-label="Nombre de la ruta"
+                          style="outline:2px solid var(--accent);outline-offset:1px;"
+                        />
+                        <!-- Botón ✓ confirmar -->
+                        <button class="rename-confirm" aria-label="Confirmar renombrado" title="Confirmar (Enter)">✓</button>
+                        <!-- Botón ✕ cancelar -->
+                        <button class="rename-cancel" aria-label="Cancelar renombrado" title="Cancelar (Escape)">✕</button>
+                        <!-- Origin badge, estado badge, ▼ y ⋯ permanecen; Probar y Editar pasos ocultos -->
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-overflow" aria-label="Más acciones">⋯</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:8px;font-style:italic;">
+                    Nota: [Probar] y [Editar pasos] se ocultan durante la edición del label.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 28: PathCard v4 — Guardando renombrado (spinner, input deshabilitado) -->
+        <div class="drag-block" id="block-view28" style="left:0;top:0;width:100%;display:none;" data-view="28">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:360px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <!-- Input deshabilitado (opacity 0.7) -->
+                        <input
+                          class="rename-input"
+                          type="text"
+                          value="Ir al mapa mundial"
+                          disabled
+                          aria-label="Nombre de la ruta"
+                          style="opacity:0.7;"
+                        />
+                        <!-- Spinner en lugar del ✓ -->
+                        <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);">
+                          <span class="spinner" style="width:10px;height:10px;border-width:1.5px;"></span>
+                        </div>
+                        <!-- Botón ✕ deshabilitado -->
+                        <button class="rename-cancel" disabled style="opacity:.45;cursor:not-allowed;">✕</button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-overflow" aria-label="Más acciones">⋯</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 29: PathCard v4 — Error al renombrar (label vacío o error 422/500) -->
+        <div class="drag-block" id="block-view29" style="left:0;top:0;width:100%;display:none;" data-view="29">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:380px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (2 variantes)</div>
+                  <!-- Variante A: label vacío -->
+                  <div class="paths-list" style="margin-bottom:12px;">
+                    <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;font-style:italic;">Variante A — Label vacío:</div>
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <!-- Input con borde rojo y sin valor -->
+                        <input
+                          class="rename-input error"
+                          type="text"
+                          value=""
+                          placeholder="Escribe un nombre..."
+                          aria-label="Nombre de la ruta"
+                          aria-describedby="rename-error-a"
+                        />
+                        <!-- Botón ✓ deshabilitado (label vacío) -->
+                        <button class="rename-confirm" disabled aria-label="Confirmar renombrado" style="opacity:.45;cursor:not-allowed;">✓</button>
+                        <button class="rename-cancel" aria-label="Cancelar renombrado">✕</button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-overflow" aria-label="Más acciones">⋯</button>
+                        <!-- Mensaje de error inline — segunda línea de la cabecera -->
+                        <span id="rename-error-a" role="alert" class="rename-error-msg">
+                          El nombre no puede estar vacío.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- Variante B: error de API (422) -->
+                  <div class="paths-list">
+                    <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;font-style:italic;">Variante B — Error 422 de la API:</div>
+                    <div class="path-card">
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <input
+                          class="rename-input error"
+                          type="text"
+                          value="Nombre-que-el-servidor-rechazó"
+                          aria-label="Nombre de la ruta"
+                          aria-describedby="rename-error-b"
+                        />
+                        <button class="rename-confirm" aria-label="Confirmar renombrado">✓</button>
+                        <button class="rename-cancel" aria-label="Cancelar renombrado">✕</button>
+                        <span class="badge badge-origin">DORF1</span>
+                        <span class="badge badge-inactive">Inactiva</span>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <button class="btn-overflow" aria-label="Más acciones">⋯</button>
+                        <span id="rename-error-b" role="alert" class="rename-error-msg">
+                          Error al guardar. Reintenta.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista 30: PathCard v4 — Menú ⋯ abierto (popover eliminar) -->
+        <div class="drag-block" id="block-view30" style="left:0;top:0;width:100%;display:none;" data-view="30">
+          <div class="drag-handle"><span class="drag-handle-dots">··· ··· ···</span></div>
+          <div style="position:relative;min-height:380px;background:rgba(0,0,0,.35);border-radius:var(--radius-md);overflow:hidden;">
+            <div style="padding:16px;opacity:.3;"><div class="noise-table-wrap" style="height:60px;"></div></div>
+            <div style="position:absolute;inset-block:0;inset-inline-end:0;width:460px;background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;border-radius:0 var(--radius-md) var(--radius-md) 0;overflow:hidden;">
+              <div class="drawer-header">
+                <button class="drawer-close">✕</button>
+                <div class="drawer-title-wrap"><div class="drawer-title">Estadísticas globales</div></div>
+              </div>
+              <div class="drawer-body">
+                <div class="drawer-section">
+                  <div class="drawer-section-title">Rutas existentes (1)</div>
+                  <div class="paths-list">
+                    <div class="path-card">
+                      <!-- Cabecera v4 con menú ⋯ abierto -->
+                      <div class="path-header" style="flex-wrap:wrap;gap:6px;">
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:0;font-family:inherit;font-size:13px;font-weight:500;color:var(--text);flex:1;text-align:start;">
+                          Ir a estadísticas de tropas
+                        </button>
+                        <button class="rename-pencil-btn demo-visible" aria-label="Renombrar ruta">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <span class="badge badge-origin">STATISTICS</span>
+                        <span class="badge badge-active">● Activa</span>
+                        <button style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);border-radius:var(--radius-sm);font-family:inherit;font-size:11px;cursor:pointer;">Probar</button>
+                        <button class="btn-edit-steps">Editar pasos</button>
+                        <button style="appearance:none;border:none;background:transparent;cursor:pointer;padding:4px;font-size:10px;color:var(--text-tertiary);">▼</button>
+                        <!-- ⋯ con menú abierto -->
+                        <div style="position:relative;">
+                          <button class="btn-overflow" aria-label="Más acciones" aria-expanded="true" style="background:var(--surface-2);">⋯</button>
+                          <!-- Mini popover (abierto) -->
+                          <div class="overflow-menu" role="menu" aria-label="Acciones de la ruta">
+                            <button class="overflow-menu-item danger" role="menuitem">
+                              Eliminar ruta
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-tertiary);margin-top:10px;font-style:italic;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);">
+                    Al pulsar "Eliminar ruta" se activa el DeletePopover existente para confirmar antes de ejecutar la acción (igual que en v3, solo cambia el trigger de ✕ a ⋯).
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notas de migración v1→v2:
+             - Vistas 1-5 sin cambios.
+             - Vistas 9 (skeleton) y 10 (error API) de v1 → ahora son 6 y 7.
+             - Vistas 6, 7, 8 de v1 (drawers con editor directo) → eliminadas.
+             - Nuevas vistas 8-17: wizard de rutas.
+             - Nuevas vistas 18-20: rutas existentes con is_dead y editor avanzado.
+             Delta v3 (2026-06-02):
+             - Nuevas vistas 21-25: botón "Probar" + PathTestResultPanel (EP-N14).
+             Delta v4 (2026-06-02):
+             - Nuevas vistas 26-30: renombrar label inline (✎ + input + ✓/✕) + acciones
+               descubribles (Editar pasos en cabecera, ⋯ overflow menu para eliminar).
+        -->
+
+      </div><!-- /drag-canvas -->
+    </main>
+  </div>
+</div>
+
+<!-- Export panel -->
+<div id="export-panel" role="dialog" aria-label="Exportar layout" aria-modal="true">
+  <h3>Layout exportado (JSON)</h3>
+  <textarea id="export-textarea" readonly aria-label="JSON del layout"></textarea>
+  <div class="export-actions">
+    <button class="btn-ghost" onclick="document.getElementById('export-panel').style.display='none'">Cerrar</button>
+    <button class="btn-secondary" id="btn-copy-export">Copiar</button>
+  </div>
+</div>
+
+<script>
+/* ===== THEME TOGGLE ===== */
+const btnTheme = document.getElementById('btn-theme')
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  btnTheme.textContent = isDark ? 'Oscuro' : 'Claro'
+}
+applyTheme()
+btnTheme.addEventListener('click', () => { isDark = !isDark; applyTheme() })
+
+/* ===== VIEW SWITCHER ===== */
+const viewSelect = document.getElementById('view-select')
+const blocks = document.querySelectorAll('.drag-block[data-view]')
+
+function showView(v) {
+  blocks.forEach(b => {
+    b.style.display = b.dataset.view === String(v) ? '' : 'none'
+  })
+}
+viewSelect.addEventListener('change', () => showView(parseInt(viewSelect.value)))
+showView(1)
+
+/* ===== CONFIG PANEL TOGGLE (vista 1) ===== */
+const cfgHeader = document.getElementById('config-header-v1')
+const cfgBody = document.getElementById('config-body-v1')
+const cfgChevron = document.getElementById('config-chevron-v1')
+const cfgHint = document.getElementById('config-hint-v1')
+
+function toggleConfig() {
+  const isOpen = cfgBody.classList.toggle('open')
+  cfgHeader.classList.toggle('open', isOpen)
+  cfgChevron.classList.toggle('open', isOpen)
+  cfgHeader.setAttribute('aria-expanded', isOpen)
+  cfgHint.style.display = isOpen ? '' : 'none'
+}
+cfgHeader.addEventListener('click', toggleConfig)
+cfgHeader.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleConfig() }})
+
+/* ===== DRAG & DROP ===== */
+const GRID = 8
+let editMode = false
+const btnEdit = document.getElementById('btn-edit')
+
+btnEdit.addEventListener('click', () => {
+  editMode = !editMode
+  btnEdit.classList.toggle('active', editMode)
+  btnEdit.setAttribute('aria-pressed', editMode)
+  document.querySelectorAll('.drag-block').forEach(b => {
+    b.style.cursor = editMode ? 'grab' : 'default'
+  })
+})
+
+let dragging = null, ox = 0, oy = 0
+
+document.addEventListener('mousedown', e => {
+  if (!editMode) return
+  const block = e.target.closest('.drag-block')
+  if (!block) return
+  e.preventDefault()
+  dragging = block
+  const rect = block.getBoundingClientRect()
+  const canvasRect = document.getElementById('drag-canvas').getBoundingClientRect()
+  ox = e.clientX - (rect.left - canvasRect.left)
+  oy = e.clientY - (rect.top - canvasRect.top)
+  block.classList.add('dragging')
+  block.style.zIndex = 100
+})
+
+document.addEventListener('mousemove', e => {
+  if (!dragging) return
+  const canvasRect = document.getElementById('drag-canvas').getBoundingClientRect()
+  let x = e.clientX - canvasRect.left - ox
+  let y = e.clientY - canvasRect.top - oy
+  x = Math.round(x / GRID) * GRID
+  y = Math.round(y / GRID) * GRID
+  x = Math.max(0, x); y = Math.max(0, y)
+  dragging.style.left = x + 'px'
+  dragging.style.top = y + 'px'
+})
+
+document.addEventListener('mouseup', () => {
+  if (!dragging) return
+  dragging.classList.remove('dragging')
+  dragging.style.zIndex = ''
+  dragging = null
+})
+
+/* ===== SAVE / RESTORE LAYOUT ===== */
+const STORAGE_KEY = 'noise-catalog-playground-layout-v4'
+
+function getLayout() {
+  const l = {}
+  document.querySelectorAll('.drag-block[id]').forEach(b => {
+    l[b.id] = { left: b.style.left, top: b.style.top, display: b.style.display }
+  })
+  return l
+}
+
+function applyLayout(l) {
+  if (!l) return
+  Object.entries(l).forEach(([id, s]) => {
+    const b = document.getElementById(id)
+    if (b) { b.style.left = s.left; b.style.top = s.top; if (s.display !== undefined) b.style.display = s.display }
+  })
+}
+
+document.getElementById('btn-save-layout').addEventListener('click', () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ view: viewSelect.value, blocks: getLayout() }))
+  alert('Layout guardado en localStorage.')
+})
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  localStorage.removeItem(STORAGE_KEY)
+  document.querySelectorAll('.drag-block').forEach(b => { b.style.left = '0px'; b.style.top = '0px' })
+  showView(1); viewSelect.value = '1'
+})
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const data = { view: viewSelect.value, timestamp: new Date().toISOString(), blocks: getLayout() }
+  document.getElementById('export-textarea').value = JSON.stringify(data, null, 2)
+  document.getElementById('export-panel').style.display = 'block'
+})
+
+document.getElementById('btn-copy-export').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('export-textarea').value)
+    .then(() => alert('Copiado al portapapeles.'))
+    .catch(() => { document.getElementById('export-textarea').select(); document.execCommand('copy') })
+})
+
+// Restaurar layout guardado
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+  if (saved) {
+    if (saved.view) { viewSelect.value = saved.view; showView(parseInt(saved.view)) }
+    if (saved.blocks) applyLayout(saved.blocks)
+  }
+} catch(e) { /* ignorar JSON inválido */ }
+</script>
+</body>
+</html>

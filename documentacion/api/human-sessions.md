@@ -76,23 +76,10 @@ GET /worlds/1/session/timeline
 
 ---
 
-## `GET /worlds/{world_id}/session/timeline/{weekday}` — Timeline de un día
-
-Devuelve el timeline de un día concreto (0=lunes … 6=domingo).
-
-```
-GET /worlds/1/session/timeline/0
-```
-
-Misma estructura de respuesta que el objeto individual de la lista anterior.
-
-| Código | Condición |
-|--------|-----------|
-| `404` | `world_id` no existe |
-| `422` | `weekday` fuera de rango [0-6] |
-| `500` | Error interno |
-
----
+> **Nota:** no existe un endpoint de lectura por día (`GET .../session/timeline/{weekday}`).
+> Para obtener un día concreto, el cliente filtra el array `timelines` de la respuesta de
+> `GET /worlds/{world_id}/session/timeline` por el campo `weekday`. La escritura sí es por
+> día (`PUT .../session/timeline/{weekday}`, abajo).
 
 ## `PUT /worlds/{world_id}/session/timeline/{weekday}` — Actualizar timeline de un día
 
@@ -226,4 +213,4 @@ Content-Type: application/json
 
 ---
 
-🔖 Última revisión: 2026-05-31 (documento creado; incluye §8.7 DELETE /session/override añadido en v2.2)
+🔖 Última revisión: 2026-06-04 (corregida divergencia: eliminado de la doc el endpoint inexistente GET /session/timeline/{weekday}. La lectura es solo GET /session/timeline —los 7 días— y el cliente filtra por weekday; la escritura sí es por día con PUT. Verificado contra adapters/api/routes/session.py)

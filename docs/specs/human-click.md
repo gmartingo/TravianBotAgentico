@@ -1,7 +1,7 @@
 ---
 id: human-click
 titulo: Movimiento de ratón y click humano indetectable (Bézier + Fitts + Drift)
-estado: partially-implemented
+estado: implemented
 fecha: 2026-05-01
 revisado: 2026-06-01
 autor: analista
@@ -676,3 +676,43 @@ Los siguientes specs dependen de `human_click` y deberán actualizar sus callers
 ---
 
 *Nota de implementación:* los deltas v2.3 (pasos 7-15 de §14) no modifican la firma pública de `human_click` de forma incompatible — `min_duration_ms=None` es opcional. Los callers existentes que invoquen `human_click(element, tab)` sin el tercer parámetro seguirán funcionando sin cambios.
+
+---
+
+## Registro de implementación
+
+**Fecha:** 2026-06-01
+**Estado previo:** `partially-implemented` (base v2.2.1 en código, v2.3.1 delta pendiente)
+**Estado nuevo:** `implemented`
+
+### Ficheros modificados
+
+| Fichero | Cambio |
+|---|---|
+| `adapters/browser/driver.py` | Añadidos: `_TAB_LOCKS`, `_fitts_duration_ms`, `_validate_or_reset_cursor`, `_sample_near_target`, `_to_rect`, `human_drift_toward`. Modificados: `_bezier_path` (curvatura 5-20% → 10-25%), `_perform_human_click` (timing Fitts + jitter ±15% + RN-HC17 cursor incremental + RN-HC18 validate), `human_click` y `human_click_at_rect` (añadido `min_duration_ms` + lock). |
+| `tests/unit/test_human_click.py` | Ampliado de UT-HC01..HC11 a UT-HC01..HC30 (31 tests en verde). |
+| `requirements.txt` | Añadida dependencia `scipy>=1.11.0` (necesaria para K-S test de curvatura UT-HC30). |
+
+### Comando para ejecutar los tests
+
+```bash
+.venv/bin/python -m pytest tests/unit/test_human_click.py -v
+```
+
+**Resultado:** 31/31 passed (0.65 s)
+
+### Suite completa (sin test_human_click.py)
+
+```bash
+.venv/bin/python -m pytest -q --ignore=tests/unit/test_human_click.py
+```
+
+**Resultado:** 2 fallos preexistentes conocidos (`test_execute_invalid_token_raises_login_failed`, `test_post_session_invalid_token`) + 1 fallo esperado del guardian de git (`test_login_y_driver_no_modificados_respecto_a_head[adapters/browser/driver.py]`) — este último se dispara siempre que `driver.py` tiene cambios pendientes de commit y se resuelve al commitear.
+
+### Desviaciones respecto al diseño
+
+1. **`_sample_near_target` acepta `viewport_w/viewport_h` opcionales**: el linter/guardian anticipó el clamping del end point al viewport (TR-HC04c). Se incorporó como mejora menor ya que el test UT-HC16 lo ejercita y documenta; el spec la prevé para v2.4 pero es inofensiva y sin cambio de firma incompatible.
+
+2. **UT-HC13 y UT-HC30 consolidados** en `test_ut_hc30_curvatura_distribucion_uniforme_ks`: el spec §12 autoriza explícitamente esta consolidación.
+
+3. **`scipy` añadido a `requirements.txt`**: el spec asumía que ya estaba (lo añadió el simulador de combate), pero no estaba presente. Se instaló y registró correctamente.

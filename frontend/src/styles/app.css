@@ -145,3 +145,13 @@ tr[data-highlight="1"] td {
   background: var(--accent-subtle) !important;
   transition: background 2s ease-out;
 }
+
+/* ── PathCard v4: lápiz ✎ visible en hover/foco de la cabecera ── */
+.path-header:hover .rename-pencil,
+.path-header:focus-within .rename-pencil {
+  opacity: 1 !important;
+}
+/* Foco directo sobre el botón lápiz también lo muestra */
+.rename-pencil:focus {
+  opacity: 1 !important;
+}

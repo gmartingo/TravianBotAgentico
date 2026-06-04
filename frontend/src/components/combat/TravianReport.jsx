@@ -61,7 +61,8 @@ export function ResIcon({ res, size = 16, label }) {
 
 // Icono genérico del juego: name = nombre sin extensión bajo /static/icons/
 // (p. ej. "stat_attack", "stat_def_infantry", "stat_carry", "stat_resources_sum").
-function GameIcon({ name, size = 16, alt }) {
+// Exportado para reutilizar (p. ej. el icono de total en BalanceSection).
+export function GameIcon({ name, size = 16, alt }) {
   return (
     <img
       src={`/api/static/icons/${name}.png`}

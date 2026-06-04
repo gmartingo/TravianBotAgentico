@@ -667,3 +667,24 @@ RECOMENDACIÓN: en el próximo toque a WizardModal, importar desde uiUtils y eli
 ### CS-02 — DeleteConfirmModal duplicado vs inline en AccountsListPage (BAJA)
 `AccountsListPage.jsx` tiene un `DeleteConfirmModal` inline (definido localmente en el mismo fichero, líneas ~481-550) para el borrado de cuentas desde la lista. Existe también `ConfirmDeleteModal` en `src/components/ui/ConfirmDeleteModal.jsx` (usado en AccountDetailPage para borrar mundo y cuenta). Son muy similares pero el de AccountsListPage no tiene el estado 409 inline.
 DECISIÓN SUGERIDA: mantener separados (AccountsListPage es más simple y no necesita el estado 409 — es una lista, el borrado forzado no aplica ahí). No forzar DRY si añade complejidad innecesaria.
+
+---
+
+## Navegación al ancla de origen en vivo (noise-path-wizard) — pregame 2026-06-02
+
+Necesidad: acción del wizard que, dado world_id + origin, conduce el Chrome vivo del bot a la URL del ancla (para que el usuario vea la pantalla y grabe los clicks siguientes).
+
+REUTILIZABLE (no rediseñar):
+- Lógica "origin → URL del ancla" YA existe inline en `WorldAgent.execute_path_test` (`core/scheduling/world_agent.py:1461-1496`): maneja ANY (sin nav), VILLAGE_<data_id>→`/dorf1.php?newdid=<id>`, y enum genérico vía `ORIGIN_PATHS` (`core/entities/noise.py:56-66`) + `build_url(server, relative)` (`adapters/browser/url_utils.py:6`). La navegación real es `await browser.get(anchor_url)` + `human_delay(500,900)`.
+- Acceso al browser vivo: `session_registry.get_browser(world_id)` + `get_world_server(world_id)` (`adapters/browser/session_registry.py:149,158`; devuelve "" si no hay sesión → `not server` lo cubre).
+- Lock de browser: `WorldAgent._browser_lock` (asyncio.Lock) serializa execute_path_test / _execute_noise_action / refresh_villages. `BrowserBusyError` (core/exceptions) → 409.
+- Precondición sesión activa: `WorldAgent._session_active()` (world_agent.py:403) + estado RUNNING. Patrón de handler en EP-N14 test_path (`adapters/api/routes/noise.py:1277-1296`): RUNNING + _session_active() o 409; BrowserBusyError→409; RuntimeError→500.
+- Front: EP-N12 origins ya da value/path por origin a `NoiseOriginSelector.jsx`; `NoisePathWizard.jsx` ya tiene origin+originLabel en estado. Cliente HTTP `frontend/src/api/client.js:421-477` tiene helpers EP-N01..N14 (patrón `api.refreshNoiseVillages`, `api.testNoisePath`).
+
+AJUSTE PEQUEÑO recomendado (no rompedor): extraer la lógica "origin→relative URL" de execute_path_test (líneas 1476-1489) a un helper privado reutilizable (p.ej. `_origin_to_relative_url(origin: str) -> str`) y un método público `navigate_to_origin(origin: str)` que adquiera el lock, resuelva server, build_url, browser.get + human_delay. execute_path_test pasaría a llamar al mismo helper → cero duplicación.
+
+NUEVO mínimo: endpoint `POST /worlds/{id}/noise/navigate-to-origin` (body con origin) calcando el handler de EP-N13/EP-N14 + helper de cliente `api.navigateNoiseToOrigin(worldId, origin)`.
+
+RIESGO duplicación a evitar: NO reimplementar el mapeo origin→URL ni el parsing de VILLAGE_<data_id> en una nueva función; reusar el de execute_path_test. NO crear un segundo patrón de acceso a browser/lock.
+
+Anti-detección: `browser.get(anchor_url)` directo ya es el mecanismo aceptado por el guardian para llegar al ancla (idéntico a execute_path_test, RN-PT03). No hay pieza "clic en el menú" reutilizable; el guardian debe validar el nuevo método igualmente por tocar el browser de Travian.

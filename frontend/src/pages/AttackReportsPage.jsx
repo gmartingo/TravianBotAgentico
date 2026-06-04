@@ -3,7 +3,7 @@
  *
  * Estructura:
  *   H1 "Reportes de oasis"
- *   TabBar (Ingresar | Historial | Estadísticas)
+ *   TabBar (Ingresar | Historial | Estadísticas | Cadencia de farmeo)
  *   <contenido del tab activo>
  *   ReportDetailDrawer (portal flotante)
  *
@@ -17,6 +17,7 @@ import { TabBar } from '../components/ui/TabBar.jsx'
 import { IngestTab } from '../components/attack-reports/IngestTab.jsx'
 import { HistoryTab } from '../components/attack-reports/HistoryTab.jsx'
 import { StatsTab }   from '../components/attack-reports/StatsTab.jsx'
+import { CadenciaTab } from '../components/attack-reports/CadenciaTab.jsx'
 import { ReportDetailDrawer } from '../components/attack-reports/ReportDetailDrawer.jsx'
 import { api } from '../api/client.js'
 
@@ -58,9 +59,10 @@ export function AttackReportsPage() {
   }
 
   const tabs = [
-    { id: 'ingest',  label: t('ar.tab.ingest') },
-    { id: 'history', label: t('ar.tab.history') },
-    { id: 'stats',   label: t('ar.tab.stats') },
+    { id: 'ingest',    label: t('ar.tab.ingest') },
+    { id: 'history',   label: t('ar.tab.history') },
+    { id: 'stats',     label: t('ar.tab.stats') },
+    { id: 'cadencia',  label: t('ar.tab.cadencia') },
   ]
 
   return (
@@ -120,6 +122,18 @@ export function AttackReportsPage() {
         >
           {activeTab === 'stats' && (
             <StatsTab lang={lang} onGoToIngest={() => handleTabChange('ingest')} />
+          )}
+        </div>
+
+        {/* Cadencia de farmeo */}
+        <div
+          id="ar-tabpanel-cadencia"
+          role="tabpanel"
+          aria-labelledby="tab-cadencia"
+          hidden={activeTab !== 'cadencia'}
+        >
+          {activeTab === 'cadencia' && (
+            <CadenciaTab lang={lang} onGoToIngest={() => handleTabChange('ingest')} />
           )}
         </div>
       </div>

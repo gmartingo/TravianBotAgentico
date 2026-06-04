@@ -32,7 +32,7 @@ function modeLabel(mode, t) {
   if (!mode) return ''
   const m = mode.toLowerCase()
   if (m === 'hardcore') return t('session.mode.hardcore')
-  if (m === 'idle') return t('session.mode.idle')
+  if (m === 'pasivo') return t('session.mode.pasivo')
   return t('session.mode.disconnected')
 }
 
@@ -40,7 +40,7 @@ function modeCssClass(mode) {
   if (!mode) return 'disconnected'
   const m = mode.toLowerCase()
   if (m === 'hardcore') return 'hardcore'
-  if (m === 'idle') return 'idle'
+  if (m === 'pasivo') return 'pasivo'
   return 'disconnected'
 }
 

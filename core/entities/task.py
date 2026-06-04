@@ -17,6 +17,8 @@ from enum import Enum
 
 class TaskType(str, Enum):
     SEND_FARM_LIST_GROUP = "SEND_FARM_LIST_GROUP"
+    # Navegación de ruido anti-detección (Human Sessions v2.2)
+    NOISE_NAVIGATION = "NOISE_NAVIGATION"
 
 
 @dataclass

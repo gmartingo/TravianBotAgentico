@@ -314,6 +314,21 @@ class AccountSQLiteAdapter(DbPort):
             return None
         return _row_to_world(row)
 
+    async def get_account_id_for_world(self, world_id: int) -> Optional[int]:
+        """
+        Devuelve el account_id propietario de un mundo, o None si el mundo no existe.
+
+        Útil para componentes que solo conocen el world_id (p.ej. el arranque del
+        WorldAgent) y necesitan el account_id para el relogin automático, sin tener
+        que cargar el World completo (la entidad World no expone account_id).
+        """
+        cursor = await self._conn.execute(
+            "SELECT account_id FROM worlds WHERE id = ?",
+            (world_id,),
+        )
+        row = await cursor.fetchone()
+        return int(row[0]) if row is not None else None
+
     async def get_world_by_account_and_server(
         self, account_id: int, server: str
     ) -> Optional[World]:

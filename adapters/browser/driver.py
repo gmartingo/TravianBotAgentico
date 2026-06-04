@@ -559,9 +559,27 @@ async def _perform_human_click(
     await asyncio.sleep(random.uniform(settle_ms[0] / 1000, settle_ms[1] / 1000))
 
     # Click: mousedown + pausa real + mouseup (RN-HC08)
-    await _dispatch_mouse_down(tab, round(px), round(py))
+    # ANTI-DETECCION: el par down→sleep→up se blinda con shield() para que una
+    # cancelación externa (timeout global de execute_path_test, request_stop del
+    # agente, asyncio.timeout) NUNCA pueda partirlo entre el mousedown y el mouseup.
+    # Si se partiera, quedaría un botón de ratón "presionado" a nivel CDP: el
+    # siguiente movimiento generaría mousemove con buttons=1 (drag fantasma), una
+    # firma trivial de automatización. shield() garantiza que el gesto se complete
+    # atómicamente aunque el CancelledError llegue a mitad del settle de 35-110 ms.
+    await asyncio.shield(_complete_click_gesture(tab, round(px), round(py)))
+
+
+async def _complete_click_gesture(tab: zd.Tab, x: int, y: int) -> None:
+    """
+    Gesto atómico mousedown → pausa 35-110 ms → mouseup (RN-HC08).
+
+    Se ejecuta bajo asyncio.shield en el caller: una vez iniciado, el botón
+    SIEMPRE se suelta aunque la coroutine que lo invocó sea cancelada. Esto evita
+    dejar el ratón "presionado" si un timeout/stop cae a mitad del gesto.
+    """
+    await _dispatch_mouse_down(tab, x, y)
     await asyncio.sleep(random.uniform(0.035, 0.110))
-    await _dispatch_mouse_up(tab, round(px), round(py))
+    await _dispatch_mouse_up(tab, x, y)
 
 
 def _validate_jitter_settle(jitter: float, settle_ms: tuple[int, int]) -> None:

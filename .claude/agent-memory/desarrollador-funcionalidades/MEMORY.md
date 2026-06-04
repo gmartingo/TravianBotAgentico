@@ -23,3 +23,13 @@
 - [attack-reports-pattern](attack-reports-pattern.md) — BD ataques oasis: router+adaptador faltaban en main.py; attacked_at verbatim naive; _calc_regen_rates; orden EP-08>EP-07>EP-06>/{id}
 - [chrome-extension-mv3-pattern](chrome-extension-mv3-pattern.md) — CORS via SW (no content script), iconos PNG stdlib, host_permissions TLD explícitos, sin tests automáticos
 - [defeat-report-pattern](defeat-report-pattern.md) — modo perdido: AnimalEntry.present=None; _is_defeat_row/mixed_row; DDL INTEGER sin NOT NULL; TravianReport NumRow muestra '?'
+- [human-click-v231-pattern](human-click-v231-pattern.md) — Bezier+Fitts+Drift: _CURSOR_POS incremental, _TAB_LOCKS, _validate_or_reset_cursor; test guardian falla con cambios no comiteados (normal)
+- [noise-navigation-pattern](noise-navigation-pattern.md) — subsistema de ruido: 4 tablas, 10 EPs, bursty gap, stub ejecución, warmup post-relogin, validación URL RN-HS23
+- [noise-execution-wiring](noise-execution-wiring.md) — gap v2.2.1: _execute_noise_action real + seed wiring en run() + touch_last_used_at; fallo preexistente UT_HS16 a ignorar de noche
+- [oasis-spawn-catalog-pattern](oasis-spawn-catalog-pattern.md) — core/game_data/ catálogo spawn; gap cereal={1..10}; valores reales troop_stats; formato tab multi-animal en tests
+- [farm-slots-schema-gotchas](farm-slots-schema-gotchas.md) — PK compuesta farm_slots sin AUTOINCREMENT, total_bounty eliminado por migración, villages requiere accounts+worlds, acceso conn via attack_report_port._conn
+- [noise-path-wizard-pattern](noise-path-wizard-pattern.md) — migraciones SQLite RENAME+CREATE, tab.url sincrónico (no await), _validate_origin en adaptador, villages en NoiseDbPort Opción A, _make_noise_db_mock helper
+- [temporal-distribution-pattern](temporal-distribution-pattern.md) — EP-TD v4: 5 secciones + max_present/avg_bounty/total_animals/oasis_coords; CTE+bounty; deduplicación bounty por report_id (CRÍTICO)
+- [noise-path-test-pattern](noise-path-test-pattern.md) — EP-N14 probar ruta: _browser_lock, execute_path_test, no-destructivo, PathTestReport en core/entities/noise_test.py
+- [sqlite-rename-fk-gotcha](sqlite-rename-fk-gotcha.md) — RENAME TABLE con FK hijas corrompe la BD (SQLite >= 3.25); patrón correcto: CREATE _new + DROP vieja + RENAME con foreign_keys=OFF
+- [noise-frequency-weight-pattern](noise-frequency-weight-pattern.md) — req_per_hour→interval_seconds; navigation_weight alias; jitter SIEMPRE; clamp 60%; piso 30 s guardian
