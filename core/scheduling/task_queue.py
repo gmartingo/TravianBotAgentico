@@ -83,6 +83,10 @@ class TaskQueue:
         """True si hay al menos una tarea del scheduler en cola."""
         return any(t.source_scheduler_id == scheduler_id for t in self._tasks)
 
+    def has_task_type(self, task_type: TaskType) -> bool:
+        """True si hay al menos una tarea del tipo indicado en cola."""
+        return any(t.task_type == task_type for t in self._tasks)
+
     def snapshot(self) -> list[Task]:
         """Copia de la cola actual (para inspección, no para modificar)."""
         return list(self._tasks)

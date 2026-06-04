@@ -788,28 +788,45 @@ class WorldAgent:
         self,
         mode: SessionMode,
         config: NoiseConfig,
-        recent_productive_traffic: int = 0,
     ) -> float:
         """
         Calcula el gap en segundos hasta la siguiente NOISE_NAVIGATION.
 
-        Distribución bursty (RN-HS24bis): máquina de estados burst/silence.
-          - Burst:   gap = uniform(0.5, 4.0) s.
-          - Silence: gap = expovariate(1 / (base_gap × 3.5)), cap [20, 600] s.
-          - base_gap = 3600 / uniform(target_min, target_max), descontando tráfico productivo.
+        Intervalo como fuente de verdad (RN-FW04):
+          base_gap = uniform(interval_min, interval_max) [segundos]
+
+        GUARDIAN (RN-FW04) — CONDICIÓN NO NEGOCIABLE:
+          Jitter gaussiano multiplicativo ±8% (clamp ±15%) aplicado SIEMPRE
+          sobre base_gap, incluso si iv_min == iv_max (rango puntual).
+          Sin esto, uniform(N,N)=N exacto produce un tick periódico trivialmente
+          detectable. El silence_floor también es aleatorizado (×uniform(1.0, 1.15))
+          para que el clamp inferior del exponencial nunca produzca gaps idénticos.
+
+        Máquina burst/silence (sin cambio):
+          Burst:   gap = uniform(0.5, 4.0) s.
+          Silence: gap = expovariate(1/(base_gap×3.5)),
+                   cap [max(30, iv_min)×random, min(7200, iv_max×4)].
+
+        El parámetro recent_productive_traffic se elimina (RN-FW04): con intervalo
+        directo el usuario controla la cadencia; el ajuste implícito confunde
+        las expectativas.
 
         Returns:
-            Segundos hasta la próxima navegación de ruido (float >= 0.5).
+            Segundos hasta la próxima navegación de ruido.
         """
-        if mode == SessionMode.HARDCORE:
-            target_min = max(1, config.hardcore_total_req_per_hour_min - recent_productive_traffic)
-            target_max = max(1, config.hardcore_total_req_per_hour_max - recent_productive_traffic)
-        else:  # PASIVO
-            target_min = max(1, config.passive_total_req_per_hour_min - recent_productive_traffic)
-            target_max = max(1, config.passive_total_req_per_hour_max - recent_productive_traffic)
+        _MIN_INTERVAL = 30  # segundos — piso guardian RN-FW02
 
-        rate = random.uniform(target_min, target_max)
-        base_gap = 3600.0 / max(rate, 1.0)  # segundos por navegación en promedio
+        if mode == SessionMode.HARDCORE:
+            iv_min = float(config.hardcore_interval_min_seconds)
+            iv_max = float(config.hardcore_interval_max_seconds)
+        else:  # PASIVO
+            iv_min = float(config.passive_interval_min_seconds)
+            iv_max = float(config.passive_interval_max_seconds)
+
+        # [GUARDIAN] Jitter humano SIEMPRE — incluso si iv_min == iv_max
+        raw_base = random.uniform(iv_min, iv_max)
+        jitter   = min(1.15, max(0.85, random.gauss(1.0, 0.08)))
+        base_gap = max(_MIN_INTERVAL, raw_base * jitter)
 
         if self._noise_in_burst:
             gap = random.uniform(0.5, 4.0)
@@ -818,10 +835,14 @@ class WorldAgent:
                 self._noise_in_burst = False
                 logger.debug("Mundo %d: ruido — fin de burst, pasando a silence", self.world_id)
         else:
-            # Silence: exponencial con media = base_gap × 3.5, cap [20, 600]
+            # Silence: exponencial con media = base_gap × 3.5
             mean = base_gap * 3.5
             raw = random.expovariate(1.0 / mean)
-            gap = max(20.0, min(600.0, raw))
+
+            # [GUARDIAN] silence_floor NO constante: aleatorizado para evitar clamp idéntico
+            silence_floor = max(_MIN_INTERVAL, iv_min) * random.uniform(1.0, 1.15)
+            silence_ceil  = min(7200.0, iv_max * 4.0)
+            gap = max(silence_floor, min(silence_ceil, raw))
 
             # Decidir si el próximo ciclo entra en burst (~40%) o sigue en silence (~60%)
             if random.random() < 0.40:
@@ -1177,18 +1198,19 @@ class WorldAgent:
             # Ventana demasiado pequeña para calcular ratio significativo
             return False
 
-        # Extrapolamos la tasa actual a 30 min
-        target_min = (
-            config.hardcore_total_req_per_hour_min
-            if self._active_mode == SessionMode.HARDCORE
-            else config.passive_total_req_per_hour_min
-        )
-        # target en 30 min = target_per_hour / 2
-        target_in_30min = target_min / 2.0
-        # efectivo en la ventana actual, extrapolado a 30 min
-        effective = self._noise_recent_count * (1800.0 / window_seconds)
+        # Con el nuevo esquema de intervalo: si no se ha producido ninguna navegación,
+        # o el intervalo medio efectivo (window_seconds / count) supera en > 2.5×
+        # el intervalo máximo configurado, consideramos que estamos por debajo del mínimo.
+        if self._noise_recent_count == 0:
+            return True
 
-        return effective < (target_in_30min * 0.40)
+        effective_interval = window_seconds / self._noise_recent_count
+        iv_max = (
+            config.hardcore_interval_max_seconds
+            if self._active_mode == SessionMode.HARDCORE
+            else config.passive_interval_max_seconds
+        )
+        return effective_interval > (iv_max * 2.5)
 
     def _should_reenqueue_noise(self) -> bool:
         """Reenqueue NOISE_NAVIGATION si estamos en HARDCORE o PASIVO (no DISCONNECTED)."""
@@ -1248,7 +1270,6 @@ class WorldAgent:
         gap = self._calculate_next_noise_gap(
             self._active_mode,
             config,
-            recent_productive_traffic=self._get_productive_recent_rate(),
         )
         execute_at = datetime.now() + timedelta(seconds=gap)
         self._enqueue_noise(execute_at)
@@ -1297,7 +1318,6 @@ class WorldAgent:
             gap = self._calculate_next_noise_gap(
                 self._active_mode,
                 config,
-                recent_productive_traffic=self._get_productive_recent_rate(),
             )
             execute_at = datetime.now() + timedelta(seconds=gap)
             self._enqueue_noise(execute_at, priority=priority)

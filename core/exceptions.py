@@ -348,3 +348,53 @@ class FarmListResponseError(TravianBotError):
         super().__init__(f"Lista[{index}]: {message}")
         self.index = index
         self.params = {"index": index, "message": message}
+
+
+# --- Excepciones añadidas en la feature noise-navigation ---
+
+class BrowserBusyError(TravianBotError):
+    """
+    El lock de browser del WorldAgent no pudo adquirirse en el tiempo límite.
+
+    Se lanza por execute_path_test cuando asyncio.wait_for(lock.acquire(), timeout)
+    expira porque _execute_noise_action o refresh_villages ya tienen el lock.
+
+    El handler HTTP lo convierte en HTTP 409 con detail legible.
+    """
+
+    error_code = "BROWSER_BUSY"
+
+    def __init__(self, world_id: int = 0, timeout_s: int = 60) -> None:
+        super().__init__(
+            f"Browser del mundo {world_id} ocupado: no se adquirió el lock en {timeout_s}s"
+        )
+        self.world_id = world_id
+        self.timeout_s = timeout_s
+        self.params = {"world_id": world_id, "timeout_s": timeout_s}
+
+
+class NoiseStepError(TravianBotError):
+    """
+    Un paso de la ruta de ruido de navegación falló.
+
+    Se lanza por _execute_noise_step cuando el JS no encuentra el elemento,
+    o cuando wait_for se agota. El WorldAgent captura esta excepción para
+    incrementar el contador de fallos del destino y, si llega a 3,
+    marcarlo como dead.
+
+    action: tipo de NoiseAction que falló.
+    selector: selector CSS del paso.
+    reason: descripción legible del fallo.
+    """
+
+    error_code = "NOISE_STEP_ERROR"
+
+    def __init__(self, action: str = "", selector: str = "", reason: str = "") -> None:
+        msg = f"Paso de ruido fallido [{action}] selector='{selector}'"
+        if reason:
+            msg += f": {reason}"
+        super().__init__(msg)
+        self.action = action
+        self.selector = selector
+        self.reason = reason
+        self.params = {"action": action, "selector": selector, "reason": reason}
