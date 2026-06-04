@@ -1,13 +1,19 @@
 /**
  * StatsTab — Pestaña "Estadísticas" del módulo de reportes de oasis.
  *
- * Layout (DA-CL01: BalanceSection ANTES de GlobalOasisStatsPanel):
- *   1. BalanceSection        — bloque KPI (carga independiente de EP-BALANCE).
- *   2. GlobalOasisStatsPanel — panel fijo siempre visible (carga independiente).
- *   3. OasisList             — lista de oasis individuales (carga independiente).
+ * Layout v2.3 (AnimalFrequencyPanel movido a CadenciaTab — pestaña propia):
+ *   1. SpawnMechanicsPanel       — educativo/estático, colapsable
+ *   2. BalanceSection            — pérdidas/ganancias del mundo
+ *   3. OasisCombatPlannerPanel   — combinaciones por oasis (Media/Peor, sin def)
+ *   4. GlobalOasisStatsPanel     — apariciones globales
+ *   5. OasisList                 — lista navegable de oasis
  *
- * Las tres cargas son paralelas: un error en cualquiera NO bloquea las otras.
- * DA-CL08/09: BalanceSection falla de forma aislada.
+ * Carga independiente: un error en cualquier panel NO bloquea los demás.
+ * SpawnMechanicsPanel: sin carga (datos estáticos del catálogo).
+ * OasisCombatPlannerPanel: EP-SPAWN re-lanzado cuando cambia timerMin.
+ *
+ * Flujo 5.3: si la respuesta EP-SPAWN es oasis:[], vacíoBD=true se pasa a
+ * SpawnMechanicsPanel para que se despliegue automáticamente.
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
@@ -15,11 +21,15 @@ import { api } from '../../api/client.js'
 import { OasisList } from './OasisList.jsx'
 import { GlobalOasisStatsPanel } from './GlobalOasisStatsPanel.jsx'
 import { BalanceSection } from './BalanceSection.jsx'
+import { SpawnMechanicsPanel } from './SpawnMechanicsPanel.jsx'
+import { OasisCombatPlannerPanel } from './OasisCombatPlannerPanel.jsx'
+
+const DEFAULT_TIMER_MIN = 10  // valor por defecto (spec §14 decisión)
 
 export function StatsTab({ lang, onGoToIngest }) {
   const { t } = useI18n()
 
-  // ── Estado del panel global (independiente de OasisList y Balance) ─────────
+  // ── Estado panel global (independiente) ───────────────────────────────────
   const [globalData, setGlobalData]       = useState(null)
   const [globalLoading, setGlobalLoading] = useState(true)
   const [globalError, setGlobalError]     = useState(null)
@@ -39,12 +49,71 @@ export function StatsTab({ lang, onGoToIngest }) {
 
   useEffect(() => { loadGlobal() }, [loadGlobal])
 
+  // ── Estado EP-SPAWN (OasisCombatPlannerPanel) ──────────────────────────────
+  const [timerMin, setTimerMin]         = useState(DEFAULT_TIMER_MIN)
+  const [spawnData, setSpawnData]       = useState(null)
+  const [spawnLoading, setSpawnLoading] = useState(true)
+  const [spawnError, setSpawnError]     = useState(null)
+
+  const loadSpawn = useCallback(async (timer) => {
+    setSpawnLoading(true)
+    setSpawnError(null)
+    try {
+      const res = await api.getOasisSpawnComposition(timer)
+      setSpawnData(res)
+    } catch (err) {
+      setSpawnError(err?.detail ?? t('stats.planner.error'))
+      setSpawnData(null)
+    } finally {
+      setSpawnLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => { loadSpawn(timerMin) }, [loadSpawn, timerMin])
+
+  const handleTimerChange = useCallback((newTimer) => {
+    setTimerMin(newTimer)
+  }, [])
+
+  const retrySpawn = useCallback(() => {
+    loadSpawn(timerMin)
+  }, [loadSpawn, timerMin])
+
+  // ¿La BD está vacía? Para el auto-despliegue de SpawnMechanicsPanel (flujo 5.3)
+  const vacíoBD = !spawnLoading && !spawnError && spawnData != null && spawnData.oasis.length === 0
+
   return (
     <div style={{ maxWidth: '900px' }}>
-      {/* 1. BalanceSection — DA-CL01: SIEMPRE encima del panel global */}
+
+      {/* 1. SpawnMechanicsPanel — educativo, estático, colapsable */}
+      <SpawnMechanicsPanel lang={lang} t={t} vacíoBD={vacíoBD} />
+
+      {/* 2. BalanceSection — pérdidas/ganancias del mundo */}
       <BalanceSection lang={lang} t={t} />
 
-      {/* 2. Panel global */}
+      {/* 3. OasisCombatPlannerPanel — dos filas Media/Peor por oasis */}
+      <OasisCombatPlannerPanel
+        data={spawnData}
+        loading={spawnLoading}
+        error={spawnError}
+        onRetry={retrySpawn}
+        onGoToIngest={onGoToIngest}
+        timerMin={timerMin}
+        onTimerChange={handleTimerChange}
+        lang={lang}
+        t={t}
+      />
+
+      {/* Separador antes de los paneles existentes */}
+      <hr
+        style={{
+          border: 'none',
+          borderTop: '1px solid var(--border)',
+          margin: '8px 0 24px 0',
+        }}
+      />
+
+      {/* 3b. Panel global de estadísticas */}
       <GlobalOasisStatsPanel
         data={globalData}
         loading={globalLoading}
@@ -55,12 +124,13 @@ export function StatsTab({ lang, onGoToIngest }) {
         t={t}
       />
 
-      {/* 3. Lista de oasis individuales */}
+      {/* 4. Lista de oasis individuales */}
       <OasisList
         lang={lang}
         onGoToIngest={onGoToIngest}
         t={t}
       />
+
     </div>
   )
 }

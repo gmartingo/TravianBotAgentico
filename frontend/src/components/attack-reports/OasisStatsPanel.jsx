@@ -1,7 +1,7 @@
 /**
  * OasisStatsPanel — Muestra las estadísticas de un oasis:
- *   0. Ritmo de regeneración (KPI principal) — sección RegenRatesSection
- *   1. Animales observados (apariciones, prom, máx, mín)
+ *   0. Animales observados (apariciones, prom, máx, mín)
+ *   1. Balance agregado del oasis (bajas vs ganancias + neto)
  *   2. Repoblación y regeneración (intervalo, animales regenerados)
  *
  * Las columnas de animales regenerados en la tabla de repoblación son dinámicas:
@@ -10,23 +10,18 @@
  * Regenerados positivos: --success, null: "—", negativos: --danger.
  *
  * Props:
- *   data — respuesta de GET /attack-reports/stats/oasis (incluye animal_regen_rates)
+ *   data — respuesta de GET /attack-reports/stats/oasis
  *   lang — string
  */
 import { useI18n } from '../../i18n/index.jsx'
 import { formatDateVerbatim } from '../../utils/formatDateVerbatim.js'
-import { RegenRatesSection } from './RegenRatesSection.jsx'
+import { BalanceGrid } from './BalanceSection.jsx'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 // attacked_at se muestra verbatim (hora del servidor de Travian, sin conversión de zona)
 function formatDate(isoStr) {
   return formatDateVerbatim(isoStr)
-}
-
-function formatCoord(n) {
-  if (n == null) return '—'
-  return n < 0 ? `−${Math.abs(n)}` : `${n}`
 }
 
 /**
@@ -194,26 +189,37 @@ export function OasisStatsPanel({ data, lang }) {
     total_attacks,
     animal_appearances,
     repopulation_gaps,
-    animal_regen_rates,
+    balance,
   } = data
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-      {/* 0. Ritmo de regeneración (KPI principal — siempre primero) */}
-      <RegenRatesSection
-        rates={animal_regen_rates ?? []}
-        totalAttacks={total_attacks}
-        lang={lang}
-        t={t}
-      />
+      {/* Balance agregado de este oasis (bajas vs ganancias + neto) —
+          reutiliza BalanceGrid del balance global. Solo si el endpoint lo trae. */}
+      {balance && balance.total_reports > 0 && (
+        <section
+          aria-labelledby="oasis-balance-title"
+          style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}
+        >
+          <h3
+            id="oasis-balance-title"
+            style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}
+          >
+            {t('ar.balance.title')}
+          </h3>
+          <BalanceGrid data={balance} lang={lang} t={t} />
+        </section>
+      )}
 
       {/* 1. Animales observados */}
-      <AnimalsTable
-        appearances={animal_appearances}
-        total={total_attacks}
-        lang={lang}
-        t={t}
-      />
+      <div style={{ marginTop: '20px' }}>
+        <AnimalsTable
+          appearances={animal_appearances}
+          total={total_attacks}
+          lang={lang}
+          t={t}
+        />
+      </div>
 
       {/* 2. Repoblación y regeneración (solo con 2+ ataques) */}
       {total_attacks >= 2 && (
