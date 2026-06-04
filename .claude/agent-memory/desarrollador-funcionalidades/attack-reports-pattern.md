@@ -69,3 +69,29 @@ regenerated<0. Incluye regenerated=0. Animales sin intervalos válidos NO aparec
 - Rata: appearances=4, avg_present=9.25, max=14, min=7
 - Rata regen: avg_regen_per_hour=2.29, valid_intervals=4
 - last_attack: "2026-05-31T13:39:30" (verbatim)
+
+---
+
+## Update 2026-06-01 — spec bd-ataques-oasis-global-pct-aparicion (EP-09 eligible_reports)
+
+### Patrón `eligible_reports` en `get_global_oasis_stats()`
+Campo aditivo (no rompe clientes existentes). La query del denominador (Paso 1b del spec)
+se ejecuta justo después del Paso 1a (apariciones). Usa subconsulta DISTINCT para
+"ever_present" (oasis donde el animal apareció alguna vez con present>0), luego JOIN
+con attack_reports por coordenadas para contar TODOS los reportes de esos oasis.
+`eligible_by_ordinal: dict[int, int]` construido en memoria para O(1) lookup al ensamblar
+la respuesta.
+
+### Invariante demostrada (no solo afirmada)
+appearances <= eligible_reports: los reportes de appearances son subset de eligible_reports
+por construcción de la subquery. Test T-P03 lo verifica para todos los items.
+
+### Ejemplo numérico de referencia (T-P06)
+A(10 rep, 6 rata) + B(5 rep, 2 rata) + C(20 rep, sin rata) → appearances=8, eligible=15 (NO 35).
+Si se usa present=0 para "Rata ausente" en el reporte, el parser parsea la fila correctamente
+(present=0 en attack_report_animals). El WHERE present > 0 en la subquery ever_present
+excluye esas filas del denominador de C, pero C tampoco entra porque nunca tuvo rata con present>0.
+
+### Documentacion/
+El módulo attack_reports no tiene entrada en documentacion/ (ni backend/ ni referencia-funciones/).
+Si se crea documentación de este módulo en el futuro, añadir entrada en documentacion/README.md.

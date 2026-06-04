@@ -19,3 +19,6 @@
 - [feedback-no-gitignore-icons-graphify](feedback-no-gitignore-icons-graphify.md) — no añadir all_icons_dump.json ni archivos graphify al .gitignore; el usuario quiere que estén trackeados
 - [travian-report-hora-verbatim](travian-report-hora-verbatim.md) — el "Server time" del reporte es el reloj de visualización, NO la hora del ataque; guardar attacked_at verbatim sin convertir a UTC
 - [features-split-across-unmerged-branches](features-split-across-unmerged-branches.md) — calculadora (rama optimizador) y reportes-oasis (untracked) no están en develop; por eso desaparecieron del front al cambiar de rama
+- [git-flow-advisor-oversteps-verify](git-flow-advisor-oversteps-verify.md) — git-flow-advisor puede commitear/pushear WIP que encuentra y reportar mal el árbol; verificar git status tras él y pasar guardian a código de browser aunque llegue como WIP
+- [feedback-confirm-metric-before-stats-change](feedback-confirm-metric-before-stats-change.md) — ante cambios en estadísticas, confirmar QUÉ métrica/pantalla/denominador antes de implementar (pasó: construí la tasa regen por-animal cuando el pedido era el % de aparición global)
+- [oasis-spawn-mechanics-stats-feature](oasis-spawn-mechanics-stats-feature.md) — feature aparición animales oasis: backend hecho+270 tests, UI pendiente del gate de mockup; inferencia de tipo por Jaccard (no solapamiento)

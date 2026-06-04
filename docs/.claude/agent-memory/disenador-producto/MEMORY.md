@@ -1,0 +1,1 @@
+- [AnimalFrequencyPanel v2 — rediseño de matriz a lista simple](project_animal_frequency_panel.md) — usuario rechazó la matriz; v2 = lista simple con una frecuencia a la vez y lenguaje humano

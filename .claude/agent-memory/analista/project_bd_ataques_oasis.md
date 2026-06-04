@@ -52,6 +52,7 @@ Estas correcciones fueron recurrentes y aplican a cualquier spec con endpoints d
 - Spec base: `ready-for-impl` — contrato API validado por desarrollador-apis (correcciones C1-C7 incorporadas, `apis_validadas_por_desarrollador_apis: true`).
 - Spec de cambio hora/balance: `docs/specs/bd-ataques-oasis-fix-hora-balance.md` (`ready-for-impl`, EP-07 validado por desarrollador-apis, `apis_validadas_por_desarrollador_apis: true`).
 - Spec prueba manual: `docs/specs/bd-ataques-oasis-stats-oasis-nav.md` (`ready-for-impl`, EP-06 modificación + EP-08 creación **pendientes de gate desarrollador-apis**, `apis_validadas_por_desarrollador_apis: false`).
+- Spec distribución temporal: `docs/specs/bd-ataques-oasis-temporal-distribution.md` (`ready-for-impl`, EP-TD creación, `apis_validadas_por_desarrollador_apis: false` — Agent no disponible, gate pendiente).
 
 ## Fix hora del ataque (lección aprendida — 2026-05-31)
 
@@ -114,6 +115,81 @@ WINDOW w AS (
 )
 ```
 Sin filtro WHERE de coordenadas, el PARTITION garantiza que el LAG no cruce oasis distintos.
+
+## Distribucion temporal de animales por tipo de oasis (EP-TD v4 — 2026-06-02)
+
+Spec en `docs/specs/bd-ataques-oasis-temporal-distribution.md` (`ready-for-impl`, v4).
+
+**Historial:**
+- v1 (bucket_hours, matriz): implementado, 33 tests.
+- v2 (interval_minutes, lista plana, Opcion B): implementado, 39 tests.
+- v3 (agrupado por tipo de oasis inferido): implementado, 41 tests, EP-SPAWN 52/52.
+- v4 (max_present + avg_bounty + total_animals + oasis_coords): ready-for-impl, gate desarrollador-apis pendiente.
+
+**Decisiones clave v2-v3 (siguen vigentes en v4):**
+- `interval_minutes` en {6,7,10,15,30,60,120,180,240,300}, default 240. Binning umbral inferior.
+- Gaps < 360s descartados. present=NULL → n_total (no n_valid).
+- Moda en Python con Counter. Media a 2 dec. Accept-Language obligatorio.
+- Tribe.NATURE (mayusculas), clave "nombre" en JsonTranslationAdapter.
+- infer_type elevada desde _infer_type. 5 secciones fijas. arcilla→"Barro".
+- CTE para la query LAG (no JOIN directo — el LAG toma el reporte anterior, no el animal anterior).
+
+**Decisiones clave v4 (nuevas — denominadores críticos):**
+- `max_present` por animal: max(valids) — mismo null-handling que avg/mode. null si n_valid=0.
+- `avg_bounty` denominador = TODOS los reportes (incl. derrotas con bounty=0). DDL NOT NULL DEFAULT 0.
+  No promediar solo sobre "con bounty>0" — eso sesgaría. Consistente con get_bounty_stats.
+- `avg_bounty.total` = media de (w+c+i+cr) por reporte — NO suma de medias individuales.
+- Botín deduplicado por report_id (JOIN produce N filas de animal por reporte; bounty es del reporte).
+- `total_animals` denominador = reportes con TODOS los animales not null ("todo o nada").
+  Si CUALQUIER animal del reporte tiene present=NULL → reporte excluido de n_valid del total.
+  Justificación: suma parcial de present con ausencias silenciosas es engañosa.
+- `oasis_coords`: serializar type_oasis_ids[tipo] → lista [{x, y}] ordenada (y ASC, x ASC). Sin cap.
+  Enteros crudos — formateo (-15|23) es del frontend. Palantir detectó 5 copias → centralizar en coordUtils.js (tarea UI v5).
+- CTE report_gaps se amplía con bounty_wood/clay/iron/crop (mínimo cambio, sin nueva query).
+- `apis_validadas_por_desarrollador_apis: false` — gate pendiente de desarrollador-apis.
+
+**Patrón de generación de buckets (para futuros specs con buckets uniformes + cubo abierto):**
+```python
+THRESHOLD = 24 * 3600
+bucket_secs = bucket_hours * 3600
+def assign_bucket(gap_seconds):
+    if gap_seconds >= THRESHOLD:
+        return (24, None)   # cubo abierto
+    lower_h = (gap_seconds // bucket_secs) * bucket_hours
+    return (lower_h, lower_h + bucket_hours)
+```
+
+## Fix % de aparición global (EP-09 — 2026-06-01)
+
+Spec en `docs/specs/bd-ataques-oasis-global-pct-aparicion.md` (`ready-for-impl`, `apis_validadas_por_desarrollador_apis: false` — Agent no disponible; gate pendiente de desarrollador-apis).
+
+**Problema resuelto:** el denominador correcto para el % de aparición global NO es "todos los reportes de la BD", sino solo los reportes de oasis donde ese animal ha aparecido alguna vez (`present > 0`). Usar todos los reportes diluye artificialmente el % (oasis de madera baja el % de ratas).
+
+**Denominador (`eligible_reports`) — query clave:**
+```sql
+SELECT a_ever.animal_ordinal, COUNT(DISTINCT r_eligible.id) AS eligible_reports
+FROM (
+    SELECT DISTINCT r2.coord_x_dest, r2.coord_y_dest, a2.animal_ordinal
+    FROM attack_report_animals a2 JOIN attack_reports r2 ON r2.id = a2.report_id
+    WHERE a2.present > 0
+) a_ever
+JOIN attack_reports r_eligible
+    ON r_eligible.coord_x_dest = a_ever.coord_x_dest AND r_eligible.coord_y_dest = a_ever.coord_y_dest
+GROUP BY a_ever.animal_ordinal
+```
+
+**Invariante:** `appearances <= eligible_reports` siempre. Si se viola → bug.
+
+**Patrón para futuros specs de % de aparición multi-oasis:**
+- Numerador = conteo de reportes con `present > 0` para ese animal.
+- Denominador = todos los reportes de los oasis donde ese animal apareció alguna vez (`ever_present`).
+- Oasis donde el animal NUNCA apareció no entran en el denominador.
+- `present = NULL` (derrota) no satisface `> 0` → no entra ni en numerador ni en denominador.
+- El % es presentacional (se calcula en el frontend con `Math.round`), no se devuelve como campo JSON.
+- El campo `eligible_reports` es aditivo → retrocompatible; clientes que no lo lean siguen funcionando.
+
+**Display en frontend:** `"appearances / eligible_reports (NN%)"` ej. `"8/15 (53%)"`.
+Guardia defensiva: si `eligible_reports` es null o 0, mostrar solo `appearances`.
 
 ## Delta: reportes de combate PERDIDO (2026-06-01)
 
