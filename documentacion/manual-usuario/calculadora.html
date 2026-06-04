@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario — Calculadora de combate | TravianBot</title>
+  <style>
+    /* === Variables (tema claro — igual al sistema de diseño del proyecto) === */
+    :root {
+      --bg: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-2: #F0F0F2;
+      --border: #D8D8DC;
+      --text: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #A0A0A5;
+      --accent: #8A6418;
+      --accent-text: #8A6418;
+      --accent-subtle: #F4ECD8;
+      --accent-subtle-border: #D6B87A;
+      --success: #1A7F37;
+      --danger: #C9352C;
+      --warning: #D4900A;
+      --info: #0068CC;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 0 24px;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 4px 8px 6px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: background .12s, color .12s;
+    }
+    .sidebar-link:hover { background: var(--surface-2); color: var(--text); }
+    .sidebar-link.active { background: var(--accent-subtle); color: var(--accent-text); font-weight: 600; }
+    .sidebar-sub { padding-left: 12px; }
+    .sidebar-back {
+      display: block;
+      padding: 6px 8px 6px 20px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-decoration: none;
+      margin-bottom: 8px;
+    }
+    .sidebar-back:hover { color: var(--text-secondary); }
+
+    .main {
+      min-width: 0;
+      padding: 48px 56px 80px;
+      max-width: 820px;
+    }
+
+    .page-header { margin-bottom: 40px; }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 580px;
+      line-height: 1.65;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .breadcrumb a { color: var(--text-tertiary); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--accent-text); }
+
+    .manual-section {
+      margin-bottom: 56px;
+      scroll-margin-top: 24px;
+    }
+    .manual-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .manual-section h2 .section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      background: var(--accent-subtle);
+      color: var(--accent-text);
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .manual-section > p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.7;
+    }
+    .manual-section h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 10px;
+    }
+    .manual-section p + p { margin-top: 10px; }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    .screenshot-wrap {
+      margin: 20px 0 28px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .screenshot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .screenshot-caption {
+      padding: 10px 16px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .screenshot-caption strong { color: var(--text); }
+
+    .callout {
+      display: flex;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 16px 0;
+    }
+    .callout-icon { font-size: 16px; flex-shrink: 0; line-height: 1.4; }
+    .callout.info { background: #EBF4FF; border: 1px solid #B8D9F8; color: #0068CC; }
+    .callout.tip  { background: var(--accent-subtle); border: 1px solid var(--accent-subtle-border); color: var(--accent-text); }
+    .callout.warn { background: #FFF8E6; border: 1px solid #F0D080; color: #7A5800; }
+    .callout p { margin: 0; }
+
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 16px 0 24px; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .steps li::before {
+      content: counter(step);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0 24px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border-bottom: 2px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .ref-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text);
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+    .ref-table code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .badge-green { background: #DCFCE7; color: var(--success); }
+    .badge-red   { background: #FEE2E2; color: var(--danger); }
+    .badge-amber { background: #FEF3C7; color: var(--warning); }
+    .badge-gray  { background: var(--surface-2); color: var(--text-secondary); }
+
+    .mode-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      margin: 10px 0;
+      background: var(--surface);
+    }
+    .mode-card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mode-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin: 0;
+    }
+    .mode-label {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 10px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--text);
+      color: var(--bg);
+      letter-spacing: .03em;
+    }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 24px 20px 48px; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <nav class="sidebar" aria-label="Manual de usuario">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+    <a href="index.html" class="sidebar-back">&#8592; Inicio del manual</a>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Calculadora</div>
+      <a href="#dos-modos" class="sidebar-link">Los dos modos</a>
+      <div class="sidebar-sub">
+        <a href="#simulador" class="sidebar-link">Simulador de combate</a>
+        <a href="#optimizador" class="sidebar-link">Optimizador</a>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Simulador — flujo</div>
+      <a href="#sim-atacante" class="sidebar-link">Configurar el atacante</a>
+      <a href="#sim-defensor" class="sidebar-link">Configurar el defensor</a>
+      <a href="#sim-resultado" class="sidebar-link">Leer el resultado</a>
+      <a href="#sim-saqueo-vs-ataque" class="sidebar-link">Saqueo vs. Ataque</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Optimizador — flujo</div>
+      <a href="#opt-multi-tropa" class="sidebar-link">Modo Multi-tropa</a>
+      <a href="#opt-ejercito" class="sidebar-link">Modo Simulador ejército</a>
+      <a href="#opt-multi-raid" class="sidebar-link">Modo Multi-raid</a>
+      <a href="#opt-resultado" class="sidebar-link">Interpretar el ranking</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Temas relacionados</div>
+      <a href="oasis-reportes.html" class="sidebar-link">Reportes de oasis</a>
+      <a href="oasis-spawn.html" class="sidebar-link">Mecánica de spawn</a>
+      <a href="farm-lists.html" class="sidebar-link">Farm Lists</a>
+    </div>
+  </nav>
+
+  <!-- ===== CONTENIDO PRINCIPAL ===== -->
+  <main class="main">
+    <div class="breadcrumb">
+      <a href="index.html">Manual</a> / Calculadora de combate
+    </div>
+
+    <div class="page-header">
+      <h1>Calculadora de combate</h1>
+      <p>Antes de lanzar un ataque, calcula exactamente qué ocurrirá: quién gana, cuántas tropas pierdes y cuántos recursos obtienes. Y si tienes un inventario real de tropas, el Optimizador busca automáticamente la combinación que mejor se adapta a tus objetivos.</p>
+    </div>
+
+    <!-- =========================================================
+         SECCIÓN 1 — LOS DOS MODOS
+         ========================================================= -->
+    <section class="manual-section" id="dos-modos">
+      <h2><span class="section-num">1</span> Los dos modos de la calculadora</h2>
+      <p>La calculadora tiene dos modos, accesibles con los botones <strong>Simulador</strong> y <strong>Optimizador</strong> en la esquina superior derecha. El modo activo aparece con fondo oscuro.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-01-vista-inicial.png" alt="Vista inicial de la Calculadora de combate en modo Simulador">
+        <div class="screenshot-caption"><strong>Figura 1.</strong> Vista inicial. Los botones <em>Simulador</em> (activo, fondo negro) y <em>Optimizador</em> están en la esquina superior derecha. El menú lateral muestra la sección Calculadora resaltada en dorado.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Modo</th>
+            <th>Para qué sirve</th>
+            <th>Cuándo usarlo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Simulador</strong></td>
+            <td>Introduces tú el ejército completo (atacante y defensor) y el sistema calcula el resultado exacto del combate</td>
+            <td>Cuando ya sabes qué tropas vas a enviar y quieres confirmar el resultado antes de atacar</td>
+          </tr>
+          <tr>
+            <td><strong>Optimizador</strong></td>
+            <td>Describes tu inventario (qué tipos de tropa tienes y cuántas) y el sistema busca la mejor combinación para ganar con el menor coste</td>
+            <td>Cuando no sabes cuántas tropas necesitas o quieres maximizar el beneficio de varias raids seguidas</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9998;</span>
+        <p>Si es la primera vez que atacas un oasis concreto, empieza por el <strong>Optimizador</strong> para saber qué tropas necesitas. Luego, si quieres afinar detalles (héroe, herrería, muro), usa el <strong>Simulador</strong> con esa combinación.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 2 — SIMULADOR DE COMBATE
+         ========================================================= -->
+    <section class="manual-section" id="simulador">
+      <h2><span class="section-num">2</span> Simulador de combate</h2>
+      <p>El Simulador usa la fórmula real de Travian T4.5 para calcular el resultado de un combate dado un ejército atacante y una defensa. El resultado es exacto: los mismos números que verás en el reporte real después del ataque.</p>
+
+      <!-- 2.1 Atacante -->
+      <h3 id="sim-atacante">Configurar el atacante</h3>
+      <p>El bloque <strong>ATACANTE</strong> tiene cuatro elementos que rellenar:</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-03-tropas-atacante.png" alt="Bloque Atacante con 500 Legionarios y 200 Pretorianos introducidos">
+        <div class="screenshot-caption"><strong>Figura 2.</strong> Bloque Atacante con tropas introducidas: 500 en la primera tropa (Legionario romano) y 200 en la tercera (Pretoriano). Los campos vacíos se ignoran en el cálculo.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Elemento</th>
+            <th>Qué introducir</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Saqueo / Ataque</strong></td>
+            <td>Elige el tipo de ataque (ver sección <a href="#sim-saqueo-vs-ataque">Saqueo vs. Ataque</a>). Por defecto está en <strong>Saqueo</strong>, que es el modo habitual para farmear oasis.</td>
+          </tr>
+          <tr>
+            <td><strong>Bonus de alianza</strong></td>
+            <td>El porcentaje de bonus de ataque que da tu alianza (entre 0% y 5%). Si no perteneces a ninguna alianza o no tiene bonus, déjalo en 0%.</td>
+          </tr>
+          <tr>
+            <td><strong>Artefacto</strong></td>
+            <td>Si tienes un artefacto activo que afecte a tus tropas, selecciónalo. Si no, deja <em>Sin artefacto</em>.</td>
+          </tr>
+          <tr>
+            <td><strong>Héroe</strong></td>
+            <td>Despliega el menú <em>Héroe</em> para introducir sus puntos de ataque y el bonus porcentual. Déjalo sin cambios si no envías héroe.</td>
+          </tr>
+          <tr>
+            <td><strong>Tribu (botones circulares)</strong></td>
+            <td>Selecciona tu tribu: RO (Romanos), TE (Teutones), GA (Galos), EG (Egipcios), HU (Hunos), SP (Espartanos) o VI (Vikingos). El icono de cada tropa cambia automáticamente.</td>
+          </tr>
+          <tr>
+            <td><strong>Cantidad por tropa</strong></td>
+            <td>Introduce el número de unidades de cada tipo. Puedes dejar en 0 las tropas que no envías. Los campos vacíos equivalen a 0.</td>
+          </tr>
+          <tr>
+            <td><strong>Herrería (fila de cuadros pequeños)</strong></td>
+            <td>Nivel de herrería de cada tropa (0 = sin mejora). Si tienes la herrería en nivel 10, ponlo aquí para que el cálculo use los stats mejorados.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <span class="callout-icon">&#8505;</span>
+        <p>La tribu seleccionada en el bloque Atacante no tiene que coincidir con la que usas en el bloque Defensor. En Travian, el defensor puede ser de cualquier tribu o ser animales de la naturaleza (Nature).</p>
+      </div>
+
+      <!-- 2.2 Defensor -->
+      <h3 id="sim-defensor">Configurar el defensor</h3>
+      <p>El bloque <strong>DEFENSOR</strong> representa los animales o tropas que defienden el oasis. La lógica es igual que en el atacante, con dos campos adicionales.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-04-defensor-oasis.png" alt="Bloque Defensor con 15 animales Nature configurados y muro nivel 20 x 5">
+        <div class="screenshot-caption"><strong>Figura 3.</strong> Bloque Defensor con tribu NA (Nature) seleccionada, 15 unidades del segundo animal (Araña gigante) y el muro configurado como nivel 20 x 5. El campo a la izquierda del &times; es el nivel del muro; el de la derecha, el multiplicador.</td></div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Elemento</th>
+            <th>Qué introducir</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Muro (nivel &times; multiplicador)</strong></td>
+            <td>El primer número es el nivel del muro del defensor (0–20). El segundo, el bonus de stonemason (normalmente 1 si no hay cantero activo). Para oasis sin muro, deja ambos en 0.</td>
+          </tr>
+          <tr>
+            <td><strong>Tribu defensora</strong></td>
+            <td>Selecciona <strong>NA</strong> (Nature) para oasis. Si el defensor es un jugador, selecciona su tribu para que el bonus de muro sea el correcto.</td>
+          </tr>
+          <tr>
+            <td><strong>Animales / tropas</strong></td>
+            <td>Introduce la cantidad de cada tipo de animal o tropa que defiende. Para oasis, los animales Nature son los que ves en los reportes: rata, araña, serpiente, murciélago, jabalí, lobo, oso, cocodrilo, tigre, elefante.</td>
+          </tr>
+          <tr>
+            <td><strong>+ Añadir refuerzo</strong></td>
+            <td>Si hay tropas reforzando el oasis desde una aldea aliada o del propio propietario, pulsa este botón para añadir una segunda formación defensora con su tribu y cantidades separadas.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warn">
+        <span class="callout-icon">&#9888;</span>
+        <p>Si el defensor pertenece a las tribus Hunos, Espartanos o Vikingos, el bonus de muro se calcula con una aproximación (nivel &times; 3%) porque aún no hay datos completos de esas murallas. El resultado sigue siendo una buena estimación, pero puede diferir ligeramente del combate real.</p>
+      </div>
+
+      <!-- 2.3 Lanzar y leer resultado -->
+      <h3 id="sim-resultado">Lanzar la simulación y leer el resultado</h3>
+      <p>Una vez configurados ambos bandos, pulsa el botón negro <strong>Simular</strong> al pie de la pantalla. El resultado aparece justo debajo.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-05-resultado-simulador.png" alt="Simulador con el resultado visible: badge verde 'Atacante gana' y Ratio 32.38">
+        <div class="screenshot-caption"><strong>Figura 4.</strong> Resultado inmediato tras pulsar Simular: badge verde <em>Atacante gana</em> con el ratio de fuerzas (32.38). El panel de detalles se despliega hacia abajo con las tropas supervivientes, las bajas y la tabla de recursos.</div>
+      </div>
+
+      <p>El panel de resultado muestra tres bloques:</p>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Bloque del resultado</th>
+            <th>Qué significa</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Ganador + Ratio</strong></td>
+            <td>Badge verde si gana el atacante, rojo si pierde. El ratio es la proporción de fuerzas: cuanto mayor, más holgada la victoria. Un ratio de 1.0 es victoria por los pelos; 32 significa que el atacante es 32 veces más fuerte que la defensa.</td>
+          </tr>
+          <tr>
+            <td><strong>Tabla de tropas</strong></td>
+            <td>Por cada tropa, muestra cuántas se enviaron y cuántas sobreviven. Las bajas aparecen en rojo. En modo Saqueo, el perdedor también tiene algunos supervivientes (reparto proporcional); en modo Ataque, el perdedor es aniquilado al 100%.</td>
+          </tr>
+          <tr>
+            <td><strong>Tabla de recursos</strong></td>
+            <td>Tres filas: recursos obtenidos de animales muertos (en verde), coste de las bajas propias (en rojo) y neto final. Si el neto es positivo (verde), el ataque es rentable en recursos; si es negativo (rojo), cuesta más en tropas de lo que obtienes.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9998;</span>
+        <p>Un ratio muy alto (como 32) no significa cero bajas — en Saqueo ambos bandos siempre tienen alguna. Revisa la tabla de tropas para ver el coste real, no solo el ganador.</p>
+      </div>
+
+      <!-- 2.4 Saqueo vs Ataque -->
+      <h3 id="sim-saqueo-vs-ataque">Cuándo usar Saqueo y cuándo Ataque</h3>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-07-modo-ataque.png" alt="Bloque Atacante con el botón 'Ataque' activo (fondo negro)">
+        <div class="screenshot-caption"><strong>Figura 5.</strong> Modo <em>Ataque</em> activo (fondo negro en el botón). En este modo, el perdedor es aniquilado al 100% y las catapultas pueden destruir edificios.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Modo</th>
+            <th>Comportamiento de las bajas</th>
+            <th>Cuándo usarlo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Saqueo</strong> (por defecto)</td>
+            <td>Ambos bandos pierden tropas proporcionalmente. El ganador pierde menos, pero nunca pierde cero. El perdedor siempre tiene algún superviviente.</td>
+            <td>Farmear oasis repetidamente. Es el modo real que Travian usa en casi todos los ataques a oasis.</td>
+          </tr>
+          <tr>
+            <td><strong>Ataque</strong></td>
+            <td>El bando perdedor es destruido al 100%. Las catapultas dañan edificios del defensor y los arietes reducen el nivel del muro.</td>
+            <td>Asedios PvP, destruir la muralla de un enemigo o demoler edificios estratégicos. No es relevante para farmear oasis de animales.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 3 — OPTIMIZADOR
+         ========================================================= -->
+    <section class="manual-section" id="optimizador">
+      <h2><span class="section-num">3</span> Optimizador de balance multiraid</h2>
+      <p>El Optimizador analiza todas las combinaciones posibles de tus tropas y devuelve un ranking de las mejores opciones para ganar el combate al menor coste. Tiene tres modos según la información que puedas proporcionar.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-07-optimizador-inicial.png" alt="Vista inicial del Optimizador en modo Multi-tropa">
+        <div class="screenshot-caption"><strong>Figura 6.</strong> Vista inicial del Optimizador. Los tres submodos (<em>Multi-tropa</em>, <em>Simulador ejército</em>, <em>Multi-raid</em>) están en la cabecera del bloque ATACANTE. El defensor ahora se llama <em>DEFENSA DEL OASIS</em> y solo acepta animales Nature.</div>
+      </div>
+
+      <div class="mode-card">
+        <div class="mode-card-title"><span class="mode-label">Multi-tropa</span>&nbsp;Modo A — quiero saber qué tipos de tropa necesito</div>
+        <p>Marcas qué tipos de tropa tienes disponibles (sin especificar cantidades). El optimizador busca la combinación mínima ganadora entre esos tipos. Útil cuando acabas de construir tropas y quieres saber si bastan.</p>
+      </div>
+      <div class="mode-card">
+        <div class="mode-card-title"><span class="mode-label">Simulador ejército</span>&nbsp;Modo B — tengo un inventario concreto</div>
+        <p>Introduces cuántas unidades tienes de cada tipo. El optimizador respeta esos máximos y busca la subselección óptima. Útil para optimizar un ataque puntual con las tropas que tienes ahora mismo.</p>
+      </div>
+      <div class="mode-card">
+        <div class="mode-card-title"><span class="mode-label">Multi-raid</span>&nbsp;Modo C — voy a repetir el mismo oasis varias veces</div>
+        <p>Igual que el Modo B, pero el sistema puntúa las oleadas pensando en repetirlas N veces. Una oleada pequeña que puedes repetir 30 veces puntúa mejor que una grande que solo puedes hacer 2. Añade columnas extra: cuántas veces puedes repetir la oleada y cuántas tropas te sobran.</p>
+      </div>
+
+      <!-- 3.1 Multi-tropa -->
+      <h3 id="opt-multi-tropa">Usar el Modo Multi-tropa</h3>
+      <p>En este modo, las tropas son botones con icono que se activan o desactivan con un clic. Activa solo los tipos que tienes en tu aldea.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-11-resultado-optimizador.png" alt="Optimizador en Modo Multi-tropa con T1 (20) activo y resultado con 3 combinaciones ganadoras">
+        <div class="screenshot-caption"><strong>Figura 7.</strong> Ejemplo: T1 (Legionario) activo con cantidad 20, 20 ratas en la Defensa del Oasis. El optimizador encontró <strong>3 combinaciones ganadoras</strong>. La primera (#1) envía 100 legionarios con 2 bajas y obtiene +2400 recursos netos.</div>
+      </div>
+
+      <ol class="steps">
+        <li>Pulsa <strong>Optimizador</strong> en la esquina superior derecha.</li>
+        <li>Verifica que el submodo activo es <strong>Multi-tropa</strong>.</li>
+        <li>Selecciona tu tribu en los botones circulares.</li>
+        <li>Haz clic en los iconos de tropa para activar los tipos que tienes disponibles. El icono activado queda resaltado con borde dorado. Puedes añadir también un número de referencia por cada tipo activo (el optimizador lo usará como cantidad máxima).</li>
+        <li>En el bloque <strong>Defensa del oasis</strong>, introduce los animales que tiene el oasis según tu último reporte.</li>
+        <li>Pulsa el botón negro <strong>Optimizar</strong>.</li>
+        <li>Lee el ranking de resultados que aparece debajo (ver <a href="#opt-resultado">Interpretar el ranking</a>).</li>
+      </ol>
+
+      <!-- 3.2 Simulador ejército -->
+      <h3 id="opt-ejercito">Usar el Modo Simulador ejército</h3>
+      <p>Este modo sustituye los botones de tipo por campos numéricos con dos filas: la primera para la cantidad disponible y la segunda para el nivel de herrería de ese tipo de tropa.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-09-modo-simulador-ejercito.png" alt="Optimizador en modo Simulador ejército con campos numéricos de cantidad y herrería">
+        <div class="screenshot-caption"><strong>Figura 8.</strong> Modo <em>Simulador ejército</em>. Cada columna tiene dos filas: la primera es la cantidad disponible, la segunda el nivel de herrería. El bloque <em>Defensa del Oasis</em> aparece más abajo.</div>
+      </div>
+
+      <ol class="steps">
+        <li>Pulsa <strong>Simulador ejército</strong> en la cabecera del bloque Atacante.</li>
+        <li>Introduce en la primera fila la cantidad real de cada tipo de tropa que tienes en la aldea ahora mismo.</li>
+        <li>En la segunda fila (más pequeña, sin icono) introduce el nivel de herrería para ese tipo si lo has mejorado. Deja en blanco si no hay mejora.</li>
+        <li>Rellena la <strong>Defensa del Oasis</strong> con los animales del oasis.</li>
+        <li>Pulsa <strong>Optimizar</strong>.</li>
+      </ol>
+
+      <div class="callout info">
+        <span class="callout-icon">&#8505;</span>
+        <p>El Modo B respeta tus cantidades como límite máximo: nunca te sugerirá enviar más tropas de las que tienes. Si introduces 80 espías y el optimizador recomienda enviar 50, los otros 30 se quedan en la aldea.</p>
+      </div>
+
+      <!-- 3.3 Multi-raid -->
+      <h3 id="opt-multi-raid">Usar el Modo Multi-raid</h3>
+      <p>El Modo Multi-raid añade una sección especial de <strong>Rango de raids</strong> con dos campos opcionales: Mín y Máx.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-10-modo-multi-raid.png" alt="Optimizador en modo Multi-raid con la sección Rango de raids visible">
+        <div class="screenshot-caption"><strong>Figura 9.</strong> Modo <em>Multi-raid</em>. Aparece la sección <em>Rango de raids (opcional)</em> con los campos Mín y Máx en modo <em>Auto</em>. El texto de ayuda dice: "Déjalos vacíos para que el optimizador decida cuántas veces atacar".</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Campo de rango</th>
+            <th>Comportamiento</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Mín y Máx vacíos (Auto)</strong></td>
+            <td>El optimizador decide libremente cuántas veces repetir la oleada para maximizar el beneficio total.</td>
+          </tr>
+          <tr>
+            <td><strong>Solo Mín</strong></td>
+            <td>Quieres hacer al menos X raids. Las alternativas que no alcanzan ese mínimo quedan penalizadas al fondo del ranking.</td>
+          </tr>
+          <tr>
+            <td><strong>Solo Máx</strong></td>
+            <td>Quieres hacer como mucho X raids. Las tropas no consumidas aparecen en la columna "Sobrantes".</td>
+          </tr>
+          <tr>
+            <td><strong>Mín = Máx</strong></td>
+            <td>Quieres hacer exactamente X raids, ni una más ni una menos.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9998;</span>
+        <p>Si usas Multi-raid para farmear un oasis todo el día, deja el rango en <strong>Auto</strong> la primera vez. El sistema te dirá cuántas raids son posibles con tu inventario actual. A partir de ahí ya puedes ajustar el rango según tus necesidades.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 4 — INTERPRETAR EL RANKING
+         ========================================================= -->
+    <section class="manual-section" id="opt-resultado">
+      <h2><span class="section-num">4</span> Interpretar el ranking del Optimizador</h2>
+      <p>Tras pulsar <strong>Optimizar</strong>, aparece una tabla con las mejores combinaciones de tropas ordenadas por su puntuación global. Cada fila es una alternativa distinta que gana el combate.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/calc-12-detalle-alternativa.png" alt="Tabla de resultados del Optimizador con 3 combinaciones ganadoras y sus métricas">
+        <div class="screenshot-caption"><strong>Figura 10.</strong> Tabla de resultados: tres combinaciones ganadoras. La primera fila (#1) envía 100 legionarios (T1) y 20 pretorianos (T2), con bajas de 800 recursos, gana 800 de cada tipo de recurso y tiene un neto de +2400. Las columnas <em>Bajas (R)</em>, <em>Rec. Ganados</em> y <em>Neto</em> permiten comparar directamente.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Columna</th>
+            <th>Qué significa</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>#</strong></td>
+            <td>Posición en el ranking. La #1 es la mejor combinación según la puntuación total.</td>
+          </tr>
+          <tr>
+            <td><strong>Tropas enviadas</strong></td>
+            <td>Los tipos de tropa y las cantidades exactas que se envían. Los números rojos junto a cada tropa son las bajas previstas de ese tipo.</td>
+          </tr>
+          <tr>
+            <td><strong>Bajas (R)</strong></td>
+            <td>Coste total de las tropas que se pierden, expresado en recursos (suma del coste de producción de todas las bajas). Aparece en rojo.</td>
+          </tr>
+          <tr>
+            <td><strong>Rec. Ganados</strong></td>
+            <td>Recursos obtenidos de los animales muertos (madera, arcilla, hierro, trigo). Aparecen con iconos de recursos en verde.</td>
+          </tr>
+          <tr>
+            <td><strong>Neto</strong></td>
+            <td>Recursos ganados menos coste de bajas. Verde si el ataque es rentable, rojo si las tropas perdidas cuestan más de lo que obtienes.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Cómo elegir entre las alternativas</h3>
+      <p>El ranking #1 no siempre es la mejor opción para todos los jugadores. Ten en cuenta:</p>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Si tu prioridad es...</th>
+            <th>Elige la alternativa con...</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Ganar más recursos por raid</td>
+            <td>Mayor <strong>Neto</strong> (columna verde más alta)</td>
+          </tr>
+          <tr>
+            <td>Perder el menor número de tropas</td>
+            <td>Menores <strong>Bajas (R)</strong> (número rojo más pequeño)</td>
+          </tr>
+          <tr>
+            <td>Enviar pocas tropas (conservar el ejército)</td>
+            <td>Alternativa con menos tropas en la columna <em>Tropas enviadas</em></td>
+          </tr>
+          <tr>
+            <td>Multi-raid: repetir la oleada muchas veces</td>
+            <td>Mayor número de raids posibles (columna <em>Raids</em> en Modo C)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <span class="callout-icon">&#8505;</span>
+        <p>Las alternativas del ranking son lo que en optimización se llama un <strong>frente de Pareto</strong>: ninguna domina a las demás en todos los objetivos al mismo tiempo. Por eso el sistema no tiene una sola respuesta correcta — te da opciones y tú eliges según lo que más te importe hoy.</p>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">&#9888;</span>
+        <p>Si el optimizador muestra el mensaje <em>"No se encontraron combinaciones ganadoras"</em>, significa que con las tropas y defensa configuradas no hay forma de ganar el combate. En ese caso el ranking muestra igualmente las mejores aproximaciones (las que más se acercan a ganar) para que veas cuántas tropas te faltan.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 5 — REFERENCIA RÁPIDA
+         ========================================================= -->
+    <section class="manual-section" id="referencia">
+      <h2><span class="section-num">5</span> Referencia rápida de campos</h2>
+
+      <h3>Campos del Atacante (Simulador)</h3>
+      <table class="ref-table">
+        <thead>
+          <tr><th>Campo</th><th>Valores posibles</th><th>Nota</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tipo de ataque</td><td>Saqueo / Ataque</td><td>Por defecto: Saqueo</td></tr>
+          <tr><td>Bonus alianza</td><td>0%–5%</td><td>0% si no aplica</td></tr>
+          <tr><td>Artefacto</td><td>Sin artefacto / varios</td><td>Solo si tienes artefactos activos</td></tr>
+          <tr><td>Héroe</td><td>Puntos de ataque + bonus %</td><td>Dejar en 0 si no envías héroe</td></tr>
+          <tr><td>Tribu</td><td>RO, TE, GA, EG, HU, SP, VI</td><td>Cambia los iconos y stats de tropas</td></tr>
+          <tr><td>Cantidad tropa</td><td>0 – sin límite</td><td>0 = tropa no enviada</td></tr>
+          <tr><td>Herrería (fila pequeña)</td><td>0 – máximo por tribu</td><td>0 = stats base sin mejora</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Campos del Defensor (Simulador)</h3>
+      <table class="ref-table">
+        <thead>
+          <tr><th>Campo</th><th>Valores posibles</th><th>Nota</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Muro — nivel</td><td>0–20</td><td>0 para oasis sin muro</td></tr>
+          <tr><td>Muro — stonemason</td><td>0–5 (o 1 si sin cantero)</td><td>Multiplica el bonus de muro</td></tr>
+          <tr><td>Tribu defensora</td><td>NA, RO, TE, GA, EG, HU, SP, VI</td><td>NA = animales Nature (oasis)</td></tr>
+          <tr><td>Tropas / animales</td><td>0 – sin límite</td><td>Ratas, arañas, etc.</td></tr>
+          <tr><td>+ Añadir refuerzo</td><td>Botón</td><td>Añade un segundo defensor (refuerzos)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Diferencias entre modos del Optimizador</h3>
+      <table class="ref-table">
+        <thead>
+          <tr><th>Modo</th><th>Entrada</th><th>Columnas extra en resultado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Multi-tropa (A)</td><td>Tipos de tropa activados (sin cantidad fija)</td><td>Ninguna</td></tr>
+          <tr><td>Simulador ejército (B)</td><td>Cantidades reales de inventario</td><td>Ninguna</td></tr>
+          <tr><td>Multi-raid (C)</td><td>Cantidades + rango de raids opcional</td><td>Raids posibles, Tropas sobrantes, Totales acumulados</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer style="margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-tertiary);">
+      <p>TravianBot — Manual de usuario &middot; Calculadora de combate</p>
+      <p style="margin-top: 4px;">&#128278; Última revisión: 2026-06-04</p>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>

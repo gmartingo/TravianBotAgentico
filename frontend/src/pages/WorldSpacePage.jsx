@@ -35,6 +35,7 @@ import { FarmListsTab }   from '../components/world/FarmListsTab.jsx'
 import { FarmListDrawer } from '../components/world/FarmListDrawer.jsx'
 import { AgentBottomBar } from '../components/world/AgentBottomBar.jsx'
 import { SessionTab }     from '../components/session/SessionTab.jsx'
+import { NoiseTab }       from '../components/world/noise/NoiseTab.jsx'
 
 // ── Iconos sidebar ────────────────────────────────────────────────────────────
 
@@ -99,6 +100,18 @@ function IconSession() {
       style={{ width: '16px', height: '16px', flexShrink: 0 }} aria-hidden="true">
       <circle cx="12" cy="12" r="9" />
       <polyline points="12 7 12 12 15 15" />
+    </svg>
+  )
+}
+
+function IconNoise() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+      style={{ width: '16px', height: '16px', flexShrink: 0 }} aria-hidden="true">
+      <path d="M5 12.5 a9 9 0 0 1 14 0" />
+      <path d="M8 15.5 a5 5 0 0 1 8 0" />
+      <circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -369,6 +382,13 @@ export function WorldSpacePage() {
       soon: false,
     },
     {
+      id: 'noise',
+      label: t('worldnav.noise'),
+      icon: <IconNoise />,
+      disabled: false,
+      soon: false,
+    },
+    {
       id: 'calc',
       label: t('worldnav.calculator'),
       icon: <IconCalc />,
@@ -623,6 +643,13 @@ export function WorldSpacePage() {
             {activeTab === 'session' && (
               <ErrorBoundary onReset={() => setActiveTab('agents')} title={t('error.loadDetail')} closeLabel={t('topbar.backToWorlds')}>
                 <SessionTab worldId={worldId} />
+              </ErrorBoundary>
+            )}
+
+            {/* Pestaña: Ruido (Noise catalog) */}
+            {activeTab === 'noise' && (
+              <ErrorBoundary onReset={() => setActiveTab('agents')} title={t('error.loadDetail')} closeLabel={t('topbar.backToWorlds')}>
+                <NoiseTab worldId={worldId} />
               </ErrorBoundary>
             )}
 

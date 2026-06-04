@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario — Reportes de ataques a oasis | TravianBot</title>
+  <style>
+    /* === Variables (tema claro — igual al sistema de diseño del proyecto) === */
+    :root {
+      --bg: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-2: #F0F0F2;
+      --border: #D8D8DC;
+      --text: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #A0A0A5;
+      --accent: #8A6418;
+      --accent-text: #8A6418;
+      --accent-subtle: #F4ECD8;
+      --accent-subtle-border: #D6B87A;
+      --success: #1A7F37;
+      --danger: #C9352C;
+      --warning: #D4900A;
+      --info: #0068CC;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-full: 9999px;
+      --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 0 24px;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 4px 8px 6px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: background .12s, color .12s;
+    }
+    .sidebar-link:hover { background: var(--surface-2); color: var(--text); }
+    .sidebar-link.active { background: var(--accent-subtle); color: var(--accent-text); font-weight: 600; }
+    .sidebar-sub { padding-left: 12px; }
+    .sidebar-back {
+      display: block;
+      padding: 6px 8px 6px 20px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-decoration: none;
+      margin-bottom: 8px;
+    }
+    .sidebar-back:hover { color: var(--text-secondary); }
+
+    .main {
+      min-width: 0;
+      padding: 48px 56px 80px;
+      max-width: 820px;
+    }
+
+    .page-header { margin-bottom: 40px; }
+    .page-header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .page-header p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 580px;
+      line-height: 1.65;
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .breadcrumb a { color: var(--text-tertiary); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--accent-text); }
+
+    .manual-section {
+      margin-bottom: 56px;
+      scroll-margin-top: 24px;
+    }
+    .manual-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .manual-section h2 .section-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      background: var(--accent-subtle);
+      color: var(--accent-text);
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .manual-section > p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.7;
+    }
+    .manual-section h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 10px;
+    }
+    .manual-section p + p { margin-top: 10px; }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 48px 0;
+    }
+
+    .screenshot-wrap {
+      margin: 20px 0 28px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .screenshot-wrap img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .screenshot-caption {
+      padding: 10px 16px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .screenshot-caption strong { color: var(--text); }
+
+    .callout {
+      display: flex;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 16px 0;
+    }
+    .callout-icon { font-size: 16px; flex-shrink: 0; line-height: 1.4; }
+    .callout.info { background: #EBF4FF; border: 1px solid #B8D9F8; color: #0068CC; }
+    .callout.tip  { background: var(--accent-subtle); border: 1px solid var(--accent-subtle-border); color: var(--accent-text); }
+    .callout.warn { background: #FFF8E6; border: 1px solid #F0D080; color: #7A5800; }
+    .callout p { margin: 0; }
+
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 16px 0 24px; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .steps li::before {
+      content: counter(step);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      background: var(--text);
+      color: var(--bg);
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .ref-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0 24px;
+    }
+    .ref-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--surface-2);
+      border-bottom: 2px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .ref-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text);
+    }
+    .ref-table tr:last-child td { border-bottom: none; }
+    .ref-table code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .badge-green { background: #DCFCE7; color: var(--success); }
+    .badge-red   { background: #FEE2E2; color: var(--danger); }
+    .badge-amber { background: #FEF3C7; color: var(--warning); }
+    .badge-gray  { background: var(--surface-2); color: var(--text-secondary); }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 24px 20px 48px; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ===== SIDEBAR ===== -->
+  <nav class="sidebar" aria-label="Manual de usuario">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+    <a href="index.html" class="sidebar-back">&#8592; Inicio del manual</a>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Reportes de oasis</div>
+      <a href="#pestanyas" class="sidebar-link">Las cuatro pestañas</a>
+      <div class="sidebar-sub">
+        <a href="#ingresar" class="sidebar-link">Ingresar un reporte</a>
+        <a href="#historial" class="sidebar-link">Historial</a>
+        <a href="#estadisticas" class="sidebar-link">Estadísticas</a>
+        <a href="#cadencia" class="sidebar-link">Cadencia de farmeo</a>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Tareas frecuentes</div>
+      <a href="#como-pegar" class="sidebar-link">Cómo pegar un reporte</a>
+      <a href="#filtrar" class="sidebar-link">Filtrar el historial</a>
+      <a href="#balance" class="sidebar-link">Ver el balance</a>
+      <a href="#por-oasis" class="sidebar-link">Ver stats de un oasis</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Temas relacionados</div>
+      <a href="oasis-spawn.html" class="sidebar-link">Mecánica de spawn</a>
+      <a href="farm-lists.html" class="sidebar-link">Farm Lists</a>
+    </div>
+  </nav>
+
+  <!-- ===== CONTENIDO PRINCIPAL ===== -->
+  <main class="main">
+    <div class="breadcrumb">
+      <a href="index.html">Manual</a> / Reportes de ataques a oasis
+    </div>
+
+    <div class="page-header">
+      <h1>Reportes de ataques a oasis</h1>
+      <p>Acumula tus reportes de Travian para saber qué robas, qué pierdes y qué animales esperar en cada oasis. Solo tienes que pegar el texto del reporte: el bot hace todo lo demás.</p>
+    </div>
+
+    <!-- =========================================================
+         SECCIÓN 1 — LAS CUATRO PESTAÑAS
+         ========================================================= -->
+    <section class="manual-section" id="pestanyas">
+      <h2><span class="section-num">1</span> Las cuatro pestañas</h2>
+      <p>La página "Reportes de oasis" tiene cuatro pestañas. Cada una tiene un propósito distinto:</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-01-vista-historial.png" alt="Página Reportes de oasis con las cuatro pestañas visibles en la parte superior">
+        <div class="screenshot-caption"><strong>Figura 1.</strong> Las cuatro pestañas: Ingresar, Historial, Estadísticas y Cadencia de farmeo. La pestaña activa se resalta en dorado.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Pestaña</th>
+            <th>Para qué sirve</th>
+            <th>Cuándo usarla</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Ingresar</strong></td>
+            <td>Pegar el texto de un reporte de Travian para analizarlo y guardarlo</td>
+            <td>Cada vez que tienes un reporte nuevo que quieres añadir a la base de datos</td>
+          </tr>
+          <tr>
+            <td><strong>Historial</strong></td>
+            <td>Ver la lista de todos los reportes guardados, filtrarlos y abrirlos</td>
+            <td>Para revisar ataques pasados, buscar uno concreto o borrar uno erróneo</td>
+          </tr>
+          <tr>
+            <td><strong>Estadísticas</strong></td>
+            <td>Ver el balance global de operaciones, la composición típica de cada oasis y las estadísticas globales</td>
+            <td>Para tomar decisiones sobre qué oasis atacar y con qué equipo</td>
+          </tr>
+          <tr>
+            <td><strong>Cadencia de farmeo</strong></td>
+            <td>Ver qué animales esperar según la frecuencia con la que atacas</td>
+            <td>Para calibrar el equipo de tropas según tu ritmo de envío</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 2 — INGRESAR UN REPORTE
+         ========================================================= -->
+    <section class="manual-section" id="ingresar">
+      <h2><span class="section-num">2</span> Ingresar un reporte</h2>
+      <p>Esta es la puerta de entrada de todos los datos. No hay formularios complicados: simplemente copia el texto del reporte en Travian y pégalo aquí.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-09-ingest-vacio.png" alt="Pestaña Ingresar con el área de texto vacía esperando que el usuario pegue un reporte">
+        <div class="screenshot-caption"><strong>Figura 2.</strong> Área de texto de la pestaña Ingresar. El placeholder muestra un ejemplo del formato esperado.</div>
+      </div>
+
+      <h3 id="como-pegar">Cómo pegar un reporte paso a paso</h3>
+      <ol class="steps">
+        <li>Ve a Travian, abre un reporte de ataque a un oasis (el defensor debe ser animales Nature: ratas, arañas, lobos, etc.).</li>
+        <li>Selecciona todo el texto del reporte con <code>Ctrl+A</code> (o <code>Cmd+A</code>) y cópialo con <code>Ctrl+C</code>.</li>
+        <li>En TravianBot, haz clic en la pestaña <strong>Ingresar</strong>.</li>
+        <li>Haz clic en el área de texto gris y pega el reporte con <code>Ctrl+V</code> (o <code>Cmd+V</code>).</li>
+        <li>Pulsa el botón <strong>Analizar</strong> (o usa el atajo <code>⌘↵</code> / <code>Ctrl+Enter</code>). El bot analizará el texto automáticamente.</li>
+        <li>Revisa el preview que aparece: muestra las tropas, los animales, el botín y el coste de las bajas.</li>
+        <li>Si todo se ve correcto, pulsa <strong>Guardar</strong>. Listo.</li>
+      </ol>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9998;</span>
+        <p>El bot detecta el idioma del reporte automáticamente (español, inglés, alemán y 22 idiomas más). No necesitas indicar el idioma.</p>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">&#9888;</span>
+        <p>Solo se aceptan reportes de ataques a oasis de animales. Los reportes de ataques a aldeas o de defensa no son compatibles.</p>
+      </div>
+
+      <h3>Si el reporte ya existe</h3>
+      <p>Si pegas un reporte que ya está guardado, el sistema lo detecta durante el análisis y muestra un aviso en dorado: "Este reporte ya está guardado." con un enlace al reporte existente. En ese caso no hace falta guardar de nuevo.</p>
+
+      <h3>Si el reporte se perdió (cantidades con "?")</h3>
+      <p>A veces en Travian el atacante pierde la batalla y el reporte muestra "?" en lugar de las cantidades de animales. El sistema acepta este tipo de reportes: los guarda con los datos que tiene (tropas enviadas, coordenadas, hora) y marca las cantidades de animales como desconocidas.</p>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 3 — HISTORIAL
+         ========================================================= -->
+    <section class="manual-section" id="historial">
+      <h2><span class="section-num">3</span> Historial</h2>
+      <p>La pestaña Historial muestra todos los reportes guardados ordenados del más reciente al más antiguo.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-02-tabla-historial.png" alt="Tabla del historial con 2124 reportes, columnas de fecha, oasis, desde, botín y bajas">
+        <div class="screenshot-caption"><strong>Figura 3.</strong> Tabla del historial. Cada fila es un reporte. Las <strong>bajas</strong> se muestran en rojo cuando el atacante perdió tropas.</div>
+      </div>
+
+      <h3>Columnas de la tabla</h3>
+      <table class="ref-table">
+        <thead>
+          <tr><th>Columna</th><th>Qué muestra</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Fecha</td>
+            <td>Hora local del servidor de Travian en el momento del ataque (formato <code>DD/MM/AA HH:MM</code>)</td>
+          </tr>
+          <tr>
+            <td>Oasis</td>
+            <td>Coordenadas del oasis atacado en formato <code>(X|Y)</code></td>
+          </tr>
+          <tr>
+            <td>Desde</td>
+            <td>Nombre de la aldea desde la que se lanzó el ataque</td>
+          </tr>
+          <tr>
+            <td>Botín</td>
+            <td>Suma total de recursos robados (madera + barro + hierro + trigo)</td>
+          </tr>
+          <tr>
+            <td>Bajas</td>
+            <td>Número de tropas atacantes perdidas. En rojo si &gt; 0.</td>
+          </tr>
+          <tr>
+            <td>Acciones</td>
+            <td>Icono de papelera (borrar) e icono de play (ver detalle)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 id="filtrar">Filtrar el historial</h3>
+      <p>La barra de filtros al principio de la pestaña Historial permite acotar los reportes mostrados:</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-04-filtros-historial.png" alt="Barra de filtros con campos X, Y, Desde y Hasta">
+        <div class="screenshot-caption"><strong>Figura 4.</strong> Filtros del historial. Se pueden combinar: solo coordenadas, solo fechas, o ambos a la vez.</div>
+      </div>
+
+      <table class="ref-table">
+        <thead>
+          <tr><th>Filtro</th><th>Cómo funciona</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Coordenadas X e Y</td>
+            <td>Filtra solo los reportes del oasis en esas coordenadas. Ambos campos son obligatorios si usas este filtro.</td>
+          </tr>
+          <tr>
+            <td>Desde / Hasta</td>
+            <td>Rango de fechas en formato <code>YYYY-MM-DD HH:MM:SS</code>. También puedes usar el botón de calendario para seleccionar el rango visualmente.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Pulsa <strong>Aplicar filtros</strong> para ver solo los reportes que coinciden. El contador "N reportes" se actualiza para reflejar el número de resultados.</p>
+
+      <h3>Ver el detalle de un reporte</h3>
+      <p>Haz clic en cualquier fila de la tabla (o en el botón "&#9654;" al final de la fila) para abrir el detalle completo del reporte.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-03-detalle-reporte.png" alt="Drawer con el detalle de un reporte: tropas enviadas, animales muertos y botín">
+        <div class="screenshot-caption"><strong>Figura 5.</strong> Detalle de un reporte. Muestra la tabla de tropas (Atacante / Defensor), estadísticas de combate y el botón "Borrar reporte" al pie.</div>
+      </div>
+
+      <div class="callout info">
+        <span class="callout-icon">ⓘ</span>
+        <p>El botón <strong>Borrar reporte</strong> al pie del detalle elimina el reporte definitivamente. Esta acción no se puede deshacer.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 4 — ESTADÍSTICAS
+         ========================================================= -->
+    <section class="manual-section" id="estadisticas">
+      <h2><span class="section-num">4</span> Estadísticas</h2>
+      <p>La pestaña Estadísticas concentra todo el análisis útil para decidir cómo y cuándo atacar. Se divide en cinco paneles, cada uno con información independiente.</p>
+
+      <h3 id="balance">Panel: Balance de operaciones</h3>
+      <p>Es el primer panel que ves al abrir Estadísticas. Compara lo que has <strong>perdido</strong> (valor en recursos de las tropas muertas) con lo que has <strong>robado</strong> (botín + inventario del héroe).</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-05-balance-stats.png" alt="Panel de balance con dos columnas: Perdido en rojo y Robado en verde, fila de neto en verde indicando +3.114.628">
+        <div class="screenshot-caption"><strong>Figura 6.</strong> Balance de operaciones. La fila <strong>Neto</strong> muestra si las operaciones son rentables: verde si ganas recursos, rojo si pierdes.</div>
+      </div>
+
+      <p>Puedes filtrar el balance por rango de fechas usando los campos <strong>Desde</strong> y <strong>Hasta</strong>. Esto te permite ver la rentabilidad de un período concreto (esta semana, este mes, etc.).</p>
+
+      <div class="callout info">
+        <span class="callout-icon">ⓘ</span>
+        <p>Si ves la nota "N reportes sin tribu identificada", significa que para esos reportes el bot no pudo calcular el coste de las tropas perdidas (no conoce la tribu del atacante). El balance de "Perdido" puede estar subestimado.</p>
+      </div>
+
+      <h3>Panel: Planificador de combate por oasis</h3>
+      <p>Justo debajo del balance encontrarás el planificador de combate. Este panel ya está documentado en detalle en el <a href="oasis-spawn.html">Manual de mecánica de spawn</a>. Selecciona el intervalo de envío y el panel muestra qué equipo necesitas para cada oasis.</p>
+
+      <h3>Panel: Estadísticas globales</h3>
+      <p>Muestra las estadísticas de todos los oasis combinados: qué animales aparecen más frecuentemente, cuántas veces se ha observado cada especie y su tasa de regeneración media.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-06-global-stats.png" alt="Panel de estadísticas globales con la lista de 152 oasis con reportes">
+        <div class="screenshot-caption"><strong>Figura 7.</strong> La sección inferior muestra la lista de los 152 oasis con reportes, ordenados por el ataque más reciente.</div>
+      </div>
+
+      <h3 id="por-oasis">Panel: Estadísticas por oasis individual</h3>
+      <p>Haz clic en cualquier oasis de la lista para ver sus estadísticas detalladas: qué animales han aparecido en ese oasis, cuántas veces, el balance propio de ese oasis y el historial de regeneración.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-08-stats-oasis.png" alt="Panel de estadísticas de un oasis individual con su lista de animales y balance">
+        <div class="screenshot-caption"><strong>Figura 8.</strong> Estadísticas de un oasis individual. Incluye el balance propio (qué robaste de este oasis específico) y la lista de animales observados con sus frecuencias.</div>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         SECCIÓN 5 — CADENCIA DE FARMEO
+         ========================================================= -->
+    <section class="manual-section" id="cadencia">
+      <h2><span class="section-num">5</span> Cadencia de farmeo</h2>
+      <p>La pestaña <strong>Cadencia de farmeo</strong> responde a la pregunta: "Si ataco cada X minutos, ¿cuántos animales suelo encontrar?" Los datos se basan en tus propios reportes históricos, agrupados según el tipo de oasis.</p>
+
+      <div class="screenshot-wrap">
+        <img src="assets/ar-10-cadencia.png" alt="Pestaña Cadencia con selector de intervalo (4h seleccionado), pestañas por tipo de oasis (Hierro 33, Barro 12) y estadísticas de animales">
+        <div class="screenshot-caption"><strong>Figura 9.</strong> Cadencia de farmeo con intervalo de 4 horas seleccionado. La pestaña "Hierro 33" muestra 33 ataques a oasis de hierro con gaps en ese rango. La media global es 12,3 animales.</div>
+      </div>
+
+      <h3>Cómo usar el selector de intervalo</h3>
+      <p>Usa los botones de la fila "Farmeo cada:" para elegir tu cadencia habitual de ataque: 6 min, 7 min, 10 min, 15 min, 30 min, 1 h, 2 h, 3 h, 4 h o 5h+.</p>
+
+      <p>El sistema selecciona solo los reportes donde el tiempo entre dos ataques consecutivos al mismo oasis coincide con ese intervalo. Así las estadísticas son representativas de lo que encuentras cuando atacas a esa cadencia.</p>
+
+      <h3>Pestañas por tipo de oasis</h3>
+      <p>Los oasis se agrupan por tipo (Hierro, Barro, Madera, Cereal, Sin clasificar). El número junto al nombre indica cuántos reportes hay en esa categoría para el intervalo seleccionado. Las pestañas en gris con guion indican que no hay datos suficientes en ese intervalo.</p>
+
+      <table class="ref-table">
+        <thead>
+          <tr><th>Tipo</th><th>Animales típicos</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Hierro</td><td>Rata, Araña, Murciélago</td></tr>
+          <tr><td>Barro</td><td>Rata, Araña, Jabalí</td></tr>
+          <tr><td>Madera</td><td>Jabalí, Lobo, Oso</td></tr>
+          <tr><td>Cereal</td><td>Todos (Rata hasta Elefante)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Qué muestran las estadísticas de cada animal</h3>
+      <p>Por cada animal de la sección se muestra:</p>
+      <ul style="margin: 12px 0 16px; padding-left: 20px; font-size: 14px; line-height: 1.8; color: var(--text-secondary);">
+        <li><strong>Media de animales</strong> — promedio de cuántos de esa especie encuentras en ese intervalo.</li>
+        <li><strong>Lo normal</strong> — la moda (el número más frecuente que aparece en los reportes).</li>
+        <li><strong>Peor</strong> — el máximo observado: cuántos encontraste en el peor ataque registrado.</li>
+        <li><strong>N ataques</strong> — cuántos reportes contribuyen a esas estadísticas.</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="callout-icon">&#9998;</span>
+        <p>Usa "Peor" para dimensionar el equipo. Si el peor caso para Rata en tu intervalo habitual es 36, asegúrate de que tus tropas puedan liquidar 36 ratas sin bajas.</p>
+      </div>
+    </section>
+
+    <hr class="section-divider">
+
+    <!-- =========================================================
+         REFERENCIA RÁPIDA
+         ========================================================= -->
+    <section class="manual-section" id="referencia">
+      <h2><span class="section-num">6</span> Referencia rápida: qué hacer cuando...</h2>
+
+      <table class="ref-table">
+        <thead>
+          <tr><th>Situación</th><th>Qué hacer</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Quiero añadir un reporte nuevo</td>
+            <td>Pestaña <strong>Ingresar</strong> → pegar texto → Analizar → Guardar</td>
+          </tr>
+          <tr>
+            <td>El sistema dice "Reporte ya guardado"</td>
+            <td>Ya tienes ese reporte. El enlace dorado te lleva al reporte existente.</td>
+          </tr>
+          <tr>
+            <td>El sistema rechaza el reporte con error</td>
+            <td>Comprueba que has copiado todo el texto del reporte (incluida la línea "Server time"). Solo se aceptan ataques a oasis de animales Nature.</td>
+          </tr>
+          <tr>
+            <td>Quiero ver qué pasó en un oasis concreto</td>
+            <td>Pestaña <strong>Historial</strong> → filtrar por coordenadas X e Y</td>
+          </tr>
+          <tr>
+            <td>Quiero saber si mis operaciones de oasis son rentables</td>
+            <td>Pestaña <strong>Estadísticas</strong> → sección "Balance de operaciones"</td>
+          </tr>
+          <tr>
+            <td>Quiero calibrar el equipo para un oasis</td>
+            <td>Pestaña <strong>Estadísticas</strong> → sección "Planificador de combate" → seleccionar intervalo. Ver también el <a href="oasis-spawn.html">Manual de mecánica de spawn</a>.</td>
+          </tr>
+          <tr>
+            <td>Quiero saber cuántos animales esperar según mi cadencia</td>
+            <td>Pestaña <strong>Cadencia de farmeo</strong> → seleccionar el intervalo → ver la pestaña del tipo de oasis</td>
+          </tr>
+          <tr>
+            <td>Quiero borrar un reporte incorrecto</td>
+            <td>Pestaña <strong>Historial</strong> → abrir el reporte → botón "Borrar reporte"</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>
