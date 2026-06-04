@@ -25,7 +25,7 @@ import { showToast } from '../ui/uiUtils.jsx'
 import { SessionStatusPanel } from './SessionStatusPanel.jsx'
 import { SessionOverridePanel } from './SessionOverridePanel.jsx'
 import { WeekdaySelector } from './WeekdaySelector.jsx'
-import { TimelineBar } from './TimelineBar.jsx'
+import { TimelineBar, validateCoverage } from './TimelineBar.jsx'
 import { BlockEditor } from './BlockEditor.jsx'
 
 // Obtener día de la semana actual en esquema 0=lun…6=dom
@@ -63,7 +63,7 @@ export function SessionTab({ worldId }) {
   const [timelinesError, setTimelinesError] = useState(null)
 
   // ── Override loading ──────────────────────────────────────────────────────
-  const [overrideLoading, setOverrideLoading] = useState(null) // 'HARDCORE'|'IDLE'|'DISCONNECTED'|null
+  const [overrideLoading, setOverrideLoading] = useState(null) // 'HARDCORE'|'PASIVO'|'DISCONNECTED'|null
   const [cancellingOverride, setCancellingOverride] = useState(false)
 
   // ── Selección de día y edición ────────────────────────────────────────────
@@ -71,6 +71,7 @@ export function SessionTab({ worldId }) {
   const [editBlocks, setEditBlocks] = useState(null)
   const [savingBlocks, setSavingBlocks] = useState(false)
   const [blockApiError, setBlockApiError] = useState(null)
+  const [copyingDays, setCopyingDays] = useState(false)
 
   const todayWeekday = getTodayWeekday()
   const editorRef = useRef(null)
@@ -180,7 +181,10 @@ export function SessionTab({ worldId }) {
     setSavingBlocks(true)
     setBlockApiError(null)
     try {
-      const saved = await api.putWorldTimelineDay(worldId, selectedDay, { blocks })
+      // El backend (enum SessionMode) exige el modo en MAYÚSCULAS: HARDCORE / PASIVO / DISCONNECTED.
+      // En la UI los modos viven en minúsculas, así que serializamos al enum antes del PUT.
+      const wireBlocks = blocks.map(b => ({ ...b, mode: (b.mode ?? 'disconnected').toUpperCase() }))
+      const saved = await api.putWorldTimelineDay(worldId, selectedDay, { blocks: wireBlocks })
       // Actualizar el timeline local con la respuesta del servidor
       setTimelines(prev => prev.map((tl, i) => i === selectedDay ? saved : tl))
       setEditBlocks(normalizeBlocks(saved.blocks))
@@ -191,6 +195,41 @@ export function SessionTab({ worldId }) {
       setBlockApiError(msg)
     } finally {
       setSavingBlocks(false)
+    }
+  }
+
+  // ── Copiar el día actual a otros días (presets) ───────────────────────────
+  // Aplica los bloques del día en edición a un conjunto de días destino
+  // (toda la semana / entre semana / fin de semana) reutilizando el PUT por día.
+  async function handleCopyToDays(weekdays) {
+    if (selectedDay === null || !editBlocks) return
+    // Defensa: el día origen debe cubrir 24h (los botones ya se deshabilitan si no).
+    if (!validateCoverage(editBlocks).ok) {
+      showToast(t('session.editor.saveError'))
+      return
+    }
+    setCopyingDays(true)
+    setBlockApiError(null)
+    const wireBlocks = editBlocks.map(b => ({ ...b, mode: (b.mode ?? 'disconnected').toUpperCase() }))
+    try {
+      // Secuencial a propósito: el backend usa una única conexión SQLite y
+      // upsert_timeline abre una transacción; lanzar los PUT en paralelo
+      // solaparía transacciones en la misma conexión y daría 500.
+      const byDay = new Map()
+      for (const wd of weekdays) {
+        const saved = await api.putWorldTimelineDay(worldId, wd, { blocks: wireBlocks })
+        byDay.set(wd, saved)
+      }
+      setTimelines(prev => prev.map((tl, i) => byDay.has(i) ? byDay.get(i) : tl))
+      // Si el día en edición está incluido, refrescar sus bloques con la respuesta.
+      if (byDay.has(selectedDay)) {
+        setEditBlocks(normalizeBlocks(byDay.get(selectedDay).blocks))
+      }
+      showToast(t('session.editor.copied', { n: weekdays.length }))
+    } catch (e) {
+      showToast(e instanceof ApiError ? e.detail : t('session.editor.copyError'))
+    } finally {
+      setCopyingDays(false)
     }
   }
 
@@ -300,6 +339,8 @@ export function SessionTab({ worldId }) {
             apiError={blockApiError}
             onChange={setEditBlocks}
             onSave={handleSaveBlocks}
+            onCopyToDays={handleCopyToDays}
+            copying={copyingDays}
           />
         </div>
       )}

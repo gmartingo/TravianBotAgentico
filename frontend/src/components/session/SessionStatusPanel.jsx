@@ -21,7 +21,7 @@ function modeKey(mode) {
   if (!mode) return 'session.status.mode.disconnected'
   const m = mode.toLowerCase()
   if (m === 'hardcore') return 'session.status.mode.hardcore'
-  if (m === 'idle') return 'session.status.mode.idle'
+  if (m === 'pasivo') return 'session.status.mode.pasivo'
   return 'session.status.mode.disconnected'
 }
 
@@ -29,7 +29,7 @@ function modeCssClass(mode) {
   if (!mode) return 'disconnected'
   const m = mode.toLowerCase()
   if (m === 'hardcore') return 'hardcore'
-  if (m === 'idle') return 'idle'
+  if (m === 'pasivo') return 'pasivo'
   return 'disconnected'
 }
 

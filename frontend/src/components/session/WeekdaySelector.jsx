@@ -33,7 +33,7 @@ function getFirstModeColor(timeline) {
   if (!timeline || !timeline.blocks || timeline.blocks.length === 0) return null
   const mode = timeline.blocks[0].mode?.toLowerCase()
   if (mode === 'hardcore') return 'var(--mode-hardcore)'
-  if (mode === 'idle') return 'var(--mode-idle)'
+  if (mode === 'pasivo') return 'var(--mode-pasivo)'
   return 'var(--mode-disconnected)'
 }
 

@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnimalFrequencyPanel v5 — Mockup editable</title>
+<style>
+/* ── Tokens (§19.16 de DESIGN.md) ─────────────────────────────────── */
+:root {
+  --bg:#F5F5F7; --surface:#fff; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93; --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012; --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#fff; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+}
+[data-theme="dark"] {
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ── Barra del playground ───────────────────────────────────────────── */
+#playground-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.pg-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.pg-badge {
+  font-size: 10px; font-family: var(--font-mono); font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent-text); background: var(--accent-subtle);
+  border-radius: var(--radius-full); padding: 2px 8px;
+}
+.pg-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+.pg-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+  transition: background var(--dur-fast), border-color var(--dur-fast);
+}
+.pg-btn:hover { background: var(--surface); border-color: var(--accent); }
+.pg-btn--primary { background: var(--btn-primary-bg); color: var(--btn-primary-text); border-color: var(--btn-primary-bg); }
+.pg-btn--primary:hover { background: var(--btn-primary-hover); border-color: var(--btn-primary-hover); }
+#edit-mode-toggle[data-active="true"] {
+  background: var(--accent-subtle); border-color: var(--accent); color: var(--accent-text); font-weight: 600;
+}
+.pg-select {
+  font-size: 12px; font-family: var(--font-sans);
+  background: var(--surface-2); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); color: var(--text); padding: 4px 8px; cursor: pointer;
+}
+
+/* ── Canvas ──────────────────────────────────────────────────────────── */
+#canvas {
+  padding: 40px 32px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* ── Bloques arrastrables ────────────────────────────────────────────── */
+.drag-block { position: relative; }
+#canvas[data-edit="true"] .drag-block {
+  outline: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  user-select: none;
+}
+#canvas[data-edit="true"] .drag-block:hover {
+  outline-color: var(--accent);
+  background: var(--accent-subtle);
+}
+#canvas[data-edit="true"] .drag-block.dragging { opacity: 0.35; cursor: grabbing; }
+#canvas[data-edit="true"] .drag-block.drag-over { outline: 2px solid var(--accent); }
+.drag-handle-label {
+  display: none; position: absolute; top: 4px; inset-inline-end: 8px;
+  font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 1px 6px; pointer-events: none; z-index: 10;
+}
+#canvas[data-edit="true"] .drag-block:hover .drag-handle-label { display: block; }
+
+/* ── PANEL PRINCIPAL ─────────────────────────────────────────────────── */
+.panel { /* sin background, borde, sombra — vive sobre el StatsTab */ }
+
+.panel-title {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--text); margin-bottom: 24px;
+}
+
+/* ── FrequencySelector ──────────────────────────────────────────────── */
+.freq-wrap {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; margin-bottom: 8px;
+}
+.freq-label {
+  font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  flex-shrink: 0; margin-inline-end: 4px;
+}
+.freq-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.freq-divider {
+  width: 1px; height: 20px; background: var(--border);
+  flex-shrink: 0; margin: 0 6px; align-self: center;
+}
+.freq-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 4px 12px; border-radius: var(--radius-full);
+  font-size: 12px; font-weight: 500; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
+  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+  white-space: nowrap; min-height: 30px;
+}
+.freq-pill:hover:not(.active) { border-color: var(--accent); }
+.freq-pill.active {
+  background: var(--accent-subtle); border-color: var(--accent);
+  color: var(--accent-text); font-weight: 600;
+}
+.freq-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── TypeTabSelector ────────────────────────────────────────────────── */
+.type-tabs-wrap {
+  display: flex; align-items: stretch; gap: 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  margin-bottom: 0; /* ficha va justo después */
+}
+.type-tabs-wrap::-webkit-scrollbar { display: none; }
+.type-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 18px; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); background: transparent;
+  border: none; border-bottom: 2px solid transparent; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  margin-bottom: -1px; position: relative;
+}
+.type-tab:hover:not(.active):not(.no-data) { color: var(--text); }
+.type-tab.active { color: var(--accent-text); border-bottom-color: var(--accent); font-weight: 600; }
+.type-tab.no-data { color: var(--text-disabled); cursor: not-allowed; }
+.type-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.type-tab-count {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-family: var(--font-mono);
+  color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+.type-tab.active .type-tab-count { color: var(--accent-text); opacity: 0.7; }
+.type-tab.no-data .type-tab-count { color: var(--text-disabled); }
+.type-tab-icon { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.7; }
+.type-tab.active .type-tab-icon { opacity: 1; }
+.type-tab.no-data .type-tab-icon { opacity: 0.4; }
+
+/* ── TYPE SUMMARY CARD (NUEVA v5) ────────────────────────────────────
+   Sin borde exterior, sin fondo propio.
+   Solo un hairline inferior separa la ficha de la lista de animales.
+   Vive dentro del tabpanel, encima de la lista.
+   Tres zonas de contenido:
+     1. Línea de cabecera + confianza + coords chips
+     2. Línea total de animales
+     3. Línea botín medio
+─────────────────────────────────────────────────────────────────────── */
+.type-summary {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px; /* la cabecera sección va debajo */
+}
+
+/* Zona 1: frase de cabecera + confianza + coords */
+.summary-heading {
+  font-size: 13px; color: var(--text-secondary);
+  margin-bottom: 4px; line-height: 1.5;
+}
+
+.summary-confidence {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px; font-size: 12px; color: var(--text-tertiary);
+  margin-bottom: 14px; line-height: 1.4;
+}
+.confidence-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text-tertiary); flex-shrink: 0;
+}
+.summary-confidence.has-warning .confidence-dot { background: var(--accent); opacity: 0.6; }
+.summary-confidence.has-warning { color: var(--text-secondary); }
+
+/* Chips de coordenadas */
+.coord-chips {
+  display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;
+}
+.coord-chip {
+  display: inline-flex; align-items: center;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-full); padding: 1px 8px;
+  font-size: 11px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary); white-space: nowrap;
+  /* NO interactivo — solo informativo */
+}
+.coord-more {
+  font-size: 11px; color: var(--text-tertiary);
+  font-family: var(--font-sans);
+}
+
+/* Zona 2: total de animales */
+.summary-totals {
+  display: flex; align-items: baseline; flex-wrap: wrap;
+  gap: 4px 8px; margin-bottom: 10px;
+}
+.summary-total-label {
+  font-size: 12px; color: var(--text-secondary); flex-shrink: 0;
+  margin-inline-end: 4px;
+}
+.summary-total-avg {
+  font-size: 17px; font-weight: 600; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; color: var(--text);
+  line-height: 1;
+}
+.summary-total-avg-label {
+  font-size: 12px; color: var(--text-tertiary);
+}
+.summary-total-sep {
+  font-size: 12px; color: var(--text-disabled);
+}
+.summary-total-mode {
+  font-size: 12px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; color: var(--text-tertiary);
+}
+.summary-total-max {
+  font-size: 12px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; color: var(--text-tertiary);
+}
+.summary-no-data {
+  font-size: 12px; color: var(--text-disabled);
+}
+
+/* Zona 3: botín medio */
+.summary-bounty {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.summary-bounty-label {
+  font-size: 12px; color: var(--text-secondary); flex-shrink: 0;
+  margin-inline-end: 2px;
+}
+.bounty-resource {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.bounty-resource-icon {
+  width: 14px; height: 14px; color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.bounty-resource-value {
+  font-size: 13px; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.bounty-total {
+  font-size: 13px; font-weight: 500;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.bounty-total-label {
+  font-size: 12px; color: var(--text-secondary);
+  margin-inline-end: 4px;
+}
+.bounty-no-data {
+  font-size: 12px; color: var(--text-tertiary);
+}
+
+/* ── Cabecera de sección (frase "sueles encontrar:") ─────────────────
+   En v5 esta frase va DENTRO del tabpanel, DEBAJO de la ficha de resumen
+─────────────────────────────────────────────────────────────────────── */
+.section-heading {
+  font-size: 13px; color: var(--text-secondary);
+  margin-top: 20px; margin-bottom: 4px; line-height: 1.5;
+}
+
+/* ── LISTA DE ANIMALES v5 ────────────────────────────────────────────
+   Caption ahora: "lo normal: X · peor: Y · N ataques"
+─────────────────────────────────────────────────────────────────────── */
+.animal-list { list-style: none; }
+.animal-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.animal-row:last-child { border-bottom: none; }
+.animal-icon {
+  width: 28px; height: 28px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.animal-icon img, .animal-icon svg { width: 24px; height: 24px; object-fit: contain; }
+.animal-name {
+  font-size: 14px; font-weight: 500; color: var(--text);
+  flex: 1; min-width: 80px;
+}
+.animal-data {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px; flex-shrink: 0;
+}
+.animal-avg {
+  font-size: 22px; font-weight: 600; font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums; color: var(--text); line-height: 1;
+}
+.animal-avg-label {
+  font-size: 12px; color: var(--text-secondary);
+  margin-top: 1px; text-align: end;
+}
+/* Caption v5: moda + peor + N ataques */
+.animal-caption {
+  font-size: 12px; color: var(--text-tertiary);
+  text-align: end; margin-top: 2px; line-height: 1.4;
+}
+/* Animal sin datos */
+.animal-row.no-data .animal-avg { font-size: 18px; color: var(--text-disabled); }
+.animal-row.no-data .animal-avg-label,
+.animal-row.no-data .animal-caption { color: var(--text-disabled); }
+
+/* ── ESTADOS VACÍOS ─────────────────────────────────────────────────── */
+.type-empty {
+  padding: 48px 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; text-align: center;
+}
+.type-empty-icon { color: var(--text-disabled); margin-bottom: 4px; }
+.type-empty-title { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.type-empty-hint { font-size: 13px; color: var(--text-tertiary); }
+
+.empty-global {
+  padding: 64px 0; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; text-align: center;
+}
+.empty-global-icon { color: var(--text-disabled); margin-bottom: 4px; }
+.empty-global-title { font-size: 15px; font-weight: 500; color: var(--text-secondary); }
+.empty-global-body { font-size: 13px; color: var(--text-tertiary); max-width: 340px; }
+
+.btn-primary {
+  margin-top: 4px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 20px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500;
+  background: var(--btn-primary-bg); color: var(--btn-primary-text);
+  border: none; cursor: pointer; transition: background var(--dur-fast);
+}
+.btn-primary:hover { background: var(--btn-primary-hover); }
+
+/* ── ESTADO ERROR ───────────────────────────────────────────────────── */
+.error-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 0; margin-top: 8px;
+}
+.error-banner-text { font-size: 13px; color: var(--text-secondary); flex: 1; }
+.btn-retry {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 14px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border-strong); cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast); flex-shrink: 0;
+}
+.btn-retry:hover { border-color: var(--accent); }
+
+/* ── SKELETON ───────────────────────────────────────────────────────── */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.skeleton-bar {
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) { .skeleton-bar { animation: none; opacity: 0.5; } }
+.skeleton-animal-list { list-style: none; }
+.skeleton-animal-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.skeleton-animal-row:last-child { border-bottom: none; }
+
+/* ── NOTA CONTEXTUAL ────────────────────────────────────────────────── */
+.type-note {
+  font-size: 12px; color: var(--text-tertiary);
+  padding: 12px 0 20px 0; border-bottom: 1px solid var(--border);
+  margin-bottom: 4px; line-height: 1.5;
+}
+
+/* ── SVG helpers ─────────────────────────────────────────────────────── */
+svg { display: block; }
+
+/* ── RESPONSIVE (demo con clase .mobile-preview) ─────────────────────── */
+.mobile-preview #canvas { max-width: 390px; padding: 24px 16px; }
+.mobile-preview .freq-wrap { flex-direction: column; align-items: flex-start; gap: 6px; }
+.mobile-preview .freq-divider { display: none; }
+.mobile-preview .type-tab { padding: 10px 14px; font-size: 12px; }
+.mobile-preview .animal-avg { font-size: 20px; }
+.mobile-preview .summary-bounty { gap: 4px 10px; }
+.mobile-preview .summary-confidence { flex-wrap: wrap; }
+.mobile-preview .coord-chips { flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<!-- ── Barra del playground ──────────────────────────────────────── -->
+<div id="playground-bar">
+  <span class="pg-title">AnimalFrequencyPanel</span>
+  <span class="pg-badge">v5 mockup</span>
+
+  <div class="pg-sep"></div>
+
+  <button class="pg-btn" id="edit-mode-toggle" data-active="false" onclick="toggleEdit()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+    Editar
+  </button>
+
+  <button class="pg-btn" onclick="saveLayout()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+    </svg>
+    Guardar
+  </button>
+
+  <button class="pg-btn" onclick="resetLayout()">Restablecer</button>
+
+  <button class="pg-btn pg-btn--primary" onclick="exportLayout()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Exportar layout
+  </button>
+
+  <div class="pg-sep"></div>
+
+  <button class="pg-btn" onclick="toggleTheme()" title="Alternar modo claro/oscuro">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    </svg>
+    Tema
+  </button>
+
+  <select class="pg-select" onchange="setPreviewState(this.value)">
+    <option value="data">Con datos</option>
+    <option value="loading">Cargando</option>
+    <option value="error">Error</option>
+    <option value="empty-global">Vacío global</option>
+    <option value="empty-freq">Sin datos (cadencia)</option>
+    <option value="empty-type">Tipo sin datos</option>
+  </select>
+
+  <div class="pg-sep"></div>
+  <select class="pg-select" onchange="setResponsiveView(this.value)">
+    <option value="desktop">Desktop</option>
+    <option value="mobile">Móvil (390px)</option>
+  </select>
+</div>
+
+
+<!-- ── Canvas principal ──────────────────────────────────────────────── -->
+<div id="canvas">
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: CON DATOS — diseño v5
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-data">
+
+    <!-- BLOQUE 1: FrequencySelector -->
+    <div class="drag-block" id="block-freq-selector">
+      <div class="drag-handle-label">FrequencySelector</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="freq-wrap">
+        <span class="freq-label">Farmeo cada:</span>
+        <div class="freq-group">
+          <button class="freq-pill" onclick="selectFreq(this,'6 min')">6 min</button>
+          <button class="freq-pill" onclick="selectFreq(this,'7 min')">7 min</button>
+          <button class="freq-pill" onclick="selectFreq(this,'10 min')">10 min</button>
+          <button class="freq-pill" onclick="selectFreq(this,'15 min')">15 min</button>
+          <button class="freq-pill" onclick="selectFreq(this,'30 min')">30 min</button>
+        </div>
+        <div class="freq-divider"></div>
+        <div class="freq-group">
+          <button class="freq-pill" onclick="selectFreq(this,'1h')">1h</button>
+          <button class="freq-pill" onclick="selectFreq(this,'2h')">2h</button>
+          <button class="freq-pill" onclick="selectFreq(this,'3h')">3h</button>
+          <button class="freq-pill active" onclick="selectFreq(this,'4h')">4h</button>
+          <button class="freq-pill" onclick="selectFreq(this,'5h+')">5h+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOQUE 2: TypeTabSelector + TypeSummaryCard + AnimalList -->
+    <div class="drag-block" id="block-type-panel" style="margin-top:32px;">
+      <div class="drag-handle-label">TypeTabSelector + Ficha + AnimalList</div>
+
+      <!-- Pestañas de tipo de oasis -->
+      <div class="type-tabs-wrap" role="tablist" aria-label="Tipo de oasis">
+
+        <button class="type-tab active" role="tab" aria-selected="true"
+          aria-controls="panel-hierro" id="tab-hierro" onclick="selectType(this,'hierro')">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/>
+            <path d="M16 16l4 4"/><path d="M19 21l2-2"/>
+          </svg>
+          Hierro
+          <span class="type-tab-count">3</span>
+        </button>
+
+        <button class="type-tab" role="tab" aria-selected="false"
+          aria-controls="panel-barro" id="tab-barro" onclick="selectType(this,'barro')">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/><path d="M14 8h6v14"/>
+          </svg>
+          Barro
+          <span class="type-tab-count">2</span>
+        </button>
+
+        <button class="type-tab" role="tab" aria-selected="false"
+          aria-controls="panel-madera" id="tab-madera" onclick="selectType(this,'madera')">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
+            <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+          </svg>
+          Madera
+          <span class="type-tab-count">1</span>
+        </button>
+
+        <button class="type-tab" role="tab" aria-selected="false"
+          aria-controls="panel-cereal" id="tab-cereal" onclick="selectType(this,'cereal')">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M2 22 16 8"/>
+            <path d="M17.47 7.53L14 4l2.76-2.76a1 1 0 0 1 1.41 0L21 4a1 1 0 0 1 0 1.41L17.47 5.35Z"/>
+          </svg>
+          Cereal
+          <span class="type-tab-count">2</span>
+        </button>
+
+        <button class="type-tab no-data" role="tab" aria-selected="false"
+          aria-disabled="true" aria-controls="panel-sin-clasificar" id="tab-sin-clasificar"
+          onclick="selectType(this,'sin-clasificar')" title="Sin ataques clasificados con esta cadencia">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Sin clasificar
+          <span class="type-tab-count">—</span>
+        </button>
+
+      </div><!-- /type-tabs-wrap -->
+
+
+      <!-- ── Panel: Hierro (activo por defecto) ────────────────────────── -->
+      <div id="panel-hierro" role="tabpanel" aria-labelledby="tab-hierro">
+
+        <!-- FICHA DE RESUMEN DEL TIPO (nueva v5) -->
+        <div class="type-summary">
+
+          <!-- Zona 1: cabecera + confianza + coords -->
+          <p class="summary-heading">
+            En oasis de <strong>Hierro</strong>, cada 4h sueles encontrar:
+          </p>
+          <div class="summary-confidence">
+            <span class="confidence-dot"></span>
+            Estimado a partir de 18 ataques a 3 oasis
+            <span class="coord-chips" aria-label="Coordenadas de oasis de Hierro">
+              <span class="coord-chip">(3|5)</span>
+              <span class="coord-chip">(-7|12)</span>
+              <span class="coord-chip">(22|4)</span>
+            </span>
+          </div>
+
+          <!-- Zona 2: total de animales -->
+          <div class="summary-totals">
+            <span class="summary-total-label">Total de animales:</span>
+            <span class="summary-total-avg">11</span>
+            <span class="summary-total-avg-label">de media</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-mode">lo normal 10</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-max">peor 17</span>
+          </div>
+
+          <!-- Zona 3: botín medio -->
+          <div class="summary-bounty">
+            <span class="summary-bounty-label">Botín medio:</span>
+            <!-- Madera -->
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
+                <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+              </svg>
+              <span class="bounty-resource-value">320</span>
+            </span>
+            <!-- Barro/Arcilla -->
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/><path d="M14 8h6v14"/>
+              </svg>
+              <span class="bounty-resource-value">280</span>
+            </span>
+            <!-- Hierro -->
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/>
+              </svg>
+              <span class="bounty-resource-value">540</span>
+            </span>
+            <!-- Cereal -->
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M2 22 16 8"/>
+                <path d="M17.47 7.53L14 4l2.76-2.76a1 1 0 0 1 1.41 0L21 4a1 1 0 0 1 0 1.41L17.47 5.35Z"/>
+              </svg>
+              <span class="bounty-resource-value">190</span>
+            </span>
+            <!-- Total -->
+            <span class="bounty-resource">
+              <span class="bounty-total-label">Total</span>
+              <span class="bounty-total">1&nbsp;330</span>
+            </span>
+          </div>
+
+        </div><!-- /type-summary -->
+
+        <!-- Lista de animales v5 -->
+        <ul class="animal-list" style="margin-top:4px;">
+
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6">
+                <path d="M3 12c0-4 3-6 6-6s6 2 6 6v3H3v-3z"/>
+                <path d="M3 15v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-2"/>
+                <path d="M9 6V4"/><path d="M15 6c1-1 3-1 3 1v2"/>
+              </svg>
+            </div>
+            <span class="animal-name">Lobo</span>
+            <div class="animal-data">
+              <span class="animal-avg">5</span>
+              <span class="animal-avg-label">animales de media</span>
+              <!-- v5: moda · peor · N ataques -->
+              <span class="animal-caption">lo normal: 5&nbsp;&nbsp;·&nbsp;&nbsp;peor: 8&nbsp;&nbsp;·&nbsp;&nbsp;16 de 18</span>
+            </div>
+          </li>
+
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6">
+                <path d="M12 2C8 2 5 5 5 9v4l-2 2v2h18v-2l-2-2V9c0-4-3-7-7-7z"/>
+                <path d="M9 21a3 3 0 0 0 6 0"/>
+              </svg>
+            </div>
+            <span class="animal-name">Oso</span>
+            <div class="animal-data">
+              <span class="animal-avg">3</span>
+              <span class="animal-avg-label">animales de media</span>
+              <span class="animal-caption">lo normal: 3&nbsp;&nbsp;·&nbsp;&nbsp;peor: 5&nbsp;&nbsp;·&nbsp;&nbsp;14 de 18</span>
+            </div>
+          </li>
+
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6">
+                <path d="M12 2l3 8H7l3-8z"/><circle cx="12" cy="16" r="6"/>
+                <line x1="12" y1="10" x2="12" y2="22"/>
+              </svg>
+            </div>
+            <span class="animal-name">Araña</span>
+            <div class="animal-data">
+              <span class="animal-avg">2</span>
+              <span class="animal-avg-label">animales de media</span>
+              <span class="animal-caption">lo normal: 2 o 3&nbsp;&nbsp;·&nbsp;&nbsp;peor: 4&nbsp;&nbsp;·&nbsp;&nbsp;12 de 18</span>
+            </div>
+          </li>
+
+          <!-- Animal sin datos válidos (avg_present: null) -->
+          <li class="animal-row no-data">
+            <div class="animal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-disabled)" stroke-width="1.6">
+                <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
+              </svg>
+            </div>
+            <span class="animal-name" style="color:var(--text-disabled);">Murciélago</span>
+            <div class="animal-data">
+              <span class="animal-avg">—</span>
+              <span class="animal-avg-label">Sin observaciones válidas</span>
+              <!-- sin caption de peor cuando avg es null -->
+            </div>
+          </li>
+
+        </ul>
+
+      </div><!-- /panel-hierro -->
+
+
+      <!-- ── Panel: Cereal (ejemplo con aviso de confianza + nota + ficha) ── -->
+      <div id="panel-cereal" role="tabpanel" aria-labelledby="tab-cereal" style="display:none;">
+
+        <!-- Ficha de resumen — cereal con baja confianza -->
+        <div class="type-summary">
+          <p class="summary-heading">
+            En oasis de <strong>Cereal</strong>, cada 4h sueles encontrar:
+          </p>
+          <div class="summary-confidence has-warning">
+            <span class="confidence-dot"></span>
+            1 de 2 oasis con tipo dudoso&nbsp;&nbsp;·&nbsp;&nbsp;8 ataques
+            <span class="coord-chips">
+              <span class="coord-chip">(-15|23)</span>
+              <span class="coord-chip">(7|-3)</span>
+            </span>
+          </div>
+          <div class="summary-totals">
+            <span class="summary-total-label">Total de animales:</span>
+            <span class="summary-total-avg">8</span>
+            <span class="summary-total-avg-label">de media</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-mode">lo normal 7</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-max">peor 14</span>
+          </div>
+          <div class="summary-bounty">
+            <span class="summary-bounty-label">Botín medio:</span>
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/></svg>
+              <span class="bounty-resource-value">90</span>
+            </span>
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/><path d="M14 8h6v14"/></svg>
+              <span class="bounty-resource-value">110</span>
+            </span>
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/></svg>
+              <span class="bounty-resource-value">80</span>
+            </span>
+            <span class="bounty-resource">
+              <svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 16 8"/><path d="M17.47 7.53L14 4l2.76-2.76a1 1 0 0 1 1.41 0L21 4a1 1 0 0 1 0 1.41L17.47 5.35Z"/></svg>
+              <span class="bounty-resource-value">620</span>
+            </span>
+            <span class="bounty-resource">
+              <span class="bounty-total-label">Total</span>
+              <span class="bounty-total">900</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Nota contextual cereal -->
+        <p class="type-note" style="margin-top:4px;">
+          Los oasis de cereal tienen los patrones de animales más variados. Los datos aquí son estimaciones más amplias.
+        </p>
+
+        <ul class="animal-list">
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6">
+                <path d="M20 12V22H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/>
+              </svg>
+            </div>
+            <span class="animal-name">Serpiente</span>
+            <div class="animal-data">
+              <span class="animal-avg">4</span>
+              <span class="animal-avg-label">animales de media</span>
+              <span class="animal-caption">lo normal: 4&nbsp;&nbsp;·&nbsp;&nbsp;peor: 7&nbsp;&nbsp;·&nbsp;&nbsp;6 de 8</span>
+            </div>
+          </li>
+        </ul>
+
+      </div><!-- /panel-cereal -->
+
+
+      <!-- ── Panel: Barro ─────────────────────────────────────────────── -->
+      <div id="panel-barro" role="tabpanel" aria-labelledby="tab-barro" style="display:none;">
+        <div class="type-summary">
+          <p class="summary-heading">En oasis de <strong>Barro</strong>, cada 4h sueles encontrar:</p>
+          <div class="summary-confidence">
+            <span class="confidence-dot"></span>
+            12 ataques a 2 oasis
+            <span class="coord-chips">
+              <span class="coord-chip">(5|8)</span>
+              <span class="coord-chip">(-3|-11)</span>
+            </span>
+          </div>
+          <div class="summary-totals">
+            <span class="summary-total-label">Total de animales:</span>
+            <span class="summary-total-avg">9</span>
+            <span class="summary-total-avg-label">de media</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-mode">lo normal 9</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-max">peor 13</span>
+          </div>
+          <div class="summary-bounty">
+            <span class="summary-bounty-label">Botín medio:</span>
+            <span class="bounty-resource"><svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/></svg><span class="bounty-resource-value">200</span></span>
+            <span class="bounty-resource"><svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/><path d="M14 8h6v14"/></svg><span class="bounty-resource-value">480</span></span>
+            <span class="bounty-resource"><svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/></svg><span class="bounty-resource-value">160</span></span>
+            <span class="bounty-resource"><svg class="bounty-resource-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 16 8"/><path d="M17.47 7.53L14 4l2.76-2.76a1 1 0 0 1 1.41 0L21 4a1 1 0 0 1 0 1.41L17.47 5.35Z"/></svg><span class="bounty-resource-value">140</span></span>
+            <span class="bounty-resource"><span class="bounty-total-label">Total</span><span class="bounty-total">980</span></span>
+          </div>
+        </div>
+        <ul class="animal-list" style="margin-top:4px;">
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg></div>
+            <span class="animal-name">Araña</span>
+            <div class="animal-data">
+              <span class="animal-avg">4</span>
+              <span class="animal-avg-label">animales de media</span>
+              <span class="animal-caption">lo normal: 4&nbsp;&nbsp;·&nbsp;&nbsp;peor: 6&nbsp;&nbsp;·&nbsp;&nbsp;10 de 12</span>
+            </div>
+          </li>
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg></div>
+            <span class="animal-name">Serpiente</span>
+            <div class="animal-data">
+              <span class="animal-avg">3</span>
+              <span class="animal-avg-label">animales de media</span>
+              <span class="animal-caption">lo normal: 3&nbsp;&nbsp;·&nbsp;&nbsp;peor: 5&nbsp;&nbsp;·&nbsp;&nbsp;9 de 12</span>
+            </div>
+          </li>
+        </ul>
+      </div><!-- /panel-barro -->
+
+
+      <!-- ── Panel: Madera (con ficha, botín todo 0 = sin datos) ─────── -->
+      <div id="panel-madera" role="tabpanel" aria-labelledby="tab-madera" style="display:none;">
+        <div class="type-summary">
+          <p class="summary-heading">En oasis de <strong>Madera</strong>, cada 4h sueles encontrar:</p>
+          <div class="summary-confidence has-warning">
+            <span class="confidence-dot"></span>
+            1 de 1 con tipo dudoso&nbsp;&nbsp;·&nbsp;&nbsp;4 ataques
+            <span class="coord-chips">
+              <span class="coord-chip">(11|-6)</span>
+            </span>
+          </div>
+          <div class="summary-totals">
+            <span class="summary-total-label">Total de animales:</span>
+            <span class="summary-total-avg">7</span>
+            <span class="summary-total-avg-label">de media</span>
+            <span class="summary-total-sep">·</span>
+            <span class="summary-total-mode">lo normal 7</span>
+            <!-- max_present null: no se muestra "peor" -->
+          </div>
+          <!-- avg_bounty todos 0: mensaje limpio -->
+          <div class="summary-bounty">
+            <span class="summary-bounty-label">Botín medio:</span>
+            <span class="bounty-no-data">Sin datos de botín para este tipo</span>
+          </div>
+        </div>
+        <ul class="animal-list" style="margin-top:4px;">
+          <li class="animal-row">
+            <div class="animal-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/></svg></div>
+            <span class="animal-name">Araña</span>
+            <div class="animal-data">
+              <span class="animal-avg">3</span>
+              <span class="animal-avg-label">animales de media</span>
+              <!-- max null → sin "peor:" en la caption -->
+              <span class="animal-caption">lo normal: 3&nbsp;&nbsp;·&nbsp;&nbsp;3 de 4</span>
+            </div>
+          </li>
+        </ul>
+      </div><!-- /panel-madera -->
+
+
+      <!-- ── Panel: Sin clasificar (empty state) ──────────────────────── -->
+      <div id="panel-sin-clasificar" role="tabpanel" aria-labelledby="tab-sin-clasificar" style="display:none;">
+        <p class="type-note" style="padding-top:8px; border-top: none; margin-top:16px;">
+          Estos oasis no tienen suficientes ataques exitosos para determinar su tipo de recurso. Pueden ser de cualquier recurso.
+        </p>
+        <div class="type-empty">
+          <svg class="type-empty-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <p class="type-empty-title">Sin ataques clasificados con esta cadencia</p>
+          <p class="type-empty-hint">Prueba otra frecuencia.</p>
+        </div>
+      </div><!-- /panel-sin-clasificar -->
+
+    </div><!-- /block-type-panel -->
+
+  </div><!-- /state-data -->
+
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: LOADING — skeleton con ficha v5
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-loading" style="display:none;">
+
+    <div class="drag-block" id="block-freq-skeleton">
+      <div class="drag-handle-label">FrequencySelector (disabled)</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="freq-wrap" style="opacity:0.4;pointer-events:none;">
+        <span class="freq-label">Farmeo cada:</span>
+        <div class="freq-group">
+          <button class="freq-pill">6 min</button><button class="freq-pill">7 min</button>
+          <button class="freq-pill">10 min</button><button class="freq-pill">15 min</button>
+          <button class="freq-pill">30 min</button>
+        </div>
+        <div class="freq-divider"></div>
+        <div class="freq-group">
+          <button class="freq-pill">1h</button><button class="freq-pill">2h</button>
+          <button class="freq-pill">3h</button><button class="freq-pill active">4h</button>
+          <button class="freq-pill">5h+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="drag-block" style="margin-top:32px;" role="status" aria-label="Cargando datos de frecuencia...">
+      <div class="drag-handle-label">TypeTabs + Ficha + AnimalList (skeleton)</div>
+      <!-- Pestañas skeleton -->
+      <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0;overflow-x:auto;">
+        <div class="skeleton-bar" style="height:38px;width:90px;margin:6px 16px 6px 0;border-radius:var(--radius-sm);"></div>
+        <div class="skeleton-bar" style="height:38px;width:70px;margin:6px 16px 6px 0;border-radius:var(--radius-sm);opacity:.6;"></div>
+        <div class="skeleton-bar" style="height:38px;width:80px;margin:6px 16px 6px 0;border-radius:var(--radius-sm);opacity:.4;"></div>
+        <div class="skeleton-bar" style="height:38px;width:70px;margin:6px 16px 6px 0;border-radius:var(--radius-sm);opacity:.3;"></div>
+        <div class="skeleton-bar" style="height:38px;width:100px;margin:6px 0 6px 0;border-radius:var(--radius-sm);opacity:.2;"></div>
+      </div>
+
+      <!-- Skeleton de la ficha de resumen (v5) -->
+      <div style="padding:16px 0; border-bottom:1px solid var(--border);">
+        <!-- Línea 1: frase + confianza -->
+        <div class="skeleton-bar" style="height:13px;width:65%;margin-bottom:8px;"></div>
+        <div class="skeleton-bar" style="height:12px;width:45%;margin-bottom:14px;opacity:.6;"></div>
+        <!-- Línea 2: total animales -->
+        <div class="skeleton-bar" style="height:12px;width:55%;margin-bottom:10px;opacity:.7;"></div>
+        <!-- Línea 3: botín -->
+        <div class="skeleton-bar" style="height:12px;width:70%;opacity:.5;"></div>
+      </div>
+
+      <!-- Filas skeleton de animales -->
+      <ul class="skeleton-animal-list" style="margin-top:4px;">
+        <li class="skeleton-animal-row">
+          <div class="skeleton-bar" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;"></div>
+          <div class="skeleton-bar" style="width:80px;height:14px;flex:1;"></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="skeleton-bar" style="width:32px;height:22px;border-radius:var(--radius-sm);"></div>
+            <div class="skeleton-bar" style="width:120px;height:12px;opacity:.6;"></div>
+          </div>
+        </li>
+        <li class="skeleton-animal-row">
+          <div class="skeleton-bar" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;opacity:.7;"></div>
+          <div class="skeleton-bar" style="width:100px;height:14px;flex:1;opacity:.7;"></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="skeleton-bar" style="width:28px;height:22px;border-radius:var(--radius-sm);opacity:.7;"></div>
+            <div class="skeleton-bar" style="width:110px;height:12px;opacity:.4;"></div>
+          </div>
+        </li>
+        <li class="skeleton-animal-row" style="border-bottom:none;">
+          <div class="skeleton-bar" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;opacity:.5;"></div>
+          <div class="skeleton-bar" style="width:60px;height:14px;flex:1;opacity:.5;"></div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <div class="skeleton-bar" style="width:24px;height:22px;border-radius:var(--radius-sm);opacity:.5;"></div>
+            <div class="skeleton-bar" style="width:100px;height:12px;opacity:.3;"></div>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+  </div><!-- /state-loading -->
+
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: ERROR
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-error" style="display:none;">
+
+    <div class="drag-block">
+      <div class="drag-handle-label">FrequencySelector (activo en error)</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="freq-wrap">
+        <span class="freq-label">Farmeo cada:</span>
+        <div class="freq-group">
+          <button class="freq-pill">6 min</button><button class="freq-pill">7 min</button>
+          <button class="freq-pill">10 min</button><button class="freq-pill">15 min</button>
+          <button class="freq-pill">30 min</button>
+        </div>
+        <div class="freq-divider"></div>
+        <div class="freq-group">
+          <button class="freq-pill">1h</button><button class="freq-pill">2h</button>
+          <button class="freq-pill">3h</button><button class="freq-pill active">4h</button>
+          <button class="freq-pill">5h+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="drag-block" style="margin-top:32px;">
+      <div class="drag-handle-label">ErrorBanner</div>
+      <div class="error-banner" role="alert">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.8" style="flex-shrink:0;">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span class="error-banner-text">No se pudieron cargar los datos de frecuencia.</span>
+        <button class="btn-retry">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Reintentar
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /state-error -->
+
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: VACÍO GLOBAL
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-empty-global" style="display:none;">
+
+    <div class="drag-block">
+      <div class="drag-handle-label">Vacío global</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="empty-global">
+        <svg class="empty-global-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <p class="empty-global-title">Sin datos de tus ataques todavía</p>
+        <p class="empty-global-body">Importa reportes para ver qué sueles encontrar en cada oasis.</p>
+        <button class="btn-primary">Ir a importar reportes</button>
+      </div>
+    </div>
+
+  </div><!-- /state-empty-global -->
+
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: SIN DATOS PARA ESTA CADENCIA
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-empty-freq" style="display:none;">
+
+    <div class="drag-block">
+      <div class="drag-handle-label">FrequencySelector</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="freq-wrap">
+        <span class="freq-label">Farmeo cada:</span>
+        <div class="freq-group">
+          <button class="freq-pill active">6 min</button>
+          <button class="freq-pill">7 min</button><button class="freq-pill">10 min</button>
+          <button class="freq-pill">15 min</button><button class="freq-pill">30 min</button>
+        </div>
+        <div class="freq-divider"></div>
+        <div class="freq-group">
+          <button class="freq-pill">1h</button><button class="freq-pill">2h</button>
+          <button class="freq-pill">3h</button><button class="freq-pill">4h</button>
+          <button class="freq-pill">5h+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="drag-block" style="margin-top:32px;">
+      <div class="drag-handle-label">TypeTabs (sin datos) + Empty</div>
+      <div class="type-tabs-wrap" style="opacity:0.45;pointer-events:none;">
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/></svg>
+          Hierro <span class="type-tab-count">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/></svg>
+          Barro <span class="type-tab-count">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/></svg>
+          Madera <span class="type-tab-count">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 16 8"/></svg>
+          Cereal <span class="type-tab-count">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/></svg>
+          Sin clasificar <span class="type-tab-count">—</span>
+        </button>
+      </div>
+      <div class="type-empty" style="margin-top:8px;">
+        <svg class="type-empty-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p class="type-empty-title">Ningún oasis tiene datos con esta cadencia</p>
+        <p class="type-empty-hint">Prueba otra frecuencia.</p>
+      </div>
+    </div>
+
+  </div><!-- /state-empty-freq -->
+
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       ESTADO: TIPO SIN DATOS (pestaña seleccionada sin datos)
+       La ficha de resumen NO se muestra (no hay qué resumir)
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="state-empty-type" style="display:none;">
+
+    <div class="drag-block">
+      <div class="drag-handle-label">FrequencySelector</div>
+      <p class="panel-title">Cadencia de farmeo</p>
+      <div class="freq-wrap">
+        <span class="freq-label">Farmeo cada:</span>
+        <div class="freq-group">
+          <button class="freq-pill">6 min</button><button class="freq-pill">7 min</button>
+          <button class="freq-pill">10 min</button><button class="freq-pill">15 min</button>
+          <button class="freq-pill">30 min</button>
+        </div>
+        <div class="freq-divider"></div>
+        <div class="freq-group">
+          <button class="freq-pill">1h</button><button class="freq-pill">2h</button>
+          <button class="freq-pill">3h</button><button class="freq-pill active">4h</button>
+          <button class="freq-pill">5h+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="drag-block" style="margin-top:32px;">
+      <div class="drag-handle-label">TypeTabs (Madera activa vacía) — sin ficha</div>
+      <div class="type-tabs-wrap">
+        <button class="type-tab">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/></svg>
+          Hierro <span class="type-tab-count">3</span>
+        </button>
+        <button class="type-tab">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 22H4"/><path d="M14 22V8l-4-4H4v18"/></svg>
+          Barro <span class="type-tab-count">2</span>
+        </button>
+        <button class="type-tab active no-data" style="color:var(--text-disabled);border-bottom-color:var(--border-strong);">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/></svg>
+          Madera <span class="type-tab-count" style="color:var(--text-disabled);">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 22 16 8"/></svg>
+          Cereal <span class="type-tab-count">—</span>
+        </button>
+        <button class="type-tab no-data">
+          <svg class="type-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/></svg>
+          Sin clasificar <span class="type-tab-count">—</span>
+        </button>
+      </div>
+      <!-- NO ficha de resumen: el tipo está vacío -->
+      <div class="type-empty" style="margin-top:8px;">
+        <svg class="type-empty-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p class="type-empty-title">Aún no tienes ataques a oasis de Madera con esta cadencia</p>
+        <p class="type-empty-hint">Prueba otra frecuencia.</p>
+      </div>
+    </div>
+
+  </div><!-- /state-empty-type -->
+
+
+</div><!-- /canvas -->
+
+
+<!-- ── Toast ────────────────────────────────────────────────────────── -->
+<div id="toast" style="
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;
+  width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  padding:10px 16px;border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-lg);font-size:13px;pointer-events:none;
+  opacity:0;transform:translateY(8px);
+  transition:opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
+  z-index:200;
+">Layout guardado</div>
+
+
+<script>
+/* ─── Estado del playground ──────────────────────────────────────── */
+let currentState = 'data';
+let editActive   = false;
+let dragSrc      = null;
+
+/* ─── Tema (persistido) ─────────────────────────────────────────── */
+(function() {
+  const stored = localStorage.getItem('theme-mock-v5');
+  if (stored) document.documentElement.dataset.theme = stored;
+})();
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = (html.dataset.theme || 'light') === 'light' ? 'dark' : 'light';
+  html.dataset.theme = next;
+  localStorage.setItem('theme-mock-v5', next);
+}
+
+/* ─── Cambio de estado ──────────────────────────────────────────── */
+function setPreviewState(val) {
+  currentState = val;
+  const ids = ['data','loading','error','empty-global','empty-freq','empty-type'];
+  ids.forEach(id => {
+    const el = document.getElementById('state-' + id);
+    if (el) el.style.display = 'none';
+  });
+  const target = document.getElementById('state-' + val);
+  if (target) target.style.display = 'block';
+}
+
+/* ─── Pestañas de tipo ──────────────────────────────────────────── */
+function selectType(btn, type) {
+  // Actualizar estado visual de las pestañas
+  const tabs = btn.closest('.type-tabs-wrap').querySelectorAll('.type-tab');
+  tabs.forEach(t => {
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
+
+  // Mostrar el panel correspondiente
+  const allPanels = ['hierro','barro','madera','cereal','sin-clasificar'];
+  allPanels.forEach(t => {
+    const el = document.getElementById('panel-' + t);
+    if (el) el.style.display = 'none';
+  });
+  const targetPanel = document.getElementById('panel-' + type);
+  if (targetPanel) {
+    targetPanel.style.display = 'block';
+    // Crossfade sutil
+    targetPanel.style.opacity = '0';
+    requestAnimationFrame(() => {
+      targetPanel.style.transition = 'opacity 150ms var(--ease)';
+      targetPanel.style.opacity = '1';
+    });
+  }
+}
+
+/* ─── Pills de frecuencia ───────────────────────────────────────── */
+function selectFreq(btn, label) {
+  const group = btn.closest('#block-freq-selector') || btn.closest('.drag-block');
+  if (group) {
+    group.querySelectorAll('.freq-pill').forEach(p => p.classList.remove('active'));
+  }
+  btn.classList.add('active');
+}
+
+/* ─── Vista responsive ──────────────────────────────────────────── */
+function setResponsiveView(val) {
+  document.body.classList.toggle('mobile-preview', val === 'mobile');
+}
+
+/* ─── Editar / drag & drop ──────────────────────────────────────── */
+function toggleEdit() {
+  editActive = !editActive;
+  const btn = document.getElementById('edit-mode-toggle');
+  btn.dataset.active = String(editActive);
+  btn.innerHTML = editActive
+    ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Editando'
+    : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Editar';
+  const canvas = document.getElementById('canvas');
+  canvas.dataset.edit = String(editActive);
+
+  if (editActive) {
+    enableDragDrop();
+  } else {
+    disableDragDrop();
+  }
+}
+
+function enableDragDrop() {
+  const canvas = document.getElementById('canvas');
+  const blocks = canvas.querySelectorAll('.drag-block');
+  blocks.forEach(block => {
+    block.setAttribute('draggable', 'true');
+    block.addEventListener('dragstart', onDragStart);
+    block.addEventListener('dragover', onDragOver);
+    block.addEventListener('dragleave', onDragLeave);
+    block.addEventListener('drop', onDrop);
+    block.addEventListener('dragend', onDragEnd);
+  });
+}
+
+function disableDragDrop() {
+  const canvas = document.getElementById('canvas');
+  const blocks = canvas.querySelectorAll('.drag-block');
+  blocks.forEach(block => {
+    block.setAttribute('draggable', 'false');
+    block.removeEventListener('dragstart', onDragStart);
+    block.removeEventListener('dragover', onDragOver);
+    block.removeEventListener('dragleave', onDragLeave);
+    block.removeEventListener('drop', onDrop);
+    block.removeEventListener('dragend', onDragEnd);
+  });
+}
+
+function onDragStart(e) {
+  dragSrc = this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  this.classList.add('drag-over');
+}
+function onDragLeave() { this.classList.remove('drag-over'); }
+function onDrop(e) {
+  e.preventDefault();
+  this.classList.remove('drag-over');
+  if (dragSrc !== this) {
+    const parent = this.parentNode;
+    const srcIdx = [...parent.children].indexOf(dragSrc);
+    const dstIdx = [...parent.children].indexOf(this);
+    if (srcIdx < dstIdx) {
+      parent.insertBefore(dragSrc, this.nextSibling);
+    } else {
+      parent.insertBefore(dragSrc, this);
+    }
+    // Snap de 8px — resnapear espaciado uniforme
+    snapToGrid();
+  }
+}
+function onDragEnd() {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.drag-block').forEach(b => b.classList.remove('drag-over'));
+  dragSrc = null;
+}
+
+function snapToGrid() {
+  // El layout es flex-column; el snap se gestiona via margin entre bloques (múltiplo de 8px)
+  // No hay posicionamiento absoluto — el DOM order basta.
+}
+
+/* ─── Guardar / Restablecer / Exportar ─────────────────────────── */
+function saveLayout() {
+  const stateEl = document.getElementById('state-' + currentState);
+  const blocks = stateEl
+    ? [...stateEl.querySelectorAll('.drag-block')]
+    : [...document.querySelectorAll('.drag-block')];
+  const layout = blocks.map((b, i) => ({ id: b.id || 'block-' + i, order: i }));
+  localStorage.setItem('afp-v5-layout', JSON.stringify(layout));
+  showToast('Layout guardado');
+}
+
+function resetLayout() {
+  localStorage.removeItem('afp-v5-layout');
+  location.reload();
+}
+
+function exportLayout() {
+  const stateEl = document.getElementById('state-' + currentState);
+  const blocks = stateEl
+    ? [...stateEl.querySelectorAll('.drag-block')]
+    : [...document.querySelectorAll('.drag-block')];
+
+  const layout = {
+    version: 5,
+    date: new Date().toISOString(),
+    state: currentState,
+    theme: document.documentElement.dataset.theme || 'light',
+    blocks: blocks.map((b, i) => ({
+      id: b.id || 'block-' + i,
+      label: b.querySelector('.drag-handle-label')?.textContent?.trim() || '',
+      order: i
+    })),
+    notes: [
+      'TypeTabSelector + Ficha + AnimalList son un único bloque semántico.',
+      'La ficha de resumen del tipo vive dentro del tabpanel activo.',
+      'coordUtils.js debe crearse en frontend/src/utils/coordUtils.js.',
+      'Implementa: desarrollador-ux-ui.'
+    ]
+  };
+
+  const json = JSON.stringify(layout, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'afp-v5-layout.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Layout exportado');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translateY(0)';
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(8px)';
+  }, 2500);
+}
+
+/* ─── Restaurar layout guardado ─────────────────────────────────── */
+(function restoreLayout() {
+  const saved = localStorage.getItem('afp-v5-layout');
+  if (!saved) return;
+  try {
+    const layout = JSON.parse(saved);
+    if (!layout.blocks) return;
+    const stateEl = document.getElementById('state-' + (layout.state || 'data'));
+    if (!stateEl) return;
+    layout.blocks.sort((a, b) => a.order - b.order).forEach(item => {
+      const block = document.getElementById(item.id);
+      if (block) stateEl.appendChild(block);
+    });
+  } catch (e) {
+    console.warn('No se pudo restaurar el layout:', e);
+  }
+})();
+</script>
+
+</body>
+</html>

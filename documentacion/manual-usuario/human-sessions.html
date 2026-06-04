@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario — Sesión Humana | TravianBot</title>
+  <style>
+    /* === Variables === */
+    :root {
+      --bg: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-2: #F0F0F2;
+      --border: #D8D8DC;
+      --text: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #A0A0A5;
+      --accent: #8A6418;
+      --accent-subtle: #F4ECD8;
+      --success: #1A7F37;
+      --danger: #C9352C;
+      --warning: #D4900A;
+      --info: #0A6FCC;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      /* Tokens de modo */
+      --mode-hardcore: #248A3D;
+      --mode-hardcore-bg: rgba(36,138,61,.12);
+      --mode-pasivo: #0A6FCC;
+      --mode-pasivo-bg: rgba(10,111,204,.10);
+      --mode-disconnected: #8E8E93;
+      --mode-disconnected-bg: rgba(142,142,147,.10);
+    }
+
+    /* === Base === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    /* === Layout === */
+    .layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+
+    /* === Sidebar === */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 32px 0 24px;
+    }
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo span {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .sidebar-section {
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+    .sidebar-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 8px 8px 4px;
+    }
+    .sidebar-link {
+      display: block;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background .15s, color .15s;
+    }
+    .sidebar-link:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .sidebar-link.active {
+      background: var(--accent-subtle);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* === Main content === */
+    .main {
+      padding: 48px 56px 80px;
+      max-width: 960px;
+    }
+
+    /* === Header === */
+    .page-header { margin-bottom: 48px; }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 12px;
+    }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    h1 {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -.03em;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 12px;
+    }
+    .page-intro {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 680px;
+      line-height: 1.7;
+    }
+
+    /* === Sections === */
+    section { margin-bottom: 64px; }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 24px;
+    }
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 28px 0 10px;
+      color: var(--text);
+    }
+    p { margin-bottom: 12px; color: var(--text-secondary); }
+    p:last-child { margin-bottom: 0; }
+    strong { color: var(--text); }
+
+    /* === Screenshots === */
+    .screenshot-block { margin: 20px 0 28px; }
+    .screenshot-block img {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow);
+      display: block;
+    }
+    .screenshot-caption {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 8px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* === Annotated screenshot === */
+    .annotated {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    .annotation {
+      position: absolute;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      cursor: default;
+    }
+    .annotation-legend {
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .annotation-item {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .annotation-num {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .annotation-text { color: var(--text-secondary); }
+    .annotation-text strong { color: var(--text); }
+
+    /* === Steps === */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      margin: 16px 0 24px;
+    }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+    .steps li::before {
+      content: counter(step);
+      background: var(--text);
+      color: #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .steps li p { margin: 0; }
+
+    /* === Info boxes === */
+    .info-box {
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      border-left: 3px solid;
+    }
+    .info-box.tip {
+      background: var(--accent-subtle);
+      border-color: var(--accent);
+      color: #5A4010;
+    }
+    .info-box.warning {
+      background: rgba(212, 144, 10, .1);
+      border-color: var(--warning);
+      color: #7A5500;
+    }
+    .info-box.note {
+      background: var(--surface-2);
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+    .info-box.danger {
+      background: rgba(201, 53, 44, .08);
+      border-color: var(--danger);
+      color: #8B1A15;
+    }
+    .info-box-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    /* === Tables === */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0 24px;
+    }
+    th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+    td strong { color: var(--text); }
+    tr:last-child td { border-bottom: none; }
+
+    /* === Badges de modo === */
+    .mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .mode-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+    .mode-badge.hardcore {
+      background: var(--mode-hardcore-bg);
+      color: var(--mode-hardcore);
+    }
+    .mode-badge.pasivo {
+      background: var(--mode-pasivo-bg);
+      color: var(--mode-pasivo);
+    }
+    .mode-badge.disconnected {
+      background: var(--mode-disconnected-bg);
+      color: var(--mode-disconnected);
+    }
+
+    /* === Mode comparison cards === */
+    .mode-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .mode-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      background: var(--surface);
+    }
+    .mode-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .mode-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .mode-card-title {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .mode-card-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .mode-card-analogy {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    /* === Watermark === */
+    .watermark {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    /* === Responsive === */
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 24px 20px 60px; }
+      h1 { font-size: 26px; }
+      .mode-cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+  <nav class="sidebar" aria-label="Navegación del manual">
+    <div class="sidebar-logo">
+      <span>TravianBot</span>
+      Manual de usuario
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Pantallas</div>
+      <a href="#vista-general" class="sidebar-link active">Vista general de la pestaña</a>
+      <a href="#panel-estado" class="sidebar-link">Panel de estado</a>
+      <a href="#forzar-modo" class="sidebar-link">Forzar modo</a>
+      <a href="#calendario" class="sidebar-link">Calendario semanal</a>
+      <a href="#editor" class="sidebar-link">Editor de bloques</a>
+      <a href="#modo-oscuro" class="sidebar-link">Modo oscuro</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Tareas</div>
+      <a href="#tarea-monitorizar" class="sidebar-link">Monitorizar el estado</a>
+      <a href="#tarea-override" class="sidebar-link">Forzar un descanso</a>
+      <a href="#tarea-configurar" class="sidebar-link">Configurar el calendario</a>
+      <a href="#tarea-copiar" class="sidebar-link">Copiar horario a otros días</a>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Referencia</div>
+      <a href="#tres-modos" class="sidebar-link">Los tres modos</a>
+      <a href="#jitter" class="sidebar-link">Jitter de bordes</a>
+      <a href="#relogin" class="sidebar-link">Relogin automático</a>
+    </div>
+
+    <div class="sidebar-section" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+      <a href="index.html" class="sidebar-link">← Índice del manual</a>
+      <a href="farm-lists.html" class="sidebar-link">Listas de vacas</a>
+      <a href="oasis-spawn.html" class="sidebar-link">Estadísticas de spawn</a>
+    </div>
+  </nav>
+
+  <!-- ── Main ─────────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <header class="page-header">
+      <div class="breadcrumb">
+        <a href="index.html">Manual de usuario</a> › Sesión humana
+      </div>
+      <h1>Sesión humana</h1>
+      <p class="page-intro">
+        La pestaña <strong>Sesión</strong> controla cuándo y cómo actúa el bot a lo largo del día.
+        Configurando un calendario de actividad que imite tus hábitos reales reduces el riesgo
+        de que Travian detecte que no eres un jugador humano.
+      </p>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="vista-general">
+      <h2>Vista general de la pestaña Sesión</h2>
+
+      <p>
+        Para acceder a esta pantalla, abre el mundo desde la sección Cuentas y haz clic en
+        <strong>Sesión</strong> en el sidebar izquierdo del mundo.
+      </p>
+
+      <div class="screenshot-block">
+        <div class="annotated">
+          <img src="assets/session-01-vista-general.png"
+               alt="Pestaña Sesión del mundo: panel de estado actual arriba, botones de forzar modo en el centro, calendario semanal abajo">
+          <!-- Anotaciones posicionadas sobre la imagen -->
+          <div class="annotation" style="top:11%;left:13%;transform:translate(-50%,-50%)">1</div>
+          <div class="annotation" style="top:30%;left:13%;transform:translate(-50%,-50%)">2</div>
+          <div class="annotation" style="top:47%;left:13%;transform:translate(-50%,-50%)">3</div>
+        </div>
+        <p class="screenshot-caption">Pestaña Sesión — vista completa con bot en modo HARDCORE activo</p>
+      </div>
+
+      <div class="annotation-legend">
+        <div class="annotation-item">
+          <span class="annotation-num">1</span>
+          <span class="annotation-text"><strong>Panel de estado</strong> — muestra el modo activo ahora mismo, el bloque horario en curso y una cuenta atrás al próximo cambio de modo.</span>
+        </div>
+        <div class="annotation-item">
+          <span class="annotation-num">2</span>
+          <span class="annotation-text"><strong>Forzar modo</strong> — tres botones para forzar un modo de forma manual hasta que llegue el próximo cambio de calendario.</span>
+        </div>
+        <div class="annotation-item">
+          <span class="annotation-num">3</span>
+          <span class="annotation-text"><strong>Calendario semanal</strong> — selector de los 7 días de la semana. Al hacer clic en un día, aparecen su barra de horario y el editor de bloques.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="tres-modos">
+      <h2>Los tres modos de actividad</h2>
+
+      <p>
+        El bot puede estar en uno de estos tres modos. Entender la diferencia es clave para
+        configurar un calendario que parezca humano:
+      </p>
+
+      <div class="mode-cards">
+        <div class="mode-card">
+          <div class="mode-card-header">
+            <div class="mode-dot" style="background: var(--mode-hardcore);"></div>
+            <span class="mode-card-title" style="color: var(--mode-hardcore);">HARDCORE</span>
+          </div>
+          <div class="mode-card-desc">
+            Operación completa. Envía raids, construye edificios, entrena tropas y navega con ruido.
+          </div>
+          <div class="mode-card-analogy">Analogía: el jugador está activamente jugando.</div>
+        </div>
+        <div class="mode-card">
+          <div class="mode-card-header">
+            <div class="mode-dot" style="background: var(--mode-pasivo);"></div>
+            <span class="mode-card-title" style="color: var(--mode-pasivo);">Pasivo</span>
+          </div>
+          <div class="mode-card-desc">
+            Actividad muy reducida. Solo envía listas de vacas de vez en cuando (5% de probabilidad, intervalo doblado). Chrome sigue abierto.
+          </div>
+          <div class="mode-card-analogy">Analogía: el juego está de fondo mientras haces otra cosa.</div>
+        </div>
+        <div class="mode-card">
+          <div class="mode-card-header">
+            <div class="mode-dot" style="background: var(--mode-disconnected);"></div>
+            <span class="mode-card-title" style="color: var(--mode-disconnected);">Descanso total</span>
+          </div>
+          <div class="mode-card-desc">
+            Parada total. Chrome se cierra. El bot no hace nada productivo hasta el próximo modo activo.
+          </div>
+          <div class="mode-card-analogy">Analogía: cerraste el navegador para dormir o trabajar.</div>
+        </div>
+      </div>
+
+      <div class="info-box tip">
+        <span class="info-box-title">Por qué "Descanso total" cierra Chrome</span>
+        Mantener Chrome abierto las 24 horas con sesión activa en Travian es una firma que los sistemas
+        de detección pueden identificar. Los jugadores reales cierran el navegador cuando paran.
+        Al cerrar Chrome durante el descanso, el bot deja de emitir actividad de sesión hacia Travian.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="panel-estado">
+      <h2>Panel de estado actual</h2>
+
+      <p>
+        Siempre visible en la parte superior de la pestaña. Muestra de un vistazo qué está haciendo
+        el bot ahora mismo y cuánto tiempo falta para que cambie de modo.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-02-panel-estado.png"
+             alt="Panel de estado mostrando modo HARDCORE activo, bloque 20:00–23:30, jitter ±15 min y cuenta atrás 04:49:21">
+        <p class="screenshot-caption">Panel de estado — bot en HARDCORE, bloque 20:00–23:30, próximo cambio en ~4 h 49 min</p>
+      </div>
+
+      <h3>Qué significa cada dato</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Dato</th>
+            <th>Qué es</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mode-badge hardcore"><span class="dot"></span>HARDCORE</span></td>
+            <td>El modo activo ahora mismo. El color y el texto cambian según el modo: verde para HARDCORE, azul para Pasivo, gris para Descanso total.</td>
+          </tr>
+          <tr>
+            <td><strong>Bloque: 20:00 – 23:30</strong></td>
+            <td>El bloque horario configurado en el calendario que corresponde a este momento del día.</td>
+          </tr>
+          <tr>
+            <td><strong>Jitter: ±15 min</strong></td>
+            <td>El margen de variación aleatoria en los bordes de cada bloque. Si el bloque acaba a las 23:30, el bot puede cambiar de modo entre las 23:15 y las 23:45.</td>
+          </tr>
+          <tr>
+            <td><strong>Cuenta atrás (04:49:21)</strong></td>
+            <td>Tiempo que falta para el próximo cambio de modo (ya incluye el jitter aleatorio calculado).</td>
+          </tr>
+          <tr>
+            <td><strong>aprox. a las 01:26</strong></td>
+            <td>Hora estimada a la que ocurrirá el próximo cambio (con jitter aplicado).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Si hay un override activo</h3>
+      <p>
+        Cuando has forzado un modo manualmente, aparece una barra adicional debajo del panel
+        de estado indicando qué modo está forzado, cuánto tiempo falta para que expire y un
+        botón <strong>Cancelar override</strong> para volver al calendario antes de que expire.
+      </p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="forzar-modo">
+      <h2>Forzar modo (override manual)</h2>
+
+      <p>
+        La sección <strong>Forzar modo</strong> te permite cambiar el modo del bot inmediatamente,
+        sin esperar al próximo cambio de calendario. Es útil cuando algo inesperado ocurre:
+        te vas a dormir antes de lo previsto, necesitas que el bot pare ahora, o quieres activarlo
+        aunque el calendario diga que debería descansar.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-01-vista-general.png"
+             alt="Panel de forzar modo con tres botones: HARDCORE activo (resaltado), Pasivo y Descanso total"
+             style="max-height: 280px; object-fit: cover; object-position: top;">
+        <p class="screenshot-caption">Panel "Forzar modo" — el botón del modo activo aparece resaltado</p>
+      </div>
+
+      <h3>Los tres botones</h3>
+
+      <table>
+        <thead>
+          <tr><th>Botón</th><th>Qué hace</th><th>Cuándo usarlo</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="mode-badge hardcore"><span class="dot"></span>HARDCORE</span></td>
+            <td>Activa operación completa hasta el próximo borde de bloque del calendario.</td>
+            <td>Si el calendario dice que deberías descansar pero necesitas que el bot actúe ya (p. ej., tienes tiempo libre fuera de tu horario habitual).</td>
+          </tr>
+          <tr>
+            <td><span class="mode-badge pasivo"><span class="dot"></span>Pasivo</span></td>
+            <td>Reduce la actividad (solo listas de vacas ocasionales) hasta el próximo borde de bloque.</td>
+            <td>Si vas a estar medio presente y quieres que el bot no sea agresivo pero tampoco pare del todo.</td>
+          </tr>
+          <tr>
+            <td><span class="mode-badge disconnected"><span class="dot"></span>Descanso total</span></td>
+            <td>Para el bot completamente y cierra Chrome hasta el próximo borde de bloque.</td>
+            <td>Si te vas a dormir antes de lo habitual o necesitas que el bot no haga nada durante un rato.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="info-box note">
+        <span class="info-box-title">El cambio no es instantáneo</span>
+        Al pulsar un botón, la app confirma el override de inmediato, pero el bot aplica el cambio
+        en su próximo ciclo interno (puede tardar unos segundos). Si el override requiere cerrar o
+        abrir Chrome (cambios desde/hacia Descanso total), el proceso puede tardar hasta 1-2 minutos.
+      </div>
+
+      <div class="info-box tip">
+        <span class="info-box-title">Duración del override</span>
+        El modo forzado solo dura hasta el próximo borde de bloque del calendario, no para siempre.
+        Si quieres un cambio permanente, modifica el calendario en la sección de abajo.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="calendario">
+      <h2>Calendario semanal</h2>
+
+      <p>
+        El calendario semanal te permite configurar qué hace el bot hora a hora, y de forma
+        distinta para cada día de la semana. Un lunes laborable y un sábado con tiempo libre
+        tienen horarios de juego distintos — el calendario lo refleja.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-03-selector-dias.png"
+             alt="Selector de los 7 días de la semana con el lunes seleccionado, barra de timeline 24h coloreada y editor de bloques">
+        <p class="screenshot-caption">Calendario semanal — lunes seleccionado con barra de timeline y editor de bloques abierto</p>
+      </div>
+
+      <h3>Selector de días</h3>
+      <p>
+        La fila de 7 botones (Lun, Mar, Mié, Jue, Vie, Sáb, Dom) muestra el día seleccionado
+        con borde dorado. Cada botón tiene un pequeño punto de color que indica el primer modo
+        del día. Si un día nunca ha sido configurado, muestra la etiqueta <strong>DEFAULT</strong>
+        debajo del nombre.
+      </p>
+
+      <h3>Barra de timeline 24h</h3>
+      <p>
+        La barra proporcional de colores muestra de un vistazo el horario completo del día
+        seleccionado: verde para HARDCORE, azul para Pasivo, gris para Descanso total. Los
+        segmentos son proporcionales a la duración de cada bloque. Debajo de la barra hay
+        marcas de hora (00:00, 06:00, 12:00, 18:00, 24:00) y una leyenda de modos.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-05-timeline-bar.png"
+             alt="Barra de timeline 24h con segmentos de colores: gris para Descanso total, verde para HARDCORE, azul para Pasivo">
+        <p class="screenshot-caption">Barra de timeline — segmentos proporcionales por modo con etiquetas de hora y leyenda</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="editor">
+      <h2>Editor de bloques</h2>
+
+      <p>
+        Al seleccionar un día, aparece el editor de bloques bajo la barra de timeline. Cada fila
+        representa un periodo del día con su modo asignado. Puedes modificar los bloques existentes,
+        añadir nuevos o eliminar los que no necesites.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-04-editor-bloques.png"
+             alt="Editor de bloques mostrando 9 bloques horarios para el lunes, con columnas Desde, Hasta y Modo">
+        <p class="screenshot-caption">Editor de bloques del lunes — 9 bloques con mezcla de HARDCORE, Pasivo y Descanso total</p>
+      </div>
+
+      <h3>Cómo funciona la tabla</h3>
+
+      <table>
+        <thead>
+          <tr><th>Columna</th><th>Descripción</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Desde</strong></td>
+            <td>Hora de inicio del bloque. Es de solo lectura: el inicio de cada bloque es siempre el final del bloque anterior (los bloques son continuos). Solo el primer bloque siempre empieza a las 00:00.</td>
+          </tr>
+          <tr>
+            <td><strong>Hasta</strong></td>
+            <td>Hora de fin del bloque. Editable con el selector de hora nativo del sistema. El último bloque debe terminar a las 24:00 (medianoche).</td>
+          </tr>
+          <tr>
+            <td><strong>Modo</strong></td>
+            <td>El modo que tendrá el bot durante este bloque: HARDCORE, Pasivo o Descanso total.</td>
+          </tr>
+          <tr>
+            <td><strong>[X]</strong></td>
+            <td>Botón para eliminar el bloque. No aparece si solo hay un bloque (no se puede quedar el día sin ningún bloque).</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Indicador de cobertura</h3>
+      <p>
+        Debajo de la tabla aparece el indicador <strong>Cobertura: 24h ✓</strong> en verde si los
+        bloques cubren el día completo sin huecos ni solapes. Si hay un problema, muestra en rojo
+        qué franja horaria falta cubrir o dónde hay solapamiento. El botón Guardar permanece
+        desactivado hasta que la cobertura sea válida.
+      </p>
+
+      <div class="info-box tip">
+        <span class="info-box-title">Los huecos se rellenan automáticamente</span>
+        Si guardas un día con huecos, el servidor los rellena automáticamente con bloques de
+        Descanso total antes de guardar. La respuesta del servidor mostrará el calendario completo
+        con los bloques añadidos. Esto facilita la configuración: puedes definir solo los bloques
+        activos y dejar que el resto se complete solo.
+      </div>
+
+      <h3>Añadir un bloque</h3>
+      <p>
+        El botón <strong>+ Añadir bloque</strong> inserta un nuevo bloque al final del día,
+        con inicio en el final del último bloque y fin en 24:00. Después puedes ajustar la hora
+        de fin del nuevo bloque y asignarle el modo que necesites.
+      </p>
+
+      <div class="info-box note">
+        <span class="info-box-title">Los bloques no pueden cruzar medianoche</span>
+        Si quieres un bloque que vaya de 23:00 a 08:00 del día siguiente, debes dividirlo en dos:
+        23:00–24:00 en el día actual y 00:00–08:00 en el día siguiente.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="jitter">
+      <h2>Jitter de bordes de bloque</h2>
+
+      <p>
+        Cada borde de bloque (la hora a la que el bot cambia de modo) tiene un margen de variación
+        aleatorio de <strong>±15 minutos</strong> por defecto. Si un bloque termina a las 23:30, el
+        bot puede cambiar de modo en cualquier momento entre las 23:15 y las 23:45.
+      </p>
+
+      <p>
+        Este margen es deliberado: un jugador humano no empieza a jugar exactamente a las 08:00:00.000.
+        Sin jitter, el bot cambiaría de modo siempre a la misma hora exacta cada día, lo que sería
+        fácilmente detectable como comportamiento automatizado.
+      </p>
+
+      <div class="info-box tip">
+        <span class="info-box-title">El jitter se recalcula en cada transición</span>
+        Cada vez que el bot llega a un borde de bloque, el jitter se calcula de nuevo aleatoriamente.
+        No es fijo entre sesiones. Esto asegura que el patrón de transiciones varía cada día.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="relogin">
+      <h2>Relogin automático al salir de Descanso total</h2>
+
+      <p>
+        Cuando el modo cambia de Descanso total a HARDCORE o Pasivo (ya sea por el calendario
+        o por un override manual), Chrome estaba cerrado. El bot necesita volver a autenticarse
+        en Travian. Este proceso ocurre automáticamente, sin que tengas que hacer nada.
+      </p>
+
+      <h3>Si el relogin falla</h3>
+      <p>
+        Si el bot no puede conectar con Travian (error de red, servidor caído), espera 10 minutos
+        y vuelve a intentarlo. Si sigue fallando, espera 20 minutos, luego 40, con un máximo de
+        60 minutos entre intentos.
+      </p>
+
+      <div class="info-box danger">
+        <span class="info-box-title">Error de credenciales (estado de error permanente)</span>
+        Si la clave de cifrado del bot (<code>TRAVIAN_BOT_SECRET_KEY</code>) no está disponible
+        o las credenciales guardadas están dañadas, el bot entra en estado de error y no reintenta
+        automáticamente. Verás el error en los logs del servidor. Para resolverlo, corrige las
+        credenciales y reinicia el bot.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="modo-oscuro">
+      <h2>Modo oscuro</h2>
+
+      <p>
+        La pestaña Sesión funciona correctamente en modo oscuro. El tema sigue la preferencia del
+        sistema por defecto y puede cambiarse manualmente con el botón de luna/sol en la barra
+        superior del dashboard.
+      </p>
+
+      <div class="screenshot-block">
+        <img src="assets/session-06-modo-oscuro.png"
+             alt="Pestaña Sesión en modo oscuro mostrando el editor de bloques con fondo grafito y colores adaptados">
+        <p class="screenshot-caption">Editor de bloques en modo oscuro — misma información, superficies grafito</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="tarea-monitorizar">
+      <h2>Tarea: monitorizar el estado del bot</h2>
+
+      <ol class="steps">
+        <li>
+          <p>Abre el mundo desde la sección Cuentas y haz clic en <strong>Sesión</strong> en el sidebar.</p>
+        </li>
+        <li>
+          <p>El panel <strong>Estado actual</strong> muestra el modo activo ahora mismo con un badge de color.</p>
+        </li>
+        <li>
+          <p>Lee la <strong>cuenta atrás</strong> para saber cuánto tiempo falta hasta el próximo cambio de modo. La hora aproximada aparece debajo ("aprox. a las HH:MM").</p>
+        </li>
+        <li>
+          <p>Si hay un override activo, lo verás en una barra adicional con su propio countdown. Puedes cancelarlo si ya no lo necesitas.</p>
+        </li>
+      </ol>
+
+      <div class="info-box note">
+        El panel de estado se actualiza automáticamente cada 15 segundos. No necesitas recargar la página.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="tarea-override">
+      <h2>Tarea: forzar un descanso de emergencia</h2>
+
+      <p>Situación: te vas a dormir antes de lo habitual y quieres que el bot pare ahora mismo.</p>
+
+      <ol class="steps">
+        <li>
+          <p>En la sección <strong>Forzar modo</strong>, haz clic en el botón <strong>Descanso total</strong>.</p>
+        </li>
+        <li>
+          <p>El botón muestra brevemente un indicador de carga. Espera a que confirme.</p>
+        </li>
+        <li>
+          <p>El panel de estado se actualiza mostrando el override activo con su cuenta atrás hasta el próximo borde de bloque del calendario.</p>
+        </li>
+        <li>
+          <p>En el próximo ciclo del WorldAgent (unos segundos), Chrome se cerrará y el bot entrará en Descanso total.</p>
+        </li>
+        <li>
+          <p>Al llegar al borde de bloque del calendario, el override expira y el bot retoma el calendario automáticamente (incluido el relogin si el siguiente modo es activo).</p>
+        </li>
+      </ol>
+
+      <div class="info-box tip">
+        Si te levantas antes de que expire el override y quieres que el bot reanude la actividad
+        antes de tiempo, haz clic en <strong>Cancelar override</strong> en el panel de estado.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="tarea-configurar">
+      <h2>Tarea: configurar el calendario de un día</h2>
+
+      <ol class="steps">
+        <li>
+          <p>En la sección <strong>Calendario semanal</strong>, haz clic en el día que quieres configurar (p. ej., <strong>Lun</strong>).</p>
+        </li>
+        <li>
+          <p>Aparece la barra de timeline del día y el editor de bloques. Si el día nunca ha sido configurado, el editor muestra el aviso "Usando configuración por defecto. Edita para personalizar."</p>
+        </li>
+        <li>
+          <p>Ajusta las horas de fin de cada bloque con el selector de hora nativo. Al cambiar un campo, la barra de timeline se actualiza en tiempo real para reflejar los cambios.</p>
+        </li>
+        <li>
+          <p>Cambia el <strong>Modo</strong> de cada bloque con el selector desplegable (HARDCORE / Pasivo / Descanso total).</p>
+        </li>
+        <li>
+          <p>Si quieres añadir un periodo nuevo, haz clic en <strong>+ Añadir bloque</strong>.</p>
+        </li>
+        <li>
+          <p>Asegúrate de que el indicador <strong>Cobertura: 24h ✓</strong> aparece en verde. Si hay un hueco o solape, aparece en rojo indicando qué franja falta.</p>
+        </li>
+        <li>
+          <p>Haz clic en <strong>Guardar</strong>. Si todo es correcto, aparece un aviso de confirmación. Los cambios se aplican en la próxima transición de bloque del bot.</p>
+        </li>
+      </ol>
+
+      <div class="info-box warning">
+        <span class="info-box-title">Los cambios no son inmediatos</span>
+        El WorldAgent carga el calendario al arrancar y en cada transición de bloque. Si modificas
+        el calendario mientras el bot está en medio de un bloque, el cambio se aplicará cuando ese
+        bloque expire. No es necesario reiniciar el bot.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <section id="tarea-copiar">
+      <h2>Tarea: copiar el horario a otros días</h2>
+
+      <p>
+        Si quieres aplicar el mismo horario a varios días a la vez (p. ej., de lunes a viernes
+        todos iguales), usa la función de copia rápida del editor.
+      </p>
+
+      <ol class="steps">
+        <li>
+          <p>Configura el horario del día que quieres usar como plantilla (p. ej., Lunes) y asegúrate de que la cobertura es válida (24h ✓).</p>
+        </li>
+        <li>
+          <p>Desplázate hasta la sección <strong>Copiar este día a:</strong> debajo de la tabla de bloques.</p>
+        </li>
+        <li>
+          <p>Haz clic en uno de los tres presets:
+            <ul style="margin: 8px 0 0 24px; color: var(--text-secondary); font-size: 13px;">
+              <li style="margin-bottom: 4px;"><strong>Toda la semana</strong> — aplica a los 7 días</li>
+              <li style="margin-bottom: 4px;"><strong>Entre semana</strong> — aplica a lunes, martes, miércoles, jueves y viernes</li>
+              <li><strong>Fin de semana</strong> — aplica solo a sábado y domingo</li>
+            </ul>
+          </p>
+        </li>
+        <li>
+          <p>Los presets se aplican secuencialmente. Espera a que todos terminen (el indicador de carga desaparecerá cuando estén listos).</p>
+        </li>
+      </ol>
+
+      <div class="info-box note">
+        Los botones de copia solo están activos si el horario del día actual tiene cobertura válida
+        (24h ✓). Si hay huecos o solapes, los botones aparecen en gris y no se pueden usar.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="watermark">
+      Manual de usuario — TravianBot · Sesión humana (Human Sessions v2.1)<br>
+      Capturas tomadas el 2026-06-04 sobre la versión de producción en <code>localhost:5173</code>.<br>
+      🔖 Última revisión: 2026-06-04
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

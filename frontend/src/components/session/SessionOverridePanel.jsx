@@ -4,7 +4,7 @@
  * Props:
  *  - currentMode {string}   — modo efectivo actualmente (del status panel)
  *  - overrideMode {string|null} — si hay override activo, su modo
- *  - loading {string|null}  — qué botón está en cargando: 'HARDCORE'|'IDLE'|'DISCONNECTED'|null
+ *  - loading {string|null}  — qué botón está en cargando: 'HARDCORE'|'PASIVO'|'DISCONNECTED'|null
  *  - onOverride {function}  — fn(mode: string) → dispara PUT /session/mode
  *
  * Spec §7 (estados de botones de override), §9 (microcopy), §12 (interacciones).
@@ -14,13 +14,13 @@ import { Spinner } from '../ui/uiUtils.jsx'
 
 const MODES = [
   { value: 'HARDCORE',     cssClass: 'hardcore',     iconSymbol: '●' },
-  { value: 'IDLE',         cssClass: 'idle',         iconSymbol: '~' },
+  { value: 'PASIVO',       cssClass: 'pasivo',       iconSymbol: '~' },
   { value: 'DISCONNECTED', cssClass: 'disconnected', iconSymbol: '○' },
 ]
 
 function modeLabelKey(mode) {
   if (mode === 'HARDCORE') return 'session.mode.hardcore'
-  if (mode === 'IDLE') return 'session.mode.idle'
+  if (mode === 'PASIVO') return 'session.mode.pasivo'
   return 'session.mode.disconnected'
 }
 
