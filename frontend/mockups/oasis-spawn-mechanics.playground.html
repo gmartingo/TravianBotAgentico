@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Mecánica de Spawn de Oasis (Stats panel v2.1)
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador.
+
+  Vistas disponibles (selector "Vista"):
+    1.  SpawnMechanicsPanel — colapsado (estado habitual)
+    2.  SpawnMechanicsPanel — desplegado (tabla timers + sets + nota anomalía)
+    3.  OasisCompositionPanel — loading  [v2 — conservada para referencia]
+    4.  OasisCompositionPanel — error    [v2 — conservada para referencia]
+    5.  OasisCompositionPanel — vacío    [v2 — conservada para referencia]
+    6.  OasisCompositionPanel — normal   [v2 — conservada para referencia]
+    7.  WorstCasePlannerPanel — loading  [v2 — conservada para referencia]
+    8.  WorstCasePlannerPanel — error    [v2 — conservada para referencia]
+    9.  WorstCasePlannerPanel — vacío    [v2 — conservada para referencia]
+   10.  WorstCasePlannerPanel — normal   [v2 — conservada para referencia]
+   11.  Vista completa StatsTab v2 (orden antiguo — referencia)
+   --- NUEVAS VISTAS v2.1 ---
+   12.  OasisCombatPlannerPanel — loading
+   13.  OasisCombatPlannerPanel — error
+   14.  OasisCombatPlannerPanel — vacío
+   15.  OasisCombatPlannerPanel — normal (3 grupos: cereal+anomalía, arcilla, desconocido)
+   16.  Vista completa StatsTab v2.1 — NUEVO ORDEN (gate humano — arrastrar y aprobar)
+
+  Controles:
+    - Toggle tema (claro / oscuro)
+    - Selector de vista
+    - Modo Editar: drag & drop con imán de 8px sobre rejilla
+    - Guardar (localStorage) / Restablecer / Exportar layout (JSON)
+
+  Spec: docs/design/oasis-spawn-mechanics.md  §v2.1
+  Spec funcional: docs/specs/oasis-spawn-mechanics-stats.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Spawn Mechanics v2.1 (playground)</title>
+<style>
+/* ===== TOKENS (fuente: frontend/DESIGN.md §19.16) ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;
+  --accent-subtle:rgba(138,100,24,.14);--accent-subtle-border:rgba(138,100,24,.40);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--danger:#C9352C;--info:#0A6FCC;
+  --success-subtle:rgba(36,138,61,.10);--danger-subtle:rgba(201,53,44,.08);
+  --danger-border:rgba(201,53,44,.30);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --topbar-h:52px;--sidebar-w:200px;
+}
+[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;
+  --accent-subtle:rgba(203,176,121,.16);--accent-subtle-border:rgba(203,176,121,.45);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--danger:#FF453A;--info:#0A84FF;
+  --success-subtle:rgba(52,199,89,.12);--danger-subtle:rgba(255,69,58,.10);
+  --danger-border:rgba(255,69,58,.30);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:14px;color:var(--text);background:var(--bg);
+     -webkit-font-smoothing:antialiased;line-height:1.4;min-height:100vh}
+
+/* ===== TOOLBAR ===== */
+#toolbar{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;gap:12px;
+  padding:8px 16px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-sm);flex-wrap:wrap;
+}
+#toolbar label{font-size:12px;color:var(--text-secondary);font-weight:500}
+#toolbar select,#toolbar button{
+  font-family:var(--font-sans);font-size:12px;padding:4px 10px;
+  background:var(--surface-2);color:var(--text);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);cursor:pointer;
+  transition:background var(--dur-fast);
+}
+#toolbar button:hover{background:var(--btn-primary-bg);color:var(--btn-primary-text)}
+#edit-toggle{background:var(--surface-2);color:var(--text)}
+#edit-toggle.active{background:var(--accent-subtle);color:var(--accent-text);border-color:var(--accent-subtle-border)}
+#toast-msg{font-size:12px;color:var(--success);font-weight:500;min-width:100px}
+.tag-new{
+  font-size:9px;font-weight:700;color:var(--accent-text);background:var(--accent-subtle);
+  border:1px solid var(--accent-subtle-border);border-radius:var(--radius-full);
+  padding:1px 5px;margin-inline-start:4px;vertical-align:middle;white-space:nowrap;
+}
+
+/* ===== MAIN ===== */
+#main{padding:24px;max-width:1200px;margin:0 auto}
+
+/* ===== EDIT MODE ===== */
+.edit-mode .draggable-block{
+  cursor:grab;position:relative;
+  outline:2px dashed var(--border-strong);outline-offset:2px;border-radius:var(--radius-md);
+}
+.edit-mode .draggable-block:hover{outline-color:var(--accent)}
+.edit-mode .draggable-block::before{
+  content:attr(data-label);
+  position:absolute;top:-22px;inset-inline-start:0;
+  font-size:10px;font-weight:600;color:var(--accent-text);
+  background:var(--surface);padding:1px 6px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);white-space:nowrap;z-index:10;
+}
+.draggable-block.dragging{opacity:0.4;outline:2px solid var(--accent)}
+.draggable-block.drag-over{outline:2px solid var(--success)}
+
+/* ===== CARD / PANEL ===== */
+.panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:20px 24px;
+  margin-bottom:16px;
+}
+.panel-header{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:16px;
+  padding-bottom:12px;border-bottom:1px solid var(--border);
+}
+.panel-title{font-size:15px;font-weight:600;color:var(--text)}
+.panel-caption{font-size:12px;color:var(--text-tertiary)}
+
+/* ===== COLLAPSIBLE PANEL ===== */
+.panel-collapse-header{
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  padding:16px 24px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  transition:background var(--dur-fast);user-select:none;
+}
+.panel-collapse-header:hover{background:var(--surface-2)}
+.chevron{
+  width:16px;height:16px;color:var(--text-tertiary);
+  transition:transform var(--dur-base) var(--ease);flex-shrink:0;
+}
+.chevron.open{transform:rotate(90deg)}
+.collapse-content{overflow:hidden;transition:max-height var(--dur-base) var(--ease)}
+.collapse-content.collapsed{max-height:0}
+.collapse-content.expanded{max-height:2000px}
+
+/* ===== TABLES ===== */
+table{width:100%;border-collapse:collapse}
+thead th{
+  background:var(--surface-2);color:var(--text-secondary);
+  font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;
+  padding:8px 12px;text-align:start;border-bottom:1px solid var(--border);
+}
+thead th.right{text-align:end}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover td{background:var(--surface-2)}
+tbody td{padding:9px 12px;font-size:13px;color:var(--text);vertical-align:middle}
+tbody td.right{text-align:end}
+tbody td.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+tbody td.secondary{color:var(--text-secondary)}
+tbody td.disabled{color:var(--text-disabled);font-family:var(--font-mono)}
+
+/* ===== BADGE / STATUS ===== */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  border-radius:var(--radius-full);padding:2px 8px;
+  font-size:11px;font-weight:500;white-space:nowrap;
+}
+.badge-neutral{background:var(--surface-2);color:var(--text-secondary);border:1px solid var(--border)}
+.badge-accent{background:var(--accent-subtle);color:var(--accent-text);border:1px solid var(--accent-subtle-border)}
+.badge-success{background:var(--success-subtle);color:var(--success);border:1px solid rgba(36,138,61,.30)}
+.badge-danger{background:var(--danger-subtle);color:var(--danger);border:1px solid var(--danger-border)}
+
+/* Status dot + text */
+.status-row{display:inline-flex;align-items:center;gap:5px;font-size:12px}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.status-dot.green{background:var(--success)}
+.status-dot.red{background:var(--danger)}
+.status-dot.gray{background:var(--text-disabled)}
+.status-text.green{color:var(--success)}
+.status-text.red{color:var(--danger)}
+.status-text.gray{color:var(--text-disabled)}
+
+/* ===== CONFIDENCE DOT in badge ===== */
+.conf-dot{display:inline-block;font-size:10px;color:var(--text-tertiary);margin-inline-start:3px}
+
+/* ===== ANIMAL CHIP (v2 — conservado para vistas de referencia) ===== */
+.animal-chip{
+  display:inline-flex;align-items:center;gap:3px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:2px 7px;
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  margin:1px;
+}
+.animal-chip.anomaly{
+  background:var(--accent-subtle);border-color:var(--accent-subtle-border);
+  color:var(--accent-text);
+}
+.animal-icon{font-size:13px;line-height:1}
+.anomaly-badge{
+  font-size:9px;font-weight:600;color:var(--accent-text);
+  background:var(--accent-subtle);border:1px solid var(--accent-subtle-border);
+  border-radius:var(--radius-full);padding:0 4px;margin-inline-start:2px;
+}
+
+/* ===== WORST CASE CHIP (v2 — conservado) ===== */
+.wc-chip{
+  display:inline-flex;align-items:center;gap:3px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:2px 8px;
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  margin:1px;
+}
+
+/* ===== TIMER SELECTOR ===== */
+.timer-selector{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.timer-label{font-size:12px;color:var(--text-secondary);font-weight:500;flex-shrink:0}
+.timer-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:4px 14px;border-radius:var(--radius-full);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);
+  transition:background var(--dur-fast),border-color var(--dur-fast),color var(--dur-fast);
+  font-family:var(--font-mono);
+}
+.timer-btn:hover{background:var(--surface);border-color:var(--accent)}
+.timer-btn.active{
+  background:var(--accent-subtle);border-color:var(--accent-subtle-border);
+  color:var(--accent-text);font-weight:600;
+}
+.timer-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ===== SKELETON ===== */
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.skel{
+  display:block;height:14px;border-radius:var(--radius-sm);
+  background:var(--border);animation:pulse 1.5s ease-in-out infinite;
+}
+@media(prefers-reduced-motion:reduce){.skel{animation:none;opacity:.6}}
+.skel-row{display:flex;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)}
+
+/* ===== ERROR BANNER ===== */
+.error-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;
+  background:var(--danger-subtle);border:1px solid var(--danger-border);
+  border-radius:var(--radius-sm);font-size:13px;color:var(--danger);
+}
+.btn-retry{
+  background:transparent;border:none;padding:0;
+  font-size:12px;color:var(--accent-text);cursor:pointer;font-weight:500;
+  flex-shrink:0;font-family:var(--font-sans);
+  text-decoration:underline;text-underline-offset:2px;
+}
+.btn-retry:hover{color:var(--accent-hover)}
+
+/* ===== EMPTY STATE ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;
+  padding:32px 16px;gap:8px;text-align:center;
+}
+.empty-icon{font-size:28px;color:var(--text-tertiary);margin-bottom:4px}
+.empty-title{font-size:14px;font-weight:500;color:var(--text-secondary)}
+.empty-body{font-size:13px;color:var(--text-tertiary);max-width:320px}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-size:13px;font-weight:500;border:none;cursor:pointer;
+  transition:background var(--dur-fast);margin-top:8px;font-family:var(--font-sans);
+}
+.btn-primary:hover{background:var(--btn-primary-hover)}
+
+/* ===== NOTE / INFO LINE ===== */
+.info-note{
+  display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:var(--text-secondary);
+  padding:10px 12px;background:var(--surface-2);border-radius:var(--radius-sm);
+  margin-top:12px;
+}
+.info-icon{font-size:13px;flex-shrink:0;color:var(--info)}
+
+/* ===== SECTION SEPARATOR ===== */
+.section-sep{
+  border:none;border-top:1px solid var(--border);
+  margin:24px 0;
+}
+
+/* ===== SECTION TITLE (inside panel) ===== */
+.section-title{
+  font-size:12px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;margin-top:16px;
+}
+.section-title:first-child{margin-top:0}
+
+/* ===== OASIS TYPE SETS TABLE ===== */
+.sets-table td:first-child{
+  font-weight:500;font-size:13px;color:var(--text);padding:8px 12px;
+  white-space:nowrap;
+}
+.sets-table td:last-child{padding:6px 12px}
+
+/* ===== COORDS ===== */
+.coords{font-family:var(--font-mono);font-size:12px;color:var(--text);font-variant-numeric:tabular-nums}
+
+/* ===== DEF NUMBERS ===== */
+.def-cell{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.def-row{display:flex;flex-direction:column;gap:2px}
+.def-label{font-size:10px;color:var(--text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+
+/* ===== VIEW TOGGLE ===== */
+.view{display:none}.view.active{display:block}
+
+/* ===================================================================
+   NUEVOS ESTILOS — v2.1 — OasisCombatPlannerPanel
+   =================================================================== */
+
+/* Cabecera de grupo por oasis (sticky-header de cada sección de la tabla) */
+.oasis-group{
+  margin-bottom:16px;
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  overflow:hidden;
+}
+.oasis-group-header{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 14px;
+  background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+}
+.oasis-group-header .coords{font-size:13px;font-weight:500}
+.oasis-group-header .conf-dot{font-size:10px;color:var(--text-tertiary)}
+
+/* Tabla interna del grupo: sin borde exterior propio (lo gestiona .oasis-group) */
+.oasis-group table{border-radius:0}
+.oasis-group thead th{border-radius:0}
+
+/* Fila de totales al pie del grupo */
+.totals-row td{
+  background:var(--surface-2);
+  border-top:1px solid var(--border);
+  padding:7px 12px;
+  font-size:12px;
+}
+.totals-row:hover td{background:var(--surface-2) !important}
+.totals-label{color:var(--text-secondary);font-weight:500}
+.totals-value{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:600;color:var(--text)}
+
+/* Fila de nota inline cuando el tipo es desconocido */
+.unknown-oasis-note{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 14px;
+  font-size:12px;color:var(--text-secondary);
+}
+
+/* Columna de Peor combo: chip inline dentro de celda */
+.wc-inline{
+  display:inline-flex;align-items:center;gap:3px;
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:1px 8px;
+  font-size:12px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+}
+
+/* Columna Animal en la tabla fusionada */
+.animal-row-label{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;
+}
+.animal-row-icon{font-size:15px;line-height:1}
+
+/* Anomaly inline en columna Animal */
+.anomaly-inline{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:9px;font-weight:700;color:var(--accent-text);
+  background:var(--accent-subtle);border:1px solid var(--accent-subtle-border);
+  border-radius:var(--radius-full);padding:1px 5px;
+  margin-inline-start:4px;
+}
+
+/* Totals compact (mobile, una sola línea) */
+.totals-compact{
+  padding:7px 14px;
+  background:var(--surface-2);
+  border-top:1px solid var(--border);
+  font-size:12px;color:var(--text-secondary);
+}
+.totals-compact span.tval{
+  font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+  font-weight:600;color:var(--text);
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR ===== -->
+<div id="toolbar">
+  <div style="display:flex;align-items:center;gap:6px">
+    <div style="width:24px;height:24px;border-radius:5px;background:var(--btn-primary-bg);color:var(--btn-primary-text);display:grid;place-items:center;font-size:10px;font-weight:700">TB</div>
+    <span style="font-size:13px;font-weight:600;color:var(--text)">Spawn Mechanics</span>
+    <span style="font-size:11px;color:var(--text-tertiary)">playground v2.1</span>
+  </div>
+
+  <label>Vista:
+    <select id="view-sel" onchange="switchView(this.value)">
+      <option value="v1">1. SpawnMechanics — colapsado</option>
+      <option value="v2">2. SpawnMechanics — desplegado</option>
+      <option value="v3">3. [ref.v2] Composition — loading</option>
+      <option value="v4">4. [ref.v2] Composition — error</option>
+      <option value="v5">5. [ref.v2] Composition — vacío</option>
+      <option value="v6">6. [ref.v2] Composition — normal</option>
+      <option value="v7">7. [ref.v2] WorstCase — loading</option>
+      <option value="v8">8. [ref.v2] WorstCase — error</option>
+      <option value="v9">9. [ref.v2] WorstCase — vacío</option>
+      <option value="v10">10. [ref.v2] WorstCase — normal</option>
+      <option value="v11">11. [ref.v2] Vista completa (orden antiguo)</option>
+      <option value="v12">12. ★ CombatPlanner — loading</option>
+      <option value="v13">13. ★ CombatPlanner — error</option>
+      <option value="v14">14. ★ CombatPlanner — vacío</option>
+      <option value="v15" selected>15. ★ CombatPlanner — normal (3 grupos)</option>
+      <option value="v16">16. ★★ Vista completa v2.1 — GATE HUMANO</option>
+    </select>
+  </label>
+
+  <button onclick="toggleTheme()" title="Cambiar tema claro/oscuro">Tema</button>
+  <button id="edit-toggle" onclick="toggleEdit()" title="Activar drag & drop">Editar</button>
+  <button onclick="saveLayout()" title="Guardar posiciones en localStorage">Guardar</button>
+  <button onclick="resetLayout()" title="Restaurar posiciones originales">Restablecer</button>
+  <button onclick="exportLayout()" title="Exportar JSON del layout">Exportar</button>
+  <span id="toast-msg"></span>
+</div>
+
+<!-- ===== MAIN ===== -->
+<div id="main">
+
+<!-- ======================================================== -->
+<!-- VISTA 1: SpawnMechanicsPanel — colapsado                  -->
+<!-- ======================================================== -->
+<div id="v1" class="view">
+  <div class="draggable-block" data-label="SpawnMechanicsPanel (colapsado)">
+    <div class="panel-collapse-header" onclick="toggleCollapse(this)">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 4l4 4-4 4"/>
+      </svg>
+      <span class="panel-title">Mecánica de spawn de oasis</span>
+      <span class="panel-caption" style="margin-inline-start:8px">Cómo funcionan los timers y los sets de animales</span>
+    </div>
+    <div class="collapse-content collapsed" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);padding:0 24px">
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- VISTA 2: SpawnMechanicsPanel — desplegado                 -->
+<!-- ======================================================== -->
+<div id="v2" class="view">
+  <div class="draggable-block" data-label="SpawnMechanicsPanel (desplegado)">
+    <div class="panel-collapse-header" onclick="toggleCollapse(this)" style="border-radius:var(--radius-md) var(--radius-md) 0 0">
+      <svg class="chevron open" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 4l4 4-4 4"/>
+      </svg>
+      <span class="panel-title">Mecánica de spawn de oasis</span>
+      <span class="panel-caption" style="margin-inline-start:8px">Cómo funcionan los timers y los sets de animales</span>
+    </div>
+    <div class="collapse-content expanded" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);padding:20px 24px;background:var(--surface)">
+      <div class="section-title">Timers de aparición (servidor x1)</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Animal</th><th class="right">Orden spawn</th><th class="right">Timer</th></tr></thead>
+          <tbody>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐀</span> <span>Rata</span></span></td><td class="right mono secondary">1</td><td class="right mono">5:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🕷</span> <span>Araña</span></span></td><td class="right mono secondary">2</td><td class="right mono">6:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐍</span> <span>Serpiente</span></span></td><td class="right mono secondary">3</td><td class="right mono">7:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🦇</span> <span>Murciélago</span></span></td><td class="right mono secondary">4</td><td class="right mono">8:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐗</span> <span>Jabalí</span></span></td><td class="right mono secondary">5</td><td class="right mono">9:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐺</span> <span>Lobo</span></span></td><td class="right mono secondary">6</td><td class="right mono">10:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐻</span> <span>Oso</span></span></td><td class="right mono secondary">7</td><td class="right mono">11:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐊</span> <span>Cocodrilo</span></span></td><td class="right mono secondary">8</td><td class="right mono">12:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐯</span> <span>Tigre</span></span></td><td class="right mono secondary">9</td><td class="right mono">13:00</td></tr>
+            <tr><td><span style="display:inline-flex;align-items:center;gap:7px"><span style="font-size:15px">🐘</span> <span>Elefante</span></span></td><td class="right mono secondary">10</td><td class="right mono">14:00</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="section-title" style="margin-top:20px">Sets normales por tipo de oasis</div>
+      <div style="overflow-x:auto">
+        <table class="sets-table">
+          <thead><tr><th>Tipo</th><th>Animales del set</th></tr></thead>
+          <tbody>
+            <tr><td>⛏ Hierro</td><td><span class="animal-chip"><span class="animal-icon">🐀</span> Rata</span><span class="animal-chip"><span class="animal-icon">🕷</span> Araña</span><span class="animal-chip"><span class="animal-icon">🦇</span> Murciélago</span></td></tr>
+            <tr><td>🧱 Arcilla</td><td><span class="animal-chip"><span class="animal-icon">🐀</span> Rata</span><span class="animal-chip"><span class="animal-icon">🕷</span> Araña</span><span class="animal-chip"><span class="animal-icon">🐗</span> Jabalí</span></td></tr>
+            <tr><td>🌲 Madera</td><td><span class="animal-chip"><span class="animal-icon">🐗</span> Jabalí</span><span class="animal-chip"><span class="animal-icon">🐺</span> Lobo</span><span class="animal-chip"><span class="animal-icon">🐻</span> Oso</span></td></tr>
+            <tr><td>🌾 Cereal</td><td><span class="animal-chip"><span class="animal-icon">🐀</span> Rata</span><span class="animal-chip"><span class="animal-icon">🕷</span> Araña</span><span class="animal-chip"><span class="animal-icon">🐍</span> Serpiente</span><span class="animal-chip"><span class="animal-icon">🦇</span> Murciélago</span><span class="animal-chip"><span class="animal-icon">🐗</span> Jabalí</span><span class="animal-chip"><span class="animal-icon">🐺</span> Lobo</span><span class="animal-chip"><span class="animal-icon">🐻</span> Oso</span><span class="animal-chip"><span class="animal-icon">🐊</span> Cocodrilo</span><span class="animal-chip"><span class="animal-icon">🐯</span> Tigre</span><span class="animal-chip"><span class="animal-icon">🐘</span> Elefante</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="info-note" style="margin-top:16px">
+        <span class="info-icon">ℹ</span>
+        <span><strong>Anomalía:</strong> animal observado fuera del set del tipo inferido. Puede aparecer esporádicamente. No se incluye en el peor caso ya que distorsionaría el umbral defensivo.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- VISTAS 3–11: conservadas como referencia v2               -->
+<!-- ======================================================== -->
+
+<div id="v3" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] OasisCompositionPanel — loading</p>
+  <div class="draggable-block" data-label="OasisCompositionPanel (loading)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Composición típica por oasis</div></div>
+      <div class="skel-row"><span class="skel" style="width:80px"></span><span class="skel" style="width:60px"></span><span class="skel" style="width:50px"></span><span class="skel" style="flex:1"></span></div>
+      <div class="skel-row"><span class="skel" style="width:90px"></span><span class="skel" style="width:70px"></span><span class="skel" style="width:45px"></span><span class="skel" style="flex:1"></span></div>
+      <div class="skel-row"><span class="skel" style="width:75px"></span><span class="skel" style="width:55px"></span><span class="skel" style="width:60px"></span><span class="skel" style="flex:1"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="v4" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] OasisCompositionPanel — error</p>
+  <div class="draggable-block" data-label="OasisCompositionPanel (error)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Composición típica por oasis</div></div>
+      <div class="error-banner"><span>Error al cargar la composición de oasis.</span><button class="btn-retry">Reintentar</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="v5" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] OasisCompositionPanel — vacío</p>
+  <div class="draggable-block" data-label="OasisCompositionPanel (vacío)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Composición típica por oasis</div></div>
+      <div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Sin oasis con reportes</div><div class="empty-body">Ingresa reportes de ataques para ver la composición típica de tus oasis.</div><button class="btn-primary">Ir a Ingresar →</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="v6" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] OasisCompositionPanel — normal</p>
+  <div class="draggable-block" data-label="OasisCompositionPanel (normal)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Composición típica por oasis</div></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Oasis</th><th>Tipo / Confianza</th><th>Estado</th><th>Composición (avg · máx)</th><th class="right">Ataques</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="coords">(−70|73)</span></td>
+              <td><span class="badge badge-accent">🌾 Cereal</span><span class="conf-dot" title="Confianza media">·med</span></td>
+              <td><span class="status-row"><span class="status-dot green"></span><span class="status-text green">Repoblando</span></span></td>
+              <td><span class="animal-chip"><span class="animal-icon">🐯</span> 4.5·7</span><span class="animal-chip"><span class="animal-icon">🐘</span> 2.0·3</span><span class="animal-chip anomaly"><span class="animal-icon">🐻</span> 1.0·1 <span class="anomaly-badge">anom.</span></span><div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">hace 12 h</div></td>
+              <td class="right mono secondary">12</td>
+            </tr>
+            <tr>
+              <td><span class="coords">(−12|50)</span></td>
+              <td><span class="badge badge-neutral">🧱 Arcilla</span><span class="conf-dot">·low</span></td>
+              <td><span class="status-row"><span class="status-dot red"></span><span class="status-text red">Cooldown</span></span></td>
+              <td><span class="animal-chip"><span class="animal-icon">🐀</span> 3.0·5</span><span class="animal-chip"><span class="animal-icon">🕷</span> 2.5·4</span><span class="animal-chip"><span class="animal-icon">🐗</span> 1.5·3</span><div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">hace 5 h 40 m</div></td>
+              <td class="right mono secondary">2</td>
+            </tr>
+            <tr>
+              <td><span class="coords">( 12|−45)</span></td>
+              <td><span style="color:var(--text-tertiary);font-size:13px">—</span></td>
+              <td><span class="status-row"><span class="status-dot gray"></span><span class="status-text gray">Desconocido</span></span></td>
+              <td><span style="font-size:12px;color:var(--text-tertiary)">Sin datos suficientes</span><div style="font-size:11px;color:var(--text-tertiary);margin-top:4px">hace 4 d</div></td>
+              <td class="right mono secondary">1</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="v7" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] WorstCasePlannerPanel — loading</p>
+  <div class="draggable-block" data-label="WorstCasePlannerPanel (loading)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Peor combinación a batir</div></div>
+      <div class="timer-selector"><span class="timer-label">Intervalo de envío:</span><button class="timer-btn" disabled>6 min</button><button class="timer-btn" disabled>7 min</button><button class="timer-btn active" disabled>10 min</button><button class="timer-btn" disabled>15 min</button></div>
+      <div class="skel-row"><span class="skel" style="width:80px"></span><span class="skel" style="width:70px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:60px"></span></div>
+      <div class="skel-row"><span class="skel" style="width:90px"></span><span class="skel" style="width:60px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:55px"></span></div>
+      <div class="skel-row"><span class="skel" style="width:75px"></span><span class="skel" style="width:65px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:65px"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="v8" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] WorstCasePlannerPanel — error</p>
+  <div class="draggable-block" data-label="WorstCasePlannerPanel (error)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Peor combinación a batir</div></div>
+      <div class="timer-selector"><span class="timer-label">Intervalo de envío:</span><button class="timer-btn">6 min</button><button class="timer-btn">7 min</button><button class="timer-btn active">10 min</button><button class="timer-btn">15 min</button></div>
+      <div class="error-banner"><span>Error al calcular el peor caso.</span><button class="btn-retry">Reintentar</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="v9" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] WorstCasePlannerPanel — vacío</p>
+  <div class="draggable-block" data-label="WorstCasePlannerPanel (vacío)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Peor combinación a batir</div></div>
+      <div class="timer-selector"><span class="timer-label">Intervalo de envío:</span><button class="timer-btn" disabled>6 min</button><button class="timer-btn" disabled>7 min</button><button class="timer-btn" disabled>10 min</button><button class="timer-btn" disabled>15 min</button></div>
+      <div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">Sin datos para el peor caso</div><div class="empty-body">Ingresa reportes de ataques para calcular la peor combinación.</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="v10" class="view">
+  <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] WorstCasePlannerPanel — normal</p>
+  <div class="draggable-block" data-label="WorstCasePlannerPanel (normal)">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">Peor combinación a batir</div></div>
+      <div class="timer-selector"><span class="timer-label">Intervalo de envío:</span><button class="timer-btn" onclick="setTimer(6,this)">6 min</button><button class="timer-btn" onclick="setTimer(7,this)">7 min</button><button class="timer-btn active" onclick="setTimer(10,this)">10 min</button><button class="timer-btn" onclick="setTimer(15,this)">15 min</button></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Oasis</th><th>Tipo</th><th>Peor combinación</th><th class="right">Def. inf.</th><th class="right">Def. cav.</th></tr></thead>
+          <tbody>
+            <tr><td><span class="coords">(−70|73)</span></td><td><span class="badge badge-accent">🌾 Cereal</span></td><td><span class="wc-chip"><span class="animal-icon">🐯</span> ×5</span><span class="wc-chip"><span class="animal-icon">🐘</span> ×3</span></td><td class="right"><div class="def-row"><span class="def-label">INF</span><span class="def-cell">2 020</span></div></td><td class="right"><div class="def-row"><span class="def-label">CAV</span><span class="def-cell">2 560</span></div></td></tr>
+            <tr><td><span class="coords">(−12|50)</span></td><td><span class="badge badge-neutral">🧱 Arcilla</span></td><td><span class="wc-chip"><span class="animal-icon">🐀</span> ×7</span><span class="wc-chip"><span class="animal-icon">🕷</span> ×5</span><span class="wc-chip"><span class="animal-icon">🐗</span> ×4</span></td><td class="right"><div class="def-row"><span class="def-label">INF</span><span class="def-cell">840</span></div></td><td class="right"><div class="def-row"><span class="def-label">CAV</span><span class="def-cell">1 120</span></div></td></tr>
+            <tr><td><span class="coords">( 12|−45)</span></td><td><span style="color:var(--text-tertiary)">—</span></td><td colspan="3"><span style="font-size:12px;color:var(--text-tertiary)">Añade más reportes para inferir el tipo</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="info-note"><span class="info-icon">ℹ</span><span>Los animales anómalos no se incluyen en el peor caso.</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="v11" class="view">
+  <p style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;padding:8px 12px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border)">[ref.v2] Vista completa StatsTab — orden v2 (referencia histórica). Para el nuevo orden ver Vista 16.</p>
+  <div class="draggable-block" data-id="blk-spawn-v11" data-label="A · SpawnMechanicsPanel">
+    <div class="panel-collapse-header" onclick="toggleCollapse(this)">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
+      <span class="panel-title">Mecánica de spawn de oasis</span>
+      <span class="panel-caption" style="margin-inline-start:8px">Cómo funcionan los timers y los sets de animales</span>
+    </div>
+    <div class="collapse-content collapsed" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);padding:16px 24px;background:var(--surface)">
+      <div class="info-note"><span class="info-icon">ℹ</span><span>Contenido colapsado — ver vista 2 para el detalle.</span></div>
+    </div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="draggable-block" data-id="blk-comp-v11" data-label="B · OasisCompositionPanel">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">🔬</span><div><div class="panel-title" style="color:var(--text-secondary)">OasisCompositionPanel</div><div style="font-size:12px;color:var(--text-tertiary)">Panel v2 — fusionado en OasisCombatPlannerPanel (v2.1)</div></div></div>
+    </div>
+  </div>
+  <div style="height:12px"></div>
+  <div class="draggable-block" data-id="blk-worst-v11" data-label="C · WorstCasePlannerPanel">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">🎯</span><div><div class="panel-title" style="color:var(--text-secondary)">WorstCasePlannerPanel</div><div style="font-size:12px;color:var(--text-tertiary)">Panel v2 — fusionado en OasisCombatPlannerPanel (v2.1)</div></div></div>
+    </div>
+  </div>
+  <hr class="section-sep"/>
+  <div class="draggable-block" data-id="blk-balance-v11" data-label="D · BalanceSection">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:20px">⚖️</span><div><div class="panel-title" style="color:var(--text-secondary)">BalanceSection</div><div style="font-size:12px;color:var(--text-tertiary)">Panel existente</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- VISTA 12: OasisCombatPlannerPanel — loading   ★ v2.1          -->
+<!-- ============================================================= -->
+<div id="v12" class="view">
+  <p style="font-size:11px;color:var(--accent-text);margin-bottom:12px;padding:6px 10px;background:var(--accent-subtle);border-radius:var(--radius-sm);border:1px solid var(--accent-subtle-border)">★ v2.1 — OasisCombatPlannerPanel (loading)</p>
+  <div class="draggable-block" data-label="OasisCombatPlannerPanel (loading)">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Planificador de combate por oasis</div>
+      </div>
+      <!-- Selector deshabilitado durante loading (los botones siguen visibles pero disabled) -->
+      <div class="timer-selector">
+        <span class="timer-label">Intervalo de envío:</span>
+        <button class="timer-btn" disabled>6 min</button>
+        <button class="timer-btn" disabled>7 min</button>
+        <button class="timer-btn active" disabled>10 min</button>
+        <button class="timer-btn" disabled>15 min</button>
+      </div>
+      <!-- Skeleton de grupos -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-bottom:12px">
+        <div style="background:var(--surface-2);padding:9px 14px;border-bottom:1px solid var(--border)">
+          <span class="skel" style="width:160px;display:inline-block"></span>
+        </div>
+        <div class="skel-row"><span class="skel" style="width:100px"></span><span class="skel" style="width:60px"></span><span class="skel" style="width:50px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:55px"></span></div>
+        <div class="skel-row"><span class="skel" style="width:90px"></span><span class="skel" style="width:70px"></span><span class="skel" style="width:55px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:60px"></span></div>
+        <div class="skel-row"><span class="skel" style="width:110px"></span><span class="skel" style="width:60px"></span><span class="skel" style="width:48px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:50px"></span></div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-bottom:12px">
+        <div style="background:var(--surface-2);padding:9px 14px;border-bottom:1px solid var(--border)">
+          <span class="skel" style="width:140px;display:inline-block"></span>
+        </div>
+        <div class="skel-row"><span class="skel" style="width:95px"></span><span class="skel" style="width:65px"></span><span class="skel" style="width:52px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:58px"></span></div>
+        <div class="skel-row"><span class="skel" style="width:100px"></span><span class="skel" style="width:60px"></span><span class="skel" style="width:55px"></span><span class="skel" style="flex:1"></span><span class="skel" style="width:55px"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- VISTA 13: OasisCombatPlannerPanel — error   ★ v2.1            -->
+<!-- ============================================================= -->
+<div id="v13" class="view">
+  <p style="font-size:11px;color:var(--accent-text);margin-bottom:12px;padding:6px 10px;background:var(--accent-subtle);border-radius:var(--radius-sm);border:1px solid var(--accent-subtle-border)">★ v2.1 — OasisCombatPlannerPanel (error)</p>
+  <div class="draggable-block" data-label="OasisCombatPlannerPanel (error)">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Planificador de combate por oasis</div>
+      </div>
+      <div class="timer-selector">
+        <span class="timer-label">Intervalo de envío:</span>
+        <button class="timer-btn" onclick="setTimer(6,this)">6 min</button>
+        <button class="timer-btn" onclick="setTimer(7,this)">7 min</button>
+        <button class="timer-btn active" onclick="setTimer(10,this)">10 min</button>
+        <button class="timer-btn" onclick="setTimer(15,this)">15 min</button>
+      </div>
+      <div class="error-banner">
+        <span>Error al cargar los datos de combate. Comprueba que el servidor esté activo.</span>
+        <button class="btn-retry">Reintentar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- VISTA 14: OasisCombatPlannerPanel — vacío   ★ v2.1            -->
+<!-- ============================================================= -->
+<div id="v14" class="view">
+  <p style="font-size:11px;color:var(--accent-text);margin-bottom:12px;padding:6px 10px;background:var(--accent-subtle);border-radius:var(--radius-sm);border:1px solid var(--accent-subtle-border)">★ v2.1 — OasisCombatPlannerPanel (vacío)</p>
+  <div class="draggable-block" data-label="OasisCombatPlannerPanel (vacío)">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Planificador de combate por oasis</div>
+      </div>
+      <div class="timer-selector">
+        <span class="timer-label">Intervalo de envío:</span>
+        <button class="timer-btn" disabled>6 min</button>
+        <button class="timer-btn" disabled>7 min</button>
+        <button class="timer-btn" disabled>10 min</button>
+        <button class="timer-btn" disabled>15 min</button>
+      </div>
+      <div class="empty-state">
+        <div class="empty-icon">⚔️</div>
+        <div class="empty-title">Sin oasis con reportes</div>
+        <div class="empty-body">Ingresa reportes de ataques para ver la composición y la peor combinación a batir.</div>
+        <button class="btn-primary">Ir a Ingresar →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- VISTA 15: OasisCombatPlannerPanel — normal   ★ v2.1           -->
+<!--   Grupo 1: Cereal (med, Repoblando) — 2 animales + 1 anomalía -->
+<!--   Grupo 2: Arcilla (low, Cooldown) — 3 animales               -->
+<!--   Grupo 3: tipo desconocido (null, Desconocido)                -->
+<!-- ============================================================= -->
+<div id="v15" class="view">
+  <p style="font-size:11px;color:var(--accent-text);margin-bottom:12px;padding:6px 10px;background:var(--accent-subtle);border-radius:var(--radius-sm);border:1px solid var(--accent-subtle-border)">★ v2.1 — OasisCombatPlannerPanel (normal — 3 grupos: cereal+anomalía, arcilla, tipo desconocido)</p>
+  <div class="draggable-block" data-label="OasisCombatPlannerPanel (normal)">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Planificador de combate por oasis</div>
+      </div>
+
+      <!-- Selector de intervalo (único para todo el panel) -->
+      <div class="timer-selector">
+        <span class="timer-label">Intervalo de envío:</span>
+        <button class="timer-btn" onclick="setTimer(6,this)">6 min</button>
+        <button class="timer-btn" onclick="setTimer(7,this)">7 min</button>
+        <button class="timer-btn active" onclick="setTimer(10,this)">10 min</button>
+        <button class="timer-btn" onclick="setTimer(15,this)">15 min</button>
+      </div>
+
+      <!-- ====== GRUPO 1: Cereal, medium, Repoblando ====== -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">(−70|73)</span>
+          <span class="badge badge-accent">🌾 Cereal</span>
+          <span class="conf-dot" title="Confianza media (≥3 reportes)">·med</span>
+          <span style="flex:1"></span>
+          <span class="status-row">
+            <span class="status-dot green"></span>
+            <span class="status-text green">Repoblando</span>
+          </span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:10px">hace 12 h · 12 ataques</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Animal</th>
+                <th class="right">Típica (avg · máx)</th>
+                <th class="right">Peor combo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-tertiary)">(×N para 10 min)</span></th>
+                <th class="right">Def. inf.</th>
+                <th class="right">Def. cav.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Tigre — normal -->
+              <tr>
+                <td>
+                  <span class="animal-row-label">
+                    <span class="animal-row-icon">🐯</span>
+                    <span>Tigre</span>
+                  </span>
+                </td>
+                <td class="right mono">4.5 · 7</td>
+                <td class="right">
+                  <span class="wc-inline">×5</span>
+                </td>
+                <td class="right mono">800</td>
+                <td class="right mono">1 000</td>
+              </tr>
+              <!-- Elefante — normal -->
+              <tr>
+                <td>
+                  <span class="animal-row-label">
+                    <span class="animal-row-icon">🐘</span>
+                    <span>Elefante</span>
+                  </span>
+                </td>
+                <td class="right mono">2.0 · 3</td>
+                <td class="right">
+                  <span class="wc-inline">×3</span>
+                </td>
+                <td class="right mono">1 020</td>
+                <td class="right mono">1 260</td>
+              </tr>
+              <!-- Oso — anomalía: worst_case_count=null, def=null -->
+              <tr>
+                <td>
+                  <span class="animal-row-label">
+                    <span class="animal-row-icon">🐻</span>
+                    <span>Oso</span>
+                    <span class="anomaly-inline" title="Animal fuera del set normal de Cereal — no se incluye en el peor caso">anom.</span>
+                  </span>
+                </td>
+                <td class="right mono">1.0 · 1</td>
+                <td class="right disabled">—</td>
+                <td class="right disabled">—</td>
+                <td class="right disabled">—</td>
+              </tr>
+            </tbody>
+            <!-- Fila de totales — suma solo Tigre + Elefante (Oso excluido por anomalía) -->
+            <tfoot>
+              <tr class="totals-row">
+                <td colspan="3" class="totals-label">Def. total (excl. anomalías):</td>
+                <td class="right totals-value">1 820</td>
+                <td class="right totals-value">2 260</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ====== GRUPO 2: Arcilla, low, Cooldown ====== -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">(−12|50)</span>
+          <span class="badge badge-neutral">🧱 Arcilla</span>
+          <span class="conf-dot" title="Confianza baja (&lt;3 reportes)">·low</span>
+          <span style="flex:1"></span>
+          <span class="status-row">
+            <span class="status-dot red"></span>
+            <span class="status-text red">Cooldown</span>
+          </span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:10px">hace 5 h 40 m · 2 ataques</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Animal</th>
+                <th class="right">Típica (avg · máx)</th>
+                <th class="right">Peor combo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-tertiary)">(×N para 10 min)</span></th>
+                <th class="right">Def. inf.</th>
+                <th class="right">Def. cav.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🐀</span><span>Rata</span></span></td>
+                <td class="right mono">3.0 · 5</td>
+                <td class="right"><span class="wc-inline">×7</span></td>
+                <td class="right mono">280</td>
+                <td class="right mono">350</td>
+              </tr>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🕷</span><span>Araña</span></span></td>
+                <td class="right mono">2.5 · 4</td>
+                <td class="right"><span class="wc-inline">×5</span></td>
+                <td class="right mono">300</td>
+                <td class="right mono">400</td>
+              </tr>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🐗</span><span>Jabalí</span></span></td>
+                <td class="right mono">1.5 · 3</td>
+                <td class="right"><span class="wc-inline">×4</span></td>
+                <td class="right mono">260</td>
+                <td class="right mono">370</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="totals-row">
+                <td colspan="3" class="totals-label">Def. total:</td>
+                <td class="right totals-value">840</td>
+                <td class="right totals-value">1 120</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ====== GRUPO 3: tipo desconocido (inferred_type = null) ====== -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">( 12|−45)</span>
+          <span style="color:var(--text-tertiary);font-size:13px">—</span>
+          <span style="flex:1"></span>
+          <span class="status-row">
+            <span class="status-dot gray"></span>
+            <span class="status-text gray">Desconocido</span>
+          </span>
+          <span style="font-size:11px;color:var(--text-tertiary);margin-inline-start:10px">hace 4 d · 1 ataque</span>
+        </div>
+        <!-- Nota inline: sin tabla de animales porque inferred_type = null -->
+        <div class="unknown-oasis-note">
+          <span style="color:var(--info);font-size:13px;flex-shrink:0">ℹ</span>
+          <span>Sin tipo inferido — añade más reportes para ver el peor caso</span>
+        </div>
+      </div>
+
+      <!-- Nota global del panel -->
+      <div class="info-note">
+        <span class="info-icon">ℹ</span>
+        <span>Los animales anómalos no se incluyen en el peor caso. El peor caso asume que todos los animales del raid anterior siguen, más los que reaparecen en el intervalo elegido.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- VISTA 16: Vista completa StatsTab v2.1 — GATE HUMANO ★★        -->
+<!--   Orden: Leyenda → Balance → CombatPlanner → Global → Lista   -->
+<!--   Arrastrar y aprobar                                          -->
+<!-- ============================================================= -->
+<div id="v16" class="view">
+
+  <p style="font-size:12px;color:var(--accent-text);margin-bottom:16px;padding:10px 14px;background:var(--accent-subtle);border-radius:var(--radius-sm);border:1px solid var(--accent-subtle-border)">
+    <strong>Vista completa StatsTab v2.1 — GATE HUMANO.</strong>
+    Activa "Editar" para arrastrar los bloques y reordenarlos como prefieras. Cuando estés conforme, exporta el layout (JSON) y dímelo.
+    Los bloques grises son paneles existentes sin cambios — también puedes moverlos.
+  </p>
+
+  <!-- BLOQUE A: SpawnMechanicsPanel (colapsado) -->
+  <div class="draggable-block" data-id="blk-spawn" data-label="A · SpawnMechanicsPanel (leyenda)">
+    <div class="panel-collapse-header" onclick="toggleCollapse(this)">
+      <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
+      <span class="panel-title">Mecánica de spawn de oasis</span>
+      <span class="panel-caption" style="margin-inline-start:8px">Cómo funcionan los timers y los sets de animales</span>
+    </div>
+    <div class="collapse-content collapsed" style="border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);padding:16px 24px;background:var(--surface)">
+      <div class="info-note"><span class="info-icon">ℹ</span><span>Contenido colapsado — haz clic en el header para desplegar.</span></div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- BLOQUE B: BalanceSection (marcador — panel existente) -->
+  <div class="draggable-block" data-id="blk-balance" data-label="B · BalanceSection (existente)">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">⚖️</span>
+        <div>
+          <div class="panel-title" style="color:var(--text-secondary)">BalanceSection</div>
+          <div style="font-size:12px;color:var(--text-tertiary)">Pérdidas/ganancias del mundo — panel existente, sin cambios</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- BLOQUE C: OasisCombatPlannerPanel (nuevo, tabla fusionada) -->
+  <div class="draggable-block" data-id="blk-combat" data-label="C · OasisCombatPlannerPanel (nuevo — tabla fusionada)">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Planificador de combate por oasis</div>
+        <span style="font-size:10px;background:var(--accent-subtle);color:var(--accent-text);border:1px solid var(--accent-subtle-border);border-radius:var(--radius-full);padding:1px 7px;font-weight:600;white-space:nowrap">NUEVO v2.1</span>
+      </div>
+
+      <div class="timer-selector">
+        <span class="timer-label">Intervalo de envío:</span>
+        <button class="timer-btn" onclick="setTimer(6,this)">6 min</button>
+        <button class="timer-btn" onclick="setTimer(7,this)">7 min</button>
+        <button class="timer-btn active" onclick="setTimer(10,this)">10 min</button>
+        <button class="timer-btn" onclick="setTimer(15,this)">15 min</button>
+      </div>
+
+      <!-- Grupo cereal -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">(−70|73)</span>
+          <span class="badge badge-accent">🌾 Cereal</span>
+          <span class="conf-dot">·med</span>
+          <span style="flex:1"></span>
+          <span class="status-row"><span class="status-dot green"></span><span class="status-text green">Repoblando</span></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Animal</th><th class="right">Típica (avg · máx)</th><th class="right">Peor combo</th><th class="right">Def. inf.</th><th class="right">Def. cav.</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🐯</span><span>Tigre</span></span></td>
+                <td class="right mono">4.5 · 7</td>
+                <td class="right"><span class="wc-inline">×5</span></td>
+                <td class="right mono">800</td>
+                <td class="right mono">1 000</td>
+              </tr>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🐘</span><span>Elefante</span></span></td>
+                <td class="right mono">2.0 · 3</td>
+                <td class="right"><span class="wc-inline">×3</span></td>
+                <td class="right mono">1 020</td>
+                <td class="right mono">1 260</td>
+              </tr>
+              <tr>
+                <td><span class="animal-row-label"><span class="animal-row-icon">🐻</span><span>Oso</span><span class="anomaly-inline" title="Anomalía — no se incluye en el peor caso">anom.</span></span></td>
+                <td class="right mono">1.0 · 1</td>
+                <td class="right disabled">—</td>
+                <td class="right disabled">—</td>
+                <td class="right disabled">—</td>
+              </tr>
+            </tbody>
+            <tfoot><tr class="totals-row"><td colspan="3" class="totals-label">Def. total (excl. anomalías):</td><td class="right totals-value">1 820</td><td class="right totals-value">2 260</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Grupo arcilla -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">(−12|50)</span>
+          <span class="badge badge-neutral">🧱 Arcilla</span>
+          <span class="conf-dot">·low</span>
+          <span style="flex:1"></span>
+          <span class="status-row"><span class="status-dot red"></span><span class="status-text red">Cooldown</span></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Animal</th><th class="right">Típica (avg · máx)</th><th class="right">Peor combo</th><th class="right">Def. inf.</th><th class="right">Def. cav.</th></tr></thead>
+            <tbody>
+              <tr><td><span class="animal-row-label"><span class="animal-row-icon">🐀</span><span>Rata</span></span></td><td class="right mono">3.0 · 5</td><td class="right"><span class="wc-inline">×7</span></td><td class="right mono">280</td><td class="right mono">350</td></tr>
+              <tr><td><span class="animal-row-label"><span class="animal-row-icon">🕷</span><span>Araña</span></span></td><td class="right mono">2.5 · 4</td><td class="right"><span class="wc-inline">×5</span></td><td class="right mono">300</td><td class="right mono">400</td></tr>
+              <tr><td><span class="animal-row-label"><span class="animal-row-icon">🐗</span><span>Jabalí</span></span></td><td class="right mono">1.5 · 3</td><td class="right"><span class="wc-inline">×4</span></td><td class="right mono">260</td><td class="right mono">370</td></tr>
+            </tbody>
+            <tfoot><tr class="totals-row"><td colspan="3" class="totals-label">Def. total:</td><td class="right totals-value">840</td><td class="right totals-value">1 120</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Grupo desconocido -->
+      <div class="oasis-group">
+        <div class="oasis-group-header">
+          <span class="coords">( 12|−45)</span>
+          <span style="color:var(--text-tertiary);font-size:13px">—</span>
+          <span style="flex:1"></span>
+          <span class="status-row"><span class="status-dot gray"></span><span class="status-text gray">Desconocido</span></span>
+        </div>
+        <div class="unknown-oasis-note">
+          <span style="color:var(--info);font-size:13px;flex-shrink:0">ℹ</span>
+          <span>Sin tipo inferido — añade más reportes para ver el peor caso</span>
+        </div>
+      </div>
+
+      <div class="info-note">
+        <span class="info-icon">ℹ</span>
+        <span>Los animales anómalos no se incluyen en el peor caso.</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-sep"/>
+
+  <!-- BLOQUE D: GlobalOasisStatsPanel (marcador — arrastrable) -->
+  <div class="draggable-block" data-id="blk-global" data-label="D · GlobalOasisStatsPanel (existente — arrastrable)">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">🌍</span>
+        <div>
+          <div class="panel-title" style="color:var(--text-secondary)">GlobalOasisStatsPanel</div>
+          <div style="font-size:12px;color:var(--text-tertiary)">Apariciones globales — panel existente. Puedes moverlo o mantenerlo aquí.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- BLOQUE E: OasisList (marcador — arrastrable) -->
+  <div class="draggable-block" data-id="blk-list" data-label="E · OasisList (existente — arrastrable)">
+    <div class="panel" style="background:var(--surface-2);border-style:dashed">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:22px">📍</span>
+        <div>
+          <div class="panel-title" style="color:var(--text-secondary)">OasisList</div>
+          <div style="font-size:12px;color:var(--text-tertiary)">Lista navegable de oasis — panel existente. Puedes moverlo o mantenerlo aquí.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /v16 -->
+
+</div><!-- /main -->
+
+<script>
+// ===== VISTA =====
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.getElementById(v)?.classList.add('active');
+  localStorage.setItem('spawn-playground-view', v);
+}
+
+// ===== TEMA =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const cur = html.dataset.theme;
+  const next = cur === 'dark' ? 'light' : 'dark';
+  html.dataset.theme = next;
+  localStorage.setItem('spawn-playground-theme', next);
+}
+
+// ===== COLLAPSE =====
+function toggleCollapse(header) {
+  const chevron = header.querySelector('.chevron');
+  const content = header.nextElementSibling;
+  if (!content) return;
+  const isOpen = content.classList.contains('expanded');
+  if (isOpen) {
+    content.classList.replace('expanded', 'collapsed');
+    chevron?.classList.remove('open');
+  } else {
+    content.classList.replace('collapsed', 'expanded');
+    chevron?.classList.add('open');
+  }
+}
+
+// ===== TIMER SELECTOR =====
+function setTimer(val, btn) {
+  const parent = btn.closest('.timer-selector');
+  if (!parent) return;
+  parent.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Actualizar el label de las cabeceras de columna "Peor combo" en el mismo panel
+  const panel = btn.closest('.panel');
+  if (panel) {
+    panel.querySelectorAll('.wc-header-note').forEach(el => {
+      el.textContent = `(×N para ${val} min)`;
+    });
+  }
+  toast(`Intervalo: ${val} min — en producción relanzaría la llamada API`);
+}
+
+// ===== EDIT MODE + DRAG & DROP =====
+let editMode = false;
+let dragEl = null;
+
+function toggleEdit() {
+  editMode = !editMode;
+  const btn = document.getElementById('edit-toggle');
+  btn.classList.toggle('active', editMode);
+  btn.textContent = editMode ? 'Editando' : 'Editar';
+
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) return;
+
+  const blocks = activeView.querySelectorAll('.draggable-block');
+  blocks.forEach(block => {
+    block.setAttribute('draggable', editMode ? 'true' : 'false');
+  });
+
+  if (editMode) {
+    activeView.querySelectorAll('.draggable-block').forEach(block => {
+      block.addEventListener('dragstart', onDragStart);
+      block.addEventListener('dragend', onDragEnd);
+      block.addEventListener('dragover', onDragOver);
+      block.addEventListener('dragleave', onDragLeave);
+      block.addEventListener('drop', onDrop);
+    });
+  } else {
+    activeView.querySelectorAll('.draggable-block').forEach(block => {
+      block.removeEventListener('dragstart', onDragStart);
+      block.removeEventListener('dragend', onDragEnd);
+      block.removeEventListener('dragover', onDragOver);
+      block.removeEventListener('dragleave', onDragLeave);
+      block.removeEventListener('drop', onDrop);
+    });
+  }
+
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.toggle('edit-mode', editMode);
+  });
+}
+
+function onDragStart(e) {
+  dragEl = this;
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragEnd() {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragEl = null;
+}
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (this !== dragEl) this.classList.add('drag-over');
+}
+function onDragLeave() {
+  this.classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  this.classList.remove('drag-over');
+  if (!dragEl || dragEl === this) return;
+  const parent = this.parentNode;
+  const allBlocks = Array.from(parent.querySelectorAll(':scope > .draggable-block'));
+  const idxDrag = allBlocks.indexOf(dragEl);
+  const idxDrop = allBlocks.indexOf(this);
+  if (idxDrag < idxDrop) {
+    parent.insertBefore(dragEl, this.nextSibling);
+  } else {
+    parent.insertBefore(dragEl, this);
+  }
+  toast('Bloque reposicionado');
+}
+
+// ===== SAVE / RESET / EXPORT =====
+function saveLayout() {
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) return;
+  const layout = [];
+  activeView.querySelectorAll('.draggable-block').forEach((block, i) => {
+    layout.push({ id: block.dataset.id || block.dataset.label || i, order: i });
+  });
+  localStorage.setItem('spawn-playground-layout-' + activeView.id, JSON.stringify(layout));
+  toast('Layout guardado en localStorage');
+}
+
+function resetLayout() {
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) return;
+  localStorage.removeItem('spawn-playground-layout-' + activeView.id);
+  toast('Layout restablecido — recarga la página para ver el original');
+}
+
+function exportLayout() {
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) return;
+  const layout = [];
+  activeView.querySelectorAll('.draggable-block').forEach((block, i) => {
+    layout.push({
+      id: block.dataset.id || block.dataset.label || i,
+      label: block.dataset.label || '',
+      order: i
+    });
+  });
+  const json = JSON.stringify({
+    view: activeView.id,
+    spec_version: 'v2.1',
+    layout,
+    exportedAt: new Date().toISOString()
+  }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'spawn-mechanics-v2.1-layout.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Layout exportado como JSON');
+}
+
+// ===== TOAST =====
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast-msg');
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+// ===== INIT =====
+(function init() {
+  const theme = localStorage.getItem('spawn-playground-theme');
+  if (theme) document.documentElement.dataset.theme = theme;
+
+  const savedView = localStorage.getItem('spawn-playground-view') || 'v15';
+  const viewSel = document.getElementById('view-sel');
+  if (viewSel) viewSel.value = savedView;
+  switchView(savedView);
+})();
+</script>
+</body>
+</html>
