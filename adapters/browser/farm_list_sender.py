@@ -44,6 +44,7 @@ _JS_GET_START_BUTTON_RECT = """
     if (!header) return null;
     const btn = header.querySelector('button.startFarmList');
     if (!btn) return null;
+    btn.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }});
     const r = btn.getBoundingClientRect();
     return {{ x: r.left, y: r.top, width: r.width, height: r.height, _found: true }};
 }})()
