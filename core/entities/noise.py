@@ -6,9 +6,11 @@ destinos de navegación, rutas con pasos, y configuración de ruido por mundo.
 
 Spec human-sessions.md §7 (sección v2.2 — Ruido Humano de Navegación).
 Spec noise-path-wizard.md §7 (ampliación — anclas semilla, wizard, derive-selector).
+Spec route-templates-developer-portal.md §7 (RouteTemplate + RouteTemplatePath).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -85,6 +87,10 @@ class NoiseDestination:
 
     url_pattern y category son inmutables tras la creación (no se permiten
     cambiar via update — spec §port.update_destination).
+
+    template_id (nullable): FK a route_templates.id cuando este destino fue
+    creado clonando una plantilla maestra (M-RT01). None si fue creado a mano.
+    Spec route-templates-developer-portal.md §7.3.
     """
     id: int | None
     world_id: int
@@ -97,6 +103,7 @@ class NoiseDestination:
     consecutive_failures_count: int = 0
     created_at: datetime | None = None
     last_used_at: datetime | None = None
+    template_id: int | None = None            # M-RT01: NULL si creado a mano
 
     def __post_init__(self) -> None:
         # RN-FW07 (GUARDIAN — NO NEGOCIABLE): rango cerrado [0.1, 5.0].
@@ -183,6 +190,68 @@ class NavigationPath:
     def __post_init__(self) -> None:
         if not self.label.strip():
             raise ValueError("label no puede estar vacío")
+
+
+@dataclass
+class RouteTemplatePath:
+    """
+    Ruta dentro de una plantilla global de ruido.
+
+    Sin destination_id — la plantilla no es por-mundo.
+    Sin is_dead / consecutive_failures_count — campos operacionales por-mundo.
+
+    Spec route-templates-developer-portal.md §7.1.
+    """
+    id: int | None
+    template_id: int | None
+    origin: str                  # str — admite NavigationOrigin.value + "VILLAGE_<n>"
+    label: str
+    is_active: bool = True
+    steps: list[NavigationStep] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("label no puede estar vacío")
+
+
+@dataclass
+class RouteTemplate:
+    """
+    Plantilla global de ruta de navegación de ruido.
+
+    Sin world_id — es global a la instalación del bot.
+    Slug único globalmente (RN-RT02).
+    Los steps siguen las mismas restricciones anti-detección que NavigationStep.
+
+    Spec route-templates-developer-portal.md §7.1.
+    """
+    id: int | None
+    slug: str                              # kebab-case, UNIQUE global
+    label: str
+    category: NoiseCategory
+    url_pattern: str
+    navigation_weight: float = 1.0         # peso inicial sugerido al clonar (0.1–5.0)
+    is_safe: bool = True
+    paths: list[RouteTemplatePath] = field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not (0.1 <= self.navigation_weight <= 5.0):
+            raise ValueError(
+                "navigation_weight debe estar entre 0.1 y 5.0 "
+                "(anti-detección: pesos extremos hacen el ruido predecible)"
+            )
+        if not self.slug.strip():
+            raise ValueError("slug no puede estar vacío")
+        if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', self.slug):
+            raise ValueError(
+                "slug debe ser kebab-case: solo letras minúsculas, dígitos y guiones"
+            )
+        if not self.label.strip():
+            raise ValueError("label no puede estar vacío")
+        if not self.url_pattern.strip():
+            raise ValueError("url_pattern no puede estar vacío")
 
 
 @dataclass

@@ -219,6 +219,10 @@ class NoiseDestinationResponse(BaseModel):
 
     El campo interno frequency_weight se expone como navigation_weight en el contrato
     (spec noise-frequency-and-destination-weight.md §8.3–8.5, RN-FW06).
+
+    Delta EP-N03/EP-N04 (route-templates-developer-portal.md §8.12):
+    template_id (int | null) añadido al response. Null si creado a mano;
+    int si fue clonado desde una plantilla. Campo nullable → retrocompatible.
     """
     id: int
     world_id: int
@@ -229,6 +233,7 @@ class NoiseDestinationResponse(BaseModel):
     is_safe: bool
     is_dead: bool
     consecutive_failures_count: int
+    template_id: Optional[int] = None  # NEW — Delta §8.12 EP-N03
     created_at: Optional[str] = None
     last_used_at: Optional[str] = None
 
@@ -237,6 +242,10 @@ class CreateDestinationRequest(BaseModel):
     """
     Body EP-N04.
     navigation_weight: alias de frequency_weight. Rango [0.1, 5.0] — GUARDIAN RN-FW07.
+
+    Delta (route-templates-developer-portal.md §8.12):
+    template_id: campo opcional para crear un destino con referencia explícita a una plantilla.
+    Retrocompatible: default None, los clientes que no lo envían no cambian de comportamiento.
     """
     url_pattern: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
@@ -248,6 +257,7 @@ class CreateDestinationRequest(BaseModel):
         description="Peso de navegación. Rango [0.1, 5.0] — anti-detección (RN-FW07).",
     )
     is_safe: bool = True
+    template_id: Optional[int] = None  # NEW — Delta §8.12 EP-N04
 
 
 class UpdateDestinationRequest(BaseModel):
@@ -529,6 +539,7 @@ def _dest_to_response(dest: NoiseDestination) -> NoiseDestinationResponse:
         is_safe=dest.is_safe,
         is_dead=dest.is_dead,
         consecutive_failures_count=dest.consecutive_failures_count,
+        template_id=getattr(dest, "template_id", None),  # Delta §8.12 EP-N03
         created_at=dest.created_at.isoformat() if dest.created_at else None,
         last_used_at=dest.last_used_at.isoformat() if dest.last_used_at else None,
     )
@@ -815,6 +826,7 @@ async def create_destination(
             category=body.category,
             frequency_weight=body.navigation_weight,   # alias: navigation_weight → frequency_weight
             is_safe=body.is_safe,
+            template_id=body.template_id,  # Delta §8.12 EP-N04 — None si no se envía
         )
     except ValueError as exc:
         raise HTTPException(

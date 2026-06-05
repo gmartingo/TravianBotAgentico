@@ -306,6 +306,44 @@ async def _migrate_noise_config_add_interval_fields(
     logger.debug("NoiseSQLiteAdapter: migración M-FW01 asegurada (interval fields)")
 
 
+async def _migrate_noise_destinations_add_template_id(
+    conn: aiosqlite.Connection,
+) -> None:
+    """
+    Migración M-RT01: añadir columna template_id a noise_destinations.
+
+    La columna es FK nullable a route_templates.id con ON DELETE SET NULL:
+    si la plantilla origen se borra, los destinos clonados quedan intactos
+    con template_id=NULL (RN-RT06).
+
+    Idempotente: ALTER TABLE falla silenciosamente si la columna ya existe.
+
+    Spec route-templates-developer-portal.md §7.3, §14 Paso 4.
+    """
+    try:
+        await conn.execute(
+            "ALTER TABLE noise_destinations"
+            " ADD COLUMN template_id INTEGER DEFAULT NULL"
+            " REFERENCES route_templates(id) ON DELETE SET NULL"
+        )
+        await conn.commit()
+        logger.info(
+            "NoiseSQLiteAdapter: migración M-RT01 completada (template_id añadida a noise_destinations)"
+        )
+    except aiosqlite.OperationalError:
+        pass  # columna ya existe — migración idempotente
+
+    # Crear índice independientemente (CREATE INDEX IF NOT EXISTS es idempotente)
+    try:
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_noise_destinations_template"
+            " ON noise_destinations(template_id)"
+        )
+        await conn.commit()
+    except Exception:
+        pass  # tolerar si la columna aún no existe en instancias muy antiguas
+
+
 async def _migrate_noise_destinations_tighten_weight_check(
     conn: aiosqlite.Connection,
 ) -> None:
@@ -646,18 +684,20 @@ def _now_iso() -> str:
 
 
 def _row_to_destination(row: aiosqlite.Row) -> NoiseDestination:
+    row_dict = dict(row)
     return NoiseDestination(
-        id=row["id"],
-        world_id=row["world_id"],
-        url_pattern=row["url_pattern"],
-        label=row["label"],
-        category=NoiseCategory(row["category"]),
-        frequency_weight=row["frequency_weight"],
-        is_safe=bool(row["is_safe"]),
-        is_dead=bool(row["is_dead"]),
-        consecutive_failures_count=row["consecutive_failures_count"],
-        created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-        last_used_at=datetime.fromisoformat(row["last_used_at"]) if row["last_used_at"] else None,
+        id=row_dict["id"],
+        world_id=row_dict["world_id"],
+        url_pattern=row_dict["url_pattern"],
+        label=row_dict["label"],
+        category=NoiseCategory(row_dict["category"]),
+        frequency_weight=row_dict["frequency_weight"],
+        is_safe=bool(row_dict["is_safe"]),
+        is_dead=bool(row_dict["is_dead"]),
+        consecutive_failures_count=row_dict["consecutive_failures_count"],
+        created_at=datetime.fromisoformat(row_dict["created_at"]) if row_dict["created_at"] else None,
+        last_used_at=datetime.fromisoformat(row_dict["last_used_at"]) if row_dict["last_used_at"] else None,
+        template_id=row_dict.get("template_id"),  # M-RT01: None en BDs antiguas antes de la migración
     )
 
 
@@ -947,9 +987,11 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         include_dead: bool = False,
         include_unsafe: bool = False,
     ) -> list[NoiseDestination]:
-        query = """
+        has_tid = await self._has_template_id_column()
+        tid_col = ", template_id" if has_tid else ""
+        query = f"""
             SELECT id, world_id, url_pattern, label, category, frequency_weight,
-                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at
+                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at{tid_col}
               FROM noise_destinations
              WHERE world_id = ?
         """
@@ -969,10 +1011,12 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         return [_row_to_destination(r) for r in rows]
 
     async def get_destination(self, dest_id: int) -> NoiseDestination | None:
+        has_tid = await self._has_template_id_column()
+        tid_col = ", template_id" if has_tid else ""
         rows = await self._conn.execute_fetchall(
-            """
+            f"""
             SELECT id, world_id, url_pattern, label, category, frequency_weight,
-                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at
+                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at{tid_col}
               FROM noise_destinations
              WHERE id = ?
             """,
@@ -982,6 +1026,19 @@ class NoiseSQLiteAdapter(NoiseDbPort):
             return None
         return _row_to_destination(rows[0])
 
+    async def _has_template_id_column(self) -> bool:
+        """
+        Comprueba si noise_destinations tiene la columna template_id (M-RT01).
+        Necesario para retrocompatibilidad: los tests que no instancian
+        RouteTemplateSQLiteAdapter no ejecutan M-RT01 y la columna puede no existir.
+        Cachea el resultado en _template_id_col para evitar PRAGMA por cada SELECT.
+        """
+        if not hasattr(self, "_template_id_col"):
+            cursor = await self._conn.execute("PRAGMA table_info(noise_destinations)")
+            cols = {row[1] for row in await cursor.fetchall()}
+            self._template_id_col = "template_id" in cols  # type: ignore[attr-defined]
+        return self._template_id_col  # type: ignore[attr-defined]
+
     async def create_destination(
         self,
         world_id: int,
@@ -990,6 +1047,7 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         category: NoiseCategory,
         frequency_weight: float,
         is_safe: bool = True,
+        template_id: int | None = None,
     ) -> NoiseDestination:
         # Validar frequency_weight — la entidad también lo valida, pero defensa en profundidad
         if not (0.1 <= frequency_weight <= 5.0):
@@ -1005,17 +1063,35 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         _validate_url_pattern(url_pattern, world_server)
 
         now = _now_iso()
+
+        # Guard M-RT01: solo incluir template_id en el INSERT si la columna existe.
+        # Necesario para retrocompatibilidad con tests que no instancian RouteTemplateSQLiteAdapter.
+        has_template_col = await self._has_template_id_column()
+
         try:
-            cursor = await self._conn.execute(
-                """
-                INSERT INTO noise_destinations
-                  (world_id, url_pattern, label, category, frequency_weight,
-                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, NULL)
-                """,
-                (world_id, url_pattern, label, category.value, frequency_weight,
-                 int(is_safe), now),
-            )
+            if has_template_col:
+                cursor = await self._conn.execute(
+                    """
+                    INSERT INTO noise_destinations
+                      (world_id, url_pattern, label, category, frequency_weight,
+                       is_safe, is_dead, consecutive_failures_count, created_at, last_used_at,
+                       template_id)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, NULL, ?)
+                    """,
+                    (world_id, url_pattern, label, category.value, frequency_weight,
+                     int(is_safe), now, template_id),
+                )
+            else:
+                cursor = await self._conn.execute(
+                    """
+                    INSERT INTO noise_destinations
+                      (world_id, url_pattern, label, category, frequency_weight,
+                       is_safe, is_dead, consecutive_failures_count, created_at, last_used_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, NULL)
+                    """,
+                    (world_id, url_pattern, label, category.value, frequency_weight,
+                     int(is_safe), now),
+                )
             await self._conn.commit()
         except Exception as exc:
             if "UNIQUE" in str(exc).upper():
@@ -1037,6 +1113,7 @@ class NoiseSQLiteAdapter(NoiseDbPort):
             consecutive_failures_count=0,
             created_at=datetime.fromisoformat(now),
             last_used_at=None,
+            template_id=template_id if has_template_col else None,
         )
 
     async def update_destination(
@@ -1122,6 +1199,59 @@ class NoiseSQLiteAdapter(NoiseDbPort):
             (now.isoformat(), dest_id),
         )
         await self._conn.commit()
+
+    async def find_destination_by_url(
+        self, world_id: int, url_pattern: str
+    ) -> "NoiseDestination | None":
+        """
+        Devuelve el primer NoiseDestination de ese mundo con esa url_pattern,
+        o None si no existe.
+
+        Usado para detectar colisiones UNIQUE(world_id, url_pattern) antes de
+        clonar una plantilla (RN-RT05, §9.1).
+
+        Spec route-templates-developer-portal.md §14 Paso 4.
+        """
+        rows = await self._conn.execute_fetchall(
+            """
+            SELECT id, world_id, url_pattern, label, category, frequency_weight,
+                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at,
+                   template_id
+              FROM noise_destinations
+             WHERE world_id = ? AND url_pattern = ?
+             LIMIT 1
+            """,
+            (world_id, url_pattern),
+        )
+        if not rows:
+            return None
+        return _row_to_destination(rows[0])
+
+    async def find_destination_by_template(
+        self, world_id: int, template_id: int
+    ) -> "NoiseDestination | None":
+        """
+        Devuelve el NoiseDestination de ese mundo cuyo template_id coincide,
+        o None si no existe.
+
+        Usado por EP-RT09 (sync) para localizar la instancia a re-sincronizar (§9.2).
+
+        Spec route-templates-developer-portal.md §14 Paso 4.
+        """
+        rows = await self._conn.execute_fetchall(
+            """
+            SELECT id, world_id, url_pattern, label, category, frequency_weight,
+                   is_safe, is_dead, consecutive_failures_count, created_at, last_used_at,
+                   template_id
+              FROM noise_destinations
+             WHERE world_id = ? AND template_id = ?
+             LIMIT 1
+            """,
+            (world_id, template_id),
+        )
+        if not rows:
+            return None
+        return _row_to_destination(rows[0])
 
     async def pick_random_safe_destination(
         self, world_id: int

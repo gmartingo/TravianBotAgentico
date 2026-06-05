@@ -19,10 +19,6 @@ import { BalanceGrid } from './BalanceSection.jsx'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-// attacked_at se muestra verbatim (hora del servidor de Travian, sin conversión de zona)
-function formatDate(isoStr) {
-  return formatDateVerbatim(isoStr)
-}
 
 /**
  * Formatea segundos a "6 h 14 min", "2 d 3 h", "45 min", etc.
@@ -154,7 +150,7 @@ function RepopTable({ gaps, appearances, lang, t }) {
               return (
                 <tr key={idx} role="row" style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '7px 10px', color: 'var(--text)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
-                    {formatDate(row.attacked_at)}
+                    {formatDateVerbatim(row.attacked_at)}
                   </td>
                   <td style={{ padding: '7px 10px', textAlign: 'end', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>
                     {row.gap_seconds != null

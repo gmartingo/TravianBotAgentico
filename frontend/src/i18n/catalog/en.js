@@ -10,6 +10,7 @@ const en = {
   'nav.construction': 'Construction',
   'nav.comingSoon':   'Coming soon',
   'nav.attackReports': 'Oasis reports',
+  'nav.routeTemplates': 'Route catalog',
 
   'topbar.toggleTheme':    'Toggle theme',
   'topbar.selectLanguage': 'Select language',

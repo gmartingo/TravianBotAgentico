@@ -476,6 +476,72 @@ export const api = {
   testNoisePath: (worldId, pathId) =>
     request('POST', `/worlds/${worldId}/noise/paths/${pathId}/test`),
 
+  // ── Plantillas de rutas (Portal del desarrollador /rutas) ────────────────
+  // EP-RT01..EP-RT10 — /route-templates/...
+  // Nota: estos endpoints no requieren Accept-Language (labels = texto libre del dev).
+  // buildHeaders() ya lo incluye igualmente (inofensivo).
+
+  /**
+   * EP-RT01 GET /route-templates — lista plantillas.
+   * params: { category?, include_paths?, limit?, offset? }
+   */
+  listRouteTemplates: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.category)      qs.set('category', params.category)
+    if (params.include_paths) qs.set('include_paths', 'true')
+    if (params.limit != null) qs.set('limit', params.limit)
+    if (params.offset != null) qs.set('offset', params.offset)
+    const q = qs.toString()
+    return request('GET', `/route-templates${q ? '?' + q : ''}`)
+  },
+
+  /** EP-RT02 POST /route-templates — crear plantilla → 201 */
+  createRouteTemplate: (data) =>
+    request('POST', '/route-templates', data),
+
+  /** EP-RT03 GET /route-templates/:id — obtener plantilla con paths+steps */
+  getRouteTemplate: (id) =>
+    request('GET', `/route-templates/${id}`),
+
+  /** EP-RT04 PUT /route-templates/:id — PATCH parcial de plantilla */
+  updateRouteTemplate: (id, data) =>
+    request('PUT', `/route-templates/${id}`, data),
+
+  /** EP-RT05 DELETE /route-templates/:id — borrar plantilla → 204 */
+  deleteRouteTemplate: (id) =>
+    request('DELETE', `/route-templates/${id}`),
+
+  /** EP-RT06 GET /route-templates/:id/paths — listar paths de la plantilla */
+  getRouteTemplatePaths: (id) =>
+    request('GET', `/route-templates/${id}/paths`),
+
+  /**
+   * EP-RT07 POST /route-templates/:id/clone-to-world/:worldId — clonar plantilla a un mundo.
+   * force: boolean (default false) — sobreescribe si hay conflicto.
+   */
+  cloneRouteTemplate: (id, worldId, force = false) =>
+    request('POST', `/route-templates/${id}/clone-to-world/${worldId}${force ? '?force=true' : ''}`),
+
+  /**
+   * EP-RT08 POST /worlds/:worldId/noise/apply-templates — bulk clone.
+   * data: { template_ids: [...], force?: boolean }
+   */
+  applyRouteTemplatesBulk: (worldId, data) =>
+    request('POST', `/worlds/${worldId}/noise/apply-templates`, data),
+
+  /**
+   * EP-RT09 POST /route-templates/:id/sync-to-world/:worldId — re-sincronizar instancia.
+   */
+  syncRouteTemplate: (id, worldId) =>
+    request('POST', `/route-templates/${id}/sync-to-world/${worldId}`),
+
+  /**
+   * EP-RT10 POST /route-templates/:id/test — probar plantilla en vivo.
+   * data: { world_id, path_index? }
+   */
+  testRouteTemplate: (id, data) =>
+    request('POST', `/route-templates/${id}/test`, data),
+
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 

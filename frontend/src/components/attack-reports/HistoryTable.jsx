@@ -27,15 +27,6 @@ import { formatCoord } from '../../utils/coordUtils.js'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatCoords(x, y) {
-  return formatCoord(x, y)
-}
-
-// attacked_at es verbatim (hora del servidor Travian) — no pasar por new Date()
-function formatDate(isoStr) {
-  return formatDateVerbatim(isoStr)
-}
-
 function formatBounty(n, lang) {
   if (n == null) return '—'
   return new Intl.NumberFormat(lang).format(Math.round(n))
@@ -67,8 +58,8 @@ function ReportRow({ item, onRowClick, onDelete, lang, t }) {
   const [disappearing, setDisappearing] = useState(false)
   const deleteRef = useRef(null)
 
-  const coordStr = formatCoords(item.coord_x_dest, item.coord_y_dest)
-  const dateStr  = formatDate(item.attacked_at)
+  const coordStr = formatCoord(item.coord_x_dest, item.coord_y_dest)
+  const dateStr  = formatDateVerbatim(item.attacked_at)
   const bountyTotal = item.cumulative_bounty != null
     ? null  // la suma acumulada es del rango, no de cada fila
     : null

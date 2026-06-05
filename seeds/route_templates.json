@@ -1,0 +1,528 @@
+[
+  {
+    "slug": "map-explore",
+    "label": "Explorar el mapa",
+    "category": "MAP",
+    "url_pattern": "/karte.php",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#map",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "map-to-oasis",
+    "label": "Ver oasis en el mapa",
+    "category": "MAP",
+    "url_pattern": "/karte.php#type=oasis",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#map",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "statistics-players",
+    "label": "Estadísticas de jugadores",
+    "category": "OTHER",
+    "url_pattern": "/statistics/players",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#statistics",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "statistics-alliances",
+    "label": "Estadísticas de alianzas",
+    "category": "OTHER",
+    "url_pattern": "/statistics/alliances",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#statistics",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "messages-inbox",
+    "label": "Bandeja de mensajes",
+    "category": "MESSAGES",
+    "url_pattern": "/messages",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#messageContent",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "reports-inbox",
+    "label": "Bandeja de reportes",
+    "category": "REPORTS",
+    "url_pattern": "/report",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "ANY",
+        "label": "Desde cualquier aldea",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": "#reportList",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "rally-point-view",
+    "label": "Rally Point — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=13",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=13']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=13"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType13",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "academy-view",
+    "label": "Academy — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=14",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=14']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=14"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType14",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "barracks-view",
+    "label": "Barracks — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=15",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=15']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=15"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType15",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "stable-view",
+    "label": "Stable — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=16",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=16']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=16"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType16",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "trade-office-view",
+    "label": "Trade Office — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=20",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=20']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=20"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType20",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "great-market-view",
+    "label": "Great Market — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=21",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=21']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=21"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType21",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "embassy-view",
+    "label": "Embassy — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=22",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=22']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=22"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType22",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "hero-mansion-view",
+    "label": "Hero's Mansion — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=23",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=23']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=23"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType23",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "warehouse-view",
+    "label": "Warehouse — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=10",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=10']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=10"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType10",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "granary-view",
+    "label": "Granary — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=11",
+    "navigation_weight": 1.0,
+    "is_safe": true,
+    "paths": [
+      {
+        "origin": "DORF2",
+        "label": "Desde aldea - edificios",
+        "is_active": true,
+        "steps": [
+          {
+            "step_order": 0,
+            "action": "CLICK",
+            "selector": "a[href*='gid=11']",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900,
+            "expected_url_after_click": "/build.php?gid=11"
+          },
+          {
+            "step_order": 1,
+            "action": "WAIT_FOR_SELECTOR",
+            "selector": ".buildingType11",
+            "value": "",
+            "delay_min_ms": 500,
+            "delay_max_ms": 900
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "slug": "player-own-profile",
+    "label": "Perfil propio del jugador",
+    "category": "PLAYER_PROFILE",
+    "url_pattern": "/profile",
+    "navigation_weight": 0.5,
+    "is_safe": true,
+    "paths": []
+  },
+  {
+    "slug": "alliance-page",
+    "label": "Página de alianza",
+    "category": "OTHER",
+    "url_pattern": "/allianz",
+    "navigation_weight": 0.5,
+    "is_safe": true,
+    "paths": []
+  },
+  {
+    "slug": "oasis-info-map",
+    "label": "Info de oasis desde el mapa",
+    "category": "OASIS_INFO",
+    "url_pattern": "/karte.php",
+    "navigation_weight": 0.8,
+    "is_safe": true,
+    "paths": []
+  },
+  {
+    "slug": "village-dorf1",
+    "label": "Vista recursos de la aldea",
+    "category": "OTHER",
+    "url_pattern": "/dorf1.php",
+    "navigation_weight": 1.5,
+    "is_safe": true,
+    "paths": []
+  }
+]

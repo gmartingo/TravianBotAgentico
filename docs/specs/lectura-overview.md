@@ -1,7 +1,7 @@
 ---
 id: lectura-overview
 titulo: "Lectura de overview Travian — bloque overview"
-estado: ready-for-impl
+estado: implemented
 fecha: 2026-05-26
 autor: analista
 apis_validadas_por_desarrollador_apis: true

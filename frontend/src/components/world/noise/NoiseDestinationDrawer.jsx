@@ -79,6 +79,15 @@ const SectionSkeleton = memo(function SectionSkeleton({ rows = 3 }) {
 export function NoiseDestinationDrawer({
   open, dest, worldId, onClose, triggerRef, onDestUpdated,
   origins, loadingOrigins, originsError, onOriginsRefreshed, onRetryOrigins,
+  // Modo plantilla (Portal /rutas):
+  //   mode="template" — dest es una RouteTemplate; los paths se cargan via EP-RT06.
+  //   templateId     — id de la plantilla (usado para cargar paths en modo template).
+  //   onTemplateSaved — callback(updatedTemplate) cuando se guarda en modo template.
+  //   onTemplateDeleted — callback() cuando se borra en modo template.
+  mode = 'world',
+  templateId,
+  onTemplateSaved,
+  onTemplateDeleted,
 }) {
   const { t } = useI18n()
   const panelRef = useRef(null)
@@ -113,7 +122,7 @@ export function NoiseDestinationDrawer({
 
   // Campos editables del destino
   const [label, setLabel] = useState(dest?.label ?? '')
-  const [weight, setWeight] = useState(dest?.frequency_weight ?? 1.0)
+  const [weight, setWeight] = useState(dest?.navigation_weight ?? 1.0)
   const [isSafe, setIsSafe] = useState(dest?.is_safe ?? true)
   const [saving, setSaving] = useState(false)
   const [destApiError, setDestApiError] = useState(null)
@@ -131,20 +140,27 @@ export function NoiseDestinationDrawer({
   useEffect(() => {
     if (dest) {
       setLabel(dest.label ?? '')
-      setWeight(dest.frequency_weight ?? 1.0)
+      setWeight(dest.navigation_weight ?? 1.0)
       setIsSafe(dest.is_safe ?? true)
       setDestApiError(null)
     }
   }, [dest?.id])
 
   // Cargar paths: solo cuando abre y el destino cambia (no en cada re-apertura
-  // del mismo destino si ya están cargados)
+  // del mismo destino si ya están cargados).
+  // En mode="template" usa EP-RT06; en mode="world" usa EP-N07.
   const loadPaths = useCallback(async () => {
     if (!dest) return
     setLoadingPaths(true)
     setPathsError(null)
     try {
-      const data = await api.getNoisePaths(worldId, dest.id)
+      let data
+      if (mode === 'template') {
+        const tid = templateId ?? dest.id
+        data = await api.getRouteTemplatePaths(tid)
+      } else {
+        data = await api.getNoisePaths(worldId, dest.id)
+      }
       setPaths(data?.paths ?? data ?? [])
       loadedDestId.current = dest.id
     } catch (e) {
@@ -152,7 +168,7 @@ export function NoiseDestinationDrawer({
     } finally {
       setLoadingPaths(false)
     }
-  }, [worldId, dest?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [worldId, dest?.id, mode, templateId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open && dest) {
@@ -169,13 +185,25 @@ export function NoiseDestinationDrawer({
     setSaving(true)
     setDestApiError(null)
     try {
-      const updated = await api.updateNoiseDestination(worldId, dest.id, {
-        label: label.trim() || undefined,
-        frequency_weight: weight,
-        is_safe: isSafe,
-      })
-      showToast(t('noise.drawer.saved'))
-      onDestUpdated(updated)
+      let updated
+      if (mode === 'template') {
+        const tid = templateId ?? dest.id
+        updated = await api.updateRouteTemplate(tid, {
+          label: label.trim() || undefined,
+          navigation_weight: weight,
+          is_safe: isSafe,
+        })
+        showToast(t('noise.drawer.saved'))
+        onTemplateSaved?.(updated)
+      } else {
+        updated = await api.updateNoiseDestination(worldId, dest.id, {
+          label: label.trim() || undefined,
+          navigation_weight: weight,
+          is_safe: isSafe,
+        })
+        showToast(t('noise.drawer.saved'))
+        onDestUpdated?.(updated)
+      }
     } catch (e) {
       setDestApiError(e instanceof ApiError ? e.detail : t('noise.drawer.saving'))
     } finally {
@@ -199,7 +227,7 @@ export function NoiseDestinationDrawer({
 
   const isDirty = dest && (
     label !== (dest.label ?? '') ||
-    weight !== (dest.frequency_weight ?? 1.0) ||
+    weight !== (dest.navigation_weight ?? 1.0) ||
     isSafe !== (dest.is_safe ?? true)
   )
 
@@ -340,24 +368,35 @@ export function NoiseDestinationDrawer({
                 />
               </div>
 
-              {/* Peso */}
+              {/* Peso de navegación (navigation_weight) */}
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: 500 }}>
                   {t('noise.drawer.weight')}
+                  <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginInlineStart: '6px' }}>
+                    0.1 – 5.0
+                  </span>
                 </label>
                 <input
                   type="number"
                   min="0.1"
+                  max="5"
                   step="0.1"
                   value={weight}
-                  onChange={e => setWeight(parseFloat(e.target.value) || 1.0)}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value)
+                    // Clampar al rango válido [0.1, 5.0] (RN-FW06, CA-FW18)
+                    if (!isNaN(v)) setWeight(Math.min(5.0, Math.max(0.1, v)))
+                    else setWeight(1.0)
+                  }}
                   disabled={saving}
+                  aria-label={t('noise.drawer.weight')}
                   style={{
                     width: '80px', padding: '6px 8px',
                     border: '1px solid var(--border-strong)',
                     borderRadius: 'var(--radius-sm)',
                     background: 'var(--surface)', color: 'var(--text)',
                     fontFamily: 'var(--font-mono)', fontSize: '13px',
+                    fontVariantNumeric: 'tabular-nums',
                   }}
                 />
               </div>
