@@ -8,8 +8,10 @@ info:
 
     FastAPI genera el OpenAPI completo automáticamente en /docs y /openapi.json.
     Este archivo documenta: EP-06, EP-09, EP-10, EP-SPAWN, EP-TD (attack-reports);
-    EP-HS01..EP-HS07 (session); EP-N01..EP-N14 (noise).
-    Última actualización: 2026-06-04.
+    EP-HS01..EP-HS07 (session); EP-N01..EP-N14 (noise);
+    EP-RT01..EP-RT10 (route-templates — Portal de Desarrollador de Rutas).
+    Delta EP-N03/EP-N04: campo template_id (int|null) en NoiseDestination.
+    Última actualización: 2026-06-05.
 
 servers:
   - url: http://localhost:8000
@@ -3236,3 +3238,384 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
+
+  # -------------------------------------------------------------------------
+  # Portal de Desarrollador de Rutas — EP-RT01..EP-RT10
+  # Spec: route-templates-developer-portal.md §8
+  # Sin Accept-Language: labels y slugs son texto libre del desarrollador.
+  # -------------------------------------------------------------------------
+
+  /route-templates:
+    get:
+      tags: [route-templates]
+      summary: "EP-RT01 — Listar plantillas de rutas"
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [MAP, OASIS_INFO, PLAYER_PROFILE, MESSAGES, REPORTS, BUILDING_VIEW, OTHER]
+        - name: include_paths
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Lista de plantillas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RouteTemplateListItem' }
+        "422":
+          description: category inválida.
+    post:
+      tags: [route-templates]
+      summary: "EP-RT02 — Crear plantilla de ruta"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTemplateRequest' }
+      responses:
+        "201":
+          description: Plantilla creada.
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteTemplateResponse' }
+        "409":
+          description: Slug duplicado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "422":
+          description: Slug inválido / navigation_weight fuera de rango / delay_min_ms < 200 ms.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}:
+    get:
+      tags: [route-templates]
+      summary: "EP-RT03 — Obtener plantilla con paths+steps"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Plantilla completa con paths y steps.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteTemplateResponse' }
+        "404":
+          description: Plantilla no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+    put:
+      tags: [route-templates]
+      summary: "EP-RT04 — Actualizar plantilla (PATCH parcial)"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTemplateRequest' }
+      responses:
+        "200":
+          description: Plantilla actualizada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteTemplateResponse' }
+        "404":
+          description: Plantilla no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "422":
+          description: Body vacío / campos inmutables / valores fuera de rango.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+    delete:
+      tags: [route-templates]
+      summary: "EP-RT05 — Borrar plantilla (instancias quedan huérfanas con template_id=null)"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Plantilla borrada.
+        "404":
+          description: Plantilla no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}/paths:
+    get:
+      tags: [route-templates]
+      summary: "EP-RT06 — Listar paths de una plantilla"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Lista de paths con steps.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TemplatePathResponse' }
+        "404":
+          description: Plantilla no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}/clone-to-world/{world_id}:
+    post:
+      tags: [route-templates]
+      summary: "EP-RT07 — Clonar plantilla a un mundo"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: force
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        "201":
+          description: Clon nuevo creado.
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [cloned] }
+                  destination_id: { type: integer }
+                  world_id: { type: integer }
+                  template_id: { type: integer }
+                  url_pattern: { type: string }
+        "200":
+          description: Misma plantilla ya estaba clonada (idempotente).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [already_exists] }
+                  destination_id: { type: integer }
+                  world_id: { type: integer }
+                  template_id: { type: integer }
+        "409":
+          description: "URL conflictiva — conflicting_destination_id dentro de detail (dict)."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      conflicting_destination_id: { type: integer }
+        "422":
+          description: URL absoluta incompatible con el servidor del mundo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "404":
+          description: Plantilla o mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /worlds/{world_id}/noise/apply-templates:
+    post:
+      tags: [route-templates]
+      summary: "EP-RT08 — Bulk clone: aplicar múltiples plantillas a un mundo"
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [template_ids]
+              properties:
+                template_ids:
+                  type: array
+                  items: { type: integer }
+                  minItems: 1
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Resultado por plantilla (no atómico).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        template_id: { type: integer }
+                        result: { type: string, enum: [cloned, already_exists, conflict] }
+                        destination_id: { type: integer, nullable: true }
+                        conflicting_destination_id: { type: integer, nullable: true }
+                        error: { type: string, nullable: true }
+        "422":
+          description: template_ids vacío.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}/sync-to-world/{world_id}:
+    post:
+      tags: [route-templates]
+      summary: "EP-RT09 — Re-sincronizar instancia con la plantilla maestra"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Instancia re-sincronizada (paths/steps reemplazados).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [synced] }
+                  destination_id: { type: integer }
+                  paths_replaced: { type: integer }
+        "201":
+          description: No había instancia; se creó (equivale a clone).
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [created] }
+                  destination_id: { type: integer }
+        "409":
+          description: "URL conflictiva con destino de template_id distinto — conflicting_destination_id en detail."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: object
+                    properties:
+                      message: { type: string }
+                      conflicting_destination_id: { type: integer }
+        "404":
+          description: Plantilla o mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}/test:
+    post:
+      tags: [route-templates]
+      summary: "EP-RT10 — Probar plantilla en vivo (wrapper de EP-N14)"
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [world_id]
+              properties:
+                world_id: { type: integer, minimum: 1 }
+                path_index: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Test ejecutado (HTTP 200 aunque overall=error).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PathTestResponse' }
+        "404":
+          description: Plantilla o mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "409":
+          description: Agente desconectado o browser ocupado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "422":
+          description: path_index fuera de rango.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+# -------------------------------------------------------------------------
+# Schemas adicionales para EP-RT (se añaden a components/schemas existentes)
+# Los schemas base (DetailError, PathTestResponse, etc.) ya están arriba.
+# -------------------------------------------------------------------------

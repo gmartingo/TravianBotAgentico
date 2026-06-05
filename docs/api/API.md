@@ -1894,4 +1894,100 @@ curl -X POST http://localhost:8000/worlds/1/noise/paths/42/test
 
 ---
 
-🔖 Última revisión: 2026-06-04 (añadidos EP-HS01..EP-HS07 Human Sessions completos; añadidos EP-N01..EP-N10 Noise config/destinations/paths; tabla índice completada con todos los 26 endpoints documentados)
+---
+
+## Portal de Desarrollador de Rutas — EP-RT01..EP-RT10
+
+Catálogo maestro global de plantillas de rutas de navegación de ruido. Los labels y slugs son texto libre del desarrollador; no requieren `Accept-Language`.
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/route-templates` | Listar plantillas (filtro category, include_paths) |
+| POST | `/route-templates` | Crear plantilla nueva |
+| GET | `/route-templates/{id}` | Obtener plantilla con paths+steps |
+| PUT | `/route-templates/{id}` | Actualizar plantilla (PATCH parcial) |
+| DELETE | `/route-templates/{id}` | Borrar plantilla (instancias quedan huérfanas) |
+| GET | `/route-templates/{id}/paths` | Listar paths de una plantilla |
+| POST | `/route-templates/{id}/clone-to-world/{world_id}` | Clonar al mundo |
+| POST | `/worlds/{world_id}/noise/apply-templates` | Bulk clone |
+| POST | `/route-templates/{id}/sync-to-world/{world_id}` | Re-sync instancia |
+| POST | `/route-templates/{id}/test` | Probar en vivo |
+
+### EP-RT02 — Crear plantilla
+
+Crea una plantilla global reutilizable. `slug` es kebab-case único (ej. `"rally-point-view"`). `navigation_weight` fija el peso sugerido al clonar ([0.1–5.0], anti-detección). Los steps siguen las mismas restricciones que los steps de producción (`delay_min_ms >= 200 ms`).
+
+```bash
+curl -X POST http://localhost:8000/route-templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "rally-point-view",
+    "label": "Rally Point — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=13",
+    "navigation_weight": 1.0,
+    "paths": [{
+      "origin": "DORF2",
+      "label": "Desde edificios",
+      "steps": [{"step_order":0,"action":"CLICK","selector":"a[href*='\''gid=13'\'']","delay_min_ms":500,"delay_max_ms":900}]
+    }]
+  }'
+# → 201, Location: /route-templates/42
+```
+
+**Errores:** `409` slug duplicado · `422` slug no kebab-case, navigation_weight fuera de [0.1,5.0], delay_min_ms < 200 ms.
+
+### EP-RT07 — Clonar plantilla a un mundo
+
+Materializa una `noise_destination` + paths+steps en el mundo destino. Tres casos según RN-RT05:
+
+- **Sin conflicto** → `201` + `Location`, `result:"cloned"`.
+- **Misma plantilla ya clonada** → `200`, `result:"already_exists"` (idempotente).
+- **URL ocupada por otro destino** → `409`, `detail.conflicting_destination_id` con el ID del conflictivo.
+
+`?force=true` sobreescribe el destino conflictivo (borra el anterior y crea nuevo → `201`).
+
+```bash
+# Clone normal
+curl -X POST http://localhost:8000/route-templates/1/clone-to-world/3
+
+# Con force
+curl -X POST "http://localhost:8000/route-templates/1/clone-to-world/3?force=true"
+```
+
+### EP-RT08 — Bulk clone
+
+Clona en masa una lista de plantillas al mundo. No atómico: si una falla, las demás siguen. La respuesta lista el resultado por plantilla (`cloned` | `already_exists` | `conflict`).
+
+```bash
+curl -X POST http://localhost:8000/worlds/3/noise/apply-templates \
+  -H "Content-Type: application/json" \
+  -d '{"template_ids":[1,2,3,4],"force":false}'
+```
+
+### EP-RT09 — Re-sincronizar instancia
+
+Reemplaza los paths/steps de la instancia clonada con los de la plantilla maestra. **Preserva** `navigation_weight`, `is_dead`, `consecutive_failures_count` y `last_used_at` (estado operacional del usuario).
+
+Si no existe instancia → actúa como clone y devuelve `201`.
+
+### EP-RT10 — Probar plantilla en vivo
+
+Wrapper de EP-N14: clona temporalmente la plantilla (si no hay instancia en el mundo), ejecuta el test con `execute_path_test`, borra el clon temporal en `try/finally`. HTTP 200 tanto si la ruta pasó (`overall:"ok"`) como si falló (`overall:"error"`).
+
+```bash
+curl -X POST http://localhost:8000/route-templates/1/test \
+  -H "Content-Type: application/json" \
+  -d '{"world_id":3,"path_index":0}'
+```
+
+### Modificaciones EP-N03 / EP-N04
+
+- **EP-N03** (`GET /worlds/{id}/noise/destinations`): campo `template_id` (int|null) añadido al response. `null` si creado a mano; `int` si clonado.
+- **EP-N04** (`POST /worlds/{id}/noise/destinations`): campo `template_id` (int|null, opcional) añadido al request body.
+
+Ambos cambios son retrocompatibles (nullable/opcional).
+
+---
+
+🔖 Última revisión: 2026-06-05 (añadidos EP-RT01..EP-RT10 Portal de Desarrollador de Rutas; deltas EP-N03/EP-N04 con template_id)

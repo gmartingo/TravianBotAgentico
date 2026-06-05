@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Frontera hexagonal verificable — Ports & Adapters
+#
+# Esto convierte las reglas de arquitectura de CLAUDE.md (que hasta ahora se
+# "confiaban") en CONTRATOS que la máquina hace cumplir. Ejecutar con:
+#
+#     lint-imports
+#
+# Si un cambio NUEVO cruza la frontera (core importando un adapter, o el core
+# importando una librería de infraestructura), `lint-imports` falla.
+#
+# ── Patrón "ratchet" (trinquete) ────────────────────────────────────────────
+# Las violaciones que YA existían cuando se montó esta barrera están listadas
+# explícitamente en `ignore_imports`, cada una con su nº de recomendación de la
+# auditoría 2026-06-05. Son DEUDA CONOCIDA, no permiso para crecer:
+#   - NO se puede añadir ninguna entrada nueva a estas listas.
+#   - Cada vez que se salda una violación, se borra su línea de aquí.
+# La lista solo puede encoger → la frontera solo puede apretarse.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[importlinter]
+root_packages =
+    core
+    adapters
+# Necesario para que el Contrato 2 pueda vigilar imports a librerías externas
+# (bs4, zendriver, fastapi…) desde el core.
+include_external_packages = True
+
+# ── Contrato 1 ──────────────────────────────────────────────────────────────
+# El core (dominio + casos de uso) NO puede importar ningún adapter.
+# El flujo de dependencias es siempre adapters → core, nunca al revés.
+[importlinter:contract:core-no-depende-de-adapters]
+name = Core no depende de adapters (frontera hexagonal)
+type = forbidden
+source_modules =
+    core
+forbidden_modules =
+    adapters
+# DEUDA CONOCIDA (auditoría 2026-06-05) — saldar y borrar de aquí:
+#   R3 / C-1: WorldAgent mezcla scheduler (core) con ejecución de browser (adapter).
+#             Resolver creando un BrowserExecutionPort en core/ports/ que el
+#             adapter de browser implemente. Hasta entonces, estos 3 imports
+#             diferidos quedan tolerados:
+ignore_imports =
+    core.scheduling.world_agent -> adapters.browser.driver
+    core.scheduling.world_agent -> adapters.browser.village_switcher
+    core.scheduling.world_agent -> adapters.browser.url_utils
+
+# ── Contrato 2 ──────────────────────────────────────────────────────────────
+# El core no puede importar librerías de infraestructura (browser/web/db).
+# Debe recibir datos ya parseados (DTOs/dicts), nunca HTML crudo ni drivers.
+[importlinter:contract:core-no-importa-infraestructura]
+name = Core no importa librerías de infraestructura (browser / web / parsing)
+type = forbidden
+# Solo imports DIRECTOS: que el core no haga `import bs4`/`import zendriver`.
+# Las cadenas transitivas (core → adapter ya tolerado → infra) no cuentan aquí;
+# esa frontera la cubre el Contrato 1.
+allow_indirect_imports = True
+source_modules =
+    core
+forbidden_modules =
+    zendriver
+    bs4
+    fastapi
+    uvicorn
+    aiosqlite
+# DEUDA CONOCIDA (auditoría 2026-06-05) — saldar y borrar de aquí:
+#   C-2: village_map.py parsea HTML con BeautifulSoup dentro del core.
+#        Resolver moviendo VillageOverviewParser a adapters/browser/parsers/.
+#   zendriver (l.67): type-hint bajo TYPE_CHECKING en world_agent; desaparece
+#        al resolver R3/C-1.
+ignore_imports =
+    core.use_cases.village_map -> bs4
+    core.scheduling.world_agent -> zendriver

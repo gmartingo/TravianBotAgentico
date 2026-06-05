@@ -1094,4 +1094,183 @@ Borra la ruta en cascada con sus pasos.
 curl -X DELETE http://localhost:8000/worlds/1/noise/paths/42
 ```
 
+---
+
+## Portal de Desarrollador de Rutas — EP-RT01..EP-RT10
+
+> Sin `Accept-Language` en ningún EP-RT. Los labels/slugs son texto libre del desarrollador, no del catálogo de Travian.
+> Notas de colisión: el campo `conflicting_destination_id` va DENTRO del dict `detail` en los 409 de EP-RT07 y EP-RT09.
+
+### EP-RT01 — Listar plantillas
+
+**Endpoint:** `GET /route-templates` — lista el catálogo maestro de plantillas globales.
+
+**Auth:** ninguna. **Headers:** ninguno.
+
+**Query params:** `category` (enum: MAP|OASIS_INFO|PLAYER_PROFILE|MESSAGES|REPORTS|BUILDING_VIEW|OTHER, opcional) · `include_paths` (bool, default false) · `limit` (int, default 100, [1,500]) · `offset` (int, default 0).
+
+**Response OK (200):** lista de objetos `{id, slug, label, category, url_pattern, navigation_weight, is_safe, paths_count, paths?, created_at, updated_at}`.
+
+**Errores:** `422` category inválida (FastAPI auto).
+
+**Ejemplo:**
+```bash
+curl http://localhost:8000/route-templates?category=MAP&include_paths=true
+```
+
+---
+
+### EP-RT02 — Crear plantilla
+
+**Endpoint:** `POST /route-templates` — crea una nueva plantilla global.
+
+**Auth:** ninguna. **Headers:** `Content-Type: application/json`.
+
+**Request:** `{slug (kebab-case, UNIQUE), label, category, url_pattern, navigation_weight? (0.1–5.0), is_safe? (bool), paths? [...]}`.
+
+**Response OK (201):** objeto completo `{id, slug, label, category, url_pattern, navigation_weight, is_safe, paths, created_at, updated_at}`. Header `Location: /route-templates/{id}`.
+
+**Errores:** `409` slug duplicado · `422` slug no kebab-case / navigation_weight fuera de rango / delay_min_ms < 200 ms.
+
+**Ejemplo:**
+```bash
+curl -X POST http://localhost:8000/route-templates \
+  -H "Content-Type: application/json" \
+  -d '{"slug":"map-explore","label":"Explorar mapa","category":"MAP","url_pattern":"/karte.php"}'
+```
+
+---
+
+### EP-RT03 — Obtener plantilla
+
+**Endpoint:** `GET /route-templates/{id}` — devuelve la plantilla con paths+steps completos.
+
+**Auth:** ninguna. **Request:** sin body.
+
+**Response OK (200):** objeto completo con `paths[{id, template_id, origin, label, is_active, steps[...]}]`.
+
+**Errores:** `404` plantilla no encontrada.
+
+---
+
+### EP-RT04 — Actualizar plantilla (PATCH parcial)
+
+**Endpoint:** `PUT /route-templates/{id}` — actualiza label, navigation_weight, is_safe o paths.
+
+**Auth:** ninguna. **Headers:** `Content-Type: application/json`.
+
+**Request (al menos un campo):** `{label?, navigation_weight?, is_safe?, paths?}`. `slug`, `category` y `url_pattern` son inmutables (422 si se incluyen).
+
+**Response OK (200):** objeto completo actualizado.
+
+**Errores:** `404` · `422` body vacío / campos inmutables enviados / valores fuera de rango.
+
+---
+
+### EP-RT05 — Borrar plantilla
+
+**Endpoint:** `DELETE /route-templates/{id}` — borra la plantilla; los destinos clonados quedan con `template_id=null`.
+
+**Auth:** ninguna. **Request:** sin body.
+
+**Response OK (204):** sin body.
+
+**Errores:** `404`.
+
+---
+
+### EP-RT06 — Listar paths de una plantilla
+
+**Endpoint:** `GET /route-templates/{id}/paths` — lista los paths con steps de la plantilla.
+
+**Auth:** ninguna. **Request:** sin body.
+
+**Response OK (200):** lista `[{id, template_id, origin, label, is_active, steps[...]}]`.
+
+**Errores:** `404` plantilla no encontrada.
+
+---
+
+### EP-RT07 — Clonar plantilla a un mundo
+
+**Endpoint:** `POST /route-templates/{id}/clone-to-world/{world_id}` — clona la plantilla al mundo.
+
+**Auth:** ninguna. **Request:** sin body. **Query:** `force` (bool, default false).
+
+**Response OK (201):** `{result:"cloned", destination_id, world_id, template_id, url_pattern}`. Header `Location: /worlds/{world_id}/noise/destinations/{destination_id}`.
+
+**Response OK (200):** `{result:"already_exists", destination_id, world_id, template_id}` — misma plantilla ya estaba clonada.
+
+**Errores:** `404` plantilla/mundo · `409` `{"detail": {"message":"...", "conflicting_destination_id": N}}` URL conflictiva · `422` URL absoluta incompatible con el servidor del mundo.
+
+**Ejemplo:**
+```bash
+curl -X POST http://localhost:8000/route-templates/1/clone-to-world/3
+curl -X POST "http://localhost:8000/route-templates/1/clone-to-world/3?force=true"
+```
+
+---
+
+### EP-RT08 — Bulk clone (apply-templates)
+
+**Endpoint:** `POST /worlds/{world_id}/noise/apply-templates` — clona en masa múltiples plantillas.
+
+**Auth:** ninguna. **Headers:** `Content-Type: application/json`.
+
+**Request:** `{template_ids: [1,2,3], force?: bool}`. `template_ids` no puede estar vacío.
+
+**Response OK (200):** `{results: [{template_id, result:"cloned"|"already_exists"|"conflict", destination_id?, conflicting_destination_id?, error?}]}`. No es atómico.
+
+**Errores:** `404` mundo · `422` `template_ids` vacío.
+
+**Ejemplo:**
+```bash
+curl -X POST http://localhost:8000/worlds/3/noise/apply-templates \
+  -H "Content-Type: application/json" \
+  -d '{"template_ids":[1,2,3]}'
+```
+
+---
+
+### EP-RT09 — Re-sincronizar instancia con la plantilla
+
+**Endpoint:** `POST /route-templates/{id}/sync-to-world/{world_id}` — actualiza los paths/steps del destino clonado con los de la plantilla maestra. Preserva `navigation_weight`, `is_dead`, `consecutive_failures_count` y `last_used_at`.
+
+**Auth:** ninguna. **Request:** sin body.
+
+**Response OK (200):** `{result:"synced", destination_id, paths_replaced}` — instancia existente actualizada.
+
+**Response OK (201):** `{result:"created", destination_id}` — no había instancia, se creó. Header `Location`.
+
+**Errores:** `404` plantilla/mundo · `409` `{"detail": {"message":"...", "conflicting_destination_id": N}}` URL ocupada por otra plantilla.
+
+---
+
+### EP-RT10 — Probar plantilla en vivo
+
+**Endpoint:** `POST /route-templates/{id}/test` — ejecuta la plantilla en el Chrome real (wrapper de EP-N14).
+
+**Auth:** ninguna. **Headers:** `Content-Type: application/json`.
+
+**Request:** `{world_id: int, path_index?: int (default 0)}`.
+
+**Response OK (200):** `{overall:"ok"|"error", aborted_at_step, anchor_navigated_to, steps[{step_order, action, selector, status, reason, current_url}], browser_note}`. HTTP 200 aunque `overall="error"`.
+
+**Errores:** `404` plantilla/mundo · `409` agente desconectado / browser ocupado · `422` `path_index` fuera de rango · `500`.
+
+**Ejemplo:**
+```bash
+curl -X POST http://localhost:8000/route-templates/1/test \
+  -H "Content-Type: application/json" \
+  -d '{"world_id": 3, "path_index": 0}'
+```
+
+---
+
+### EP-N03/EP-N04 — Modificaciones retrocompatibles
+
+**Delta EP-N03** (`GET /worlds/{id}/noise/destinations`): campo `template_id` (int|null) añadido al response de cada destino. `null` si creado a mano; `int` si fue clonado desde una plantilla.
+
+**Delta EP-N04** (`POST /worlds/{id}/noise/destinations`): campo `template_id` (int|null, opcional, default null) añadido al request body para crear destinos con referencia explícita a una plantilla.
+
 **Detalle:** `docs/api/openapi.yaml` → paths `/worlds/{world_id}/noise/paths/{path_id}`
