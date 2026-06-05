@@ -622,3 +622,206 @@ class TestCalcSecondsRemaining:
         from core.use_cases.incoming_attack_use_cases import _calc_seconds_remaining
         result = _calc_seconds_remaining("not-a-date")
         assert result is None
+
+
+# ===========================================================================
+# WorldAgent — invocación del hook tras tarea de browser (§9.5, RN-21)
+# ===========================================================================
+
+class TestWorldAgentPageHookWiring:
+    """
+    Verifica que _post_page_hook se invoca desde _execute tras cada tarea de
+    browser post-login (SEND_FARM_LIST_GROUP, NOISE_NAVIGATION) y que NO se
+    invoca tras CHECK_INCOMING_ATTACK_DETAIL (evita re-entrada del radar).
+
+    El WorldAgent se construye con stubs mínimos:
+      - browser / db: objetos con los métodos mínimos que usa el agente.
+      - page_html_provider: async callable que devuelve un HTML de prueba.
+      - sidebar_attack_hook: async callable espiado para verificar invocaciones.
+
+    No toca la BD, no toca el browser real, no hay asyncio.run de bucles.
+    """
+
+    def _make_agent(self, hook_calls: list, provider_html: str | None = "<html/>"):
+        """
+        Construye un WorldAgent con stubs para tests de invocación de hook.
+
+        hook_calls — lista mutable donde se acumularán los HTML recibidos por
+                     el sidebar_attack_hook (permite aserciones fuera del async).
+        provider_html — HTML que devuelve el page_html_provider.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from core.scheduling.world_agent import WorldAgent
+        from core.entities.task import Task, TaskType
+
+        # Stub de FarmListBrowserPort y FarmListDbPort
+        browser_mock = AsyncMock()
+        db_mock = AsyncMock()
+
+        # Stub del SendSchedulerGroupUseCase usado internamente por WorldAgent
+        # Necesitamos que _send_group.execute no falle.
+        send_group_mock = AsyncMock()
+
+        # page_html_provider — devuelve un HTML fijo
+        async def _provider():
+            return provider_html
+
+        # sidebar_attack_hook espiado — registra llamadas y devuelve []
+        async def _hook(html, world_id, db_port):
+            hook_calls.append(html)
+            return []
+
+        # incoming_db stub mínimo para que _post_page_hook no haga early return
+        incoming_db_mock = MagicMock()
+
+        agent = WorldAgent(
+            world_id=1,
+            browser=browser_mock,
+            db=db_mock,
+            incoming_db=incoming_db_mock,
+            sidebar_attack_hook=_hook,
+            page_html_provider=_provider,
+        )
+        # Reemplazar _send_group con el mock para que execute no falle
+        agent._send_group = send_group_mock
+        return agent
+
+    def test_hook_invoked_after_send_farm_list_group(self):
+        """
+        Tras SEND_FARM_LIST_GROUP el hook se invoca UNA VEZ con el HTML del provider.
+        """
+        from core.entities.task import Task, TaskType
+
+        async def _run():
+            calls = []
+            agent = self._make_agent(calls, provider_html="<html>farm page</html>")
+            task = Task(
+                task_type=TaskType.SEND_FARM_LIST_GROUP,
+                world_id=1,
+                execute_at=datetime.now(),
+                priority=1,
+                payload={"scheduler_id": 42, "scheduler_type": "farm"},
+                recurring=False,
+                source_scheduler_id=42,
+            )
+            await agent._execute(task)
+            assert len(calls) == 1
+            assert calls[0] == "<html>farm page</html>"
+
+        asyncio.run(_run())
+
+    def test_hook_not_invoked_after_check_incoming_attack_detail(self):
+        """
+        CHECK_INCOMING_ATTACK_DETAIL NO debe invocar el hook (evita re-entrada).
+        """
+        from core.entities.task import Task, TaskType
+
+        async def _run():
+            calls = []
+            agent = self._make_agent(calls, provider_html="<html>dorf1</html>")
+            # incoming_db y dorf1_attack_reader ausentes → _handle_check retorna inmediatamente
+            agent._dorf1_attack_reader = None
+
+            task = Task(
+                task_type=TaskType.CHECK_INCOMING_ATTACK_DETAIL,
+                world_id=1,
+                execute_at=datetime.now(),
+                priority=0,
+                payload={},
+                recurring=False,
+                source_scheduler_id=None,
+            )
+            await agent._execute(task)
+            assert calls == [], (
+                "El hook NO debe invocarse tras CHECK_INCOMING_ATTACK_DETAIL "
+                "(previene re-entrada del radar)"
+            )
+
+        asyncio.run(_run())
+
+    def test_hook_not_invoked_when_provider_is_none(self):
+        """
+        Sin page_html_provider, el hook nunca se llama aunque sidebar_attack_hook esté.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from core.scheduling.world_agent import WorldAgent
+        from core.entities.task import Task, TaskType
+
+        async def _run():
+            calls = []
+
+            async def _hook(html, world_id, db_port):
+                calls.append(html)
+                return []
+
+            browser_mock = AsyncMock()
+            db_mock = AsyncMock()
+            send_group_mock = AsyncMock()
+            incoming_db_mock = MagicMock()
+
+            agent = WorldAgent(
+                world_id=1,
+                browser=browser_mock,
+                db=db_mock,
+                incoming_db=incoming_db_mock,
+                sidebar_attack_hook=_hook,
+                page_html_provider=None,   # NO hay provider
+            )
+            agent._send_group = send_group_mock
+
+            task = Task(
+                task_type=TaskType.SEND_FARM_LIST_GROUP,
+                world_id=1,
+                execute_at=datetime.now(),
+                priority=1,
+                payload={"scheduler_id": 1, "scheduler_type": "farm"},
+                recurring=False,
+                source_scheduler_id=1,
+            )
+            await agent._execute(task)
+            assert calls == []
+
+        asyncio.run(_run())
+
+    def test_hook_provider_exception_does_not_crash_task(self):
+        """
+        Si page_html_provider lanza, la tarea principal debe completarse igualmente.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from core.scheduling.world_agent import WorldAgent
+        from core.entities.task import Task, TaskType
+
+        async def _run():
+            async def _failing_provider():
+                raise RuntimeError("tab caído")
+
+            browser_mock = AsyncMock()
+            db_mock = AsyncMock()
+            send_group_mock = AsyncMock()
+            incoming_db_mock = MagicMock()
+
+            agent = WorldAgent(
+                world_id=1,
+                browser=browser_mock,
+                db=db_mock,
+                incoming_db=incoming_db_mock,
+                sidebar_attack_hook=None,
+                page_html_provider=_failing_provider,
+            )
+            agent._send_group = send_group_mock
+
+            task = Task(
+                task_type=TaskType.SEND_FARM_LIST_GROUP,
+                world_id=1,
+                execute_at=datetime.now(),
+                priority=1,
+                payload={"scheduler_id": 1, "scheduler_type": "farm"},
+                recurring=False,
+                source_scheduler_id=1,
+            )
+            # No debe lanzar — el provider falla pero la tarea termina OK
+            await agent._execute(task)
+            # Si llegamos aquí sin excepción, la tarea no fue tumbada
+
+        asyncio.run(_run())

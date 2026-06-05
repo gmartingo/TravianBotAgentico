@@ -29,7 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field as dc_field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from core.entities.farm_scheduler import FarmScheduler
 from core.entities.noise import (
@@ -158,6 +158,11 @@ class WorldAgent:
         incoming_db=None,               # IncomingAttackDbPort | None (radar ataques v1)
         sidebar_attack_hook=None,       # async (html, world_id, db_port) -> list — Comp. A
         dorf1_attack_reader=None,       # async (world_id) -> list[Dorf1AttackDTO]  — Comp. B
+        page_html_provider: Callable[[], Awaitable[str | None]] | None = None,
+        # Callable inyectado desde el composition root (adapters/api) para obtener el HTML
+        # de la página actualmente cargada en el browser sin hacer ninguna petición extra.
+        # Implementación: lambda que llama a tab.get_content() del tab activo.
+        # No se importa adapters.browser.* aquí — la frontera hexagonal se mantiene (RN-21).
     ) -> None:
         self.world_id    = world_id
         self._browser    = browser
@@ -172,6 +177,7 @@ class WorldAgent:
         # no importar adapters.browser.* dentro del core (frontera hexagonal).
         self._sidebar_attack_hook = sidebar_attack_hook   # Comp. A
         self._dorf1_attack_reader = dorf1_attack_reader   # Comp. B
+        self._page_html_provider = page_html_provider     # () -> Awaitable[str|None]
 
         self._queue: TaskQueue = queue or TaskQueue()
         self._stop_event   = asyncio.Event()
@@ -644,6 +650,28 @@ class WorldAgent:
     # Ejecución y reencole
     # ------------------------------------------------------------------
 
+    async def _maybe_run_page_hook(self) -> None:
+        """
+        Invoca _post_page_hook con el HTML de la página actualmente cargada.
+
+        Solo actúa si page_html_provider está inyectado (RN-21). Obtiene el HTML
+        llamando al provider (una sola lectura del DOM, sin navegación extra — coste
+        cero anti-detección, RN-01/G7). Si el provider o el hook fallan, loggea y
+        continúa: el radar nunca debe tumbar la tarea principal (EC-15).
+        """
+        if self._page_html_provider is None:
+            return
+        try:
+            html = await self._page_html_provider()
+        except Exception as exc:
+            logger.warning(
+                "Mundo %d: page_html_provider falló (no-op): %s", self.world_id, exc
+            )
+            return
+        if html is None:
+            return
+        await self._post_page_hook(html, self.world_id)
+
     async def _execute(self, task: Task) -> None:
         """
         Ejecuta una tarea. Un fallo no mata el agente: se loguea y se sigue.
@@ -659,11 +687,21 @@ class WorldAgent:
                 # Contabilizar para que el ruido descuente este tráfico productivo
                 # al calcular el siguiente gap (guardian amber #1).
                 self._productive_recent_count += 1
+                # Componente A del radar — hook post-página (RN-21, §9.5).
+                # Punto ÚNICO de invocación: WorldAgent, aquí, tras la tarea productiva.
+                # Los adapters individuales (farm_lists.py) NO llaman al hook.
+                await self._maybe_run_page_hook()
 
             elif task.task_type == TaskType.NOISE_NAVIGATION:
                 await self._handle_noise_navigation()
+                # Hook post-página también tras ruido: la navegación de ruido carga
+                # páginas de Travian post-login y el sidebar estará presente (RN-21).
+                await self._maybe_run_page_hook()
 
             elif task.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL:
+                # NO se invoca _maybe_run_page_hook aquí: esta tarea YA ES parte
+                # del radar (Componente B). Re-invocar el hook causaría re-entrada
+                # (detección en dorf1 → nueva tarea CHECK → hook en dorf1 → bucle).
                 await self._handle_check_incoming_attack_detail()
 
             else:

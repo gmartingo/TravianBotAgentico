@@ -1245,3 +1245,51 @@ point. Interesa:
 - A5: Wrapper `{items, total, limit, offset}` sin `world_id` en raíz. Ejemplo de respuesta EP-RA01 actualizado.
 - A6: `seconds_remaining=null` cuando `impact_at IS NULL`. Calculado en use case (no handler). EC-17, UT-RE04, §9.5 actualizados.
 - A7: `500` añadido a cuadros de errores de ambos endpoints.
+
+---
+
+## Registro de implementación
+
+**Fecha:** 2026-06-05
+
+**Alcance de esta sesión:** cableado de `_post_page_hook` — Componente A (§9.5, RT-06). El resto (bloques 1-4) ya estaba implementado en commit `202d4a7`.
+
+**Ficheros modificados:**
+
+- `/Users/german/DEV/travian-radar/core/scheduling/world_agent.py`
+  - Añadida importación `Callable, Awaitable` desde `typing`.
+  - Nuevo parámetro opcional en `__init__`: `page_html_provider: Callable[[], Awaitable[str | None]] | None = None`.
+  - Nuevo atributo: `self._page_html_provider = page_html_provider`.
+  - Nuevo método privado `_maybe_run_page_hook()`: obtiene HTML del provider y llama a `_post_page_hook`; captura excepciones del provider sin propagar (EC-15).
+  - `_execute()`: llama a `await self._maybe_run_page_hook()` tras `SEND_FARM_LIST_GROUP` y tras `NOISE_NAVIGATION`. NO se llama tras `CHECK_INCOMING_ATTACK_DETAIL` (previene re-entrada del radar).
+
+- `/Users/german/DEV/travian-radar/adapters/api/routes/farm.py`
+  - En `start_agent`: construye `page_html_provider` como corrutina async que llama a `session_registry.get_browser(world_id).main_tab.get_content()` — lectura de DOM sin petición HTTP (RN-01/G7).
+  - Pasa `page_html_provider=page_html_provider` al constructor de `WorldAgent`.
+
+- `/Users/german/DEV/travian-radar/tests/unit/test_incoming_attack_parsers.py`
+  - Nueva clase `TestWorldAgentPageHookWiring` con 4 tests:
+    - `test_hook_invoked_after_send_farm_list_group`: verifica invocación real del hook.
+    - `test_hook_not_invoked_after_check_incoming_attack_detail`: verifica no re-entrada.
+    - `test_hook_not_invoked_when_provider_is_none`: verifica no-op sin provider.
+    - `test_hook_provider_exception_does_not_crash_task`: verifica resiliencia EC-15.
+
+**Comando para ejecutar los tests:**
+```bash
+cd /Users/german/DEV/travian-radar && \
+  "/Users/german/DEV/Travian con Agentes/.venv/bin/python" \
+  -m pytest tests/unit/test_incoming_attack_parsers.py tests/test_incoming_attacks_api.py -q
+```
+
+**Resultado:** 58 de 58 tests pasan.
+
+**Verificación de frontera hexagonal:**
+```bash
+cd /Users/german/DEV/travian-radar && \
+  "/Users/german/DEV/Travian con Agentes/.venv/bin/lint-imports"
+# Contracts: 2 kept, 0 broken
+```
+
+**Desviaciones respecto al diseño:**
+- El spec §9.5 describe el callable como `page_html_provider` sin especificar la firma exacta más allá de "devuelva el HTML de la página actualmente cargada". Se implementó como `Callable[[], Awaitable[str | None]]` (sin parámetros — el `world_id` queda capturado en la closure del composition root), lo cual es más simple y suficiente para el uso previsto.
+- El hook también se invoca tras `NOISE_NAVIGATION` (no solo tras `SEND_FARM_LIST_GROUP`). El spec §9.5 dice "tras CADA tarea de browser post-login que cargue página"; la navegación de ruido carga páginas de Travian post-login, por lo que aplica. Decisión mínimamente invasiva: si hay un ataque, el radar lo detecta también cuando el bot está navegando en ruido.

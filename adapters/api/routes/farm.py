@@ -884,6 +884,29 @@ async def start_agent(world_id: int, request: Request) -> dict:
 
             dorf1_attack_reader = _dorf1_reader
 
+    # page_html_provider — Componente A del radar (RN-21, §9.5).
+    # Devuelve el HTML de la página ACTUALMENTE cargada en el browser del mundo,
+    # sin hacer ninguna petición HTTP adicional (tab.get_content() es solo una
+    # lectura del DOM via CDP — coste de anti-detección CERO, RN-01/G7).
+    # Se construye aquí (adapters/, composition root) para que WorldAgent (core/)
+    # nunca importe adapters.browser.* directamente (frontera hexagonal).
+    page_html_provider = None
+    if session_registry is not None:
+        async def _page_html_provider(
+            _wid: int = world_id,
+            _registry=session_registry,
+        ) -> str | None:
+            """Lee el HTML de la página activa del browser de este mundo."""
+            browser_inst = _registry.get_browser(_wid)
+            if browser_inst is None:
+                return None
+            tab = browser_inst.main_tab
+            if tab is None:
+                return None
+            return await tab.get_content()
+
+        page_html_provider = _page_html_provider
+
     agent = WorldAgent(
         world_id=world_id,
         browser=browser,
@@ -896,6 +919,7 @@ async def start_agent(world_id: int, request: Request) -> dict:
         incoming_db=incoming_db,
         sidebar_attack_hook=sidebar_attack_hook,
         dorf1_attack_reader=dorf1_attack_reader,
+        page_html_provider=page_html_provider,
     )
     seeded = await agent.seed_from_schedulers()
     agents[world_id] = agent
