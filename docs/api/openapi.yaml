@@ -8,8 +8,8 @@ info:
 
     FastAPI genera el OpenAPI completo automáticamente en /docs y /openapi.json.
     Este archivo documenta: EP-06, EP-09, EP-10, EP-SPAWN, EP-TD (attack-reports);
-    EP-HS01..EP-HS07 (session); EP-N01..EP-N14 (noise).
-    Última actualización: 2026-06-04.
+    EP-HS01..EP-HS07 (session); EP-N01..EP-N14 (noise); EP-RA01, EP-RA02 (incoming-attacks).
+    Última actualización: 2026-06-05.
 
 servers:
   - url: http://localhost:8000
@@ -28,6 +28,106 @@ components:
         detail:
           type: string
           description: Mensaje de error legible.
+
+    IncomingAttackItem:
+      type: object
+      description: |
+        Un ataque entrante detectado para una aldea del jugador.
+        seconds_remaining es null si impact_at es null (sin timer todavía).
+      required: [id, village_game_id, village_name, village_coord_x, village_coord_y,
+                 attack_count, impact_at, seconds_remaining, rally_point_href,
+                 attacker_name, origin_village_name, origin_village_coord_x,
+                 origin_village_coord_y, operation_type, attacker_snapshot,
+                 source, detected_at]
+      properties:
+        id:
+          type: integer
+          description: ID autoincrement en la BD local.
+        village_game_id:
+          type: integer
+          description: game_id de la aldea propia (data-did de Travian).
+        village_name:
+          type: ["string", "null"]
+          description: Nombre de la aldea propia (puede ser null hasta que se enriquezca).
+        village_coord_x:
+          type: ["integer", "null"]
+          description: Coordenada X de la aldea propia.
+        village_coord_y:
+          type: ["integer", "null"]
+          description: Coordenada Y de la aldea propia.
+        attack_count:
+          type: integer
+          description: Número de ataques simultáneos detectados.
+        impact_at:
+          type: ["string", "null"]
+          format: date-time
+          description: |
+            Momento de impacto en ISO-8601 UTC.
+            Null si el ataque fue detectado solo por el sidebar (sin timer).
+        seconds_remaining:
+          type: ["integer", "null"]
+          description: |
+            Segundos restantes hasta el impacto. Calculado por el use case.
+            Nunca negativo (max(0, delta)). Null si impact_at es null.
+        rally_point_href:
+          type: ["string", "null"]
+          description: "Ruta relativa a la plaza de reuniones (e.g. /build.php?gid=16&id=1)."
+        attacker_name:
+          type: ["string", "null"]
+          description: Nombre del jugador atacante (null hasta Componente C).
+        origin_village_name:
+          type: ["string", "null"]
+          description: Nombre de la aldea de origen (null hasta Componente C).
+        origin_village_coord_x:
+          type: ["integer", "null"]
+          description: Coord X de la aldea de origen.
+        origin_village_coord_y:
+          type: ["integer", "null"]
+          description: Coord Y de la aldea de origen.
+        operation_type:
+          type: ["string", "null"]
+          description: "Tipo de operación: 'attack' | 'raid' | 'spy' | etc. (null hasta Comp C)."
+        attacker_snapshot:
+          type: ["object", "null"]
+          description: Snapshot JSON opaco de la ficha del atacante (null hasta Componente D).
+        source:
+          type: string
+          description: "Fuente de detección: 'sidebar' | 'dorf1' | 'rally_point'."
+        detected_at:
+          type: string
+          format: date-time
+          description: Momento en que se detectó el ataque (ISO-8601 UTC).
+
+    IncomingAttackListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomingAttackItem'
+        total:
+          type: integer
+          description: Total de registros que coinciden con los filtros (antes de paginar).
+        limit:
+          type: integer
+          description: Número máximo de items solicitado.
+        offset:
+          type: integer
+          description: Desplazamiento aplicado.
+
+    CheckIncomingAttacksResponse:
+      type: object
+      required: [world_id, attacks_detected, message]
+      properties:
+        world_id:
+          type: integer
+        attacks_detected:
+          type: integer
+          description: Número de ataques detectados en esta lectura.
+        message:
+          type: string
+          description: Mensaje de resultado.
 
     SpeciesColumn:
       type: object
@@ -3228,6 +3328,115 @@ paths:
           description: Ruta borrada.
         "404":
           description: Mundo no encontrado o ruta no encontrada (o de otro mundo).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  # ---------------------------------------------------------------------------
+  # Radar de ataques entrantes — EP-RA01, EP-RA02
+  # ---------------------------------------------------------------------------
+
+  /game/incoming-attacks/{world_id}:
+    get:
+      tags: [incoming-attacks]
+      summary: "EP-RA01 — Lista ataques entrantes de un mundo"
+      description: |
+        Devuelve la lista paginada de ataques entrantes detectados para el mundo.
+        Sin Accept-Language: los datos son numéricos o texto crudo del juego.
+        Por defecto solo incluye ataques pendientes (impact_at > ahora o sin timer).
+        Con include_past=true, devuelve todos los registros.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo en la BD local.
+        - name: include_past
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: "Si es true, incluye ataques con impact_at ya pasado."
+        - name: village_game_id
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+          description: "Filtro opcional: solo ataques a esta aldea (game_id de Travian)."
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+          description: "Número máximo de registros a devolver (1–100)."
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: Desplazamiento para paginación.
+      responses:
+        "200":
+          description: Lista paginada de ataques entrantes.
+          headers:
+            X-Request-ID:
+              schema: { type: string }
+            X-API-Version:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IncomingAttackListResponse' }
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "422":
+          description: Parámetros de query inválidos (limit fuera de rango, offset negativo, etc.).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /game/incoming-attacks/{world_id}/check:
+    post:
+      tags: [incoming-attacks]
+      summary: "EP-RA02 — Dispara lectura inmediata del radar de ataques"
+      description: |
+        Fuerza una lectura inmediata del radar para el mundo indicado.
+        Navega dorf1 con el browser autenticado y persiste los ataques detectados.
+        Requiere sesión activa (login previo). Sin body ni Accept-Language.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo en la BD local.
+      requestBody:
+        required: false
+      responses:
+        "200":
+          description: Resultado de la lectura del radar.
+          headers:
+            X-Request-ID:
+              schema: { type: string }
+            X-API-Version:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckIncomingAttacksResponse' }
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "503":
+          description: No hay sesión activa para este mundo (SessionNotActiveError).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }

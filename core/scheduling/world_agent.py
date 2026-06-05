@@ -155,6 +155,9 @@ class WorldAgent:
         account_id: int | None = None,  # para pasar a LoginUseCase.execute()
         queue: TaskQueue | None = None,
         noise_db: NoiseDbPort | None = None,  # puerto de ruido de navegación (v2.2)
+        incoming_db=None,               # IncomingAttackDbPort | None (radar ataques v1)
+        sidebar_attack_hook=None,       # async (html, world_id, db_port) -> list — Comp. A
+        dorf1_attack_reader=None,       # async (world_id) -> list[Dorf1AttackDTO]  — Comp. B
     ) -> None:
         self.world_id    = world_id
         self._browser    = browser
@@ -164,6 +167,11 @@ class WorldAgent:
         self._login_use_case   = login_use_case
         self._account_id = account_id
         self._noise_db   = noise_db
+        self._incoming_db = incoming_db   # opcional, patrón P4 (igual que noise_db)
+        # Callables inyectados desde el composition root (adapters/api) para
+        # no importar adapters.browser.* dentro del core (frontera hexagonal).
+        self._sidebar_attack_hook = sidebar_attack_hook   # Comp. A
+        self._dorf1_attack_reader = dorf1_attack_reader   # Comp. B
 
         self._queue: TaskQueue = queue or TaskQueue()
         self._stop_event   = asyncio.Event()
@@ -655,6 +663,9 @@ class WorldAgent:
             elif task.task_type == TaskType.NOISE_NAVIGATION:
                 await self._handle_noise_navigation()
 
+            elif task.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL:
+                await self._handle_check_incoming_attack_detail()
+
             else:
                 logger.warning(
                     "Tipo de tarea desconocido en mundo %d: %s",
@@ -767,6 +778,137 @@ class WorldAgent:
             "msg": msg,
         })
         logger.debug("[activity] %s", msg)
+
+    # ------------------------------------------------------------------
+    # Radar de ataques entrantes — §9.5/§9.6 (v1)
+    # ------------------------------------------------------------------
+
+    async def _handle_check_incoming_attack_detail(self) -> None:
+        """
+        Handler de TaskType.CHECK_INCOMING_ATTACK_DETAIL — Componente B del radar.
+
+        Obtiene el HTML de dorf1.php y parsea los ataques entrantes con timer.
+        Persiste el impact_at calculado en BD.
+
+        Componentes C/D están BLOQUEADOS (fixtures GAP-02/GAP-03 pendientes):
+        los campos attacker_name, origin_village_name, operation_type quedan None.
+
+        Lanza:
+          IncomingAttackPageError si dorf1 no carga → loggea ERROR, no re-encola.
+          SessionNotActiveError si no hay sesión → idem.
+        """
+        if self._incoming_db is None:
+            logger.warning(
+                "Mundo %d: CHECK_INCOMING_ATTACK_DETAIL pero incoming_db no inyectado",
+                self.world_id,
+            )
+            return
+
+        if self._dorf1_attack_reader is None:
+            logger.warning(
+                "Mundo %d: CHECK_INCOMING_ATTACK_DETAIL pero dorf1_attack_reader no inyectado",
+                self.world_id,
+            )
+            return
+
+        try:
+            attacks = await self._dorf1_attack_reader(self.world_id)
+        except Exception as exc:
+            logger.error(
+                "Mundo %d: error al leer dorf1 para radar: %s", self.world_id, exc
+            )
+            return
+        if not attacks:
+            logger.debug("Mundo %d: dorf1 sin ataques entrantes", self.world_id)
+            return
+
+        from datetime import timezone as _tz  # noqa: PLC0415
+        now = datetime.now(_tz.utc)
+        now_iso = now.isoformat()
+
+        from core.ports.incoming_attack_db_port import IncomingAttackRecord  # noqa: PLC0415
+        for dto in attacks:
+            impact_dt = now + timedelta(seconds=dto.seconds_to_impact)
+            impact_iso = impact_dt.isoformat()
+            # El village_game_id se desconoce en Comp. B (dorf1 no expone data-did directamente).
+            # Usamos 0 como placeholder hasta que Comp. C lo enriquezca, o el upsert
+            # del sidebar ya habrá creado la fila con el game_id correcto.
+            # El UNIQUE es (world_id, village_game_id, impact_at); si village_game_id
+            # viene del sidebar el upsert actualizará el impact_at en esa fila.
+            # NOTA: esta limitación es deuda de Comp. B (sin rallypoint no hay game_id exacto).
+            await self._incoming_db.upsert_attack(IncomingAttackRecord(
+                world_id=self.world_id,
+                village_game_id=0,      # placeholder — se enriquece en Comp. C
+                attack_count=dto.attack_count,
+                impact_at=impact_iso,
+                rally_point_href=dto.rally_point_href,
+                source="dorf1",
+                detected_at=now_iso,
+                updated_at=now_iso,
+            ))
+
+        logger.info(
+            "Mundo %d: %d ataque(s) dorf1 persistido(s) con impact_at",
+            self.world_id, len(attacks),
+        )
+
+    async def _post_page_hook(self, html: str, world_id: int) -> None:
+        """
+        Hook post-página transversal — Componente A del radar de ataques entrantes.
+
+        Llamado desde el WorldAgent tras CADA tarea de browser post-login que cargue HTML.
+        El HTML ya está en memoria; NO se hace ninguna petición HTTP adicional (RN-01).
+        NO se llama desde login.py ni desde adapters individuales (RN-21).
+
+        Solo aplica en páginas post-login: si #sidebarBoxVillageList no está en el HTML
+        → no-op silencioso (RN-19, EC-01).
+
+        Si el hook detecta ataques y no hay tarea CHECK_INCOMING_ATTACK_DETAIL ya encolada,
+        encola una con retraso variable 3-15 s (RN-22) y prioridad máxima (0).
+
+        Las excepciones no se propagan — el radar nunca debe bloquear el flujo (EC-15).
+        """
+        if self._incoming_db is None:
+            return
+
+        try:
+            if self._sidebar_attack_hook is None:
+                return
+            attacks = await self._sidebar_attack_hook(html, world_id, self._incoming_db)
+
+            if attacks and not self._has_pending_radar_task(world_id):
+                # Retraso humano variable antes de encolar Comp. B (RN-22)
+                import random as _random  # import diferido — patrón del proyecto (P5)
+                delay_s = _random.uniform(3, 15)
+                from datetime import timezone as _tz  # noqa: PLC0415
+                execute_at = datetime.now(_tz.utc).replace(tzinfo=None) + timedelta(seconds=delay_s)
+                self._queue.add(Task(
+                    task_type=TaskType.CHECK_INCOMING_ATTACK_DETAIL,
+                    world_id=world_id,
+                    priority=0,         # Prioridad máxima — más urgente que farm lists
+                    execute_at=execute_at,
+                    recurring=False,
+                ))
+                logger.info(
+                    "Mundo %d: %d aldea(s) bajo ataque detectadas — "
+                    "encolando CHECK_INCOMING_ATTACK_DETAIL en %.1fs",
+                    world_id, len(attacks), delay_s,
+                )
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: excepción inesperada en _post_page_hook: %s",
+                world_id, exc,
+            )
+
+    def _has_pending_radar_task(self, world_id: int) -> bool:
+        """
+        Comprueba si ya hay una tarea CHECK_INCOMING_ATTACK_DETAIL encolada para el mundo.
+        Evita encolar múltiples tareas de radar en el mismo ciclo (RN-22).
+        """
+        return any(
+            t.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL and t.world_id == world_id
+            for t in self._queue
+        )
 
     # ------------------------------------------------------------------
     # Ruido Humano de Navegación — §9.7-9.10 (Human Sessions v2.2)

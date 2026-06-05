@@ -859,6 +859,31 @@ async def start_agent(world_id: int, request: Request) -> dict:
         account_id = await accounts_db.get_account_id_for_world(world_id)
         login_use_case = LoginUseCase(registry=session_registry, db=accounts_db, fernet=fernet)
 
+    # Callables del radar de ataques entrantes — se construyen aquí (composition root,
+    # capa de adapters) para que WorldAgent (core) no importe adapters.browser directamente.
+    # Patrón: inyección de funciones en lugar de clases concretas (frontera hexagonal).
+    incoming_db = getattr(request.app.state, "incoming_attack_db_port", None)
+    sidebar_attack_hook = None
+    dorf1_attack_reader = None
+    if incoming_db is not None:
+        from adapters.browser.incoming_attack_hook import check_sidebar_attacks  # noqa: PLC0415
+        from adapters.browser.incoming_attack_browser_adapter import IncomingAttackBrowserAdapter  # noqa: PLC0415
+        from adapters.browser.parsers.dorf1_incoming_parser import Dorf1IncomingParser  # noqa: PLC0415
+
+        sidebar_attack_hook = check_sidebar_attacks
+
+        if session_registry is not None:
+            _browser_adapter = IncomingAttackBrowserAdapter(
+                get_browser=session_registry.get_browser,
+                get_world_server=session_registry.get_world_server,
+            )
+
+            async def _dorf1_reader(wid: int, _adapter=_browser_adapter) -> list:
+                html = await _adapter.get_dorf1_html(wid)
+                return Dorf1IncomingParser.parse(html)
+
+            dorf1_attack_reader = _dorf1_reader
+
     agent = WorldAgent(
         world_id=world_id,
         browser=browser,
@@ -868,6 +893,9 @@ async def start_agent(world_id: int, request: Request) -> dict:
         login_use_case=login_use_case,
         account_id=account_id,
         noise_db=noise_db,
+        incoming_db=incoming_db,
+        sidebar_attack_hook=sidebar_attack_hook,
+        dorf1_attack_reader=dorf1_attack_reader,
     )
     seeded = await agent.seed_from_schedulers()
     agents[world_id] = agent

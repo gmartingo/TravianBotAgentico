@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head><title>Sidebar sin ataque — fixture radar-ataques-entrantes</title></head>
+<body>
+<!--
+  Fixture: sidebar SIN ningún ataque entrante.
+  Basado en HTML real del sidebar de Travian (GAP-01 cerrado).
+
+  HALLAZGO CRÍTICO del diff con-ataque vs sin-ataque:
+    - En AMBOS estados, TODAS las entradas tienen svg.attack en span.incomingTroops.
+    - Por tanto, svg.attack es señuelo permanente: NO discrimina el estado de ataque.
+    - La ÚNICA diferencia es la clase "attack" en el div.listEntry.
+
+  Aquí: data-did=27322 tiene "listEntry village" (sin "attack") → NO detectada.
+  Todas las demás también "listEntry village" → ninguna detectada.
+  El parser debe retornar lista vacía.
+
+  Ver spec docs/specs/radar-ataques-entrantes.md §4 RN-02, §12 UT-RA03.
+  GAP-01 cerrado en v3 (2026-06-05).
+-->
+<div id="sidebarBoxVillageList">
+  <div class="content">
+    <ul class="villageList">
+
+      <!-- Aldea 27322 — SIN ataque ahora: clase "listEntry village" (sin "attack") -->
+      <li>
+        <div class="listEntry village" data-did="27322">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">07</span>
+          <span class="coordinateX">(−68</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">73)</span>
+          <span class="incomingTroops">
+            <!-- señuelo permanente: presente aunque no haya ataque -->
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+      <!-- Aldea 24341 — sin ataque -->
+      <li>
+        <div class="listEntry village active" data-did="24341">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">01</span>
+          <span class="coordinateX">(−63</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">65)</span>
+          <span class="incomingTroops">
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+      <!-- Aldea 24342 — sin ataque -->
+      <li>
+        <div class="listEntry village" data-did="24342">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">02</span>
+          <span class="coordinateX">(10</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">−5)</span>
+          <span class="incomingTroops">
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+      <!-- Aldea 24343 — sin ataque -->
+      <li>
+        <div class="listEntry village" data-did="24343">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">03</span>
+          <span class="coordinateX">(15</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">20)</span>
+          <span class="incomingTroops">
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+    </ul>
+  </div>
+</div>
+</body>
+</html>

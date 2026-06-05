@@ -1894,4 +1894,134 @@ curl -X POST http://localhost:8000/worlds/1/noise/paths/42/test
 
 ---
 
-🔖 Última revisión: 2026-06-04 (añadidos EP-HS01..EP-HS07 Human Sessions completos; añadidos EP-N01..EP-N10 Noise config/destinations/paths; tabla índice completada con todos los 26 endpoints documentados)
+---
+
+## Radar de ataques entrantes
+
+> **Sin `Accept-Language`** en estos dos endpoints. Los datos devueltos son
+> coordenadas, conteos y texto crudo del juego — no texto localizado. Desviación
+> consciente documentada en `docs/specs/radar-ataques-entrantes.md §8`.
+
+---
+
+### EP-RA01 — Lista ataques entrantes de un mundo
+
+**Ruta:** `GET /game/incoming-attacks/{world_id}`
+
+**Descripción de negocio:** Devuelve todos los ataques entrantes detectados para
+un mundo concreto. Por defecto filtra solo los ataques pendientes (aquellos cuyo
+timer no ha expirado aún, o los que no tienen timer todavía — detectados solo
+por el sidebar). Con `include_past=true` también se incluyen los ya impactados.
+
+El campo `seconds_remaining` se calcula en el use case (no en el handler):
+- `null` si `impact_at` es `null` (sin timer todavía — postura conservadora RT-05).
+- `max(0, int(delta))` si `impact_at` no es `null`. Nunca negativo.
+
+**Request — headers:**
+```
+(ninguno obligatorio)
+```
+
+**Request — query params:**
+
+| Parámetro | Tipo | Default | Descripción |
+|---|---|---|---|
+| `include_past` | bool | false | Incluir ataques con impact_at ya pasado |
+| `village_game_id` | int (ge=1) | null | Filtro por aldea (game_id de Travian) |
+| `limit` | int (1–100) | 50 | Máximo de items por página |
+| `offset` | int (ge=0) | 0 | Desplazamiento para paginación |
+
+**Response 200:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "village_game_id": 12345,
+      "village_name": "Mi Aldea",
+      "village_coord_x": 100,
+      "village_coord_y": -50,
+      "attack_count": 2,
+      "impact_at": "2026-06-05T18:30:00+00:00",
+      "seconds_remaining": 3600,
+      "rally_point_href": "/build.php?gid=16&id=1",
+      "attacker_name": null,
+      "origin_village_name": null,
+      "origin_village_coord_x": null,
+      "origin_village_coord_y": null,
+      "operation_type": null,
+      "attacker_snapshot": null,
+      "source": "dorf1",
+      "detected_at": "2026-06-05T17:30:00+00:00"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Errores:**
+
+| Código | Cuándo |
+|--------|--------|
+| `404` | Mundo no encontrado |
+| `422` | Query param inválido (`limit=0`, `limit>100`, `offset<0`, `village_game_id=0`) |
+| `500` | Error interno del servidor |
+
+**Ejemplo curl:**
+```bash
+# Listar ataques pendientes del mundo 1
+curl http://localhost:8000/game/incoming-attacks/1
+
+# Con ataques pasados, filtrado por aldea y paginación
+curl "http://localhost:8000/game/incoming-attacks/1?include_past=true&village_game_id=12345&limit=10&offset=0"
+```
+
+**Enlace OpenAPI:** `docs/api/openapi.yaml` → `paths./game/incoming-attacks/{world_id}`
+
+---
+
+### EP-RA02 — Dispara lectura inmediata del radar de ataques
+
+**Ruta:** `POST /game/incoming-attacks/{world_id}/check`
+
+**Descripción de negocio:** Fuerza una lectura inmediata del radar de ataques
+entrantes para el mundo indicado. El handler navega dorf1 a través del browser
+autenticado, parsea el timer de cada ataque entrante y persiste los resultados
+en la BD. Devuelve cuántos ataques se detectaron en esta lectura. El contador
+`attacks_detected` refleja los ataques procesados en este check, no el total en BD.
+
+Requiere sesión activa para el mundo (hacer login primero con `POST /login/{account_id}/{world_id}`).
+
+**Request — headers:** ninguno.
+
+**Request — body:** ninguno.
+
+**Response 200:**
+```json
+{
+  "world_id": 1,
+  "attacks_detected": 3,
+  "message": "Check completado"
+}
+```
+
+**Errores:**
+
+| Código | Cuándo |
+|--------|--------|
+| `404` | Mundo no encontrado |
+| `503` | No hay sesión activa para el mundo — hacer login primero |
+| `500` | Error interno del servidor |
+
+**Ejemplo curl:**
+```bash
+curl -X POST http://localhost:8000/game/incoming-attacks/1/check
+```
+
+**Enlace OpenAPI:** `docs/api/openapi.yaml` → `paths./game/incoming-attacks/{world_id}/check`
+
+---
+
+🔖 Última revisión: 2026-06-05 (añadidos EP-RA01 y EP-RA02 radar de ataques entrantes; sin Accept-Language por ser datos numéricos/texto crudo del juego)

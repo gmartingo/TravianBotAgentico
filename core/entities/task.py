@@ -19,6 +19,10 @@ class TaskType(str, Enum):
     SEND_FARM_LIST_GROUP = "SEND_FARM_LIST_GROUP"
     # Navegación de ruido anti-detección (Human Sessions v2.2)
     NOISE_NAVIGATION = "NOISE_NAVIGATION"
+    # Radar de ataques entrantes — lectura de dorf1 con timer (Componente B)
+    # Encolado desde WorldAgent._post_page_hook con retraso variable 3-15 s (RN-22).
+    # Ver spec docs/specs/radar-ataques-entrantes.md §9.5.
+    CHECK_INCOMING_ATTACK_DETAIL = "CHECK_INCOMING_ATTACK_DETAIL"
 
 
 @dataclass

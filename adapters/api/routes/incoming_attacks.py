@@ -1,0 +1,249 @@
+"""
+Router del radar de ataques entrantes.
+
+Endpoints (sin prefijo /api — el proxy de Vite lo retira):
+
+  GET  /game/incoming-attacks/{world_id}        EP-RA01: lista ataques entrantes
+  POST /game/incoming-attacks/{world_id}/check  EP-RA02: dispara lectura inmediata
+
+SIN Accept-Language: ningún campo devuelto es texto localizado.
+Esta es una desviación consciente documentada en el spec
+docs/specs/radar-ataques-entrantes.md §8.
+
+Los errores de dominio (WorldNotFoundError → 404, SessionNotActiveError → 503)
+se propagan al handler global de main.py, que los mapea vía ERROR_HTTP_MAP.
+No se capturan en este router.
+
+Ver spec docs/specs/radar-ataques-entrantes.md §8 para los contratos completos.
+Añadido en la feature radar-ataques-entrantes (2026-06-05).
+"""
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, Path, Query, Request, status
+
+from core.use_cases.incoming_attack_use_cases import (
+    CheckIncomingAttackUseCase,
+    ListIncomingAttacksUseCase,
+)
+
+router = APIRouter(prefix="/game", tags=["incoming-attacks"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers de dependencias
+# ---------------------------------------------------------------------------
+
+def _get_incoming_attack_port(request: Request):
+    """Extrae incoming_attack_port de app.state. 500 si no está inicializado."""
+    port = getattr(request.app.state, "incoming_attack_port", None)
+    if port is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor.",
+        )
+    return port
+
+
+def _get_db_port(request: Request):
+    """Extrae db_port (AccountSQLiteAdapter) de app.state para verificar mundos."""
+    port = getattr(request.app.state, "db_port", None)
+    if port is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor.",
+        )
+    return port
+
+
+async def _verify_world(world_id: int, db_port) -> None:
+    """
+    Lanza HTTPException 404 si el mundo no existe.
+    Sigue el mismo patrón que session.py._verify_world.
+    """
+    try:
+        world = await db_port.get_world(world_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Mundo no encontrado.")
+    if world is None:
+        raise HTTPException(status_code=404, detail="Mundo no encontrado.")
+
+
+# ---------------------------------------------------------------------------
+# EP-RA01 — GET /game/incoming-attacks/{world_id}
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/incoming-attacks/{world_id}",
+    summary="Lista ataques entrantes de un mundo",
+    description=(
+        "Devuelve la lista paginada de ataques entrantes detectados para el mundo indicado. "
+        "Por defecto solo incluye ataques pendientes (sin impactar o sin timer). "
+        "Usa `include_past=true` para ver también ataques pasados. "
+        "Sin Accept-Language: los datos son numéricos o texto crudo del juego, "
+        "no texto localizado."
+    ),
+    responses={
+        200: {
+            "description": "Lista de ataques entrantes",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "items": [
+                            {
+                                "id": 1,
+                                "village_game_id": 12345,
+                                "village_name": "Mi Aldea",
+                                "village_coord_x": 100,
+                                "village_coord_y": -50,
+                                "attack_count": 2,
+                                "impact_at": "2026-06-05T18:30:00+00:00",
+                                "seconds_remaining": 3600,
+                                "rally_point_href": "/build.php?gid=16&id=1",
+                                "attacker_name": None,
+                                "origin_village_name": None,
+                                "origin_village_coord_x": None,
+                                "origin_village_coord_y": None,
+                                "operation_type": None,
+                                "attacker_snapshot": None,
+                                "source": "dorf1",
+                                "detected_at": "2026-06-05T17:30:00+00:00",
+                            }
+                        ],
+                        "total": 1,
+                        "limit": 50,
+                        "offset": 0,
+                    }
+                }
+            },
+        },
+        404: {"description": "Mundo no encontrado"},
+        422: {"description": "Parámetros de query inválidos"},
+    },
+)
+async def list_incoming_attacks(
+    request: Request,
+    world_id: int = Path(..., ge=1, description="ID del mundo en la BD local"),
+    include_past: bool = Query(
+        False,
+        description=(
+            "Si es true, incluye ataques cuyo impact_at ya ha pasado. "
+            "Por defecto solo muestra ataques pendientes o sin timer."
+        ),
+    ),
+    village_game_id: int | None = Query(
+        None,
+        ge=1,
+        description="Filtro opcional: solo ataques a esta aldea (game_id de Travian).",
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=100,
+        description="Número máximo de registros a devolver (1–100).",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Desplazamiento para paginación.",
+    ),
+):
+    """
+    EP-RA01 — Lista ataques entrantes para un mundo.
+
+    Calcula seconds_remaining en el use case:
+      - null si impact_at es None (ataque detectado sin timer todavía)
+      - max(0, int(delta)) si impact_at no es None
+
+    Lanza HTTP 404 si el mundo no existe (validado en el router, antes del use case).
+    """
+    incoming_attack_port = _get_incoming_attack_port(request)
+    db_port = _get_db_port(request)
+
+    # Verificar existencia del mundo en el router (patrón de session.py)
+    await _verify_world(world_id, db_port)
+
+    use_case = ListIncomingAttacksUseCase(db_port=incoming_attack_port)
+    result = await use_case.execute(
+        world_id=world_id,
+        include_past=include_past,
+        village_game_id=village_game_id,
+        limit=limit,
+        offset=offset,
+        db_port_for_world_check=None,  # ya verificado arriba
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# EP-RA02 — POST /game/incoming-attacks/{world_id}/check
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/incoming-attacks/{world_id}/check",
+    summary="Dispara lectura inmediata del radar de ataques",
+    description=(
+        "Fuerza una lectura inmediata del radar de ataques entrantes para el mundo "
+        "indicado. Navega dorf1 con el browser autenticado y devuelve cuántos ataques "
+        "se detectaron en esta lectura. "
+        "Requiere sesión activa para el mundo (login previo). "
+        "Sin body ni Accept-Language."
+    ),
+    responses={
+        200: {
+            "description": "Resultado de la lectura del radar",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "world_id": 1,
+                        "attacks_detected": 3,
+                        "message": "Check completado",
+                    }
+                }
+            },
+        },
+        404: {"description": "Mundo no encontrado"},
+        503: {"description": "No hay sesión activa para este mundo"},
+    },
+)
+async def check_incoming_attacks(
+    request: Request,
+    world_id: int = Path(..., ge=1, description="ID del mundo en la BD local"),
+):
+    """
+    EP-RA02 — Dispara la lectura del radar para el mundo indicado.
+
+    Lanza HTTP 404 si el mundo no existe (validado en el router, antes del use case).
+    Lanza SessionNotActiveError → 503 si no hay sesión activa.
+
+    El callable fetch_dorf1_attacks se construye aquí en el handler a partir
+    del IncomingAttackBrowserAdapter inyectado en app.state. Si el adaptador
+    no está disponible (app aún no ha inicializado un WorldAgent para ese mundo),
+    SessionNotActiveError se propaga al handler global → 503.
+    """
+    incoming_attack_port = _get_incoming_attack_port(request)
+    db_port = _get_db_port(request)
+
+    # Verificar existencia del mundo en el router (patrón de session.py)
+    await _verify_world(world_id, db_port)
+
+    # Obtener el browser adapter desde app.state.
+    # incoming_attack_browser_adapter puede no estar disponible si no hay sesión activa.
+    # En ese caso lanzamos SessionNotActiveError → 503.
+    browser_adapter = getattr(request.app.state, "incoming_attack_browser_adapter", None)
+
+    if browser_adapter is None:
+        # Sin browser adapter → no hay sesión activa para ningún mundo.
+        # Lanzamos SessionNotActiveError para que el handler global lo mapee a 503.
+        from core.exceptions import SessionNotActiveError  # noqa: PLC0415
+        raise SessionNotActiveError()
+
+    async def fetch_dorf1_attacks(wid: int):
+        return await browser_adapter.fetch_dorf1_attacks(wid)
+
+    use_case = CheckIncomingAttackUseCase(db_port=incoming_attack_port)
+    result = await use_case.execute(
+        world_id=world_id,
+        fetch_dorf1_attacks=fetch_dorf1_attacks,
+        db_port_for_world_check=None,  # ya verificado arriba
+    )
+    return result
