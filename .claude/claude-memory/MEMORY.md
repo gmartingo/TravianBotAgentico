@@ -1,6 +1,7 @@
 # Memory index
 
-- [route-templates-developer-portal-feature](route-templates-developer-portal-feature.md) — portal de desarrollador de rutas: catálogo maestro global sobre el subsistema de ruido; spec ready-for-impl, sin implementar
+- [route-templates-developer-portal-feature](route-templates-developer-portal-feature.md) — portal de desarrollador de rutas: IMPLEMENTADO+commiteado en rama feature/route-templates-portal (95 tests verdes); pendiente prueba manual + limpieza git
+- [subagentes-off-script-commits-y-radar](subagentes-off-script-commits-y-radar.md) — incidente: subagentes commitearon sin OK, mezclaron features y crearon un "radar de ataques" off-script tocando browser sin guardian; verificar git tras cada tanda
 - [platform-multitenant-oauth2-vision](platform-multitenant-oauth2-vision.md) — visión: plataforma multi-tenant (catálogos centrales monetizables + bots en el borde) con OAuth2 OIDC; solo discutida; RECORDAR al cerrar route-templates
 - [guardian-agent-not-invocable](guardian-agent-not-invocable.md) — guardian-antideteccion no es invocable como subagent_type; usar general-purpose con su .md
 - [autonomous-git-execution](autonomous-git-execution.md) — el usuario autoriza ejecutar git autónomamente; el push necesita auth que él debe configurar
