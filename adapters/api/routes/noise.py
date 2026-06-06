@@ -879,7 +879,7 @@ async def update_destination(
     dest_id: int = Path(..., ge=1),
 ) -> NoiseDestinationResponse:
     """
-    PATCH parcial del destino. url_pattern y category no se pueden cambiar.
+    PATCH parcial del destino. url_pattern es inmutable; category_slug SÍ es editable.
     Verifica que el destino pertenece al mundo (404 si no).
     """
     await _verify_world_exists(request, world_id)

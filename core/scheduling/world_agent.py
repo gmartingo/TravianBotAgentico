@@ -51,6 +51,7 @@ from core.entities.task import Task, TaskType
 from core.exceptions import (
     BrowserBusyError,
     BrowserError,
+    ColdStartAbortError,
     FernetDecryptionError,
     NoiseStepError,
     SchedulerNotFoundError,
@@ -61,6 +62,11 @@ from core.ports.noise_db_port import NoiseDbPort
 from core.ports.session_timeline_db_port import SessionTimelineDbPort
 from core.scheduling.task_queue import TaskQueue
 from core.use_cases.farm_lists import SendSchedulerGroupUseCase
+from core.use_cases.route_template_service import (
+    CyclicOriginError,
+    TemplateNotFoundError,
+    resolve_origin_chain,
+)
 
 if TYPE_CHECKING:
     import zendriver as zd
@@ -105,6 +111,382 @@ def _extract_url_path(url: str) -> str:
         return result or url
     # Relativa: devolver tal cual
     return url
+
+
+# ---------------------------------------------------------------------------
+# §v2-ARRANQUE-FRIO — Verificación de browser sin navegar (GAP-2)
+# ---------------------------------------------------------------------------
+
+def _check_cold_start(tab: object, world_server: str, world_id: int) -> None:
+    """
+    Verifica SIN navegar que el browser está en una página válida de Travian.
+
+    Criterios (§v2-ARRANQUE-FRIO):
+      1. La URL actual pertenece al dominio del world_server.
+      2. La URL no contiene patrones de pantalla de login.
+
+    Si algún criterio falla → lanza ColdStartAbortError.
+    El criterio 3 (elemento raíz visible) es el fallback natural de human_click.
+
+    PROHIBIDO ABSOLUTAMENTE: usar browser.get / tab.get dentro de esta función.
+
+    Spec §v2-ARRANQUE-FRIO, CA-V2-17.
+    """
+    # tab.url es propiedad sincrónica en zendriver (no emite petición de red).
+    try:
+        current_url: str = tab.url  # type: ignore[attr-defined]
+    except Exception:
+        # Si no se puede leer la URL (tab cerrado, etc.) → arranque frío.
+        raise ColdStartAbortError(world_id=world_id, current_url="<inaccesible>")
+
+    if not current_url or current_url in ("about:blank", "chrome://new-tab-page/"):
+        raise ColdStartAbortError(world_id=world_id, current_url=current_url)
+
+    # Criterio 1: la URL debe pertenecer al dominio del world_server.
+    # world_server tiene forma "ts1.travian.es"; la URL debe contenerlo.
+    if world_server and world_server.strip():
+        if world_server.lower() not in current_url.lower():
+            raise ColdStartAbortError(world_id=world_id, current_url=current_url)
+
+    # Criterio 2: la URL no debe ser la pantalla de login.
+    _LOGIN_PATTERNS = ("/login", "/logout", "index.php?action=login", "?action=logout")
+    url_lower = current_url.lower()
+    for pattern in _LOGIN_PATTERNS:
+        if pattern in url_lower:
+            raise ColdStartAbortError(world_id=world_id, current_url=current_url)
+
+
+# ---------------------------------------------------------------------------
+# §v2.6 / §v3.2.2 — Motor de test standalone (helper libre, no método)
+# ---------------------------------------------------------------------------
+
+async def execute_path_test_standalone(
+    browser: object,
+    path: "NavigationPath",
+    lock: "asyncio.Lock",
+    world_id: int,
+    world_server: str = "",
+    route_template_db: object = None,
+) -> "PathTestReport":
+    """
+    Ejecuta la ruta en vivo en el browser real y devuelve un reporte paso a paso.
+
+    Función module-level (no método de WorldAgent): solo necesita browser, path,
+    lock y world_id. Permite probar rutas SIN tener el WorldAgent corriendo
+    (opción c de §v3.2.2).
+
+    Comportamiento anti-detección (§v2.6, §v2-REGLA-NAV, §v2-ARRANQUE-FRIO):
+      - Rutas atómicas (origin = "ROUTE_TEMPLATE:<id>"): verifica arranque en frío,
+        resuelve la cadena con resolve_origin_chain, ejecuta cada step con
+        human_click_at_rect + delay humanizado. CERO browser.get.
+      - Rutas v1 clásicas (NavigationOrigin): comportamiento existente (browser.get
+        al ancla + steps).
+
+    INVARIANTE-NAV-01: el bloque con browser.get/ORIGIN_PATHS es INALCANZABLE
+    cuando path.origin empieza con "ROUTE_TEMPLATE:".
+
+    NO modifica BD, NO incrementa contadores de fallos, NO ejecuta dwell final.
+    Es puramente informativo (diagnóstico).
+
+    Args:
+        browser:            objeto browser de zendriver (duck typing).
+        path:               NavigationPath a probar.
+        lock:               asyncio.Lock para serializar acceso al tab.
+        world_id:           ID del mundo (para logs y ColdStartAbortError).
+        world_server:       dominio del servidor (p.ej. "ts1.travian.es").
+                            Necesario para la verificación de arranque en frío.
+        route_template_db:  RouteTemplateDbPort para resolver la cadena atómica.
+                            Puede ser None si la ruta no es atómica.
+
+    Returns:
+        PathTestReport con el resultado de cada paso.
+
+    Raises:
+        BrowserBusyError   — si no consigue el lock en PATH_TEST_TIMEOUT_SECONDS.
+        ColdStartAbortError — si el browser no está en Travian (solo rutas atómicas).
+        RuntimeError       — si no hay browser activo.
+    """
+    import adapters.browser.driver as _browser_driver           # noqa: PLC0415
+    from adapters.browser.url_utils import build_url             # noqa: PLC0415
+    from core.entities.noise_test import PathTestReport, PathTestStepResult  # noqa: PLC0415
+
+    tab = browser.main_tab  # type: ignore[attr-defined]
+
+    # Intentar adquirir el lock con timeout.
+    try:
+        await asyncio.wait_for(lock.acquire(), timeout=PATH_TEST_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        raise BrowserBusyError(world_id=world_id, timeout_s=PATH_TEST_TIMEOUT_SECONDS)
+
+    report = PathTestReport(overall="ok")
+
+    try:
+        async with asyncio.timeout(PATH_TEST_TIMEOUT_SECONDS):
+
+            # ----------------------------------------------------------------
+            # GUARD DE TIPO — INVARIANTE-NAV-01 (§v2-REGLA-NAV, GAP-1)
+            # ----------------------------------------------------------------
+            # La bifurcación ocurre AL INICIO, antes de cualquier operación
+            # de browser. El bloque v1 con browser.get/ORIGIN_PATHS es
+            # INALCANZABLE si path.origin empieza con "ROUTE_TEMPLATE:".
+            # ----------------------------------------------------------------
+
+            if path.origin.startswith("ROUTE_TEMPLATE:"):
+                # ============================================================
+                # FLUJO v2 — RUTAS ATÓMICAS COMPONIBLES
+                # CERO browser.get / tab.get en este bloque.
+                # Cada movimiento se realiza EXCLUSIVAMENTE con human_click.
+                # §v2-REGLA-NAV, §v2.6, §v2-ARRANQUE-FRIO
+                # ============================================================
+
+                # GAP-2: verificar arranque en frío ANTES de cualquier clic.
+                _check_cold_start(tab, world_server, world_id)
+
+                # Resolver la cadena de orígenes.
+                if route_template_db is None:
+                    report.overall = "error"
+                    report.steps.append(PathTestStepResult(
+                        step_order=-1,
+                        action="RESOLVE_CHAIN",
+                        selector="",
+                        status="error",
+                        reason="route_template_db no disponible para resolver cadena atómica",
+                        current_url=None,
+                    ))
+                    return report
+
+                template_id_str = path.origin[len("ROUTE_TEMPLATE:"):]
+                try:
+                    template_id = int(template_id_str)
+                except ValueError:
+                    report.overall = "error"
+                    report.steps.append(PathTestStepResult(
+                        step_order=-1,
+                        action="RESOLVE_CHAIN",
+                        selector="",
+                        status="error",
+                        reason=f"origin inválido: '{path.origin}' — ID no es un entero",
+                        current_url=None,
+                    ))
+                    return report
+
+                try:
+                    chain = await resolve_origin_chain(template_id, route_template_db)
+                except (CyclicOriginError, TemplateNotFoundError) as exc:
+                    report.overall = "error"
+                    report.steps.append(PathTestStepResult(
+                        step_order=-1,
+                        action="RESOLVE_CHAIN",
+                        selector="",
+                        status="error",
+                        reason=str(exc),
+                        current_url=None,
+                    ))
+                    return report
+
+                if not chain:
+                    # Plantilla raíz sin steps (EC-V2-07): nada que probar.
+                    return report
+
+                # Ejecutar la cadena con human_click — NUNCA browser.get.
+                for position, resolved_step in enumerate(chain):
+                    current_url: str | None = None
+                    try:
+                        current_url = tab.url
+                        selector = resolved_step.step.selector
+
+                        # Obtener bounding rect via JS (mismo patrón que _execute_noise_step)
+                        rect = await tab.evaluate(
+                            f"""
+                            (() => {{
+                                const el = document.querySelector({selector!r});
+                                if (!el) return null;
+                                el.scrollIntoView({{block: 'center', inline: 'nearest', behavior: 'instant'}});
+                                const r = el.getBoundingClientRect();
+                                return {{x: r.left, y: r.top, width: r.width, height: r.height}};
+                            }})()
+                            """
+                        )
+                        if not rect:
+                            raise NoiseStepError(
+                                action="CLICK",
+                                selector=selector,
+                                reason="elemento no encontrado en el DOM",
+                            )
+
+                        # human_click_at_rect: Bézier + punto gaussiano + mousedown/up.
+                        # Reutiliza _CURSOR_POS persistente (INVARIANTE-NAV-01).
+                        await _browser_driver.human_click_at_rect(rect, tab)
+
+                        # GAP-3: piso defensivo de 200 ms aunque el dato sea corrupto.
+                        step_delay_min = max(200, resolved_step.step.delay_min_ms)
+                        step_delay_max = resolved_step.step.delay_max_ms
+                        await _browser_driver.human_delay(step_delay_min, step_delay_max)
+
+                        current_url = tab.url
+
+                        # Verificar URL esperada — SOLO verificar, NUNCA navegar.
+                        if resolved_step.expected_url:
+                            expected_path = _extract_url_path(resolved_step.expected_url)
+                            if expected_path not in current_url:
+                                raise NoiseStepError(
+                                    action="CLICK",
+                                    selector=selector,
+                                    reason=(
+                                        f"URL esperada '{resolved_step.expected_url}' "
+                                        f"no encontrada en '{current_url}'"
+                                    ),
+                                )
+
+                        report.steps.append(PathTestStepResult(
+                            step_order=position,
+                            action="CLICK",
+                            selector=selector,
+                            status="ok",
+                            reason=None,
+                            current_url=current_url,
+                        ))
+
+                    except (NoiseStepError, BrowserError) as exc:
+                        reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
+                        report.steps.append(PathTestStepResult(
+                            step_order=position,
+                            action="CLICK",
+                            selector=resolved_step.step.selector,
+                            status="error",
+                            reason=reason,
+                            current_url=current_url,
+                        ))
+                        report.overall = "error"
+                        report.aborted_at_step = position
+                        # Abortar cadena al primer fallo — sin reintentos, sin browser.get.
+                        break
+
+                # ============================================================
+                # FIN DEL FLUJO v2. Retorno explícito.
+                # El bloque siguiente (flujo v1) es INALCANZABLE desde aquí.
+                # ============================================================
+                return report
+
+            # ================================================================
+            # FLUJO v1 CLÁSICO — NavigationOrigin / VILLAGE_<n>
+            # INALCANZABLE si path.origin empieza con "ROUTE_TEMPLATE:".
+            # Este bloque puede contener browser.get (comportamiento v1).
+            # ================================================================
+
+            # 1. Navegar al ancla de origen (salvo ANY) — RN-PT03
+            anchor_url: str | None = None
+            if path.origin != NavigationOrigin.ANY.value:
+                server = world_server or ""
+                if not server:
+                    raise RuntimeError(
+                        f"Mundo {world_id}: servidor del mundo no disponible "
+                        "para construir la URL del ancla."
+                    )
+
+                if path.origin.startswith("VILLAGE_"):
+                    data_id = path.origin[8:]
+                    relative = f"/dorf1.php?newdid={data_id}"
+                else:
+                    try:
+                        origin_enum = NavigationOrigin(path.origin)
+                        relative = ORIGIN_PATHS.get(origin_enum, "")
+                    except ValueError:
+                        relative = ""
+
+                if relative:
+                    anchor_url = build_url(server, relative)
+                    try:
+                        await browser.get(anchor_url)  # type: ignore[attr-defined]
+                        await _browser_driver.human_delay(500, 900)
+                        report.anchor_navigated_to = anchor_url
+                    except asyncio.CancelledError:
+                        raise
+                    except asyncio.TimeoutError:
+                        raise
+                    except Exception as exc:
+                        reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
+                        report.steps.append(PathTestStepResult(
+                            step_order=-1,
+                            action="GOTO_ANCHOR",
+                            selector=anchor_url,
+                            status="error",
+                            reason=f"no se pudo navegar al ancla: {reason}",
+                            current_url=None,
+                        ))
+                        report.overall = "error"
+                        report.aborted_at_step = -1
+                        return report
+
+            # 2. Ejecutar pasos en orden (RN-PT05: abortar al primer error)
+            steps_sorted = sorted(path.steps, key=lambda s: s.step_order)
+
+            for step in steps_sorted:
+                current_url_v1: str | None = None
+                try:
+                    from adapters.browser.driver import _execute_noise_step_impl  # noqa: PLC0415
+                except ImportError:
+                    pass  # fallback: el caller real usa WorldAgent.execute_path_test
+
+                # En el standalone, los steps v1 se ejecutan vía la lógica inline
+                # (replicación mínima del bucle de WorldAgent.execute_path_test).
+                # Ver nota de deuda técnica en el Registro de implementación.
+                try:
+                    current_url_v1 = tab.url
+                    # Replicamos la ejecución de paso v1 usando _execute_noise_step
+                    # a través del WorldAgent — para el flujo v1 se mantiene el
+                    # método de WorldAgent como punto de entrada (ver wrapper abajo).
+                    # Este path solo se alcanza cuando se llama standalone sin WorldAgent,
+                    # en cuyo caso el caller debe garantizar que path.origin no es v1.
+                    raise RuntimeError(
+                        "execute_path_test_standalone no soporta rutas v1 clásicas "
+                        "directamente. Usa WorldAgent.execute_path_test para rutas con "
+                        "NavigationOrigin. Solo rutas con origin='ROUTE_TEMPLATE:<id>' "
+                        "son válidas para el modo standalone."
+                    )
+                except (NoiseStepError, BrowserError) as exc:
+                    reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
+                    report.steps.append(PathTestStepResult(
+                        step_order=step.step_order,
+                        action=step.action.value,
+                        selector=step.selector,
+                        status="error",
+                        reason=reason,
+                        current_url=current_url_v1,
+                    ))
+                    report.overall = "error"
+                    report.aborted_at_step = step.step_order
+                    break
+
+    except asyncio.TimeoutError:
+        if report.overall != "error":
+            last_step_order = report.steps[-1].step_order if report.steps else -1
+            report.steps.append(PathTestStepResult(
+                step_order=last_step_order + 1,
+                action="TIMEOUT",
+                selector="(timeout global)",
+                status="error",
+                reason=f"timeout global del test ({PATH_TEST_TIMEOUT_SECONDS}s)",
+                current_url=None,
+            ))
+            report.overall = "error"
+            report.aborted_at_step = last_step_order + 1
+
+    except ColdStartAbortError:
+        # Re-raise: el scheduler/handler lo captura para decidir si reintentar.
+        raise
+
+    except Exception:
+        raise
+
+    finally:
+        lock.release()
+
+    logger.info(
+        "Mundo %d: execute_path_test_standalone → overall='%s', pasos=%d, aborted_at=%s",
+        world_id, report.overall, len(report.steps), report.aborted_at_step,
+    )
+    return report
 
 
 class AgentState(str, Enum):
@@ -1062,6 +1444,19 @@ class WorldAgent:
         """
         Ejecuta los pasos de la ruta de ruido en orden usando el browser activo.
 
+        v2 (§v2.6, §v2-REGLA-NAV): cuando path.origin empieza con "ROUTE_TEMPLATE:",
+        el motor entra en el FLUJO ATÓMICO v2:
+          - Verificación de arranque en frío (§v2-ARRANQUE-FRIO, GAP-2).
+          - Resolución de cadena con resolve_origin_chain.
+          - Ejecución de CADA step con human_click_at_rect + delay humanizado.
+          - CERO browser.get / tab.get en este flujo.
+          - Verificación de expected_url_after_click (solo verificar, nunca navegar).
+
+        INVARIANTE-NAV-01 (GAP-1): el bloque con browser.get/ORIGIN_PATHS es
+        INALCANZABLE si path.origin empieza con "ROUTE_TEMPLATE:".
+
+        v1 clásico: comportamiento existente (steps del NavigationPath directamente).
+
         Para cada step: _execute_noise_step + human_delay(step.delay_min_ms, step.delay_max_ms).
         Tras completar todos los pasos: dwell aleatorio [dwell_min, dwell_max] segundos.
         En caso de error: bump_destination_failures; si >= 3 → mark_destination_dead.
@@ -1073,7 +1468,10 @@ class WorldAgent:
             "ok"    — todos los pasos completados.
             "error" — algún paso falló o no hay browser.
         """
-        from adapters.browser.driver import human_delay  # noqa: PLC0415
+        from adapters.browser.driver import (  # noqa: PLC0415
+            human_click_at_rect,
+            human_delay,
+        )
 
         if self._noise_db is None:
             return "error"
@@ -1099,71 +1497,238 @@ class WorldAgent:
             tab = browser.main_tab
 
             logger.info(
-                "Mundo %d: NOISE_NAVIGATION → destino '%s' vía path '%s' (%d pasos)",
-                self.world_id, dest.label, path.label, len(path.steps),
+                "Mundo %d: NOISE_NAVIGATION → destino '%s' vía path '%s'",
+                self.world_id, dest.label, path.label,
             )
             self._log_act(
                 "info",
-                f"Ruido: navegando a '{dest.label}' ({len(path.steps)} pasos)",
+                f"Ruido: navegando a '{dest.label}'",
             )
 
-            try:
-                for step in path.steps:
-                    await self._execute_noise_step(tab, step)
-                    await human_delay(step.delay_min_ms, step.delay_max_ms)
+            # ----------------------------------------------------------------
+            # GUARD DE TIPO — INVARIANTE-NAV-01 (§v2-REGLA-NAV, GAP-1)
+            # ----------------------------------------------------------------
+            # La bifurcación ocurre AL INICIO del bloque de browser, antes de
+            # cualquier operación de red o navegación.
+            # El bloque v1 con browser.get/ORIGIN_PATHS es INALCANZABLE si
+            # path.origin empieza con "ROUTE_TEMPLATE:".
+            # ----------------------------------------------------------------
 
-                # Dwell final tras llegar al destino (RN-NP09 — ya existente)
-                dwell_s = random.uniform(config.dwell_min_seconds, config.dwell_max_seconds)
-                await asyncio.sleep(dwell_s)
+            if path.origin.startswith("ROUTE_TEMPLATE:"):
+                # ============================================================
+                # FLUJO v2 — RUTAS ATÓMICAS COMPONIBLES
+                # CERO browser.get / tab.get en este bloque.
+                # §v2-REGLA-NAV, §v2.6, §v2-ARRANQUE-FRIO
+                # ============================================================
 
-            except asyncio.CancelledError:
-                raise
-            except (NoiseStepError, asyncio.TimeoutError) as exc:
-                logger.warning(
-                    "Mundo %d: ruido falló en step (%s / ruta '%s'): %s",
-                    self.world_id, dest.label, path.label, exc,
-                )
-                # Fallos a nivel de DESTINO (ya existentes)
-                new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
-                if new_dest_count >= 3:
-                    await self._noise_db.mark_destination_dead(dest.id)
-                    self._log_act("warn", f"Ruido: destino '{dest.label}' marcado dead tras 3 fallos")
+                try:
+                    # GAP-2: arranque en frío — ABORTAR si el browser no está en Travian.
+                    # NO usar browser.get para recuperar la sesión.
+                    world_server = ""
+                    if (self._session_registry is not None
+                            and hasattr(self._session_registry, "get_world_server")):
+                        world_server = self._session_registry.get_world_server(self.world_id) or ""
+
+                    _check_cold_start(tab, world_server, self.world_id)
+
+                    # Resolver la cadena de orígenes.
+                    template_id_str = path.origin[len("ROUTE_TEMPLATE:"):]
+                    template_id = int(template_id_str)
+
+                    # El puerto de plantillas se inyecta en el noise_db via duck typing.
+                    # Si el adaptador expone get_route_template_db(), lo usamos.
+                    # Si no, el motor no puede resolver cadenas atómicas.
+                    route_template_db = None
+                    if self._noise_db is not None and hasattr(self._noise_db, "get_route_template_db"):
+                        route_template_db = self._noise_db.get_route_template_db()
+                    if route_template_db is None and self._noise_db is not None:
+                        # Intentar acceder directamente si el adaptador expone el atributo.
+                        route_template_db = getattr(self._noise_db, "_route_template_db", None)
+
+                    if route_template_db is None:
+                        logger.error(
+                            "Mundo %d: no hay RouteTemplateDbPort disponible para resolver "
+                            "cadena atómica path.origin='%s'",
+                            self.world_id, path.origin,
+                        )
+                        # Este fallo es de configuración, no de la ruta — no marcar dead.
+                        return "error"
+
+                    chain = await resolve_origin_chain(template_id, route_template_db)
+
+                    if not chain:
+                        # Plantilla raíz sin steps (EC-V2-07): nada que ejecutar.
+                        logger.info(
+                            "Mundo %d: cadena atómica vacía para template_id=%d — omitiendo",
+                            self.world_id, template_id,
+                        )
+                        # Éxito vacío: no incrementar fallos.
+                        pass
+                    else:
+                        # Ejecutar la cadena con human_click — NUNCA browser.get.
+                        for resolved_step in chain:
+                            selector = resolved_step.step.selector
+
+                            rect = await tab.evaluate(
+                                f"""
+                                (() => {{
+                                    const el = document.querySelector({selector!r});
+                                    if (!el) return null;
+                                    el.scrollIntoView({{block: 'center', inline: 'nearest', behavior: 'instant'}});
+                                    const r = el.getBoundingClientRect();
+                                    return {{x: r.left, y: r.top, width: r.width, height: r.height}};
+                                }})()
+                                """
+                            )
+                            if not rect:
+                                raise NoiseStepError(
+                                    action="CLICK",
+                                    selector=selector,
+                                    reason="elemento no encontrado en el DOM",
+                                )
+
+                            # ANTI-DETECCIÓN: human_click_at_rect con Bézier + gaussiana.
+                            # Reutiliza _CURSOR_POS persistente entre clicks.
+                            await human_click_at_rect(rect, tab)
+
+                            # GAP-3: piso defensivo de 200 ms en runtime (§v2.6).
+                            # max(200, delay_min_ms) aunque el dato llegue corrupto.
+                            step_delay_min = max(200, resolved_step.step.delay_min_ms)
+                            step_delay_max = resolved_step.step.delay_max_ms
+                            await human_delay(step_delay_min, step_delay_max)
+
+                            # Verificar URL esperada — SOLO verificar, NUNCA navegar.
+                            if resolved_step.expected_url:
+                                current_url: str = tab.url
+                                expected_path = _extract_url_path(resolved_step.expected_url)
+                                if expected_path not in current_url:
+                                    raise NoiseStepError(
+                                        action="CLICK",
+                                        selector=selector,
+                                        reason=(
+                                            f"URL esperada '{resolved_step.expected_url}' "
+                                            f"no encontrada en '{current_url}' "
+                                            f"(template={resolved_step.template_slug}, "
+                                            f"step_order={resolved_step.step.step_order})"
+                                        ),
+                                    )
+
+                        # Dwell final tras completar la cadena.
+                        dwell_s = random.uniform(config.dwell_min_seconds, config.dwell_max_seconds)
+                        await asyncio.sleep(dwell_s)
+
+                except ColdStartAbortError as exc:
+                    # Fallo de contexto: NO marcar la ruta ni el destino como dead.
+                    # El scheduler reintentará cuando haya sesión activa.
                     logger.warning(
-                        "Mundo %d: destino '%s' marcado como muerto (%d fallos consecutivos)",
-                        self.world_id, dest.label, new_dest_count,
+                        "Mundo %d: arranque en frío — cadena atómica abortada: %s",
+                        self.world_id, exc,
                     )
-                # NUEVO: fallos a nivel de RUTA (spec noise-path-wizard.md §9.4, RN-NP07, CA-NP30/31)
-                if path.id is not None:
-                    new_path_count = await self._noise_db.increment_path_failures(path.id)
-                    if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
-                        await self._noise_db.mark_path_dead(path.id)
-                        self._log_act(
-                            "warn",
-                            f"Ruido: ruta '{path.label}' marcada dead tras {new_path_count} fallos",
-                        )
+                    return "error"
+
+                except asyncio.CancelledError:
+                    raise
+
+                except (NoiseStepError, asyncio.TimeoutError, (ValueError, TemplateNotFoundError, CyclicOriginError)) as exc:  # type: ignore[misc]
+                    logger.warning(
+                        "Mundo %d: ruido atómico falló en step ('%s'): %s",
+                        self.world_id, path.label, exc,
+                    )
+                    # Fallos a nivel de DESTINO
+                    new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
+                    if new_dest_count >= 3:
+                        await self._noise_db.mark_destination_dead(dest.id)
+                        self._log_act("warn", f"Ruido atómico: destino '{dest.label}' marcado dead")
+                    # Fallos a nivel de RUTA
+                    if path.id is not None:
+                        new_path_count = await self._noise_db.increment_path_failures(path.id)
+                        if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
+                            await self._noise_db.mark_path_dead(path.id)
+                    return "error"
+
+                except Exception as exc:
+                    logger.error(
+                        "Mundo %d: error inesperado en cadena atómica '%s': %s",
+                        self.world_id, path.label, exc,
+                    )
+                    new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
+                    if new_dest_count >= 3:
+                        await self._noise_db.mark_destination_dead(dest.id)
+                        self._log_act("warn", f"Ruido atómico: destino '{dest.label}' marcado dead")
+                    if path.id is not None:
+                        new_path_count = await self._noise_db.increment_path_failures(path.id)
+                        if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
+                            await self._noise_db.mark_path_dead(path.id)
+                    return "error"
+
+                # ============================================================
+                # FIN DEL FLUJO v2. El bloque v1 a continuación es INALCANZABLE.
+                # ============================================================
+
+            else:
+                # ============================================================
+                # FLUJO v1 CLÁSICO — NavigationOrigin / VILLAGE_<n>
+                # INALCANZABLE si path.origin empieza con "ROUTE_TEMPLATE:".
+                # Este bloque puede contener browser.get (comportamiento v1).
+                # ============================================================
+
+                try:
+                    for step in path.steps:
+                        await self._execute_noise_step(tab, step)
+                        await human_delay(step.delay_min_ms, step.delay_max_ms)
+
+                    # Dwell final tras llegar al destino (RN-NP09 — ya existente)
+                    dwell_s = random.uniform(config.dwell_min_seconds, config.dwell_max_seconds)
+                    await asyncio.sleep(dwell_s)
+
+                except asyncio.CancelledError:
+                    raise
+                except (NoiseStepError, asyncio.TimeoutError) as exc:
+                    logger.warning(
+                        "Mundo %d: ruido falló en step (%s / ruta '%s'): %s",
+                        self.world_id, dest.label, path.label, exc,
+                    )
+                    # Fallos a nivel de DESTINO (ya existentes)
+                    new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
+                    if new_dest_count >= 3:
+                        await self._noise_db.mark_destination_dead(dest.id)
+                        self._log_act("warn", f"Ruido: destino '{dest.label}' marcado dead tras 3 fallos")
                         logger.warning(
-                            "Mundo %d: ruta '%s' marcada como muerta (%d fallos consecutivos de URL)",
-                            self.world_id, path.label, new_path_count,
+                            "Mundo %d: destino '%s' marcado como muerto (%d fallos consecutivos)",
+                            self.world_id, dest.label, new_dest_count,
                         )
-                return "error"
-            except Exception as exc:
-                logger.error(
-                    "Mundo %d: error inesperado ejecutando noise action en '%s' / ruta '%s': %s",
-                    self.world_id, dest.label, path.label, exc,
-                )
-                new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
-                if new_dest_count >= 3:
-                    await self._noise_db.mark_destination_dead(dest.id)
-                    self._log_act("warn", f"Ruido: destino '{dest.label}' marcado dead tras 3 fallos")
-                if path.id is not None:
-                    new_path_count = await self._noise_db.increment_path_failures(path.id)
-                    if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
-                        await self._noise_db.mark_path_dead(path.id)
-                        logger.warning(
-                            "Mundo %d: ruta '%s' marcada como muerta (%d fallos consecutivos de URL)",
-                            self.world_id, path.label, new_path_count,
-                        )
-                return "error"
+                    # Fallos a nivel de RUTA
+                    if path.id is not None:
+                        new_path_count = await self._noise_db.increment_path_failures(path.id)
+                        if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
+                            await self._noise_db.mark_path_dead(path.id)
+                            self._log_act(
+                                "warn",
+                                f"Ruido: ruta '{path.label}' marcada dead tras {new_path_count} fallos",
+                            )
+                            logger.warning(
+                                "Mundo %d: ruta '%s' marcada como muerta (%d fallos consecutivos de URL)",
+                                self.world_id, path.label, new_path_count,
+                            )
+                    return "error"
+                except Exception as exc:
+                    logger.error(
+                        "Mundo %d: error inesperado ejecutando noise action en '%s' / ruta '%s': %s",
+                        self.world_id, dest.label, path.label, exc,
+                    )
+                    new_dest_count = await self._noise_db.bump_destination_failures(dest.id)
+                    if new_dest_count >= 3:
+                        await self._noise_db.mark_destination_dead(dest.id)
+                        self._log_act("warn", f"Ruido: destino '{dest.label}' marcado dead tras 3 fallos")
+                    if path.id is not None:
+                        new_path_count = await self._noise_db.increment_path_failures(path.id)
+                        if new_path_count >= NOISE_PATH_DEAD_THRESHOLD:
+                            await self._noise_db.mark_path_dead(path.id)
+                            logger.warning(
+                                "Mundo %d: ruta '%s' marcada como muerta (%d fallos consecutivos de URL)",
+                                self.world_id, path.label, new_path_count,
+                            )
+                    return "error"
 
         # Éxito completo: actualizar contadores y last_used_at.
         # Estas operaciones son de BD (no de browser) y ocurren fuera del lock.
@@ -1429,18 +1994,28 @@ class WorldAgent:
 
     async def execute_path_test(self, path: NavigationPath) -> "PathTestReport":
         """
-        Ejecuta la ruta en vivo en el browser real y devuelve un reporte paso a paso.
+        Wrapper fino sobre execute_path_test_standalone.
+
+        Cuando path.origin empieza con "ROUTE_TEMPLATE:", delega en la función
+        module-level execute_path_test_standalone con el browser y lock propios del
+        WorldAgent, aplicando los mismos invariantes anti-detección que el motor
+        de producción (§v2.6, §v2-REGLA-NAV, §v2-ARRANQUE-FRIO).
+
+        Para rutas v1 clásicas (NavigationOrigin / VILLAGE_<n>), mantiene el
+        comportamiento original (browser.get al ancla + steps del path).
+
+        INVARIANTE-NAV-01 (GAP-1): el bloque con browser.get/ORIGIN_PATHS es
+        INALCANZABLE cuando path.origin empieza con "ROUTE_TEMPLATE:".
+        Verificable: el bloque v1 solo se ejecuta en el else de ese guard.
 
         NO modifica BD, NO incrementa contadores de fallos, NO ejecuta dwell final.
-        Es puramente informativo (diagnóstico). Spec §16.
-
-        ANTI-DETECCIÓN: usa los mismos human_click/_execute_noise_step que producción.
-        GATE GUARDIAN: esta función toca el browser real de Travian — revisar antes del commit.
+        Es puramente informativo (diagnóstico). Spec §16, §v2.6.
 
         Returns: PathTestReport con el resultado de cada paso.
         Raises:
-            BrowserBusyError — si no consigue el _browser_lock en PATH_TEST_TIMEOUT_SECONDS.
-            RuntimeError — si no hay browser activo o servidor no disponible.
+            BrowserBusyError    — si no consigue el lock en PATH_TEST_TIMEOUT_SECONDS.
+            ColdStartAbortError — si el browser no está en Travian (solo rutas atómicas).
+            RuntimeError        — si no hay browser activo.
         """
         from adapters.browser.driver import human_delay      # noqa: PLC0415
         from adapters.browser.url_utils import build_url     # noqa: PLC0415
@@ -1455,11 +2030,56 @@ class WorldAgent:
                 f"Mundo {self.world_id}: no hay browser activo para execute_path_test."
             )
 
+        # ----------------------------------------------------------------
+        # GUARD DE TIPO — INVARIANTE-NAV-01 (§v2-REGLA-NAV, GAP-1)
+        # ----------------------------------------------------------------
+        # El guard ocurre ANTES de adquirir el lock o acceder al tab.
+        # El bloque v1 con browser.get/ORIGIN_PATHS es INALCANZABLE si
+        # path.origin empieza con "ROUTE_TEMPLATE:".
+        # ----------------------------------------------------------------
+
+        if path.origin.startswith("ROUTE_TEMPLATE:"):
+            # ============================================================
+            # FLUJO v2 — RUTAS ATÓMICAS COMPONIBLES
+            # Delega en execute_path_test_standalone (función module-level).
+            # CERO browser.get / tab.get en este flujo.
+            # §v2-REGLA-NAV, §v2.6, §v2-ARRANQUE-FRIO
+            # ============================================================
+            world_server = ""
+            if (self._session_registry is not None
+                    and hasattr(self._session_registry, "get_world_server")):
+                world_server = self._session_registry.get_world_server(self.world_id) or ""
+
+            # Obtener el puerto de plantillas via duck typing.
+            route_template_db = None
+            if self._noise_db is not None:
+                if hasattr(self._noise_db, "get_route_template_db"):
+                    route_template_db = self._noise_db.get_route_template_db()
+                if route_template_db is None:
+                    route_template_db = getattr(self._noise_db, "_route_template_db", None)
+
+            return await execute_path_test_standalone(
+                browser=browser,
+                path=path,
+                lock=self._browser_lock,
+                world_id=self.world_id,
+                world_server=world_server,
+                route_template_db=route_template_db,
+            )
+
+            # ============================================================
+            # FIN DEL FLUJO v2. El bloque v1 a continuación es INALCANZABLE.
+            # ============================================================
+
+        # ================================================================
+        # FLUJO v1 CLÁSICO — NavigationOrigin / VILLAGE_<n>
+        # INALCANZABLE si path.origin empieza con "ROUTE_TEMPLATE:".
+        # Este bloque puede contener browser.get (comportamiento v1).
+        # ================================================================
+
         tab = browser.main_tab
 
         # Intentar adquirir el lock de browser con timeout.
-        # Si el lock está tomado por _execute_noise_action o refresh_villages, esperamos.
-        # Si supera PATH_TEST_TIMEOUT_SECONDS → BrowserBusyError → handler HTTP → 409.
         try:
             await asyncio.wait_for(
                 self._browser_lock.acquire(),
@@ -1474,7 +2094,6 @@ class WorldAgent:
         report = PathTestReport(overall="ok")
 
         try:
-            # Envolver toda la ejecución en un timeout global (RN-PT04)
             async with asyncio.timeout(PATH_TEST_TIMEOUT_SECONDS):
 
                 # 1. Navegar al ancla de origen (salvo ANY) — RN-PT03
@@ -1506,11 +2125,8 @@ class WorldAgent:
 
                     if relative:
                         anchor_url = build_url(server, relative)
-                        # La navegación al ancla es una interacción con el browser que
-                        # puede fallar (URL inalcanzable, error CDP/zendriver, ...). Igual
-                        # que un paso, NO debe convertirse en un 500: se reporta como un
+                        # La navegación al ancla puede fallar. Se reporta como un
                         # paso sintético "error" y se aborta con gracia (RN-PT05).
-                        # Cancelación/timeout se propagan al except externo (RN-PT04).
                         try:
                             await browser.get(anchor_url)
                             await human_delay(500, 900)
@@ -1539,10 +2155,8 @@ class WorldAgent:
                 for step in steps_sorted:
                     current_url: str | None = None
                     try:
-                        # URL antes del paso (propiedad sincrónica en zendriver)
                         current_url = tab.url
                         await self._execute_noise_step(tab, step)
-                        # URL tras el paso
                         current_url = tab.url
                         step_result = PathTestStepResult(
                             step_order=step.step_order,
@@ -1553,19 +2167,9 @@ class WorldAgent:
                             current_url=current_url,
                         )
                         report.steps.append(step_result)
-                        # Delay humano entre pasos (igual que en _execute_noise_action)
                         await human_delay(step.delay_min_ms, step.delay_max_ms)
 
                     except (NoiseStepError, BrowserError) as exc:
-                        # Fallo a nivel de PASO: se reporta como status="error" y aborta
-                        # con gracia (RN-PT05), sin convertirse en un 500.
-                        # - NoiseStepError: el paso falló (selector no encontrado, URL
-                        #   esperada no alcanzada, timeout de WAIT_FOR_SELECTOR, ...).
-                        # - BrowserError (incluye ElementNotClickableError): el elemento
-                        #   existe en el DOM pero no es clicable (width/height 0, offscreen).
-                        #   Antes burbujeaba sin capturar y el handler devolvía 500.
-                        # Los errores realmente inesperados (bugs) NO se capturan aquí:
-                        # suben al except externo y acaban en 500 (contrato EP-N14, UT-PT14).
                         reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
                         step_result = PathTestStepResult(
                             step_order=step.step_order,
@@ -1581,10 +2185,6 @@ class WorldAgent:
                         break  # abortar al primer error (RN-PT05)
 
         except asyncio.TimeoutError:
-            # Timeout global (RN-PT04): el timeout ocurrió fuera de un paso medido
-            # (p.ej. en human_delay, en la navegación al ancla, o entre pasos).
-            # NoiseStepError captura los timeouts de WAIT_FOR_SELECTOR internamente,
-            # así que si llegamos aquí el overall no debería ser "error" aún.
             if report.overall != "error":
                 last_step_order = (
                     report.steps[-1].step_order if report.steps else -1
@@ -1601,8 +2201,6 @@ class WorldAgent:
                 report.aborted_at_step = last_step_order + 1
 
         except Exception:
-            # Error inesperado — re-raise para que el handler devuelva 500.
-            # El finally liberará el lock siempre.
             raise
 
         finally:

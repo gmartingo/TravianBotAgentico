@@ -36,3 +36,4 @@
 - [route-templates-pattern](route-templates-pattern.md) — catálogo plantillas rutas: gotcha FK-nueva-tabla en migración; SELECTs dinámicos; seed JSON externo idempotente por slug
 - [radar-page-hook-wiring](radar-page-hook-wiring.md) — page_html_provider inyectado en WorldAgent para _post_page_hook sin romper frontera hexagonal; tab.get_content() en composition root
 - [route-categories-dynamic-pattern](route-categories-dynamic-pattern.md) — UNSET sentinel para PATCH parcial; migración M-CAT03/M-CAT04 rename columna; RouteCategoryAdapter antes de RouteTemplate en lifespan
+- [free-category-pattern](free-category-pattern.md) — category libre (str, no enum): M-RT04+M-ND02 reconstruyen tablas con foreign_keys=OFF; NoiseDestination.category normaliza enum→str; _dest_to_response usa hasattr(.value)

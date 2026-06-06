@@ -125,6 +125,8 @@ class NoiseDestination:
             raise ValueError("url_pattern no puede estar vacío")
         if not self.label.strip():
             raise ValueError("label no puede estar vacío")
+        if not self.category_slug.strip():
+            raise ValueError("category_slug no puede estar vacío")
 
 
 @dataclass
@@ -231,25 +233,33 @@ class RouteTemplate:
     Slug único globalmente (RN-RT02).
     Los steps siguen las mismas restricciones anti-detección que NavigationStep.
 
-    Spec route-templates-developer-portal.md §7.1.
+    NOTA (v2 rev.2): navigation_weight NO pertenece a la plantilla global.
+    El peso (frecuencia de ruido) se fija por-mundo al clonar/asignar la ruta
+    a un mundo concreto; vive en NoiseDestination.frequency_weight. Ver §v2-PESO.
+
+    NOTA (v2): origin_template_id — FK nullable a otra RouteTemplate (composición
+    atómica). NULL = ruta raíz (visible desde cualquier página). INT = al ejecutar,
+    navegar primero la cadena de esa plantilla origen antes del clic propio.
+    La detección de ciclos vive en core/use_cases/route_template_service.py.
+
+    NOTA (category_slug): la categoría es un slug del catálogo dinámico
+    RouteCategory (editable tipo Notion). La validación de existencia del slug
+    vive en el handler (sin FK hard). Ver route-categories-dynamic.md.
+
+    Spec route-templates-developer-portal.md §7.1, §v2.2.3.
     """
     id: int | None
     slug: str                              # kebab-case, UNIQUE global
     label: str
-    category_slug: str                     # slug de RouteCategory (antes: NoiseCategory enum)
+    category_slug: str                     # slug de RouteCategory (catálogo dinámico)
     url_pattern: str
-    navigation_weight: float = 1.0         # peso inicial sugerido al clonar (0.1–5.0)
     is_safe: bool = True
+    origin_template_id: int | None = None  # v2 — FK nullable a otra RouteTemplate
     paths: list[RouteTemplatePath] = field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        if not (0.1 <= self.navigation_weight <= 5.0):
-            raise ValueError(
-                "navigation_weight debe estar entre 0.1 y 5.0 "
-                "(anti-detección: pesos extremos hacen el ruido predecible)"
-            )
         if not self.slug.strip():
             raise ValueError("slug no puede estar vacío")
         if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', self.slug):
@@ -260,6 +270,10 @@ class RouteTemplate:
             raise ValueError("label no puede estar vacío")
         if not self.url_pattern.strip():
             raise ValueError("url_pattern no puede estar vacío")
+        if not self.category_slug.strip():
+            raise ValueError("category_slug no puede estar vacío")
+        # v2: auto-referencia no se puede validar en __post_init__ (sin acceso a BD).
+        # La detección de ciclos vive en el use case de escritura.
 
 
 @dataclass

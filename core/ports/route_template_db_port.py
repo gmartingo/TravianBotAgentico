@@ -5,7 +5,12 @@ ABC RouteTemplateDbPort — contrato que el adaptador SQLite debe implementar.
 Las plantillas son globales (sin world_id) y se clonan a mundos concretos
 a través del subsistema de noise (NoiseDbPort.create_destination).
 
-Spec route-templates-developer-portal.md §7.1, §8, §14 Paso 2.
+NOTA (v2 rev.2): navigation_weight eliminado de RouteTemplate y de update_template.
+  El peso vive en NoiseDestination.frequency_weight (por-mundo). Ver §v2-PESO.
+
+NOTA (v2): añadido get_templates_by_origin para listar hijas de una plantilla.
+
+Spec route-templates-developer-portal.md §7.1, §8, §14 Paso 2, §v2.3.
 """
 from __future__ import annotations
 
@@ -65,9 +70,9 @@ class RouteTemplateDbPort(ABC):
         self,
         template_id: int,
         label: str | None = None,
-        navigation_weight: float | None = None,
         is_safe: bool | None = None,
-        category_slug: str | None = None,
+        category_slug: str | None = None,                  # editable (catálogo dinámico)
+        origin_template_id: int | None | type[...] = ...,  # Ellipsis = no cambiar
         paths: list[RouteTemplatePath] | None = None,
     ) -> RouteTemplate:
         """
@@ -75,8 +80,14 @@ class RouteTemplateDbPort(ABC):
 
         slug y url_pattern son inmutables (RN-RT02, §10).
         category_slug SÍ es editable (spec route-categories-dynamic.md RN-CAT11).
+        navigation_weight eliminado (v2 rev.2): el peso vive en NoiseDestination.
+        origin_template_id: usar Ellipsis (...) para no cambiar el valor actual;
+          pasar None para quitar el origen (plantilla pasa a raíz);
+          pasar un int para reasignar el origen.
         Si se pasa paths (no None), es un reemplazo ATÓMICO de los paths+steps.
         Lanza ValueError si template_id no existe.
+
+        Spec §v2.3, §v2 rev.2.
         """
 
     @abstractmethod
@@ -87,6 +98,22 @@ class RouteTemplateDbPort(ABC):
         Los noise_destinations clonados de esta plantilla quedan con template_id=NULL
         (FK ON DELETE SET NULL en noise_destinations.template_id).
         Idempotente: no lanza si la plantilla no existe.
+        """
+
+    # ------------------------------------------------------------------
+    # Consulta de hijas (v2 — composición atómica)
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def get_templates_by_origin(self, origin_template_id: int) -> list[RouteTemplate]:
+        """
+        Devuelve las plantillas que tienen origin_template_id = <id>.
+
+        Usado para mostrar las hijas de una plantilla en la UI y para
+        verificar el impacto de su borrado (cuántas plantillas quedarían raíz).
+        Devuelve [] si ninguna plantilla tiene ese origen.
+
+        Spec §v2.3, Paso v2-3.
         """
 
     # ------------------------------------------------------------------

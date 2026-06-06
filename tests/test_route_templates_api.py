@@ -72,20 +72,20 @@ def _setup_world(c: TestClient, server: str = "https://ts1.travian.es/") -> tupl
 
 
 def _make_template_body(**overrides) -> dict:
-    """Cuerpo mínimo válido para crear una plantilla."""
+    """
+    Cuerpo mínimo válido para crear una plantilla.
+    NOTA v2 rev.2: navigation_weight eliminado del body — el peso se fija al clonar.
+    """
     base = {
         "slug": "test-template",
         "label": "Plantilla de test",
         "category_slug": "uncategorized",
         "url_pattern": "/karte.php",
-        "navigation_weight": 1.0,
         "is_safe": True,
         "paths": [],
     }
-    # Compatibilidad: si se pasa 'category' (viejo), mapearlo a 'category_slug'
-    if "category" in overrides:
-        overrides.setdefault("category_slug", "uncategorized")
-        del overrides["category"]
+    # Quitar navigation_weight si se pasa (eliminado en v2 rev.2)
+    overrides.pop("navigation_weight", None)
     base.update(overrides)
     return base
 
@@ -145,7 +145,10 @@ def _running_agent(report=None):
 # ---------------------------------------------------------------------------
 
 def test_TI_RT01_crear_plantilla_devuelve_201_y_cabeceras_minimas(client):
-    """POST /route-templates con datos válidos → 201, objeto completo, Location."""
+    """
+    POST /route-templates con datos válidos → 201, objeto completo, Location.
+    NOTA v2 rev.2: navigation_weight eliminado del response de plantilla.
+    """
     r = client.post("/route-templates", json=_make_template_body())
     assert r.status_code == 201, r.text
     data = r.json()
@@ -153,7 +156,9 @@ def test_TI_RT01_crear_plantilla_devuelve_201_y_cabeceras_minimas(client):
     assert data["label"] == "Plantilla de test"
     assert data["category_slug"] == "uncategorized"
     assert data["url_pattern"] == "/karte.php"
-    assert data["navigation_weight"] == 1.0
+    assert "navigation_weight" not in data, (
+        "navigation_weight fue eliminado de RouteTemplate en v2 rev.2"
+    )
     assert data["is_safe"] is True
     assert "id" in data
     assert "paths" in data
@@ -194,10 +199,25 @@ def test_TI_RT02b_crear_plantilla_slug_invalido_devuelve_422(client):
     assert r.status_code == 422, r.text
 
 
-def test_TI_RT02c_crear_plantilla_navigation_weight_invalido_devuelve_422(client):
-    """POST /route-templates con navigation_weight fuera de rango → 422."""
-    r = client.post("/route-templates", json=_make_template_body(navigation_weight=0.05))
-    assert r.status_code == 422, r.text
+def test_TI_RT02c_navigation_weight_ignorado_en_plantilla(client):
+    """
+    POST /route-templates con navigation_weight en el body → se ignora (v2 rev.2).
+    La plantilla se crea correctamente y el response no contiene navigation_weight.
+    navigation_weight fue eliminado del modelo de plantilla; el body lo ignora.
+    Spec §v2-PESO.
+    """
+    # Enviar navigation_weight en el body — debe ignorarse (no es un campo del modelo)
+    r = client.post("/route-templates", json={
+        "slug": "test-weight-ignore",
+        "label": "Test ignore weight",
+        "category": "MAP",
+        "url_pattern": "/karte.php",
+        "navigation_weight": 0.05,  # campo eliminado — Pydantic lo ignora por defecto
+    })
+    # 201 porque la plantilla se crea; navigation_weight se ignora silenciosamente
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert "navigation_weight" not in data
 
 
 def test_TI_RT02d_crear_plantilla_step_delay_bajo_devuelve_422(client):
@@ -261,6 +281,18 @@ def test_TI_RT04_listar_por_categoria(client):
 def test_TI_RT04_categoria_invalida_devuelve_empty(client):
     """GET /route-templates?category_slug=<slug-inexistente> → 200 [] (filtro silencioso, C-01)."""
     r = client.get("/route-templates?category_slug=slug-inexistente")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+def test_TI_RT04_categoria_libre_devuelve_200_lista_vacia(client):
+    """
+    GET /route-templates?category=INVALIDA → 200 con lista vacía.
+
+    Desde v2-cat-libre, category es texto libre (no enum). Cualquier string es
+    válido como filtro; si no hay coincidencias devuelve []. Ya no hay 422.
+    """
+    r = client.get("/route-templates?category=INVALIDA")
     assert r.status_code == 200, r.text
     assert r.json() == []
 
@@ -728,11 +760,20 @@ def test_TI_RT19_sync_reemplaza_paths(client):
 # ---------------------------------------------------------------------------
 
 def test_TI_RT22_seed_cargado_en_bd_vacia(client):
-    """El seed carga plantillas al arrancar (CA-RT19). Al menos 1 plantilla."""
+    """
+    El seed se carga al arrancar (CA-RT19).
+    NOTA v2: seeds/route_templates.json está vacío ([]) — el seed devuelve 0 plantillas.
+    El test verifica que el endpoint responde 200 (no error) y que no hay duplicados.
+    Cuando el seed tenga plantillas atómicas encadenadas (Fase v2), este test se ajustará.
+    """
     r = client.get("/route-templates")
     assert r.status_code == 200
     templates = r.json()
-    assert len(templates) >= 1, "El seed debe cargar al menos 1 plantilla"
+    # El seed v2 está vacío; la BD empieza vacía
+    assert isinstance(templates, list), "Debe devolver una lista"
+    # Sin duplicados
+    slugs = [t["slug"] for t in templates]
+    assert len(slugs) == len(set(slugs)), "No debe haber slugs duplicados"
 
 
 def test_TI_RT23_seed_idempotente(client, monkeypatch, tmp_path):
@@ -781,15 +822,24 @@ def test_EP_N04_acepta_template_id_opcional_sin_romper(client):
 # EP-RT10 — Test en vivo (mock de WorldAgent)
 # ---------------------------------------------------------------------------
 
-def test_RT10_test_plantilla_sin_sesion_activa_devuelve_409(client):
-    """EP-RT10 sin WorldAgent activo → 409 desconectado."""
-    _, world_id = _setup_world(client)
+def test_RT10_v3_sin_agente_sin_session_registry_world_sin_cuenta_devuelve_404(client):
+    """
+    EP-RT10 v3 — mundo sin cuenta asociada → 404 "no tiene cuenta asociada".
+    En v3 ya no hay 409 "desconectado": se intenta ensure_session.
+    Si el mundo no tiene cuenta → WorldOrphanError → 404.
+    El world_id creado por _setup_world SÍ tiene cuenta, así que usamos un ID válido
+    pero sin cuenta: crear solo el mundo sin cuenta (imposible vía HTTP, así que
+    usamos un world_id de otro setup donde quitamos la cuenta a nivel de app.state).
+    Alternativa: usar world_id=9999 para 404 de "mundo no encontrado".
+    El test válido para "mundo sin cuenta" requiere mock del db_port, así que
+    probamos el caso más común: mundo inexistente → 404 con _ensure_session.
+    """
     r = client.post("/route-templates", json=_make_template_with_path())
     tpl_id = r.json()["id"]
     app.state.world_agents = {}  # sin agente
-    r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
-    assert r.status_code == 409, r.text
-    assert "desconectado" in r.json()["detail"].lower()
+    # Mundo inexistente → 404 de _require_world antes de ensure_session
+    r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": 9999})
+    assert r.status_code == 404, r.text
 
 
 def test_RT10_test_plantilla_con_agente_activo_devuelve_200(client):
@@ -936,3 +986,637 @@ def test_eco_x_request_id(client):
     custom_id = "mi-request-id-12345"
     r = client.get("/route-templates", headers={"X-Request-ID": custom_id})
     assert r.headers.get("x-request-id") == custom_id
+
+
+# ---------------------------------------------------------------------------
+# EP-RT11 — GET /route-templates/{id}/chain (v2 NUEVO)
+# ---------------------------------------------------------------------------
+
+def _make_chain_template(client, slug: str, origin_template_id=None) -> int:
+    """Crea plantilla con un step válido, opcionalmente con origen. Devuelve su id."""
+    body = {
+        "slug": slug,
+        "label": f"Plantilla {slug}",
+        "category": "OTHER",
+        "url_pattern": f"/path-{slug}",
+        "is_safe": True,
+        "origin_template_id": origin_template_id,
+        "paths": [
+            {
+                "origin": "ANY" if origin_template_id is None else f"ROUTE_TEMPLATE:{origin_template_id}",
+                "label": "path de test",
+                "is_active": True,
+                "steps": [
+                    {
+                        "step_order": 0,
+                        "action": "CLICK",
+                        "selector": f"a[href*='{slug}']",
+                        "value": "",
+                        "delay_min_ms": 400,
+                        "delay_max_ms": 800,
+                    }
+                ],
+            }
+        ],
+    }
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()["id"]
+
+
+def test_TI_V2_04_chain_cadena_de_3_niveles(client):
+    """EP-RT11 — cadena de 3 niveles → 200 con 3 steps ordenados, primero is_root=true."""
+    raiz_id = _make_chain_template(client, "raiz-stats")
+    medio_id = _make_chain_template(client, "top10-alianzas", origin_template_id=raiz_id)
+    hoja_id = _make_chain_template(client, "top10-rivales", origin_template_id=medio_id)
+
+    r = client.get(f"/route-templates/{hoja_id}/chain")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["template_id"] == hoja_id
+    assert data["template_slug"] == "top10-rivales"
+    assert data["depth"] == 3
+    assert len(data["steps"]) == 3
+    # El primero es la raíz
+    assert data["steps"][0]["is_root"] is True
+    assert data["steps"][0]["template_id"] == raiz_id
+    # El último es la hoja
+    assert data["steps"][2]["template_id"] == hoja_id
+    assert data["steps"][2]["is_root"] is False
+    # Posiciones en orden
+    for i, step in enumerate(data["steps"]):
+        assert step["position"] == i
+    assert_cabeceras_minimas(r)
+
+
+def test_TI_V2_05_chain_ruta_raiz_devuelve_1_step(client):
+    """EP-RT11 — ruta raíz (sin origen) → 200 con 1 step, is_root=true."""
+    raiz_id = _make_chain_template(client, "solo-raiz")
+    r = client.get(f"/route-templates/{raiz_id}/chain")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["depth"] == 1
+    assert len(data["steps"]) == 1
+    assert data["steps"][0]["is_root"] is True
+    assert data["steps"][0]["template_id"] == raiz_id
+
+
+def test_TI_V2_06_chain_con_origen_borrado_devuelve_solo_clic_propio(client):
+    """EP-RT11 — origen borrado (ON DELETE SET NULL actuó) → 200 con solo el clic propio."""
+    raiz_id = _make_chain_template(client, "raiz-borrar")
+    hija_id = _make_chain_template(client, "hija-huerfana", origin_template_id=raiz_id)
+
+    # Borrar la raíz → ON DELETE SET NULL pone origin_template_id=NULL en la hija
+    r = client.delete(f"/route-templates/{raiz_id}")
+    assert r.status_code == 204, r.text
+
+    # La hija ahora es raíz (origin=NULL por ON DELETE SET NULL)
+    r = client.get(f"/route-templates/{hija_id}/chain")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    # Solo el clic propio de la hija (que ahora es raíz)
+    assert len(data["steps"]) == 1
+    assert data["steps"][0]["template_id"] == hija_id
+
+
+def test_TI_V2_chain_404_plantilla_inexistente(client):
+    """EP-RT11 con plantilla inexistente → 404."""
+    r = client.get("/route-templates/9999/chain")
+    assert r.status_code == 404, r.text
+
+
+def test_TI_V2_chain_plantilla_sin_path_steps_vacios(client):
+    """EP-RT11 — plantilla sin paths/steps → 200 con steps vacío (EC-V2-07)."""
+    body = _make_template_body(slug="sin-steps")
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+    tpl_id = r.json()["id"]
+    r = client.get(f"/route-templates/{tpl_id}/chain")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["depth"] == 0
+    assert data["steps"] == []
+
+
+# ---------------------------------------------------------------------------
+# EP-RT02/EP-RT04 — Validación anti-ciclos (v2)
+# ---------------------------------------------------------------------------
+
+def test_TI_V2_01_create_con_origin_valido_devuelve_201_con_origin_template_id(client):
+    """POST /route-templates con origin_template_id válido → 201 con origin_template_id en response."""
+    raiz_id = _make_chain_template(client, "raiz-v2-01")
+    body = _make_template_body(slug="hija-v2-01", origin_template_id=raiz_id)
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+    assert r.json()["origin_template_id"] == raiz_id
+
+
+def test_TI_V2_02_create_con_origin_inexistente_devuelve_404(client):
+    """POST /route-templates con origin_template_id inexistente → 404."""
+    body = _make_template_body(slug="hija-orphan", origin_template_id=9999)
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 404, r.text
+    assert "9999" in r.json()["detail"]
+
+
+def test_TI_V2_03_put_que_crea_ciclo_directo_devuelve_409_con_cycle_path(client):
+    """PUT /route-templates/{id} con origin_template_id que crea ciclo directo → 409 cycle_path."""
+    a_id = _make_chain_template(client, "ciclo-a")
+    b_id = _make_chain_template(client, "ciclo-b", origin_template_id=a_id)
+    # Intentar que A → B (lo que crearía A→B y B→A = ciclo)
+    r = client.put(f"/route-templates/{a_id}", json={"origin_template_id": b_id})
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "cycle_path" in detail
+    assert isinstance(detail["cycle_path"], list)
+
+
+def test_TI_V2_04_put_origin_valido_sin_ciclo_devuelve_200(client):
+    """PUT /route-templates/{id} con origin_template_id válido (sin ciclo) → 200."""
+    raiz_id = _make_chain_template(client, "raiz-put-v2")
+    hija_id = _make_chain_template(client, "hija-put-v2")
+    # Reasignar hija para tener raíz como origen
+    r = client.put(f"/route-templates/{hija_id}", json={"origin_template_id": raiz_id})
+    assert r.status_code == 200, r.text
+    assert r.json()["origin_template_id"] == raiz_id
+
+
+# ---------------------------------------------------------------------------
+# EP-RT02/EP-RT04 — Validación selectores estructurales (v2 GAP-4)
+# ---------------------------------------------------------------------------
+
+def test_TI_V2_11_create_selector_por_texto_visible_devuelve_422(client):
+    """POST /route-templates con selector ':has-text(...)' → 422 con mensaje multi-idioma."""
+    body = {
+        "slug": "bad-selector-create",
+        "label": "Test",
+        "category": "OTHER",
+        "url_pattern": "/test",
+        "is_safe": True,
+        "paths": [
+            {
+                "origin": "ANY",
+                "label": "path",
+                "is_active": True,
+                "steps": [
+                    {
+                        "step_order": 0,
+                        "action": "CLICK",
+                        "selector": 'a:has-text("Estadísticas")',
+                        "value": "",
+                        "delay_min_ms": 500,
+                        "delay_max_ms": 900,
+                    }
+                ],
+            }
+        ],
+    }
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 422, r.text
+    assert "texto visible" in r.json()["detail"]
+    assert "idioma" in r.json()["detail"].lower()
+
+
+def test_TI_V2_12_put_paths_con_contains_devuelve_422(client):
+    """PUT /route-templates/{id} con paths que incluyen ':contains(...)' → 422."""
+    tpl_id = _make_chain_template(client, "bad-selector-put")
+    r = client.put(
+        f"/route-templates/{tpl_id}",
+        json={
+            "paths": [
+                {
+                    "origin": "ANY",
+                    "label": "path mal",
+                    "is_active": True,
+                    "steps": [
+                        {
+                            "step_order": 0,
+                            "action": "CLICK",
+                            "selector": 'li:contains("Mensajes")',
+                            "value": "",
+                            "delay_min_ms": 500,
+                            "delay_max_ms": 900,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert "texto visible" in r.json()["detail"]
+
+
+def test_TI_V2_13_create_selector_estructural_valido_devuelve_201(client):
+    """POST /route-templates con selector estructural válido → 201, sin error."""
+    body = {
+        "slug": "good-selector",
+        "label": "Test selector correcto",
+        "category": "OTHER",
+        "url_pattern": "/statistics",
+        "is_safe": True,
+        "paths": [
+            {
+                "origin": "ANY",
+                "label": "path",
+                "is_active": True,
+                "steps": [
+                    {
+                        "step_order": 0,
+                        "action": "CLICK",
+                        "selector": "a[href*='/statistics']",
+                        "value": "",
+                        "delay_min_ms": 500,
+                        "delay_max_ms": 900,
+                    }
+                ],
+            }
+        ],
+    }
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+
+
+# ---------------------------------------------------------------------------
+# EP-RT07 — navigation_weight del REQUEST (v2)
+# ---------------------------------------------------------------------------
+
+def test_EP_RT07_v2_navigation_weight_del_request_se_aplica(client):
+    """EP-RT07 — navigation_weight del body del REQUEST se aplica al destino clonado."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_body())
+    tpl_id = r.json()["id"]
+
+    # Clonar con peso 2.5
+    r = client.post(
+        f"/route-templates/{tpl_id}/clone-to-world/{world_id}",
+        json={"navigation_weight": 2.5},
+    )
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["result"] == "cloned"
+    assert data["navigation_weight"] == 2.5
+
+    # Verificar que el destino tiene navigation_weight=2.5 (alias de frequency_weight en el response)
+    dest_id = data["destination_id"]
+    dests = client.get(f"/worlds/{world_id}/noise/destinations").json()
+    dest = next((d for d in dests if d["id"] == dest_id), None)
+    assert dest is not None
+    assert dest["navigation_weight"] == 2.5
+
+
+def test_EP_RT07_v2_navigation_weight_default_1_si_body_omitido(client):
+    """EP-RT07 — body omitido → navigation_weight=1.0 por defecto."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_body())
+    tpl_id = r.json()["id"]
+
+    # Sin body
+    r = client.post(f"/route-templates/{tpl_id}/clone-to-world/{world_id}")
+    assert r.status_code == 201, r.text
+    assert r.json()["navigation_weight"] == 1.0
+
+
+def test_EP_RT07_v2_navigation_weight_fuera_de_rango_devuelve_422(client):
+    """EP-RT07 — navigation_weight=5.5 (fuera de [0.1,5.0]) → 422."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_body(slug="weight-422"))
+    tpl_id = r.json()["id"]
+
+    r = client.post(
+        f"/route-templates/{tpl_id}/clone-to-world/{world_id}",
+        json={"navigation_weight": 5.5},
+    )
+    assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# EP-RT08 — default_navigation_weight en bulk (v2)
+# ---------------------------------------------------------------------------
+
+def test_EP_RT08_v2_default_navigation_weight_se_aplica_a_clonados(client):
+    """EP-RT08 — default_navigation_weight se aplica a cada ítem clonado."""
+    _, world_id = _setup_world(client)
+    r1 = client.post("/route-templates", json=_make_template_body(slug="bulk-w-1"))
+    r2 = client.post("/route-templates", json=_make_template_body(slug="bulk-w-2", url_pattern="/bulk-w-2"))
+    ids = [r1.json()["id"], r2.json()["id"]]
+
+    r = client.post(
+        f"/worlds/{world_id}/noise/apply-templates",
+        json={"template_ids": ids, "default_navigation_weight": 3.0},
+    )
+    assert r.status_code == 200, r.text
+    results = r.json()["results"]
+    cloned = [x for x in results if x["result"] == "cloned"]
+    assert all(x["navigation_weight"] == 3.0 for x in cloned)
+
+
+# ---------------------------------------------------------------------------
+# EP-RT12 — DELETE /worlds/{world_id}/session (v3 NUEVO)
+# ---------------------------------------------------------------------------
+
+def test_TI_V3_08_delete_session_sin_sesion_activa_idempotente_204(client):
+    """DELETE /worlds/{id}/session sin sesión activa → 204 idempotente."""
+    _, world_id = _setup_world(client)
+    # session_registry.is_active=False (sin sesión)
+    session_mock = MagicMock()
+    session_mock.close_session = AsyncMock()
+    app.state.world_runtime_port = session_mock
+
+    r = client.delete(f"/worlds/{world_id}/session")
+    assert r.status_code == 204, r.text
+    session_mock.close_session.assert_called_once_with(world_id)
+
+
+def test_TI_V3_10_delete_session_world_inexistente_devuelve_404(client):
+    """DELETE /worlds/9999/session con world_id inexistente → 404."""
+    r = client.delete("/worlds/9999/session")
+    assert r.status_code == 404, r.text
+    assert "no encontrado" in r.json()["detail"].lower()
+
+
+def test_TI_V3_stop_agent_cierra_sesion_chrome(client):
+    """POST /farm/worlds/{id}/agent/stop → cierra también la sesión Chrome."""
+    _, world_id = _setup_world(client)
+
+    from core.scheduling.world_agent import AgentState
+    agent = MagicMock()
+    agent.state = AgentState.RUNNING
+    agent.request_stop = MagicMock()
+    app.state.world_agents = {world_id: agent}
+
+    session_mock = MagicMock()
+    session_mock.close_session = AsyncMock()
+    app.state.world_runtime_port = session_mock
+
+    r = client.post(f"/farm/worlds/{world_id}/agent/stop")
+    assert r.status_code == 200, r.text
+    agent.request_stop.assert_called_once()
+    session_mock.close_session.assert_called_once_with(world_id)
+
+    app.state.world_agents = {}
+
+
+# ---------------------------------------------------------------------------
+# EP-RT10 v3 — _ensure_session con mocks
+# ---------------------------------------------------------------------------
+
+def test_TI_V3_02_ep_rt10_sesion_ya_activa_no_hace_login(client):
+    """EP-RT10 v3 — sesión ya activa → ensure_session NO llama login de nuevo."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    # Montar session_registry con is_active=True
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=True)
+    session_mock.get_browser = MagicMock(return_value=None)
+    app.state.world_runtime_port = session_mock
+
+    report = _make_report(overall="ok")
+    app.state.world_agents = {world_id: _running_agent(report)}
+
+    r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+    # is_active=True → ensure_session retorna inmediatamente sin llamar login
+    # execute_path_test del agente → 200
+    assert r.status_code == 200, r.text
+    # Verificar que login NO fue llamado (solo is_active)
+    session_mock.login.assert_not_called()
+
+    app.state.world_agents = {}
+
+
+def test_TI_V3_03_ep_rt10_mundo_sin_cuenta_devuelve_404(client):
+    """EP-RT10 v3 — mundo sin cuenta asociada → 404."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    # session_registry con is_active=False; accounts_db que devuelve None para account_id
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=False)
+    app.state.world_runtime_port = session_mock
+    app.state.world_agents = {}
+
+    # Mock del accounts_db para que get_account_id_for_world devuelva None
+    original_db = getattr(app.state, "db_port", None)
+    mock_db = MagicMock()
+    mock_db.get_world = AsyncMock(return_value=MagicMock(id=world_id, server="https://ts1.travian.es/"))
+    mock_db.get_account_id_for_world = AsyncMock(return_value=None)
+    app.state.db_port = mock_db
+
+    try:
+        r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+        assert r.status_code == 404, r.text
+        assert "cuenta asociada" in r.json()["detail"]
+    finally:
+        if original_db is not None:
+            app.state.db_port = original_db
+
+
+def test_TI_V3_04_ep_rt10_fernet_error_devuelve_401(client):
+    """EP-RT10 v3 — FernetDecryptionError → 401 con mención a TRAVIAN_BOT_SECRET_KEY."""
+    from core.exceptions import FernetDecryptionError as FDE
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=False)
+    app.state.world_runtime_port = session_mock
+    app.state.world_agents = {}
+
+    original_db = getattr(app.state, "db_port", None)
+    mock_db = MagicMock()
+    mock_db.get_world = AsyncMock(return_value=MagicMock(id=world_id, server="https://ts1.travian.es/"))
+    mock_db.get_account_id_for_world = AsyncMock(return_value=42)
+    app.state.db_port = mock_db
+    original_fernet = getattr(app.state, "fernet", None)
+    app.state.fernet = MagicMock()  # fernet real necesario solo para LoginUseCase
+
+    # Mock de LoginUseCase para que lance FernetDecryptionError
+    import unittest.mock as um
+    with um.patch(
+        "core.use_cases.login_use_case.LoginUseCase.execute",
+        new=AsyncMock(side_effect=FDE(42)),
+    ):
+        try:
+            r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+            assert r.status_code == 401, r.text
+            assert "travian_bot_secret_key" in r.json()["detail"].lower()
+        finally:
+            if original_db is not None:
+                app.state.db_port = original_db
+            if original_fernet is not None:
+                app.state.fernet = original_fernet
+
+
+def test_TI_V3_05_ep_rt10_login_failed_devuelve_401(client):
+    """EP-RT10 v3 — LoginFailedError → 401 con mención a credenciales."""
+    from core.exceptions import LoginFailedError as LFE
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=False)
+    app.state.world_runtime_port = session_mock
+    app.state.world_agents = {}
+
+    original_db = getattr(app.state, "db_port", None)
+    mock_db = MagicMock()
+    mock_db.get_world = AsyncMock(return_value=MagicMock(id=world_id, server="https://ts1.travian.es/"))
+    mock_db.get_account_id_for_world = AsyncMock(return_value=42)
+    app.state.db_port = mock_db
+    original_fernet = getattr(app.state, "fernet", None)
+    app.state.fernet = MagicMock()
+
+    import unittest.mock as um
+    with um.patch(
+        "core.use_cases.login_use_case.LoginUseCase.execute",
+        new=AsyncMock(side_effect=LFE("rtbot")),
+    ):
+        try:
+            r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+            assert r.status_code == 401, r.text
+            assert "credencial" in r.json()["detail"].lower()
+        finally:
+            if original_db is not None:
+                app.state.db_port = original_db
+            if original_fernet is not None:
+                app.state.fernet = original_fernet
+
+
+def test_TI_V3_06_ep_rt10_sin_world_agent_usa_standalone(client):
+    """EP-RT10 v3 — sin WorldAgent pero con sesión activa → usa execute_path_test_standalone."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    # Sesión activa, sin WorldAgent
+    mock_browser = MagicMock()
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=True)  # sesión ya activa
+    session_mock.get_browser = MagicMock(return_value=mock_browser)
+    app.state.world_runtime_port = session_mock
+    app.state.world_agents = {}  # sin agente
+
+    import unittest.mock as um
+    from core.scheduling import world_agent as wa_module
+
+    mock_report = _make_report(overall="ok", steps=[
+        SimpleNamespace(
+            step_order=0,
+            action="WAIT_FOR_SELECTOR",
+            selector="#map",
+            status="ok",
+            reason=None,
+            current_url="/karte.php",
+        )
+    ])
+    with um.patch.object(wa_module, "execute_path_test_standalone", new=AsyncMock(return_value=mock_report)):
+        r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+        assert r.status_code == 200, r.text
+        assert r.json()["overall"] == "ok"
+
+
+def test_TI_V3_07_ep_rt10_con_world_agent_usa_world_agent(client):
+    """EP-RT10 v3 — con WorldAgent RUNNING → usa WorldAgent.execute_path_test (no standalone)."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    session_mock = MagicMock()
+    session_mock.is_active = MagicMock(return_value=True)
+    session_mock.get_browser = MagicMock(return_value=MagicMock())
+    app.state.world_runtime_port = session_mock
+
+    report = _make_report(overall="ok")
+    agent = _running_agent(report)
+    app.state.world_agents = {world_id: agent}
+
+    r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+    assert r.status_code == 200, r.text
+    # El WorldAgent.execute_path_test fue llamado
+    agent.execute_path_test.assert_called_once()
+
+    app.state.world_agents = {}
+
+
+# ---------------------------------------------------------------------------
+# v2-cat-libre — Categoría libre: crear, editar, filtrar
+# ---------------------------------------------------------------------------
+
+def test_CAT01_crear_plantilla_con_categoria_libre(client):
+    """POST /route-templates con category="Estadísticas" → 201, category guardada."""
+    body = _make_template_body(slug="stats-libre", category="Estadísticas")
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+    data = r.json()
+    assert data["category"] == "Estadísticas"
+
+
+def test_CAT02_crear_plantilla_con_top10(client):
+    """POST /route-templates con category="Top 10" → 201."""
+    body = _make_template_body(slug="top-10-libre", category="Top 10", url_pattern="/dorf1.php")
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 201, r.text
+    assert r.json()["category"] == "Top 10"
+
+
+def test_CAT03_editar_categoria_de_ruta_existente(client):
+    """PUT /route-templates/{id} con category nueva → 200, category actualizada."""
+    r = client.post("/route-templates", json=_make_template_body(slug="edit-cat-test"))
+    tpl_id = r.json()["id"]
+    assert r.json()["category"] == "MAP"
+
+    r = client.put(f"/route-templates/{tpl_id}", json={"category": "Estadísticas"})
+    assert r.status_code == 200, r.text
+    assert r.json()["category"] == "Estadísticas"
+
+
+def test_CAT04_editar_categoria_persiste_tras_get(client):
+    """Editar categoría y verificar que GET devuelve la nueva categoría."""
+    r = client.post("/route-templates", json=_make_template_body(slug="cat-persist"))
+    tpl_id = r.json()["id"]
+
+    client.put(f"/route-templates/{tpl_id}", json={"category": "Top 10"})
+
+    r = client.get(f"/route-templates/{tpl_id}")
+    assert r.status_code == 200, r.text
+    assert r.json()["category"] == "Top 10"
+
+
+def test_CAT05_categoria_vacia_devuelve_422(client):
+    """POST /route-templates con category="" → 422 (campo requerido, min_length=1)."""
+    body = _make_template_body(slug="cat-empty", category="")
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 422, r.text
+
+
+def test_CAT06_categoria_demasiado_larga_devuelve_422(client):
+    """POST /route-templates con category de más de 50 chars → 422."""
+    long_cat = "A" * 51
+    body = _make_template_body(slug="cat-long", category=long_cat)
+    r = client.post("/route-templates", json=body)
+    assert r.status_code == 422, r.text
+
+
+def test_CAT07_filtrar_por_categoria_libre(client):
+    """GET /route-templates?category=Estadísticas → solo las que tienen esa categoría."""
+    client.post("/route-templates", json=_make_template_body(slug="cat-a", category="Estadísticas"))
+    client.post("/route-templates", json=_make_template_body(slug="cat-b", category="MAP", url_pattern="/karte.php"))
+    r = client.get("/route-templates?category=Estadísticas")
+    assert r.status_code == 200, r.text
+    items = r.json()
+    assert all(t["category"] == "Estadísticas" for t in items)
+    slugs = [t["slug"] for t in items]
+    assert "cat-a" in slugs
+    assert "cat-b" not in slugs
+
+
+def test_CAT08_url_pattern_invalido_devuelve_422_en_putcategory(client):
+    """PUT /route-templates/{id} con url_pattern → 422 (inmutable)."""
+    r = client.post("/route-templates", json=_make_template_body(slug="url-immut"))
+    tpl_id = r.json()["id"]
+    r = client.put(f"/route-templates/{tpl_id}", json={"url_pattern": "/new.php"})
+    assert r.status_code == 422, r.text

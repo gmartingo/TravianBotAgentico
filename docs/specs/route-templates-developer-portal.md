@@ -1691,6 +1691,66 @@ Página `frontend/src/pages/RouteTemplatesPage.jsx` bajo `ManagementShell`. Ver 
 
 ---
 
+## Registro de implementación v2 (Fase A — dominio + persistencia)
+
+**Fecha:** 2026-06-05
+**Agente:** desarrollador-funcionalidades
+**Alcance:** Fase A v2 — dominio + persistencia atómica componible (SIN nuevos endpoints v2 ni UI)
+
+### Ficheros creados
+
+- `core/use_cases/route_template_service.py` — CREADO: servicio puro `CyclicOriginError`, `TemplateNotFoundError`, `ResolvedStep`, `validate_no_cycle`, `validate_chain_integrity`, `resolve_origin_chain`, `validate_selector_is_structural`. Sin dependencias de adapters; recibe puerto por inyección.
+
+### Ficheros modificados
+
+- `core/entities/noise.py` — `RouteTemplate`: eliminado `navigation_weight` y su validación de rango; añadido `origin_template_id: int | None = None`; actualizado docstring con notas v2 rev.2 y v2.
+- `core/ports/route_template_db_port.py` — `update_template`: eliminado parámetro `navigation_weight`, añadido `origin_template_id` con sentinel Ellipsis. Añadido método abstracto `get_templates_by_origin`.
+- `adapters/db/route_template_sqlite_adapter.py` — reescrito completo: DDL sin `navigation_weight` ni `navigation_weight` CHECK; `origin_template_id` en DDL, INSERTs, SELECTs y `_row_to_template`; migraciones idempotentes M-RT02 y M-RT03; `get_templates_by_origin`; seed con 2 pasadas (raíces primero, hijas después resolviendo `origin_slug → id`); `PRAGMA foreign_keys = ON` en `ensure_tables`.
+- `adapters/db/noise_sqlite_adapter.py` — añadido `PRAGMA foreign_keys = ON` al inicio de `ensure_tables()`.
+- `adapters/api/routes/route_templates.py` — modelos Pydantic actualizados: eliminado `navigation_weight` de `RouteTemplateListItem`, `RouteTemplateResponse`, `CreateTemplateRequest`, `UpdateTemplateRequest`; añadido `origin_template_id`; actualizado `at_least_one_mutable_field`; actualizado `_template_to_full_response` y `_template_to_list_item`; actualizado handler `create_template`; añadido parámetro `navigation_weight: float = 1.0` a `_clone_template_to_world` (peso del REQUEST, no de la plantilla); actualizado handler `update_template` para pasar `origin_sentinel`; EP-RT10 usa `frequency_weight=1.0` para clon temporal.
+- `tests/unit/test_route_templates.py` — reescrito completo: tests TU-RT03/04 actualizados a v2 (`navigation_weight` eliminado, `origin_template_id` añadido); tests TU-V2-01..TU-V2-07 nuevos (ciclos, cadena, selectores estructurales); 39 tests en total.
+- `tests/test_route_templates_adapter.py` — reescrito completo: helper `_make_template` sin `navigation_weight`; tests M-RT02/M-RT03 idempotencia; tests `ON DELETE SET NULL` en `origin_template_id`; tests `get_templates_by_origin`; tests `update_template` con `origin_template_id`; 35 tests en total.
+- `tests/test_route_templates_api.py` — `_make_template_body` sin `navigation_weight`; `test_TI_RT01` actualizado; `test_TI_RT02c` reemplazado por `test_TI_RT02c_navigation_weight_ignorado`; `test_TI_RT22` actualizado para seed vacío v2.
+
+### Comando para ejecutar los tests
+
+```bash
+.venv/bin/pytest tests/unit/test_route_templates.py tests/test_route_templates_adapter.py tests/test_route_templates_api.py -v
+```
+
+Para la suite completa incluyendo regresión de noise:
+```bash
+.venv/bin/pytest tests/unit/test_route_templates.py tests/test_route_templates_adapter.py tests/test_route_templates_api.py tests/test_noise_api.py tests/test_noise_path_wizard_db.py tests/antideteccion/test_noise_frequency_weight.py tests/unit/test_noise.py -q
+```
+
+### Resultado de tests
+
+- `tests/unit/test_route_templates.py`: **39/39 passed**
+- `tests/test_route_templates_adapter.py`: **35/35 passed**
+- `tests/test_route_templates_api.py`: **51/51 passed**
+- Suite noise (regresión): **265/265 passed** (sin regresiones)
+- `lint-imports`: **Contracts: 2 kept, 0 broken**
+
+### Desviaciones respecto al diseño del spec v2 Fase A
+
+1. **Router HTTP actualizado (mínimamente) aunque es alcance de Fase B**: Al eliminar `navigation_weight` de la entidad, el router existente (implementado en Fase B v1) empezó a fallar. Se hizo la corrección mínima: eliminar `navigation_weight` de los modelos Pydantic y pasar el peso como parámetro `navigation_weight=1.0` por defecto en `_clone_template_to_world`. Esto es consistente con el spec §v2.17 corrección 5. Los nuevos endpoints v2 (EP-RT11 `/chain`) siguen siendo pendientes de Fase B.
+
+2. **`origin_sentinel` con Ellipsis en `update_template`**: El puerto usa `type[...] = ...` como sentinel para distinguir "no se pasó `origin_template_id`" de "se pasó `null`". Pydantic v2 proporciona `model_fields_set` para este propósito en el router. El sentinel no entra al `core/` directamente — el router lo resuelve antes de llamar al puerto. Es la solución más limpia sin cambiar el contrato del puerto.
+
+### Lo que queda para Fase B v2 (router HTTP nuevos endpoints)
+
+- EP-RT11 `GET /route-templates/{id}/chain` — llama a `resolve_origin_chain` del servicio de dominio y serializa con `ChainStepResponse`/`ChainResponse`.
+- EP-RT02/EP-RT04: validación anti-ciclos (llamar a `validate_no_cycle`/`validate_chain_integrity` del servicio antes de persistir); validación de selector estructural (llamar a `validate_selector_is_structural` por cada step).
+- Tests TI-V2-01..TI-V2-13 de API.
+
+### Lo que queda para Fase motor (world_agent.py) — requiere gate guardian
+
+- Paso v2-8: extender `_execute_noise_action` y `execute_path_test` con la lógica de cadena atómica (guard de tipo `ROUTE_TEMPLATE:`, `resolve_origin_chain`, `human_click` por cada step, delays `max(200, delay_min_ms)`, verificación `expected_url`).
+- `ColdStartAbortError` y detección de browser no-en-Travian.
+- Gate del guardian-antideteccion es obligatorio y no negociable antes del commit.
+
+---
+
 # v2 — Rutas Atómicas Componibles
 
 > **Cómo leer esta sección:**
@@ -4108,3 +4168,59 @@ Razones a favor de la opción (c):
 | Nuevo error `WorldOrphanError` (404) cuando el mundo no tiene cuenta | EC-V3-02: es un estado válido en el sistema (un mundo puede haberse creado sin cuenta, o la cuenta puede haberse borrado). Dar un error informativo en lugar de un 500 genérico. |
 | Anti-detección: mantener sesión entre tests (no cerrar Chrome tras cada test) | Requisito explícito del usuario + principio de anti-detección: un humano no reabre el navegador entre cada acción. Menos logins = menos firmas de "bot que se autentica repetidamente". |
 | Guardian obligatorio sobre `_ensure_session` y `execute_path_test_standalone` | Ambas funciones tocan el browser real de Travian (login_module.login + human_click). Son el tipo exacto de código que el guardian audita según CLAUDE.md y el flujo estándar de features. |
+
+---
+
+## Registro de implementación UI — Fase C v2+v3 (desarrollador-ux-ui)
+
+**Fecha:** 2026-06-06
+**Agente:** desarrollador-ux-ui
+**Alcance:** UI v2 + v3 — portal de rutas, origen como desplegable, tabla de pasos heredados, peso en clonar, panel de test con estado de sesión.
+
+### Ficheros modificados
+
+- `frontend/src/api/client.js` — añadidos:
+  - `cloneRouteTemplate`: ahora acepta `navigationWeight` y lo envía en el body (v2 rev.2).
+  - `applyRouteTemplatesBulk`: ya aceptaba `default_navigation_weight`; sin cambio de firma.
+  - `getRouteTemplateChain(id)` → EP-RT11 `GET /route-templates/{id}/chain` (nuevo).
+  - `closeWorldSession(worldId)` → EP-RT12 `DELETE /worlds/{worldId}/session` (nuevo v3).
+
+- `frontend/src/pages/RouteTemplatesPage.jsx` — cambios por spec:
+  - `NewTemplateModal`: eliminado `navigation_weight`; añadido `origin_template_id` como `<select>` con grupo "Rutas existentes" (prop `templates`). Manejo de 409 por ciclo de origen.
+  - `CloneToWorldModal`: añadido campo Frecuencia (slider + input numérico [0.1–5.0], default 1.0). El label muestra el nombre del mundo seleccionado. Resultado muestra el peso aplicado.
+  - `TemplateRow`: eliminada columna "Peso" (v2 rev.2). Añadido badge "↗ encadenada" cuando `origin_template_id != null`.
+  - Cabecera de la tabla: eliminada columna "Peso" y su clase `rt-col-weight`/`rt-th-weight`.
+  - `TestRoutePanel` (v3): añadido bloque de estado de sesión bajo el selector de mundo (badge verde/gris); botón "Cerrar sesión" visible solo si `sessionActive`; feedback "Abriendo sesión / probando…" en el botón de ejecutar; refresca el estado de sesión tras un test exitoso.
+  - `InheritedStepsPanel`: nuevo componente inline que llama EP-RT11 y renderiza la cadena raíz→hoja. Resalta el último clic (el propio). Aviso cuando origen eliminado (EC-V2-03).
+  - Modal nueva plantilla recibe prop `templates` para poblar el desplegable de origen.
+
+- `frontend/src/components/world/noise/NoiseDestinationDrawer.jsx` — cambios retrocompatibles:
+  - `handleSaveDest` en modo `template`: quitado `navigation_weight` del PATCH (v2 rev.2).
+  - Campo "Peso" envuelto en `{mode !== 'template' && ...}` — oculto en modo plantilla.
+  - `isDirty`: en modo `template` el peso no forma parte de la comparación.
+  - Añadido `InheritedStepsPanelDrawer` (componente nuevo en el mismo fichero): tabla raíz→hoja dentro del drawer cuando `dest.origin_template_id != null`; aviso de origen libre cuando es null.
+  - **Retrocompatibilidad verificada**: el uso `mode="world"` (por defecto) en `WorldSpacePage`/`NoiseTab` no se ve afectado — ningún cambio cambia la ruta `mode !== 'template'`.
+
+### Comando para verificar el build
+
+```bash
+cd frontend && npm run build
+```
+
+Resultado: **✓ built in ~1.1s** (sin errores de compilación; warning de chunk size preexistente).
+
+### Huecos pendientes (no implementados, devueltos al ciclo de spec/API)
+
+1. **EP-RT11 `GET /route-templates/{id}/chain`** — endpoint implementado en el cliente (`getRouteTemplateChain`) y consumido por `InheritedStepsPanelDrawer`. El backend debe tener este endpoint listo (§v2.8, "Lo que queda para Fase B v2"). Hasta entonces, el panel mostrará error de red, lo cual es el comportamiento correcto.
+
+2. **EP-RT12 `DELETE /worlds/{worldId}/session`** — endpoint implementado en el cliente (`closeWorldSession`) y consumido por `TestRoutePanel` v3. El backend debe tener este endpoint (§v3.4.2). Gate desarrollador-apis + guardian pendientes.
+
+3. **Estado de sesión desde `GET /worlds/{id}/agent/status`** — el `TestRoutePanel` v3 infiere `sessionActive` del campo `state === 'running'` del agente. Si el backend expone un campo `session_active` explícito en ese endpoint, la UI lo consumirá automáticamente (la lógica usa `status?.session_active === true || status?.state === 'running'`).
+
+4. **Validación 422 de selector en cliente** — el spec v2-REGLA-SELECTORES sugiere feedback inline en el wizard antes de llamar a la API. No implementado como mejora de UX (el spec lo marca como "no bloqueante"). El error 422 del backend sí se muestra correctamente.
+
+### Desviaciones respecto al diseño (justificadas)
+
+1. **`InheritedStepsPanel` en `RouteTemplatesPage` y en `NoiseDestinationDrawer`**: el spec indica la tabla en el "detalle de la plantilla". La implementé en ambos sitios — en el drawer (contexto principal de edición) y como componente independiente disponible para uso futuro. Coherente con el spec §v2.4 y el mockup bloque E.
+
+2. **`showToast` no importado en `InheritedStepsPanelDrawer`**: el componente usa `Spinner` (ya importado en el drawer) y `ApiError`. No necesita `showToast` porque los errores se muestran inline. Sin dependencia circular.

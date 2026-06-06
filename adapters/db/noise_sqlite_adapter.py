@@ -764,6 +764,135 @@ def _row_to_config(row: aiosqlite.Row) -> NoiseConfig:
     )
 
 
+async def _migrate_noise_destinations_free_category(
+    conn: aiosqlite.Connection,
+) -> None:
+    """
+    M-ND02: Elimina el CHECK constraint de category en noise_destinations,
+    convirtiendo category en texto libre (≤ 50 chars validados en la entidad).
+
+    Motivación: cuando se clona una RouteTemplate con categoría libre
+    (p.ej. "Estadísticas") al mundo, create_destination llama con esa categoría
+    como str. El CHECK IN (...7 valores...) rechaza cualquier valor fuera del
+    enum original y lanza IntegrityError 500. La solución es TEXT NOT NULL sin CHECK.
+
+    Técnica: reconstrucción de tabla (SQLite no permite DROP CONSTRAINT).
+    Preserva: id, world_id, url_pattern, label, category, frequency_weight,
+              is_safe, is_dead, consecutive_failures_count, created_at,
+              last_used_at, template_id (M-RT01), UNIQUE(world_id, url_pattern),
+              FK worlds ON DELETE CASCADE, FK route_templates ON DELETE SET NULL.
+    No toca noise_navigation_paths (su FK destination_id apunta al mismo nombre
+    de tabla; SQLite la respeta tras el RENAME sin necesidad de recrearla).
+
+    Idempotente: detecta si el CHECK de category sigue presente en sqlite_master.
+    """
+    rows = await conn.execute_fetchall(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='noise_destinations'",
+    )
+    if not rows:
+        return  # tabla no existe aún — no-op
+
+    current_sql: str = rows[0]["sql"] or ""
+    if "CHECK (category IN" not in current_sql and "CHECK(category IN" not in current_sql:
+        return  # ya sin CHECK de category — idempotente
+
+    logger.info(
+        "NoiseSQLiteAdapter: migrando noise_destinations — eliminando CHECK de category (M-ND02)"
+    )
+
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    await conn.execute("SAVEPOINT m_nd02")
+
+    try:
+        # Detectar si la columna template_id ya existe (M-RT01 puede haberse aplicado antes)
+        pragma_rows = await conn.execute_fetchall(
+            "PRAGMA table_info(noise_destinations)"
+        )
+        col_names = [r["name"] for r in pragma_rows]
+        has_template_id = "template_id" in col_names
+
+        # DDL de la tabla nueva sin CHECK de category
+        template_id_col = (
+            ",\n    template_id               INTEGER DEFAULT NULL"
+            " REFERENCES route_templates(id) ON DELETE SET NULL"
+            if has_template_id else ""
+        )
+
+        await conn.execute(f"""
+            CREATE TABLE noise_destinations_nd02 (
+                id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+                world_id                   INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+                url_pattern                TEXT    NOT NULL,
+                label                      TEXT    NOT NULL,
+                category                   TEXT    NOT NULL,
+                frequency_weight           REAL    NOT NULL DEFAULT 1.0
+                                                   CHECK (frequency_weight >= 0.1 AND frequency_weight <= 5.0),
+                is_safe                    INTEGER NOT NULL DEFAULT 1,
+                is_dead                    INTEGER NOT NULL DEFAULT 0,
+                consecutive_failures_count INTEGER NOT NULL DEFAULT 0,
+                created_at                 TEXT    NOT NULL,
+                last_used_at               TEXT{template_id_col},
+                UNIQUE (world_id, url_pattern)
+            )
+        """)
+
+        # Copiar datos
+        if has_template_id:
+            await conn.execute("""
+                INSERT INTO noise_destinations_nd02
+                       (id, world_id, url_pattern, label, category, frequency_weight,
+                        is_safe, is_dead, consecutive_failures_count,
+                        created_at, last_used_at, template_id)
+                SELECT  id, world_id, url_pattern, label, category, frequency_weight,
+                        is_safe, is_dead, consecutive_failures_count,
+                        created_at, last_used_at, template_id
+                  FROM  noise_destinations
+            """)
+        else:
+            await conn.execute("""
+                INSERT INTO noise_destinations_nd02
+                       (id, world_id, url_pattern, label, category, frequency_weight,
+                        is_safe, is_dead, consecutive_failures_count,
+                        created_at, last_used_at)
+                SELECT  id, world_id, url_pattern, label, category, frequency_weight,
+                        is_safe, is_dead, consecutive_failures_count,
+                        created_at, last_used_at
+                  FROM  noise_destinations
+            """)
+
+        await conn.execute("DROP TABLE noise_destinations")
+        await conn.execute(
+            "ALTER TABLE noise_destinations_nd02 RENAME TO noise_destinations"
+        )
+
+        # Recrear índices
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_noise_destinations_world
+                ON noise_destinations(world_id, is_dead, is_safe)
+        """)
+        if has_template_id:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_noise_destinations_template
+                    ON noise_destinations(template_id)
+            """)
+
+        await conn.execute("PRAGMA foreign_key_check")
+        await conn.execute("RELEASE SAVEPOINT m_nd02")
+
+    except Exception:
+        await conn.execute("ROLLBACK TO SAVEPOINT m_nd02")
+        await conn.execute("RELEASE SAVEPOINT m_nd02")
+        raise
+
+    finally:
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    await conn.commit()
+    logger.info(
+        "NoiseSQLiteAdapter: migración M-ND02 completada (CHECK category eliminado de noise_destinations)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Migración M-CAT04 — eliminar CHECK de category en noise_destinations
 # ---------------------------------------------------------------------------
@@ -922,9 +1051,16 @@ class NoiseSQLiteAdapter(NoiseDbPort):
                   (REFERENCES noise_navigation_paths_old → REFERENCES noise_navigation_paths).
                   Idempotente y segura si la FK ya está bien.
         """
-        # M-CAT04: migrar noise_destinations (eliminar CHECK de category, renombrar columna)
-        # DEBE ejecutarse ANTES de crear la tabla con _CREATE_NOISE_DESTINATIONS,
-        # por si la tabla ya existe con el esquema viejo (con CHECK).
+        # PRAGMA foreign_keys = ON: necesario para que las FK ON DELETE SET NULL y
+        # ON DELETE CASCADE actúen en SQLite (por defecto están desactivadas).
+        # Se activa aquí porque NoiseSQLiteAdapter es el dueño de noise_destinations,
+        # que tiene FKs hacia route_templates (template_id ON DELETE SET NULL).
+        # Spec route-templates-developer-portal.md §v2.13 — riesgo #6.
+        await self._conn.execute("PRAGMA foreign_keys = ON")
+
+        # M-CAT04: migrar noise_destinations (eliminar CHECK de category, renombrar a
+        # category_slug). DEBE ejecutarse ANTES de crear la tabla con el DDL nuevo,
+        # por si la tabla ya existe con el esquema viejo (con CHECK enum).
         await _migrate_noise_destinations_remove_check(self._conn)
 
         # Crear tablas nuevas / instalaciones nuevas
@@ -948,6 +1084,9 @@ class NoiseSQLiteAdapter(NoiseDbPort):
         # (ya no aplica: M-CAT04 recrea la tabla con el CHECK correcto directamente;
         # esta migración es idempotente si la tabla ya tiene el CHECK endurecido)
         await _migrate_noise_destinations_tighten_weight_check(self._conn)
+        # NOTA (merge A+B): la migración de "categoría libre" de B (M-ND02) se sustituye
+        # por M-CAT04 (_migrate_noise_destinations_remove_check), que además renombra
+        # category → category_slug. Por eso aquí ya no se llama a M-ND02.
 
         logger.debug("NoiseSQLiteAdapter: tablas y migraciones aseguradas (incl. M-CAT04)")
 

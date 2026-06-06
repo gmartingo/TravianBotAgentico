@@ -518,13 +518,20 @@ export const api = {
   /**
    * EP-RT07 POST /route-templates/:id/clone-to-world/:worldId — clonar plantilla a un mundo.
    * force: boolean (default false) — sobreescribe si hay conflicto.
+   * navigation_weight: float [0.1-5.0] (default 1.0) — frecuencia con la que ESE mundo usará la ruta.
+   * El peso vive en NoiseDestination por-mundo (v2 rev.2); la plantilla no tiene peso propio.
    */
-  cloneRouteTemplate: (id, worldId, force = false) =>
-    request('POST', `/route-templates/${id}/clone-to-world/${worldId}${force ? '?force=true' : ''}`),
+  cloneRouteTemplate: (id, worldId, force = false, navigationWeight = 1.0) =>
+    request(
+      'POST',
+      `/route-templates/${id}/clone-to-world/${worldId}${force ? '?force=true' : ''}`,
+      { navigation_weight: navigationWeight },
+    ),
 
   /**
    * EP-RT08 POST /worlds/:worldId/noise/apply-templates — bulk clone.
-   * data: { template_ids: [...], force?: boolean }
+   * data: { template_ids: [...], force?: boolean, default_navigation_weight?: float }
+   * default_navigation_weight: peso aplicado uniformemente a todos los clones del bulk (default 1.0).
    */
   applyRouteTemplatesBulk: (worldId, data) =>
     request('POST', `/worlds/${worldId}/noise/apply-templates`, data),
@@ -587,6 +594,22 @@ export const api = {
    */
   deleteCategory: (slug) =>
     request('DELETE', `/route-categories/${slug}`),
+
+  /**
+   * EP-RT11 GET /route-templates/:id/chain — resolver cadena de orígenes.
+   * Devuelve la secuencia ordenada de pasos [raíz → hoja] que el motor ejecutaría.
+   * Usado por la tabla de "pasos heredados" en el portal de rutas.
+   */
+  getRouteTemplateChain: (id) =>
+    request('GET', `/route-templates/${id}/chain`),
+
+  /**
+   * EP-RT12 DELETE /worlds/:worldId/session — cerrar sesión Chrome de un mundo.
+   * Cierra la sesión activa del mundo (browser + session_registry) sin hacer logout de Travian.
+   * Usado por TestRoutePanel (v3) para liberar el browser tras el test.
+   */
+  closeWorldSession: (worldId) =>
+    request('DELETE', `/worlds/${worldId}/session`),
 
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
