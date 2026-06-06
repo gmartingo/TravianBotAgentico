@@ -37,7 +37,6 @@ from core.entities.noise import (
     NavigationPath,
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     NoiseConfig,
     NoiseDestination,
 )
@@ -55,7 +54,7 @@ def make_destination(
     world_id: int = 1,
     url_pattern: str = "/karte.php",
     label: str = "Mapa",
-    category: NoiseCategory = NoiseCategory.MAP,
+    category_slug: str = "uncategorized",
     frequency_weight: float = 1.0,
     is_safe: bool = True,
     is_dead: bool = False,
@@ -66,7 +65,7 @@ def make_destination(
         world_id=world_id,
         url_pattern=url_pattern,
         label=label,
-        category=category,
+        category_slug=category_slug,
         frequency_weight=frequency_weight,
         is_safe=is_safe,
         is_dead=is_dead,
@@ -717,7 +716,7 @@ class TestNoiseDestinationValidation:
         with pytest.raises(ValueError, match="navigation_weight"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="/x", label="X",
-                category=NoiseCategory.OTHER, frequency_weight=0.0,
+                category_slug="uncategorized", frequency_weight=0.0,
             )
 
     def test_weight_negative_raises(self):
@@ -725,7 +724,7 @@ class TestNoiseDestinationValidation:
         with pytest.raises(ValueError, match="navigation_weight"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="/x", label="X",
-                category=NoiseCategory.OTHER, frequency_weight=-1.0,
+                category_slug="uncategorized", frequency_weight=-1.0,
             )
 
     def test_weight_above_5_raises(self):
@@ -733,18 +732,18 @@ class TestNoiseDestinationValidation:
         with pytest.raises(ValueError, match="navigation_weight"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="/x", label="X",
-                category=NoiseCategory.OTHER, frequency_weight=5.01,
+                category_slug="uncategorized", frequency_weight=5.01,
             )
 
     def test_weight_at_boundaries_ok(self):
         """Los límites exactos 0.1 y 5.0 son válidos."""
         NoiseDestination(
             id=1, world_id=1, url_pattern="/x", label="X",
-            category=NoiseCategory.OTHER, frequency_weight=0.1,
+            category_slug="uncategorized", frequency_weight=0.1,
         )
         NoiseDestination(
             id=2, world_id=1, url_pattern="/y", label="Y",
-            category=NoiseCategory.OTHER, frequency_weight=5.0,
+            category_slug="uncategorized", frequency_weight=5.0,
         )
 
     def test_empty_url_raises(self):
@@ -752,7 +751,7 @@ class TestNoiseDestinationValidation:
         with pytest.raises(ValueError, match="url_pattern"):
             NoiseDestination(
                 id=1, world_id=1, url_pattern="", label="X",
-                category=NoiseCategory.OTHER, frequency_weight=1.0,
+                category_slug="uncategorized", frequency_weight=1.0,
             )
 
 

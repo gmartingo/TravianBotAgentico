@@ -43,20 +43,11 @@ import { formatCoord, formatCoordSingle } from '../../utils/coordUtils.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatCoordsDisplay(x, y) {
-  return formatCoord(x, y)
-}
-
-// Formatea la fecha verbatim del último ataque (hora Travian, sin zona)
-function formatLastAttack(isoStr) {
-  return formatDateVerbatim(isoStr)
-}
-
 // ── Tarjeta de un oasis (una por coordenada, todos los tamaños) ───────────────
 
 function OasisCard({ item, isSelected, onToggle, lang, t }) {
-  const coordStr = formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)
-  const dateStr  = formatLastAttack(item.last_attack)
+  const coordStr = formatCoord(item.coord_x_dest, item.coord_y_dest)
+  const dateStr  = formatDateVerbatim(item.last_attack)
 
   return (
     <div
@@ -531,7 +522,7 @@ export function OasisList({ lang, onGoToIngest, t }) {
                   <div
                     id={detailId}
                     role="region"
-                    aria-label={`${t('ar.stats.detail.region')} ${formatCoordsDisplay(item.coord_x_dest, item.coord_y_dest)}`}
+                    aria-label={`${t('ar.stats.detail.region')} ${formatCoord(item.coord_x_dest, item.coord_y_dest)}`}
                     style={{
                       padding: '16px',
                       background: 'var(--surface-2)',

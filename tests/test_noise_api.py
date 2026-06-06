@@ -185,7 +185,7 @@ def test_EP_N03_list_respects_filters(client):
         json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
             "is_safe": True,
         },
@@ -197,26 +197,28 @@ def test_EP_N03_list_respects_filters(client):
     r = c.get(f"/worlds/{world_id}/noise/destinations")
     assert len(r.json()) == 1
 
-    # Marcar como muerto vía la API (simulado: update is_dead no es expuesto en EP-N05,
-    # usamos el adaptador directo; pero aquí testeamos el filtrado con include_dead)
-    # Para el test, creamos otro destino y chequeamos el filtro de categoría
+    # Crear una categoría personalizada y otro destino con esa categoría
+    r_cat = c.post("/route-categories", json={"label": "Mensajes"})
+    assert r_cat.status_code == 201
+    mensajes_slug = r_cat.json()["slug"]
+
     r2 = c.post(
         f"/worlds/{world_id}/noise/destinations",
         json={
             "url_pattern": "/nachrichten.php",
             "label": "Mensajes",
-            "category": "MESSAGES",
+            "category_slug": mensajes_slug,
             "navigation_weight": 2.0,
         },
     )
     assert r2.status_code == 201
 
-    # Filtrar por categoría
-    r = c.get(f"/worlds/{world_id}/noise/destinations?category=MESSAGES")
+    # Filtrar por category_slug → solo el de "mensajes"
+    r = c.get(f"/worlds/{world_id}/noise/destinations?category_slug={mensajes_slug}")
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 1
-    assert data[0]["category"] == "MESSAGES"
+    assert data[0]["category_slug"] == mensajes_slug
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +235,7 @@ def test_EP_N04_create_destination_ok(client):
         json={
             "url_pattern": "/karte.php",
             "label": "Mapa mundial",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 2.5,
             "is_safe": True,
         },
@@ -241,7 +243,7 @@ def test_EP_N04_create_destination_ok(client):
     assert r.status_code == 201, r.text
     data = r.json()
     assert data["url_pattern"] == "/karte.php"
-    assert data["category"] == "MAP"
+    assert data["category_slug"] == "uncategorized"
     assert data["navigation_weight"] == 2.5
     assert data["is_dead"] is False
     assert data["consecutive_failures_count"] == 0
@@ -257,7 +259,7 @@ def test_EP_N04_invalid_url_javascript_scheme_422(client):
         json={
             "url_pattern": "javascript:alert(1)",
             "label": "XSS",
-            "category": "OTHER",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
         },
     )
@@ -274,7 +276,7 @@ def test_EP_N04_invalid_url_protocol_relative_422(client):
         json={
             "url_pattern": "//evil.com/steal",
             "label": "Ataque",
-            "category": "OTHER",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
         },
     )
@@ -291,7 +293,7 @@ def test_EP_N04_invalid_url_relative_no_slash_422(client):
         json={
             "url_pattern": "karte.php",
             "label": "Sin slash",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
         },
     )
@@ -308,7 +310,7 @@ def test_EP_N04_invalid_url_external_domain_422(client):
         json={
             "url_pattern": "https://google.com/attack",
             "label": "Externo",
-            "category": "OTHER",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
         },
     )
@@ -323,7 +325,7 @@ def test_EP_N04_duplicate_url_pattern_422(client):
     body = {
         "url_pattern": "/karte.php",
         "label": "Mapa",
-        "category": "MAP",
+        "category_slug": "uncategorized",
         "navigation_weight": 1.0,
     }
     r = c.post(f"/worlds/{world_id}/noise/destinations", json=body)
@@ -347,7 +349,7 @@ def test_EP_N05_patch_destination_partial(client):
         json={
             "url_pattern": "/karte.php",
             "label": "Mapa original",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.0,
         },
     )
@@ -363,7 +365,7 @@ def test_EP_N05_patch_destination_partial(client):
     data = r.json()
     assert data["label"] == "Mapa actualizado"
     assert data["navigation_weight"] == 1.0  # conservado
-    assert data["category"] == "MAP"        # conservado (inmutable)
+    assert data["category_slug"] == "uncategorized"        # conservado (no se envió en el PATCH)
 
 
 def test_EP_N05_cross_world_404(client):
@@ -384,7 +386,7 @@ def test_EP_N05_cross_world_404(client):
     # Crear destino en world_id_1
     r = c.post(
         f"/worlds/{world_id_1}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     assert r.status_code == 201
     dest_id = r.json()["id"]
@@ -408,7 +410,7 @@ def test_EP_N06_delete_destination(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -431,7 +433,7 @@ def test_EP_N07_list_paths_empty(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -457,7 +459,7 @@ def test_EP_N07_cross_world_404(client):
 
     r = c.post(
         f"/worlds/{world_id_1}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -476,7 +478,7 @@ def test_EP_N08_create_path_ok(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -518,7 +520,7 @@ def test_EP_N08_empty_steps_422(client):
 
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "X", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "X", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 
@@ -537,7 +539,7 @@ def _create_dest_and_path(c: TestClient, world_id: int) -> tuple[int, int]:
     """Crea destino + ruta para tests de EP-N09/N10."""
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP", "navigation_weight": 1.0},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized", "navigation_weight": 1.0},
     )
     dest_id = r.json()["id"]
 

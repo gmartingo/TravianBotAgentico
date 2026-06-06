@@ -36,7 +36,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adapters.api.main import app
-from core.entities.noise import NoiseCategory, NoiseConfig, NoiseDestination
+from core.entities.noise import NoiseConfig, NoiseDestination
 from core.entities.session import SessionMode
 from core.scheduling.world_agent import WorldAgent
 
@@ -60,9 +60,51 @@ def _make_dest(id: int, weight: float) -> NoiseDestination:
         world_id=1,
         url_pattern=f"/page{id}.php",
         label=f"Página {id}",
-        category=NoiseCategory.MAP,
+        category_slug="uncategorized",
         frequency_weight=weight,
     )
+
+
+async def _build_real_adapter_with_dests(db_path: str, weights: list[float]):
+    """
+    Construye un NoiseSQLiteAdapter REAL sobre una BD temporal y crea un mundo
+    con un destino por cada peso de `weights`.
+
+    GUARDIAN: los tests del clamp y del destino único deben ejercer el código
+    REAL de pick_random_safe_destination, no una copia de su lógica. De lo
+    contrario, romper el clamp en producción no haría fallar el test.
+    """
+    from adapters.db.account_sqlite_adapter import AccountSQLiteAdapter
+    from adapters.db.noise_sqlite_adapter import NoiseSQLiteAdapter
+    from core.entities.account import Account
+    from core.entities.tribe import Tribe
+    from core.entities.world import World
+
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
+    await conn.execute("PRAGMA foreign_keys=ON")
+    account_adapter = AccountSQLiteAdapter(conn)
+    noise_adapter = NoiseSQLiteAdapter(conn)
+    await account_adapter.ensure_tables()
+    await noise_adapter.ensure_tables()
+
+    account = await account_adapter.save_account(
+        Account(id=None, email="clamp@example.com", username="clampbot", password=""),
+        password_cifrada=b"dummy",
+    )
+    world = await account_adapter.save_world(
+        account_id=account.id,
+        world=World(id=0, server="https://ts1.travian.es/", tribe=Tribe.ROMANS),
+    )
+    for i, w in enumerate(weights):
+        await noise_adapter.create_destination(
+            world_id=world.id,
+            url_pattern=f"/page{i}.php",
+            label=f"Página {i}",
+            category_slug="uncategorized",
+            frequency_weight=w,
+        )
+    return conn, noise_adapter, world.id
 
 
 # Fixture de cliente HTTP con BD temporal
@@ -423,55 +465,36 @@ class TestTAD_FW09_Clamp60Pct:
     Probabilidad cruda dominante ≈ 93%. Tras clamp: dominante ≤ 62% empírico.
     """
 
-    def test_dominant_freq_below_62_pct(self):
-        """10000 sorteos con pesos del peor caso — dominante ≤ 62%."""
-        from adapters.db.noise_sqlite_adapter import NoiseSQLiteAdapter
+    def test_dominant_freq_below_62_pct(self, tmp_path):
+        """
+        GUARDIAN: 10000 sorteos del peor caso [5.0, 0.1, 0.1, 0.1, 0.1] EJERCIENDO
+        el pick_random_safe_destination REAL del adaptador (no una copia de su
+        lógica). El destino dominante debe quedar <= 62% empírico. Si alguien
+        rompe el clamp en producción, este test DEBE fallar.
+        """
+        async def _run() -> float:
+            db_path = str(tmp_path / "clamp_real.db")
+            conn, noise_adapter, world_id = await _build_real_adapter_with_dests(
+                db_path, [5.0, 0.1, 0.1, 0.1, 0.1]
+            )
+            try:
+                dests = await noise_adapter.list_destinations(
+                    world_id, include_dead=False, include_unsafe=False
+                )
+                # id del destino con peso dominante (5.0)
+                dominant_id = next(d.id for d in dests if d.frequency_weight == 5.0)
+                counts: dict[int, int] = {}
+                for _ in range(10000):
+                    picked = await noise_adapter.pick_random_safe_destination(world_id)
+                    counts[picked.id] = counts.get(picked.id, 0) + 1
+                return counts.get(dominant_id, 0) / 10000
+            finally:
+                await conn.close()
 
-        # Crear adapter con mock de conexión que devuelve los destinos directamente
-        dests = [
-            _make_dest(id=1, weight=5.0),  # dominante
-            _make_dest(id=2, weight=0.1),
-            _make_dest(id=3, weight=0.1),
-            _make_dest(id=4, weight=0.1),
-            _make_dest(id=5, weight=0.1),
-        ]
-
-        # Simular el método de clamp directamente (sin BD)
-        # Reproducimos la lógica de pick_random_safe_destination con 10000 sorteos
-        counts = {i: 0 for i in range(1, 6)}
-
-        for _ in range(10000):
-            raw_weights = [d.frequency_weight for d in dests]
-            total = sum(raw_weights)
-            probs = [w / total for w in raw_weights]
-
-            _MAX_PROB = 0.60
-            changed = True
-            while changed:
-                changed = False
-                over = [(i, p) for i, p in enumerate(probs) if p > _MAX_PROB]
-                if not over:
-                    break
-                for idx, p in over:
-                    excess = p - _MAX_PROB
-                    probs[idx] = _MAX_PROB
-                    rest_total = sum(probs[j] for j in range(len(probs)) if j != idx)
-                    if rest_total > 0:
-                        for j in range(len(probs)):
-                            if j != idx:
-                                probs[j] += excess * (probs[j] / rest_total)
-                    changed = True
-
-            s = sum(probs)
-            probs = [p / s for p in probs]
-
-            selected = random.choices(dests, weights=probs, k=1)[0]
-            counts[selected.id] += 1
-
-        dominant_freq = counts[1] / 10000
+        dominant_freq = asyncio.run(_run())
         assert dominant_freq <= 0.62, (
-            f"Destino dominante captura {dominant_freq*100:.1f}% (> 62% límite). "
-            f"El clamp de 60% no funciona correctamente."
+            f"Destino dominante captura {dominant_freq*100:.1f}% (> 62% límite) "
+            f"ejerciendo el adaptador REAL. El clamp de 60% no funciona."
         )
 
     def test_dominant_above_60_theoretical(self):
@@ -519,18 +542,27 @@ class TestTAD_FW10_DestinoUnico:
     selecciona él (no hay elección posible → no es una firma de bot).
     """
 
-    def test_single_destination_always_selected(self):
-        """El único destino se selecciona siempre independientemente de su peso."""
-        # Testamos con el adaptador real: un destino con peso 0.1 (el mínimo)
-        # Con 1 solo destino, la función devuelve directamente sin sorteo
-        from adapters.db.noise_sqlite_adapter import NoiseSQLiteAdapter
+    def test_single_destination_always_selected(self, tmp_path):
+        """
+        GUARDIAN: con un único destino elegible (peso mínimo 0.1), el adaptador
+        REAL siempre lo devuelve en 200 sorteos. Ejerce pick_random_safe_destination
+        real, no una copia de la rama len==1.
+        """
+        async def _run():
+            db_path = str(tmp_path / "single_real.db")
+            conn, noise_adapter, world_id = await _build_real_adapter_with_dests(
+                db_path, [0.1]
+            )
+            try:
+                only = await noise_adapter.list_destinations(world_id)
+                only_id = only[0].id
+                for _ in range(200):
+                    picked = await noise_adapter.pick_random_safe_destination(world_id)
+                    assert picked is not None and picked.id == only_id
+            finally:
+                await conn.close()
 
-        single_dest = _make_dest(id=1, weight=0.1)
-
-        # Simulamos la lógica de pick con 1 destino (rama len==1)
-        # La función tiene: if len(destinations) == 1: return destinations[0]
-        result = single_dest  # directamente devuelve el único
-        assert result.id == 1
+        asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------
@@ -819,7 +851,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 2.5,
         })
         assert r.status_code == 201, r.text
@@ -833,7 +865,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/nachrichten.php",
             "label": "Mensajes",
-            "category": "MESSAGES",
+            "category_slug": "uncategorized",
         })
         assert r.status_code == 201, r.text
         assert r.json()["navigation_weight"] == 1.0
@@ -844,7 +876,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "X",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 0,
         })
         assert r.status_code == 422, r.text
@@ -855,7 +887,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "X",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 10,
         })
         assert r.status_code == 422, r.text
@@ -866,7 +898,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
         })
         dest_id = r.json()["id"]
 
@@ -882,7 +914,7 @@ class TestTI_FW_EP_N03_N04_N05:
         client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.5,
         })
 

@@ -6,7 +6,7 @@ metadata:
 ---
 
 # Mapa de capacidades — TravianBot
-Última recarga: 2026-05-26 (ronda 4 — añade fuente de datos de villages: upsert via ReadFarmListsUseCase como side effect de POST /farm/worlds/{wid}/farm-lists/read).
+Última recarga: 2026-06-05 (ronda 5 — añade mapa completo attack-reports/attack-report-parser/AttackReportPort; confirma que att1 ya capturado por OverviewParser pero desde /village/statistics/overview, NO desde dorf1; clarifica que rally point (build.php?gid=16&tt=1) no tiene ningún adaptador/parser; añade gap nuevos: detección tropas entrantes desde dorf1 vs statistics/overview, navegación a rally point).
 graphify 0.8.16 — grafo base de be2e449 (2668 nodos, 5752 aristas). Sección frontend añadida por lectura directa (graphify no cubre frontend/src aún).
 
 CAMBIOS vs recarga anterior:

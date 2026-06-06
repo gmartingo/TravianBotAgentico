@@ -60,9 +60,38 @@ function IconWarning({ size = 14 }) {
 }
 
 // ── NoiseCategoryBadge ────────────────────────────────────────────────────────
+//
+// Acepta DOS formas de uso:
+//   1. <NoiseCategoryBadge category="MAP" />
+//      → Badge estático con enum hardcodeado (uso legacy, compatibilidad).
+//   2. <NoiseCategoryBadge label="Mi categoría" color="var(--cat-steel)" />
+//      → Badge dinámico con datos del servidor (nuevo, preferido).
+//   3. <NoiseCategoryBadge label="Mi categoría" color={null} />
+//      → Badge neutro sin color asignado.
 
-export function NoiseCategoryBadge({ category }) {
+export function NoiseCategoryBadge({ category, label, color }) {
   const { t } = useI18n()
+
+  // ── Modo dinámico (label + color vienen por props) ──────────────────────────
+  if (label !== undefined) {
+    const hasBg = Boolean(color)
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center',
+        borderRadius: 'var(--radius-full)',
+        padding: '2px 8px',
+        fontSize: '11px', fontWeight: 500,
+        letterSpacing: '0.03em',
+        background: hasBg ? color : 'var(--surface-2)',
+        color: hasBg ? '#FFFFFF' : 'var(--text-secondary)',
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+    )
+  }
+
+  // ── Modo legacy (enum category) ─────────────────────────────────────────────
   const s = CATEGORY_STYLE[category] ?? CATEGORY_STYLE.OTHER
   return (
     <span style={{
@@ -115,14 +144,14 @@ function NoiseAddDestinationForm({ worldId, onCreated, onCancel }) {
     url_pattern: '',
     label: '',
     category: 'MAP',
-    frequency_weight: 1.0,
+    navigation_weight: 1.0,
     is_safe: true,
   })
   const [creating, setCreating] = useState(false)
   const [urlError, setUrlError] = useState(null)
   const urlRef = useRef(null)
 
-  const isValid = form.url_pattern.trim().length > 0 && form.frequency_weight > 0
+  const isValid = form.url_pattern.trim().length > 0 && form.navigation_weight > 0
 
   async function handleCreate() {
     if (!isValid || creating) return
@@ -235,9 +264,10 @@ function NoiseAddDestinationForm({ worldId, onCreated, onCancel }) {
           <input
             type="number"
             min="0.1"
+            max="5"
             step="0.1"
-            value={form.frequency_weight}
-            onChange={e => setForm(f => ({ ...f, frequency_weight: parseFloat(e.target.value) || 1.0 }))}
+            value={form.navigation_weight}
+            onChange={e => setForm(f => ({ ...f, navigation_weight: parseFloat(e.target.value) || 1.0 }))}
             style={{
               width: '80px', padding: '6px 8px',
               border: '1px solid var(--border-strong)',
@@ -305,7 +335,15 @@ function NoiseAddDestinationForm({ worldId, onCreated, onCancel }) {
 
 // React.memo: evita re-render cuando NoiseTab re-renderiza por cambio de estado del drawer.
 // Precondición: NoiseTab debe pasar onOpenDrawer/onDeleted/onCreated estables (useCallback).
-export const NoiseDestinationsTable = memo(function NoiseDestinationsTable({ worldId, destinations, loading, onOpenDrawer, onDeleted, onCreated }) {
+//
+// Props adicionales (retrocompatibles):
+//  - mode         {"world"|"template"} — en "template" oculta el form de creación y el filtro de muertos.
+//  - onDeleteItem {Function(destId)}   — reemplaza el handler de borrado interno (para modo template).
+export const NoiseDestinationsTable = memo(function NoiseDestinationsTable({
+  worldId, destinations, loading, onOpenDrawer, onDeleted, onCreated,
+  mode = 'world',
+  onDeleteItem,
+}) {
   const { t } = useI18n()
   const [showAddForm, setShowAddForm] = useState(false)
   const [filterCategory, setFilterCategory] = useState('')
@@ -329,9 +367,13 @@ export const NoiseDestinationsTable = memo(function NoiseDestinationsTable({ wor
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return
-    await api.deleteNoiseDestination(worldId, deleteTarget.dest.id)
+    if (onDeleteItem) {
+      await onDeleteItem(deleteTarget.dest.id)
+    } else {
+      await api.deleteNoiseDestination(worldId, deleteTarget.dest.id)
+    }
     showToast(t('noise.destinations.deleted'))
-    onDeleted(deleteTarget.dest.id)
+    onDeleted?.(deleteTarget.dest.id)
     setDeleteTarget(null)
   }
 
@@ -372,19 +414,21 @@ export const NoiseDestinationsTable = memo(function NoiseDestinationsTable({ wor
           ))}
         </select>
 
-        {/* Filtro muertos */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={showDead}
-            onChange={e => setShowDead(e.target.checked)}
-            style={{ width: '14px', height: '14px' }}
-          />
-          {t('noise.destinations.showDead')}
-        </label>
+        {/* Filtro muertos — solo en modo world */}
+        {mode === 'world' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showDead}
+              onChange={e => setShowDead(e.target.checked)}
+              style={{ width: '14px', height: '14px' }}
+            />
+            {t('noise.destinations.showDead')}
+          </label>
+        )}
 
-        {/* Botón añadir */}
-        {!showAddForm && (
+        {/* Botón añadir — solo en modo world */}
+        {mode === 'world' && !showAddForm && (
           <button
             type="button"
             onClick={() => setShowAddForm(true)}
@@ -404,8 +448,8 @@ export const NoiseDestinationsTable = memo(function NoiseDestinationsTable({ wor
         )}
       </div>
 
-      {/* Formulario inline de nuevo destino */}
-      {showAddForm && (
+      {/* Formulario inline de nuevo destino — solo en modo world */}
+      {mode === 'world' && showAddForm && (
         <NoiseAddDestinationForm
           worldId={worldId}
           onCreated={handleCreated}
@@ -589,7 +633,7 @@ function DestinationRow({ dest, onOpenDrawer, onDelete, deleteRef, t }) {
 
       {/* Peso */}
       <td role="cell" style={{ ...tdBase, fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}>
-        {dest.frequency_weight}
+        {dest.navigation_weight}
       </td>
 
       {/* Seguro */}

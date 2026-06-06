@@ -155,6 +155,26 @@
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
 }
 
+/* ── TOKENS PALETA DE CATEGORÍAS ─────────────────────────── */
+/* Colores mid-tone WCAG AA (≥4.5:1 texto blanco sobre fondo).
+   Usados en CategoryBadge y CategoryCombobox.
+   Los mismos hex funcionan en claro y oscuro (mid-tones neutros).
+   Fuente: docs/design/route-categories-combobox.md §14 */
+:root {
+  --cat-steel:   #2E6DAD;  /* Acero */
+  --cat-moss:    #3D7A4E;  /* Musgo */
+  --cat-amber:   #A66521;  /* Ámbar */
+  --cat-terracot:#B5453A;  /* Terracota */
+  --cat-mauve:   #7A5FAF;  /* Malva */
+  --cat-teal:    #2E8B8B;  /* Teal */
+  --cat-salmon:  #C4604E;  /* Salmón */
+  --cat-slate:   #5C6B7A;  /* Pizarra */
+  --cat-indigo:  #4A5AC0;  /* Índigo */
+  --cat-sienna:  #8B4513;  /* Siena */
+  --cat-forest:  #2D6A4F;  /* Bosque */
+  --cat-warmgra: #6B5B4E;  /* Grafito cálido */
+}
+
 /* Override manual: data-theme="light" fuerza claro aunque el sistema esté en oscuro */
 :root[data-theme="light"] {
   --bg:            #F5F5F7;

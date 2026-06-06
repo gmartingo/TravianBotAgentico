@@ -100,7 +100,7 @@ def _create_destination_and_path(
     """Crea un destino y una ruta básica con un paso. Devuelve (dest_id, path_id)."""
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     assert r.status_code == 201, r.text
     dest_id = r.json()["id"]

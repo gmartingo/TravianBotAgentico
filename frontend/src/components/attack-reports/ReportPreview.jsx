@@ -20,15 +20,6 @@ import { TravianReport } from '../combat/TravianReport.jsx'
 import { formatDateVerbatim } from '../../utils/formatDateVerbatim.js'
 import { formatCoord } from '../../utils/coordUtils.js'
 
-function formatCoords(x, y) {
-  return formatCoord(x, y)
-}
-
-// attacked_at es verbatim (hora del servidor Travian) — no pasar por new Date()
-function formatDate(isoStr) {
-  return formatDateVerbatim(isoStr)
-}
-
 function mapAttackerTroops(attackerTroopsRaw) {
   if (!attackerTroopsRaw) return []
   return attackerTroopsRaw.map((t) => ({
@@ -153,8 +144,8 @@ export function ReportPreview({ data, lang, onViewExisting, t }) {
   const anyAttackerSurvived = attackerTroops.some(t => (t.quantity_survived ?? 0) > 0)
   const attackerWins = totalLost === 0 || anyAttackerSurvived
 
-  const coordStr = formatCoords(data.coord_x_dest, data.coord_y_dest)
-  const dateStr  = formatDate(data.attacked_at)
+  const coordStr = formatCoord(data.coord_x_dest, data.coord_y_dest)
+  const dateStr  = formatDateVerbatim(data.attacked_at)
   const village  = data.origin_village_name ?? '—'
 
   return (

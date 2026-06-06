@@ -1,6 +1,6 @@
 ---
 name: patterns-noise-tab
-description: S-NOISE: pestaña Ruido, wizard de rutas, Toggle/MinMaxInput, DeletePopover inline, EP-N01..N14 (incl. Probar ruta v3, Editar ruta v4)
+description: S-NOISE: pestaña Ruido, wizard de rutas, Toggle/MinMaxInput, DeletePopover inline, EP-N01..N14 (incl. Probar ruta v3, Editar ruta v4, intervalos MM:SS v2)
 metadata:
   type: project
 ---
@@ -10,7 +10,7 @@ Pestaña "Ruido" (Noise Catalog) implementada en `frontend/src/components/world/
 ## Componentes creados
 
 - `NoiseTab.jsx` — raíz, carga EP-N01+EP-N03 en paralelo con Promise.all
-- `NoiseConfigPanel.jsx` — panel colapsable: toggle noise_enabled (PUT inmediato) + 6 campos numéricos + guardar
+- `NoiseConfigPanel.jsx` — panel colapsable: toggle noise_enabled (PUT inmediato) + inputs MM:SS intervalo (v2, ver abajo) + guardar
 - `NoiseDestinationsTable.jsx` — tabla densa + `NoiseCategoryBadge` + formulario inline `NoiseAddDestinationForm`
 - `NoiseDestinationDrawer.jsx` — drawer lateral (patrón [[patterns-world-space]] FarmListDrawer: overlay+panel+focus trap+ESC)
 - `NoisePathWizard.jsx` — wizard multi-paso (origin → step form → lista pasos acumulados → guardar)
@@ -61,6 +61,30 @@ Pestaña "Ruido" (Noise Catalog) implementada en `frontend/src/components/world/
 - **Tab order en modo edición**: `input → ✓ → ✕ → ▼ → ⋯` ([Probar]/[Editar pasos] no en DOM).
 - **Devolución de foco**: cancelar → `renameBtnRef.focus()`; confirmar OK → `labelBtnRef.focus()`.
 - **Script de verificación visual**: `frontend/scripts/test_pathcard_v4.mjs` (puppeteer desde el directorio frontend). Inyecta 5 estados en el DOM de `/mundos/1` usando los tokens CSS del proyecto.
+
+## Contratos EP-N01/N02/N03/N04/N05 — v2 (intervalo + navigation_weight)
+
+**Cambio de contrato en producción (2026-06-05):**
+
+- **EP-N01/N02** (`/worlds/:worldId/noise/config`): los campos `*_req_per_hour_*` ya NO existen. Los nuevos son `hardcore_interval_min_seconds`, `hardcore_interval_max_seconds`, `passive_interval_min_seconds`, `passive_interval_max_seconds` (int, segundos, mínimo 30).
+- **EP-N03/N04/N05** (destinos): el campo `frequency_weight` fue renombrado a `navigation_weight` en el contrato (float, rango 0.1–5.0). La entidad interna y la BD siguen siendo `frequency_weight`.
+
+**NoiseConfigPanel.jsx v2 — patrón MM:SS:**
+- Componente `MmssMinMaxInput` inline (no usa `MinMaxInput`): inputs `type="text" inputMode="numeric"`, placeholder `"mm:ss"`.
+- Conversión: importa `mmssToSeconds`, `secondsToMmss`, `validateMmss` de `frontend/src/utils/time.js`.
+- Estado local: `localMmss` = `{hcMin, hcMax, paMin, paMax}` en strings MM:SS. `null` = usa config.
+- Al recibir config (segundos): `secondsToMmss(effCfg.hardcore_interval_min_seconds ?? 30)`.
+- Al guardar: convierte cada campo con `mmssToSeconds()` antes de enviar al API.
+- Toggle: solo envía `{noise_enabled: newVal}` (PATCH mínimo, no el config completo).
+- Validación: `validateMmss(val, 30)` (mínimo 30 s, RN-FW02 guardian). Error cross: mín > máx inline.
+- Errores 422 del backend: se muestran en `<p role="alert">` sobre el footer.
+- Dwell: mostrado como R/O (disabled) — no era scope de este delta.
+
+**NoiseDestinationsTable.jsx / NoiseDestinationDrawer.jsx:**
+- Renombraron `frequency_weight → navigation_weight` en estado, API calls, display y validación.
+- Input del peso: `min="0.1" max="5" step="0.1"`. Drawer añade clamp en `onChange`: `Math.min(5.0, Math.max(0.1, v))`.
+
+**`frontend/src/utils/time.js`** — `mmssToSeconds(str)`, `secondsToMmss(n)`, `validateMmss(str, minSecs)` — REUTILIZAR siempre.
 
 ## i18n
 

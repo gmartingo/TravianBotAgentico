@@ -25,6 +25,7 @@ import { NewAccountPage }    from './pages/NewAccountPage.jsx'
 import { AccountDetailPage } from './pages/AccountDetailPage.jsx'
 import { WorldSpacePage }    from './pages/WorldSpacePage.jsx'
 import { AttackReportsPage } from './pages/AttackReportsPage.jsx'
+import { RouteTemplatesPage } from './pages/RouteTemplatesPage.jsx'
 import { CombatCalculator } from './components/combat/CombatCalculator.jsx'
 
 function CalculatorPage() {
@@ -62,6 +63,7 @@ export function App() {
         <Route path="/cuentas/:id"    element={<AccountDetailPage />} />
         <Route path="/calculadora"     element={<CalculatorPage />} />
         <Route path="/reportes-oasis"  element={<AttackReportsPage />} />
+        <Route path="/rutas"           element={<RouteTemplatesPage />} />
       </Route>
 
       {/* ── Espacio del mundo (sin sidebar) ──────────── */}

@@ -6,9 +6,11 @@ destinos de navegación, rutas con pasos, y configuración de ruido por mundo.
 
 Spec human-sessions.md §7 (sección v2.2 — Ruido Humano de Navegación).
 Spec noise-path-wizard.md §7 (ampliación — anclas semilla, wizard, derive-selector).
+Spec route-templates-developer-portal.md §7 (RouteTemplate + RouteTemplatePath).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -19,7 +21,15 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 
 class NoiseCategory(str, Enum):
-    """Categoría de destino de navegación de ruido."""
+    """
+    Categoría de destino de navegación de ruido.
+
+    DEPRECATED: reemplazado por RouteCategory (catálogo dinámico).
+    Spec route-categories-dynamic.md §2 (Paso 14 de implementación).
+    Se mantiene temporalmente para compatibilidad durante la migración.
+    Una vez que todos los tests y adaptadores usen category_slug: str,
+    este enum se eliminará del codebase.
+    """
     MAP             = "MAP"
     OASIS_INFO      = "OASIS_INFO"
     PLAYER_PROFILE  = "PLAYER_PROFILE"
@@ -83,20 +93,25 @@ class NoiseDestination:
     """
     Destino de navegación de ruido.
 
-    url_pattern y category son inmutables tras la creación (no se permiten
-    cambiar via update — spec §port.update_destination).
+    url_pattern es inmutable tras la creación.
+    category_slug es editable (spec route-categories-dynamic.md §4 RN-CAT11).
+
+    template_id (nullable): FK a route_templates.id cuando este destino fue
+    creado clonando una plantilla maestra (M-RT01). None si fue creado a mano.
+    Spec route-templates-developer-portal.md §7.3.
     """
     id: int | None
     world_id: int
     url_pattern: str
     label: str
-    category: NoiseCategory
+    category_slug: str                        # slug de RouteCategory (antes: NoiseCategory enum)
     frequency_weight: float                   # > 0
     is_safe: bool = True
     is_dead: bool = False
     consecutive_failures_count: int = 0
     created_at: datetime | None = None
     last_used_at: datetime | None = None
+    template_id: int | None = None            # M-RT01: NULL si creado a mano
 
     def __post_init__(self) -> None:
         # RN-FW07 (GUARDIAN — NO NEGOCIABLE): rango cerrado [0.1, 5.0].
@@ -110,6 +125,8 @@ class NoiseDestination:
             raise ValueError("url_pattern no puede estar vacío")
         if not self.label.strip():
             raise ValueError("label no puede estar vacío")
+        if not self.category_slug.strip():
+            raise ValueError("category_slug no puede estar vacío")
 
 
 @dataclass
@@ -183,6 +200,80 @@ class NavigationPath:
     def __post_init__(self) -> None:
         if not self.label.strip():
             raise ValueError("label no puede estar vacío")
+
+
+@dataclass
+class RouteTemplatePath:
+    """
+    Ruta dentro de una plantilla global de ruido.
+
+    Sin destination_id — la plantilla no es por-mundo.
+    Sin is_dead / consecutive_failures_count — campos operacionales por-mundo.
+
+    Spec route-templates-developer-portal.md §7.1.
+    """
+    id: int | None
+    template_id: int | None
+    origin: str                  # str — admite NavigationOrigin.value + "VILLAGE_<n>"
+    label: str
+    is_active: bool = True
+    steps: list[NavigationStep] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("label no puede estar vacío")
+
+
+@dataclass
+class RouteTemplate:
+    """
+    Plantilla global de ruta de navegación de ruido.
+
+    Sin world_id — es global a la instalación del bot.
+    Slug único globalmente (RN-RT02).
+    Los steps siguen las mismas restricciones anti-detección que NavigationStep.
+
+    NOTA (v2 rev.2): navigation_weight NO pertenece a la plantilla global.
+    El peso (frecuencia de ruido) se fija por-mundo al clonar/asignar la ruta
+    a un mundo concreto; vive en NoiseDestination.frequency_weight. Ver §v2-PESO.
+
+    NOTA (v2): origin_template_id — FK nullable a otra RouteTemplate (composición
+    atómica). NULL = ruta raíz (visible desde cualquier página). INT = al ejecutar,
+    navegar primero la cadena de esa plantilla origen antes del clic propio.
+    La detección de ciclos vive en core/use_cases/route_template_service.py.
+
+    NOTA (category_slug): la categoría es un slug del catálogo dinámico
+    RouteCategory (editable tipo Notion). La validación de existencia del slug
+    vive en el handler (sin FK hard). Ver route-categories-dynamic.md.
+
+    Spec route-templates-developer-portal.md §7.1, §v2.2.3.
+    """
+    id: int | None
+    slug: str                              # kebab-case, UNIQUE global
+    label: str
+    category_slug: str                     # slug de RouteCategory (catálogo dinámico)
+    url_pattern: str
+    is_safe: bool = True
+    origin_template_id: int | None = None  # v2 — FK nullable a otra RouteTemplate
+    paths: list[RouteTemplatePath] = field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not self.slug.strip():
+            raise ValueError("slug no puede estar vacío")
+        if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', self.slug):
+            raise ValueError(
+                "slug debe ser kebab-case: solo letras minúsculas, dígitos y guiones"
+            )
+        if not self.label.strip():
+            raise ValueError("label no puede estar vacío")
+        if not self.url_pattern.strip():
+            raise ValueError("url_pattern no puede estar vacío")
+        if not self.category_slug.strip():
+            raise ValueError("category_slug no puede estar vacío")
+        # v2: auto-referencia no se puede validar en __post_init__ (sin acceso a BD).
+        # La detección de ciclos vive en el use case de escritura.
 
 
 @dataclass

@@ -33,3 +33,7 @@
 - [noise-path-test-pattern](noise-path-test-pattern.md) — EP-N14 probar ruta: _browser_lock, execute_path_test, no-destructivo, PathTestReport en core/entities/noise_test.py
 - [sqlite-rename-fk-gotcha](sqlite-rename-fk-gotcha.md) — RENAME TABLE con FK hijas corrompe la BD (SQLite >= 3.25); patrón correcto: CREATE _new + DROP vieja + RENAME con foreign_keys=OFF
 - [noise-frequency-weight-pattern](noise-frequency-weight-pattern.md) — req_per_hour→interval_seconds; navigation_weight alias; jitter SIEMPRE; clamp 60%; piso 30 s guardian
+- [route-templates-pattern](route-templates-pattern.md) — catálogo plantillas rutas: gotcha FK-nueva-tabla en migración; SELECTs dinámicos; seed JSON externo idempotente por slug
+- [radar-page-hook-wiring](radar-page-hook-wiring.md) — page_html_provider inyectado en WorldAgent para _post_page_hook sin romper frontera hexagonal; tab.get_content() en composition root
+- [route-categories-dynamic-pattern](route-categories-dynamic-pattern.md) — UNSET sentinel para PATCH parcial; migración M-CAT03/M-CAT04 rename columna; RouteCategoryAdapter antes de RouteTemplate en lifespan
+- [free-category-pattern](free-category-pattern.md) — category libre (str, no enum): M-RT04+M-ND02 reconstruyen tablas con foreign_keys=OFF; NoiseDestination.category normaliza enum→str; _dest_to_response usa hasattr(.value)

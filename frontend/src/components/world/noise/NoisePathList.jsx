@@ -509,8 +509,11 @@ const PathCard = memo(function PathCard({ path, worldId, onUpdate, onDelete }) {
           </button>
         )}
 
-        {/* ── Botón "Probar" (EP-N14 v3) — visible solo fuera del modo renombrado ── */}
-        {!renamingLabel && (
+        {/* ── Botón "Probar" (EP-N14 v3) — SOLO en modo MUNDO. En el catálogo global de
+             plantillas (worldId == null) se prueba con el botón "Probar" de la FILA, que
+             abre el panel "Probar ruta" con selección de mundo (EP-RT10-v3). Aquí no hay
+             mundo, así que se oculta para no llamar a /worlds/null/noise/paths/.../test ── */}
+        {!renamingLabel && worldId != null && (
           <button
             ref={testBtnRef}
             type="button"

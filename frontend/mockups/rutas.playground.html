@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Portal de Desarrollador de Rutas (/rutas)
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador con doble clic.
+
+  Andamiaje de drag & drop reutilizado de noise-catalog.playground.html.
+  Sistema de tokens copiado de DESIGN.md §19.16.
+
+  BLOQUES ARRASTRABLES (cada uno es un .drag-block independiente):
+    A — Cabecera de página: título "Catálogo de rutas" + descripción + botón "Nueva plantilla"
+    B — Barra de filtros/búsqueda: texto libre + filtro por categoría (7 categorías)
+    C — Tabla de plantillas (lista con datos): identificador, nombre, categoría, pasos, peso, estado, acciones
+        → Cada fila tiene un botón ▶ por fila (P1 — siempre visible).
+        → Al pulsar ▶: se expande una fila inline debajo con el resultado paso a paso.
+        → El ▶ usa el mundo elegido en la barra global J (sticky bottom).
+    D — Tabla vacía (estado vacío: sin plantillas en el catálogo)
+    E — Drawer de edición de plantilla (panel lateral): campos RO + editables + lista de pasos + wizard
+    F — Modal "Clonar a mundo": selector de mundos + checkbox force + resultado bulk
+    G — [OBSOLETO - v1] Panel "Probar ruta": selector de mundo propio + desplegable de índice + botón "Ejecutar"
+        ELIMINADO: provocaba error "path_index fuera de rango" en rutas compuestas.
+        Reemplazado por ▶ por fila (bloque C) + barra global J.
+    H — Panel "Actualizar desde plantilla" (re-sync): listado de mundos con la plantilla + botón sync
+    I — Aviso seed inicial: banner informativo de ~20 plantillas precargadas
+
+  BARRA FIJA (no arrastrable, sticky bottom):
+    J — WorldSelector bar: selector de mundo global + hint estado.
+        Compartido por todos los ▶ de la tabla. El usuario elige el mundo UNA vez.
+        Siempre visible cuando hay tabla. height: 48px, igual que AgentBottomBar de WorldSpace.
+
+  VISTAS DEL SELECTOR:
+    1 — Lista con datos (bloques A + B + C + barra J)
+    2 — Lista vacía (bloques A + B + D + barra J)
+    3 — Drawer de edición abierto (bloque E)
+    4 — Modal clonar a mundo abierto (bloque F)
+    5 — [NUEVO] Tabla con ▶ activo: fila expandida OK (bloques A + B + C + barra J — fila 1 expandida con resultado ok)
+    6 — Panel re-sync (bloque H)
+    7 — Banner seed + tabla inicial (bloques A + B + C + I + barra J)
+    8 — [NUEVO] Tabla con ▶ activo: fila expandida ERROR (bloques A + B + C + barra J — fila 2 expandida con resultado error)
+
+  Spec funcional: docs/specs/route-templates-developer-portal.md
+  Spec de diseño: docs/design/route-test-interaction.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Catálogo de Rutas (playground)</title>
+<style>
+/* ===== TOKENS (DESIGN.md §19.16) ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--success-subtle:rgba(36,138,61,.12);
+  --danger:#C9352C;--danger-subtle:rgba(201,53,44,.08);
+  --info:#0A6FCC;--info-subtle:rgba(10,111,204,.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  --topbar-h:52px;--sidebar-w:200px;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  display:flex;flex-direction:column;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+button,select,input,textarea{font-family:inherit;}
+
+/* ===== TOOLBAR PLAYGROUND ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:200;
+  font-size:12px;position:sticky;top:0;
+}
+.toolbar-label{color:var(--text-secondary);font-size:11px;white-space:nowrap;}
+.toolbar select,.toolbar button{
+  font-family:inherit;font-size:12px;padding:4px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+}
+.toolbar button{transition:background var(--dur-fast);}
+.toolbar button:hover{background:var(--surface-2);}
+.toolbar button.active{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.toolbar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+.grow{flex:1;}
+
+/* ===== APP SHELL ===== */
+.app-wrapper{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.app-shell{display:flex;flex:1;min-height:0;overflow:hidden;}
+
+/* ===== FAKE TOPBAR (ManagementShell) ===== */
+/* ManagementShell: logo + wordmark "TravianBot" alineado a la izquierda */
+.fake-topbar{
+  height:var(--topbar-h);display:flex;align-items:center;gap:12px;
+  padding:0 20px;background:var(--surface);
+  border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.tb-square{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0;
+}
+.tb-wordmark{font-size:15px;font-weight:600;color:var(--text);}
+.tb-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto;}
+.tb-icon-btn{
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  display:grid;place-items:center;font-size:13px;
+  transition:background var(--dur-fast);
+}
+.tb-icon-btn:hover{background:var(--surface-2);}
+
+/* ===== FAKE SIDEBAR (ManagementShell — 200px) ===== */
+.fake-sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;padding:12px 8px;gap:2px;
+  overflow-y:auto;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);font-size:14px;color:var(--text);
+  cursor:pointer;position:relative;border:none;background:transparent;
+  width:100%;text-align:start;
+  transition:background var(--dur-fast) var(--ease);
+}
+.nav-item.active{background:var(--accent-subtle);color:var(--accent-text);font-weight:500;}
+.nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.nav-item:not(.active):hover{background:var(--surface-2);}
+.nav-item.disabled{color:var(--text-disabled);cursor:not-allowed;}
+.nav-icon{width:16px;height:16px;flex-shrink:0;opacity:.75;}
+.nav-version{
+  margin-top:auto;padding:12px 16px;
+  border-top:1px solid var(--border);
+  font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);
+}
+
+/* ===== MAIN CONTENT AREA ===== */
+.main-content{
+  flex:1;min-width:0;overflow-y:auto;
+  padding:28px 32px;
+  display:flex;flex-direction:column;gap:0;
+}
+
+/* ===== DRAG & DROP ENGINE (reutilizado de noise-catalog.playground.html) ===== */
+.drag-canvas{position:relative;min-height:700px;width:100%;}
+.drag-block{position:absolute;cursor:default;user-select:none;min-width:300px;}
+.drag-block.edit-mode{cursor:grab;}
+.drag-block.edit-mode:active{cursor:grabbing;z-index:100;}
+.drag-block.dragging{opacity:.85;box-shadow:var(--shadow-lg);}
+/* Handle visible solo en modo edición */
+.drag-handle{
+  position:absolute;top:-1px;inset-inline-start:-1px;inset-inline-end:-1px;
+  height:22px;cursor:grab;border-radius:var(--radius-md) var(--radius-md) 0 0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface-2);border-bottom:1px dashed var(--border);
+  opacity:0;transition:opacity var(--dur-fast);z-index:2;pointer-events:none;
+}
+.drag-block.edit-mode:hover .drag-handle,
+.drag-block.dragging .drag-handle{opacity:1;}
+.drag-block.edit-mode .drag-handle{pointer-events:auto;}
+.drag-handle-dots{color:var(--text-tertiary);font-size:10px;letter-spacing:2px;}
+/* En modo vista normal, el contenido es interactivo */
+.drag-block:not(.edit-mode) .card,
+.drag-block:not(.edit-mode) .templates-table-wrap,
+.drag-block:not(.edit-mode) .drawer-panel-inline,
+.drag-block:not(.edit-mode) .modal-inline,
+.drag-block:not(.edit-mode) .seed-banner{pointer-events:auto;}
+/* En modo edición, el contenido no captura eventos (para que arrastre) */
+.drag-block.edit-mode .card,
+.drag-block.edit-mode .templates-table-wrap,
+.drag-block.edit-mode .drawer-panel-inline,
+.drag-block.edit-mode .modal-inline,
+.drag-block.edit-mode .seed-banner{pointer-events:none;}
+
+/* ===== CARDS / PANELS ===== */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);padding:20px 24px;
+}
+.section-heading{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--text);}
+.section-desc{font-size:14px;color:var(--text-secondary);margin-top:6px;max-width:600px;line-height:1.5;}
+
+/* ===== BOTONES ===== */
+.btn-primary{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border:none;border-radius:var(--radius-sm);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-primary:hover{background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;}
+.btn-secondary{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);
+  font-family:inherit;font-size:13px;cursor:pointer;
+  transition:background var(--dur-fast);white-space:nowrap;
+}
+.btn-secondary:hover{background:var(--surface-2);}
+.btn-ghost{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 10px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);font-size:12px;cursor:pointer;
+  font-family:inherit;transition:background var(--dur-fast),color var(--dur-fast);
+}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);}
+.btn-danger{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border:1px solid var(--danger);border-radius:var(--radius-sm);
+  background:transparent;color:var(--danger);
+  font-family:inherit;font-size:13px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.btn-danger:hover{background:var(--danger-subtle);}
+
+/* ===== BADGES / CHIPS ===== */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:var(--radius-full);
+  font-size:11px;font-weight:500;letter-spacing:.03em;white-space:nowrap;
+}
+/* Categorías — mapa de colores igual que NoiseDestinationsTable.jsx */
+.badge-MAP{background:var(--info-subtle);color:var(--info);}
+.badge-OASIS_INFO{background:var(--success-subtle);color:var(--success);}
+.badge-PLAYER_PROFILE{background:var(--accent-subtle);color:var(--accent-text);}
+.badge-MESSAGES{background:rgba(10,111,204,.08);color:var(--info);}
+.badge-REPORTS{background:var(--surface-2);color:var(--text-secondary);}
+.badge-BUILDING_VIEW{background:var(--surface-2);color:var(--text-secondary);}
+.badge-OTHER{background:var(--surface-2);color:var(--text-tertiary);}
+/* Estado */
+.badge-safe{background:var(--success-subtle);color:var(--success);}
+.badge-dead{background:var(--danger-subtle);color:var(--danger);}
+.badge-template{background:var(--accent-subtle);color:var(--accent-text);}
+
+/* ===== TABLA DE PLANTILLAS ===== */
+.templates-table-wrap{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+}
+.table-toolbar{
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.table-toolbar-title{font-size:14px;font-weight:600;flex:1;}
+.filter-input{
+  padding:5px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:12px;
+  width:180px;
+}
+.filter-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.filter-input::placeholder{color:var(--text-tertiary);}
+.filter-select{
+  font-family:inherit;font-size:12px;padding:5px 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+}
+.tpl-table{width:100%;border-collapse:collapse;}
+.tpl-table th{
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);padding:8px 12px;text-align:start;
+  border-bottom:1px solid var(--border);background:var(--surface-2);
+  white-space:nowrap;
+}
+.tpl-table th.right{text-align:end;}
+.tpl-table th.center{text-align:center;}
+.tpl-table td{
+  padding:10px 12px;border-bottom:1px solid var(--border);
+  vertical-align:middle;font-size:13px;
+}
+.tpl-table tr:last-child td{border-bottom:none;}
+.tpl-table tr:hover td{background:var(--surface-2);}
+.tpl-label{
+  font-size:14px;font-weight:500;color:var(--accent-text);
+  cursor:pointer;display:flex;align-items:center;gap:5px;
+  background:none;border:none;padding:0;text-align:start;font-family:inherit;
+}
+.tpl-label:hover{color:var(--accent-hover);}
+.tpl-slug{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+.tpl-url{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);margin-top:1px;}
+.num-val{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums;}
+/* Acciones de fila — agrupadas en un menú ⋯ */
+.row-actions{display:flex;align-items:center;gap:4px;justify-content:flex-end;}
+.btn-row-icon{
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-tertiary);cursor:pointer;
+  display:grid;place-items:center;font-size:13px;
+  transition:background var(--dur-fast),color var(--dur-fast);
+}
+.btn-row-icon:hover{background:var(--surface-2);color:var(--text);}
+.btn-row-icon.danger:hover{background:var(--danger-subtle);color:var(--danger);}
+
+/* ===== ESTADO VACÍO ===== */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:64px 24px;text-align:center;
+}
+.empty-icon{font-size:36px;opacity:.4;}
+.empty-title{font-size:15px;font-weight:600;color:var(--text-secondary);}
+.empty-hint{font-size:13px;color:var(--text-tertiary);max-width:340px;line-height:1.5;}
+
+/* ===== DRAWER INLINE (panel de edición) ===== */
+/* En el playground se muestra inline (no fixed) para arrastrarlo */
+.drawer-panel-inline{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+  display:flex;flex-direction:column;min-width:440px;max-width:560px;
+}
+.drawer-header{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:16px 20px 14px;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:var(--surface);
+}
+.drawer-close{
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  display:grid;place-items:center;font-size:16px;flex-shrink:0;
+  transition:background var(--dur-fast);
+}
+.drawer-close:hover{background:var(--surface-2);}
+.drawer-title-wrap{flex:1;}
+.drawer-title{font-size:16px;font-weight:600;}
+.drawer-subtitle{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+.drawer-body{overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:20px;max-height:600px;}
+.drawer-section{display:flex;flex-direction:column;gap:10px;}
+.drawer-section-title{
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-secondary);padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+.drawer-field-row{display:flex;align-items:baseline;gap:12px;padding:4px 0;}
+.drawer-field-label{
+  font-size:12px;color:var(--text-secondary);
+  min-width:96px;flex-shrink:0;
+}
+.drawer-field-value{font-size:13px;color:var(--text);flex:1;}
+.drawer-field-value.mono{font-family:var(--font-mono);}
+.drawer-field-value.readonly{
+  font-family:var(--font-mono);color:var(--text-tertiary);
+  background:var(--surface-2);border-radius:var(--radius-sm);
+  padding:3px 7px;font-size:12px;display:inline-block;
+}
+.form-input{
+  padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;width:100%;
+}
+.form-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.form-select{
+  padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;width:100%;
+}
+.form-hint{font-size:11px;color:var(--text-tertiary);margin-top:3px;}
+/* Toggle switch */
+.toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer;}
+.toggle-track{
+  width:36px;height:20px;border-radius:var(--radius-full);
+  background:var(--border-strong);position:relative;
+  transition:background var(--dur-fast);flex-shrink:0;border:1px solid var(--border-strong);
+}
+.toggle-track.on{background:var(--success);border-color:var(--success);}
+.toggle-thumb{
+  position:absolute;top:2px;inset-inline-start:2px;
+  width:14px;height:14px;border-radius:50%;background:#fff;
+  transition:inset-inline-start var(--dur-base);
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+}
+.toggle-track.on .toggle-thumb{inset-inline-start:18px;}
+/* Paths list */
+.paths-list{display:flex;flex-direction:column;gap:8px;}
+.path-card{
+  border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;
+  background:var(--surface);
+}
+.path-header{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;
+  transition:background var(--dur-fast);
+}
+.path-header:hover{background:var(--surface-2);}
+.path-expand-icon{
+  width:14px;height:14px;flex-shrink:0;color:var(--text-secondary);
+  transition:transform var(--dur-base) var(--ease);font-size:10px;
+  display:flex;align-items:center;justify-content:center;
+}
+.path-expand-icon.open{transform:rotate(90deg);}
+.path-label{font-size:13px;font-weight:500;flex:1;}
+.path-badge{background:var(--surface-2);color:var(--text-secondary);padding:1px 6px;border-radius:var(--radius-full);font-size:10px;}
+.path-body{
+  border-top:1px solid var(--border);padding:12px;
+  background:var(--surface-2);max-height:0;overflow:hidden;
+  transition:max-height var(--dur-slow) var(--ease);
+}
+.path-body.open{max-height:400px;}
+/* Step rows */
+.step-table{width:100%;border-collapse:collapse;}
+.step-table th{
+  font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);padding:5px 6px;text-align:start;
+  border-bottom:1px solid var(--border);background:var(--surface);
+}
+.step-table td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.step-table tr:last-child td{border-bottom:none;}
+.step-order{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);text-align:center;width:22px;}
+.step-action-badge{
+  font-size:10px;font-weight:600;padding:2px 6px;border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text-secondary);white-space:nowrap;
+}
+.step-selector{font-family:var(--font-mono);font-size:11px;color:var(--text);}
+.step-delays{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);white-space:nowrap;}
+/* Wizard para añadir paso */
+.wizard-panel{
+  background:var(--surface-2);border:1px dashed var(--border-strong);
+  border-radius:var(--radius-md);padding:14px 16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.wizard-panel-title{
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-secondary);
+}
+.wizard-field{display:flex;flex-direction:column;gap:4px;}
+.wizard-field label{font-size:11px;font-weight:500;color:var(--text-secondary);}
+.wizard-input{
+  padding:5px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:12px;font-family:var(--font-mono);
+  width:100%;
+}
+.wizard-input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.wizard-hint{font-size:11px;color:var(--text-tertiary);}
+.wizard-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
+/* Resultado del test */
+.test-result-panel{
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;
+}
+.test-result-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:var(--surface-2);border-bottom:1px solid var(--border);
+}
+.test-step-row{
+  display:flex;align-items:center;gap:8px;padding:8px 14px;
+  border-bottom:1px solid var(--border);font-size:12px;
+}
+.test-step-row:last-child{border-bottom:none;}
+.test-step-ok{color:var(--success);}
+.test-step-err{color:var(--danger);}
+.test-step-order{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);min-width:20px;}
+.test-step-selector{font-family:var(--font-mono);font-size:11px;flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.test-step-reason{font-size:11px;color:var(--danger);flex:1;}
+
+.drawer-footer{
+  padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:var(--surface);
+}
+
+/* ===== MODAL INLINE (clonar a mundo) ===== */
+.modal-inline{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+  padding:24px 28px;max-width:480px;width:100%;
+}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:6px;}
+.modal-subtitle{font-size:13px;color:var(--text-secondary);margin-bottom:20px;line-height:1.5;}
+.modal-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
+.modal-field label{font-size:12px;font-weight:500;color:var(--text-secondary);}
+.world-selector{
+  padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);font-size:13px;cursor:pointer;width:100%;
+}
+.world-selector:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.checkbox-label{
+  display:flex;align-items:center;gap:8px;font-size:13px;
+  color:var(--text-secondary);cursor:pointer;user-select:none;
+}
+.checkbox-label input{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);}
+/* Resultado bulk inline */
+.bulk-result{
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:14px;
+}
+.bulk-result-header{
+  background:var(--surface-2);padding:8px 12px;
+  font-size:11px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;
+  border-bottom:1px solid var(--border);
+}
+.bulk-result-row{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  border-bottom:1px solid var(--border);font-size:12px;
+}
+.bulk-result-row:last-child{border-bottom:none;}
+.result-ok{color:var(--success);}
+.result-dupe{color:var(--text-secondary);}
+.result-conflict{color:var(--danger);}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+
+/* ===== PANEL RE-SYNC (mundos con la plantilla) ===== */
+.resync-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;
+}
+.resync-header{
+  background:var(--surface-2);padding:12px 16px;
+  font-size:11px;font-weight:600;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.04em;
+  border-bottom:1px solid var(--border);
+}
+.resync-row{
+  display:flex;align-items:center;gap:12px;padding:12px 16px;
+  border-bottom:1px solid var(--border);font-size:13px;
+}
+.resync-row:last-child{border-bottom:none;}
+.resync-world-name{font-weight:500;flex:1;}
+.resync-template-id{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);}
+.resync-status{font-size:11px;padding:2px 8px;border-radius:var(--radius-full);}
+
+/* ===== SEED BANNER ===== */
+.seed-banner{
+  background:var(--info-subtle);border:1px solid var(--info);
+  border-radius:var(--radius-md);padding:14px 18px;
+  display:flex;align-items:flex-start;gap:12px;
+}
+.seed-banner-icon{font-size:18px;flex-shrink:0;margin-top:1px;}
+.seed-banner-text{flex:1;}
+.seed-banner-title{font-size:13px;font-weight:600;color:var(--info);margin-bottom:3px;}
+.seed-banner-desc{font-size:12px;color:var(--text-secondary);line-height:1.5;}
+
+/* ===== SPINNERS / ESTADOS ===== */
+.spinner{
+  width:14px;height:14px;border:2px solid var(--border);
+  border-top-color:var(--text-secondary);border-radius:50%;
+  animation:spin .8s linear infinite;display:inline-block;flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== BOTÓN PLAY POR FILA ===== */
+/* El ▶ usa el mismo .btn-row-icon base que el resto de acciones de fila.
+   Estados visuales: normal (gris), ejecutando (spinner reemplaza icono),
+   resultado ok (success sutil), resultado error (danger sutil).
+   NO va en oro — botones monocromos según DESIGN.md §4 y §12. */
+.btn-play{
+  /* Heredado de .btn-row-icon: 28px × 28px, ghost, text-tertiary */
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  display:grid;place-items:center;font-size:13px;flex-shrink:0;
+  transition:background var(--dur-fast),color var(--dur-fast);
+  min-height:44px;  /* target táctil ≥44px en coarse */
+  /* Visualmente 28px × 28px centrado dentro del target de 44px */
+  padding:8px;
+}
+.btn-play:hover{background:var(--surface-2);color:var(--text);}
+.btn-play:disabled{opacity:.4;cursor:not-allowed;}
+/* Estado: esta fila está ejecutando */
+.btn-play.running{color:var(--text-secondary);}
+/* Estado resultado ok — la fila completa recibe .row-ok */
+tr.row-ok .btn-play{color:var(--success);}
+tr.row-ok td{background:var(--success-subtle);}
+/* Estado resultado error — la fila completa recibe .row-err */
+tr.row-err .btn-play{color:var(--danger);}
+tr.row-err td{background:var(--danger-subtle);}
+
+/* ===== FILA DE RESULTADO INLINE (expandible debajo de la fila de plantilla) ===== */
+/* Una fila <tr class="test-expand-row"> se inserta dinámicamente tras la fila activa.
+   El contenido vive en un <td colspan="6"> con animación de altura. */
+.test-expand-row td{
+  padding:0;border-bottom:1px solid var(--border);
+}
+.test-expand-inner{
+  padding:12px 16px 14px 40px; /* sangría para alinear con el contenido de la fila padre */
+  background:var(--surface-2);
+  border-top:1px dashed var(--border-strong);
+  display:flex;flex-direction:column;gap:8px;
+}
+.test-expand-meta{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  font-size:12px;color:var(--text-secondary);margin-bottom:2px;
+}
+.test-expand-meta strong{color:var(--text);}
+.test-expand-steps{
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  overflow:hidden;background:var(--surface);
+}
+.test-expand-note{
+  font-size:11px;color:var(--text-tertiary);margin-top:2px;
+}
+/* Título de la sección inline */
+.test-expand-heading{
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:4px;
+  display:flex;align-items:center;gap:6px;
+}
+
+/* ===== BARRA GLOBAL DE MUNDO (sticky bottom — bloque J) ===== */
+/* Patrón derivado de AgentBottomBar (DESIGN.md §19.4):
+   position:fixed; inset-inline:0; bottom:0; height:48px; z-index:200.
+   No es un .drag-block — es UI estructural siempre presente cuando hay tabla. */
+#world-bottom-bar{
+  position:fixed;inset-inline:0;bottom:0;height:48px;
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  padding-inline:16px;
+  z-index:200;
+  box-shadow:0 -1px 0 var(--border);
+  transition:background var(--dur-base) var(--ease);
+}
+.world-bar-label{
+  font-size:13px;font-weight:500;color:var(--text-secondary);
+  white-space:nowrap;flex-shrink:0;
+}
+.world-bar-select{
+  font-family:inherit;font-size:13px;padding:5px 10px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+  max-width:360px;flex:1;min-width:0;
+  transition:border-color var(--dur-fast),outline var(--dur-fast);
+}
+.world-bar-select:focus{outline:2px solid var(--accent);outline-offset:2px;}
+/* Hint: sin mundo elegido */
+.world-bar-hint{
+  font-size:12px;color:var(--text-tertiary);
+  white-space:nowrap;flex-shrink:0;
+}
+.world-bar-hint.warn{
+  color:var(--accent-text);font-weight:500;
+}
+/* Divisor vertical */
+.world-bar-sep{
+  width:1px;height:20px;background:var(--border);flex-shrink:0;
+}
+/* Estado: ejecutando algún test */
+.world-bar-running{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--text-secondary);
+  flex-shrink:0;
+}
+/* Clearance en main-content para que la barra no tape el final de la tabla */
+.main-content-with-bar{
+  padding-bottom:64px; /* 48px barra + 16px extra */
+}
+
+/* ===== NOTA "OBSOLETO" para bloque G ===== */
+.obsolete-note{
+  border:1px dashed var(--border-strong);border-radius:var(--radius-md);
+  padding:16px 20px;background:var(--surface-2);
+}
+.obsolete-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-disabled);margin-bottom:8px;
+}
+.obsolete-note p{font-size:13px;color:var(--text-secondary);line-height:1.6;}
+
+/* ===== LAYOUT EXPORT PANEL ===== */
+#export-panel{
+  position:fixed;inset-inline-end:16px;bottom:64px; /* 48px barra J + 16px margen */
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
+  padding:14px;width:320px;z-index:400;display:none;
+}
+#export-panel h3{font-size:13px;font-weight:600;margin-bottom:8px;}
+#export-textarea{
+  width:100%;height:120px;resize:vertical;font-family:var(--font-mono);font-size:11px;
+  padding:8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text);
+}
+.export-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px;}
+</style>
+</head>
+<body>
+
+<!-- ===== TOOLBAR DEL PLAYGROUND ===== -->
+<div class="toolbar" role="toolbar" aria-label="Controles del playground">
+  <span class="toolbar-label">TravianBot Playground</span>
+  <span style="font-size:11px;color:var(--text-tertiary)">Catálogo de Rutas</span>
+  <div class="toolbar-sep"></div>
+
+  <span class="toolbar-label">Tema:</span>
+  <button id="btn-theme" aria-label="Cambiar tema">Claro</button>
+
+  <div class="toolbar-sep"></div>
+
+  <span class="toolbar-label">Vista:</span>
+  <select id="view-select" aria-label="Seleccionar vista">
+    <option value="1">1 — Lista con datos (estado normal)</option>
+    <option value="2">2 — Lista vacía (catálogo sin plantillas)</option>
+    <option value="3">3 — Drawer de edición de plantilla</option>
+    <option value="4">4 — Modal "Clonar a mundo"</option>
+    <option value="5">5 — ▶ Resultado OK inline (fila 1 expandida)</option>
+    <option value="6">6 — Panel "Re-sincronizar a mundos"</option>
+    <option value="7">7 — Lista + banner seed inicial</option>
+    <option value="8">8 — ▶ Resultado ERROR inline (fila 2 expandida)</option>
+    <option value="9">9 — ▶ Ejecutando (spinner en fila 3)</option>
+    <option value="10">10 — Sin mundo elegido (▶ deshabilitados)</option>
+  </select>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Modo Editar: activa drag & drop en todos los bloques -->
+  <button id="btn-edit" aria-label="Activar modo edición" aria-pressed="false">Editar</button>
+  <button id="btn-save-layout" aria-label="Guardar layout">Guardar</button>
+  <button id="btn-reset" aria-label="Restablecer layout">Restablecer</button>
+  <button id="btn-export" aria-label="Exportar layout JSON">Exportar layout</button>
+
+  <div class="grow"></div>
+  <span style="font-size:11px;color:var(--text-tertiary)">docs/specs/route-templates-developer-portal.md</span>
+</div>
+
+<!-- ===== APP WRAPPER ===== -->
+<div class="app-wrapper">
+
+  <!-- Topbar — ManagementShell: logo + wordmark, sin info de mundo -->
+  <div class="fake-topbar" role="banner">
+    <div class="tb-square" aria-hidden="true">T</div>
+    <span class="tb-wordmark">TravianBot</span>
+    <div class="tb-actions">
+      <!-- Toggle tema (icono luna/sol) -->
+      <button class="tb-icon-btn" id="tb-theme-toggle" aria-label="Cambiar tema" title="Tema">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="app-shell">
+
+    <!-- Sidebar — ManagementShell: nav global de la app -->
+    <nav class="fake-sidebar" aria-label="Navegación principal">
+      <!-- Cuentas -->
+      <button class="nav-item" aria-label="Cuentas">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+        </svg>
+        Cuentas
+      </button>
+      <!-- Mundos -->
+      <button class="nav-item" aria-label="Mundos">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3c-2 3-3 5-3 9s1 6 3 9"/>
+          <path d="M12 3c2 3 3 5 3 9s-1 6-3 9"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+        </svg>
+        Mundos
+      </button>
+      <!-- Catálogo de rutas — ACTIVO -->
+      <button class="nav-item active" aria-label="Catálogo de rutas" aria-current="page">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 6h18M3 12h12M3 18h8"/>
+          <circle cx="19" cy="17" r="3"/>
+          <path d="M21.5 19.5l-1-1"/>
+        </svg>
+        Catálogo de rutas
+      </button>
+      <!-- Versión -->
+      <div class="nav-version" aria-hidden="true">v0.1.0</div>
+    </nav>
+
+    <!-- Contenido principal — padding-bottom extra para que la barra J no tape el final -->
+    <main class="main-content main-content-with-bar" id="main-content" aria-label="Catálogo de rutas">
+
+      <!-- CANVAS DE ARRASTRE -->
+      <div class="drag-canvas" id="drag-canvas">
+
+        <!-- =====================================================================
+             BLOQUE A — Cabecera de página
+             Título, descripción y CTA "Nueva plantilla"
+             ===================================================================== -->
+        <div class="drag-block" id="block-A" data-block="A"
+             style="top:0;left:0;width:100%;max-width:900px;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <!-- Cabecera: título grande + descripción + botón primario -->
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div>
+              <h1 class="section-heading">Catálogo de rutas</h1>
+              <p class="section-desc">
+                Plantillas globales de navegación de ruido. Defínelas una vez y clónalas
+                a cualquier mundo. El bot las recorre como un usuario humano para despitar
+                la detección.
+              </p>
+            </div>
+            <!-- Botón primario: "Nueva plantilla" -->
+            <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding-top:4px;">
+              <button class="btn-primary" type="button" aria-label="Crear nueva plantilla">
+                <!-- Icono + -->
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Nueva plantilla
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE B — Barra de filtros y búsqueda
+             Input de texto + select de categoría (7 valores)
+             ===================================================================== -->
+        <div class="drag-block" id="block-B" data-block="B"
+             style="top:100px;left:0;width:100%;max-width:900px;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <!-- Buscador de texto libre -->
+            <div style="position:relative;flex:1;min-width:200px;max-width:320px;">
+              <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="filter-input" type="search" placeholder="Buscar por nombre o identificador…" aria-label="Buscar plantillas" style="padding-inline-start:30px;"/>
+            </div>
+            <!-- Filtro de categoría -->
+            <select class="filter-select" aria-label="Filtrar por categoría">
+              <option value="">Todas las categorías</option>
+              <option value="MAP">MAP</option>
+              <option value="OASIS_INFO">OASIS_INFO</option>
+              <option value="PLAYER_PROFILE">PLAYER_PROFILE</option>
+              <option value="MESSAGES">MESSAGES</option>
+              <option value="REPORTS">REPORTS</option>
+              <option value="BUILDING_VIEW">BUILDING_VIEW</option>
+              <option value="OTHER">OTHER</option>
+            </select>
+            <!-- Contador de resultados (meta-info) -->
+            <span style="font-size:12px;color:var(--text-tertiary);margin-inline-start:4px;">20 plantillas</span>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE C — Tabla de plantillas (estado: con datos)
+             Columnas: nombre/identificador, categoría, nº pasos, peso, estado, acciones
+             Reutiliza el patrón de NoiseDestinationsTable.jsx con mode="template"
+             ===================================================================== -->
+        <div class="drag-block" id="block-C" data-block="C"
+             style="top:160px;left:0;width:100%;max-width:900px;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="templates-table-wrap">
+            <!-- Cabecera de la tabla -->
+            <div class="table-toolbar">
+              <span class="table-toolbar-title" style="font-size:13px;font-weight:600;color:var(--text-secondary);">
+                Plantillas del catálogo
+              </span>
+              <!-- Indicador de seed -->
+              <span class="badge badge-template" title="Plantillas pre-cargadas del seed">
+                ~20 seed
+              </span>
+            </div>
+
+            <!-- Tabla densa — herramienta interna -->
+            <div style="overflow-x:auto;">
+              <table class="tpl-table" role="table" aria-label="Catálogo de plantillas de ruta">
+                <thead>
+                  <tr>
+                    <!-- P1 — siempre visible -->
+                    <th scope="col">Plantilla</th>
+                    <!-- P1 -->
+                    <th scope="col">Categoría</th>
+                    <!-- P2 — se oculta en móvil -->
+                    <th scope="col" class="tpl-col-steps right">Pasos</th>
+                    <!-- P2 -->
+                    <th scope="col" class="tpl-col-weight right">Peso</th>
+                    <!-- P2 -->
+                    <th scope="col" class="tpl-col-status center">Estado</th>
+                    <!-- P1 — ▶ Probar siempre visible + resto de acciones -->
+                    <th scope="col" style="width:148px;text-align:end;" aria-label="Acciones">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tpl-tbody">
+
+                  <!-- ─── Iconos SVG reutilizados como <template> ─── -->
+                  <!-- (se definen en JS, los SVGs inline están abajo) -->
+
+                  <!-- ─── Fila 1 — MAP (segura) ─── estado base -->
+                  <tr id="row-1" data-template-id="map-explore" data-has-paths="true">
+                    <td>
+                      <button class="tpl-label" type="button" aria-label="Abrir plantilla map-explore">
+                        Explorar el mapa
+                      </button>
+                      <div class="tpl-slug">map-explore</div>
+                      <div class="tpl-url">/karte.php</div>
+                    </td>
+                    <td><span class="badge badge-MAP">MAP</span></td>
+                    <td class="tpl-col-steps" style="text-align:end;"><span class="num-val">1</span></td>
+                    <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">1.0</span></td>
+                    <td class="tpl-col-status" style="text-align:center;">
+                      <span class="badge badge-safe">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        Segura
+                      </span>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <!-- ▶ Probar — P1, siempre visible, primero en el flujo visual -->
+                        <button class="btn-play" id="play-row-1" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar map-explore en Chrome real">
+                          <!-- Icono play — se sustituye por spinner cuando ejecuta -->
+                          <svg id="play-icon-1" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <!-- Resto de acciones -->
+                        <button class="btn-row-icon" type="button" title="Editar plantilla" aria-label="Editar map-explore">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-row-icon" type="button" title="Clonar a mundo" aria-label="Clonar map-explore a un mundo">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn-row-icon danger" type="button" title="Eliminar plantilla" aria-label="Eliminar map-explore">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- Fila de resultado inline para row-1 (oculta por defecto) -->
+                  <tr class="test-expand-row" id="expand-row-1" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner">
+                        <div class="test-expand-heading">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                          Resultado — map-explore
+                          <span class="badge badge-safe" style="margin-inline-start:4px;">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            OK
+                          </span>
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts1.travian.com</strong></span>
+                          <span>Ancla: <code style="font-family:var(--font-mono);">/dorf2.php</code></span>
+                        </div>
+                        <div class="test-expand-steps">
+                          <div class="test-step-row">
+                            <span class="test-step-order">0</span>
+                            <svg class="test-step-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">NAVIGATE</span>
+                            <span class="test-step-selector">/karte.php</span>
+                            <span style="font-family:var(--font-mono);font-size:11px;color:var(--info);">/karte.php</span>
+                          </div>
+                        </div>
+                        <div class="test-expand-note">El browser queda en la última página visitada durante el test.</div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 2 — BUILDING_VIEW ─── -->
+                  <tr id="row-2" data-template-id="rally-point-view" data-has-paths="true">
+                    <td>
+                      <button class="tpl-label" type="button" aria-label="Abrir plantilla rally-point-view">
+                        Rally Point — ver edificio
+                      </button>
+                      <div class="tpl-slug">rally-point-view</div>
+                      <div class="tpl-url">/build.php?gid=13</div>
+                    </td>
+                    <td><span class="badge badge-BUILDING_VIEW">BUILDING_VIEW</span></td>
+                    <td class="tpl-col-steps" style="text-align:end;"><span class="num-val">2</span></td>
+                    <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">1.0</span></td>
+                    <td class="tpl-col-status" style="text-align:center;">
+                      <span class="badge badge-safe">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        Segura
+                      </span>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn-play" id="play-row-2" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar rally-point-view en Chrome real">
+                          <svg id="play-icon-2" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar rally-point-view">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-row-icon" type="button" title="Clonar a mundo" aria-label="Clonar rally-point-view">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn-row-icon danger" type="button" title="Eliminar" aria-label="Eliminar rally-point-view">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- Resultado inline fila 2 — ERROR -->
+                  <tr class="test-expand-row" id="expand-row-2" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner">
+                        <div class="test-expand-heading">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                          Resultado — rally-point-view
+                          <span class="badge badge-dead" style="margin-inline-start:4px;">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            Error en paso 1
+                          </span>
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts1.travian.com</strong></span>
+                          <span>Ancla: <code style="font-family:var(--font-mono);">/dorf2.php</code></span>
+                        </div>
+                        <div class="test-expand-steps">
+                          <div class="test-step-row">
+                            <span class="test-step-order">0</span>
+                            <svg class="test-step-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">CLICK</span>
+                            <span class="test-step-selector">a[href*='gid=13']</span>
+                            <span style="font-family:var(--font-mono);font-size:11px;color:var(--info);">/build.php?gid=13</span>
+                          </div>
+                          <div class="test-step-row">
+                            <span class="test-step-order">1</span>
+                            <svg class="test-step-err" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">WAIT</span>
+                            <span class="test-step-selector">.build-title</span>
+                            <span class="test-step-reason">Selector .build-title no encontrado tras 5000 ms.</span>
+                          </div>
+                        </div>
+                        <div class="test-expand-note">El browser queda en la última página visitada durante el test.</div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 3 — REPORTS ─── -->
+                  <tr id="row-3" data-template-id="reports-inbox" data-has-paths="true">
+                    <td>
+                      <button class="tpl-label" type="button" aria-label="Abrir plantilla reports-inbox">
+                        Bandeja de reportes
+                      </button>
+                      <div class="tpl-slug">reports-inbox</div>
+                      <div class="tpl-url">/report</div>
+                    </td>
+                    <td><span class="badge badge-REPORTS">REPORTS</span></td>
+                    <td class="tpl-col-steps" style="text-align:end;"><span class="num-val">1</span></td>
+                    <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">1.5</span></td>
+                    <td class="tpl-col-status" style="text-align:center;">
+                      <span class="badge badge-safe">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        Segura
+                      </span>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn-play" id="play-row-3" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar reports-inbox en Chrome real">
+                          <svg id="play-icon-3" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar reports-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar reports-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn-row-icon danger" type="button" title="Eliminar" aria-label="Eliminar reports-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- Resultado inline fila 3 — oculto -->
+                  <tr class="test-expand-row" id="expand-row-3" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner" id="expand-inner-3">
+                        <!-- Se rellena con spinner cuando la vista es "ejecutando" -->
+                        <div class="test-expand-heading">
+                          <span class="spinner"></span>
+                          Ejecutando reports-inbox…
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts5.travian.com</strong></span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 4 — PLAYER_PROFILE (sin pasos) ─── -->
+                  <tr id="row-4" data-template-id="player-own-profile" data-has-paths="false">
+                    <td>
+                      <button class="tpl-label" type="button" aria-label="Abrir plantilla player-own-profile">
+                        Perfil propio
+                      </button>
+                      <div class="tpl-slug">player-own-profile</div>
+                      <div class="tpl-url" style="color:var(--accent-text);font-style:italic;">URL dinámica</div>
+                    </td>
+                    <td><span class="badge badge-PLAYER_PROFILE">PLAYER_PROFILE</span></td>
+                    <td class="tpl-col-steps" style="text-align:end;"><span class="num-val" style="color:var(--text-tertiary);">0</span></td>
+                    <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">1.0</span></td>
+                    <td class="tpl-col-status" style="text-align:center;">
+                      <span class="badge badge-safe">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        Segura
+                      </span>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <!-- ▶ deshabilitado: sin pasos no se puede probar -->
+                        <button class="btn-play" id="play-row-4" type="button"
+                          disabled
+                          title="Sin pasos de navegación — añade pasos antes de probar"
+                          aria-label="Sin pasos — no se puede probar player-own-profile"
+                          aria-disabled="true">
+                          <svg id="play-icon-4" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar player-own-profile">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar player-own-profile">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn-row-icon danger" type="button" title="Eliminar" aria-label="Eliminar player-own-profile">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 5 — MESSAGES ─── -->
+                  <tr id="row-5" data-template-id="messages-inbox" data-has-paths="true">
+                    <td>
+                      <button class="tpl-label" type="button" aria-label="Abrir plantilla messages-inbox">
+                        Bandeja de mensajes
+                      </button>
+                      <div class="tpl-slug">messages-inbox</div>
+                      <div class="tpl-url">/messages</div>
+                    </td>
+                    <td><span class="badge badge-MESSAGES">MESSAGES</span></td>
+                    <td class="tpl-col-steps" style="text-align:end;"><span class="num-val">1</span></td>
+                    <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">0.8</span></td>
+                    <td class="tpl-col-status" style="text-align:center;">
+                      <span class="badge badge-safe">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        Segura
+                      </span>
+                    </td>
+                    <td>
+                      <div class="row-actions">
+                        <button class="btn-play" id="play-row-5" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar messages-inbox en Chrome real">
+                          <svg id="play-icon-5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar messages-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar messages-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                        <button class="btn-row-icon danger" type="button" title="Eliminar" aria-label="Eliminar messages-inbox">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  <!-- Resultado inline fila 5 — oculto -->
+                  <tr class="test-expand-row" id="expand-row-5" style="display:none;"><td colspan="6"></td></tr>
+
+                </tbody>
+              </table>
+            </div>
+            <!-- Responsive: columnas P2 ocultas en móvil -->
+            <style>
+              @media(max-width:767px){
+                .tpl-col-steps,.tpl-col-weight,.tpl-col-status{display:none;}
+              }
+            </style>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE D — Estado vacío (sin plantillas en el catálogo)
+             Aparece cuando GET /route-templates devuelve lista vacía
+             ===================================================================== -->
+        <div class="drag-block" id="block-D" data-block="D"
+             style="top:160px;left:0;width:100%;max-width:900px;display:none;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="templates-table-wrap">
+            <div class="empty-state">
+              <div class="empty-icon" aria-hidden="true">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" style="opacity:.4;" aria-hidden="true">
+                  <path d="M3 6h18M3 12h12M3 18h8"/>
+                  <circle cx="19" cy="17" r="3"/>
+                  <path d="M21.5 19.5l-1-1"/>
+                </svg>
+              </div>
+              <p class="empty-title">Sin plantillas todavía</p>
+              <p class="empty-hint">
+                El catálogo está vacío. Crea tu primera plantilla o espera a que se cargue
+                el seed de ~20 plantillas al arrancar el servidor.
+              </p>
+              <button class="btn-primary" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Nueva plantilla
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE E — Drawer de edición de una plantilla
+             Reutiliza el patrón de NoiseDestinationDrawer con mode="template"
+             Incluye: campos RO + editables, lista de pasos, wizard añadir paso,
+             botón "Derivar selector", botón "Probar ruta en Chrome real",
+             sección "Mundos con esta plantilla" (re-sync)
+             ===================================================================== -->
+        <div class="drag-block" id="block-E" data-block="E"
+             style="top:0;left:0;display:none;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="drawer-panel-inline">
+            <!-- Cabecera del drawer -->
+            <div class="drawer-header">
+              <button class="drawer-close" type="button" aria-label="Cerrar drawer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+              <div class="drawer-title-wrap">
+                <div class="drawer-title">Rally Point — ver edificio</div>
+                <div class="drawer-subtitle">rally-point-view</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                  <span class="badge badge-BUILDING_VIEW">BUILDING_VIEW</span>
+                  <span class="badge badge-safe">Segura</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cuerpo del drawer -->
+            <div class="drawer-body">
+
+              <!-- Sección: Campos de solo lectura (inmutables tras creación) -->
+              <div class="drawer-section">
+                <div class="drawer-section-title">Identificadores (solo lectura)</div>
+                <div class="drawer-field-row">
+                  <span class="drawer-field-label">Identificador</span>
+                  <span class="drawer-field-value readonly">rally-point-view</span>
+                </div>
+                <div class="drawer-field-row">
+                  <span class="drawer-field-label">Categoría</span>
+                  <span class="drawer-field-value readonly">BUILDING_VIEW</span>
+                </div>
+                <div class="drawer-field-row">
+                  <span class="drawer-field-label">URL pattern</span>
+                  <span class="drawer-field-value readonly">/build.php?gid=13</span>
+                </div>
+              </div>
+
+              <!-- Sección: Campos editables -->
+              <div class="drawer-section">
+                <div class="drawer-section-title">Configuración editable</div>
+                <div class="drawer-field-row" style="align-items:flex-start;">
+                  <span class="drawer-field-label" style="padding-top:6px;">Nombre</span>
+                  <div style="flex:1;">
+                    <input class="form-input" type="text" value="Rally Point — ver edificio" aria-label="Nombre de la plantilla"/>
+                  </div>
+                </div>
+                <div class="drawer-field-row" style="align-items:flex-start;">
+                  <span class="drawer-field-label" style="padding-top:6px;">Peso</span>
+                  <div style="flex:1;">
+                    <input class="form-input" type="number" min="0.1" max="5" step="0.1" value="1.0" style="width:80px;" aria-label="Peso de navegación"/>
+                    <p class="form-hint">Entre 0.1 y 5.0. Valor inicial sugerido al clonar.</p>
+                  </div>
+                </div>
+                <div class="drawer-field-row">
+                  <span class="drawer-field-label">Segura</span>
+                  <div class="toggle-wrap" role="switch" aria-checked="true" aria-label="Marcar como ruta segura">
+                    <div class="toggle-track on">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                    <span style="font-size:13px;color:var(--success);">Sí</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sección: Pasos de navegación (rutas / paths) -->
+              <div class="drawer-section">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div class="drawer-section-title" style="border:none;padding:0;">Rutas de navegación</div>
+                  <button class="btn-secondary" type="button" style="font-size:12px;padding:4px 10px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Añadir ruta
+                  </button>
+                </div>
+
+                <!-- Lista de rutas / paths -->
+                <div class="paths-list">
+                  <!-- Path 1: desde DORF2, expandido -->
+                  <div class="path-card">
+                    <div class="path-header">
+                      <span class="path-expand-icon open">&#9654;</span>
+                      <span class="path-label">Desde vista edificios (dorf2)</span>
+                      <span class="badge" style="background:var(--surface-2);color:var(--text-secondary);font-size:10px;padding:1px 6px;border-radius:var(--radius-full);">DORF2</span>
+                      <span class="path-badge">2 pasos</span>
+                    </div>
+                    <div class="path-body open">
+                      <!-- Tabla de pasos (BlockEditor) -->
+                      <table class="step-table">
+                        <thead>
+                          <tr>
+                            <th style="width:22px;">#</th>
+                            <th>Acción</th>
+                            <th>Selector CSS</th>
+                            <th>Delays (ms)</th>
+                            <th style="width:28px;"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td class="step-order">0</td>
+                            <td><span class="step-action-badge">CLICK</span></td>
+                            <td class="step-selector">a[href*='gid=13']</td>
+                            <td class="step-delays">500–900</td>
+                            <td>
+                              <button class="btn-row-icon" type="button" title="Eliminar paso" style="width:22px;height:22px;font-size:12px;">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                              </button>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td class="step-order">1</td>
+                            <td><span class="step-action-badge">WAIT</span></td>
+                            <td class="step-selector">.build-title</td>
+                            <td class="step-delays">500–900</td>
+                            <td>
+                              <button class="btn-row-icon" type="button" title="Eliminar paso" style="width:22px;height:22px;font-size:12px;">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <!-- Wizard: añadir nuevo paso -->
+                      <div class="wizard-panel" style="margin-top:10px;">
+                        <div class="wizard-panel-title">Añadir paso</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                          <div class="wizard-field">
+                            <label for="step-action">Acción</label>
+                            <select id="step-action" class="form-select" style="font-size:12px;padding:5px 8px;">
+                              <option value="CLICK">CLICK</option>
+                              <option value="WAIT_FOR_SELECTOR">WAIT_FOR_SELECTOR</option>
+                              <option value="SCROLL_TO">SCROLL_TO</option>
+                              <option value="HOVER">HOVER</option>
+                            </select>
+                          </div>
+                          <div class="wizard-field">
+                            <label>
+                              Selector CSS
+                              <!-- Botón "Derivar selector" — llama a EP-N11 -->
+                              <button class="btn-ghost" type="button" style="font-size:10px;padding:2px 6px;color:var(--accent-text);" aria-label="Derivar selector automáticamente">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                Derivar
+                              </button>
+                            </label>
+                            <input class="wizard-input" type="text" placeholder="a[href*='gid=13']" aria-label="Selector CSS del elemento"/>
+                          </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                          <div class="wizard-field">
+                            <label>Delay mín (ms)</label>
+                            <input class="wizard-input" type="number" value="500" min="200" max="5000" aria-label="Delay mínimo en milisegundos"/>
+                          </div>
+                          <div class="wizard-field">
+                            <label>Delay máx (ms)</label>
+                            <input class="wizard-input" type="number" value="900" min="200" max="5000" aria-label="Delay máximo en milisegundos"/>
+                          </div>
+                        </div>
+                        <div class="wizard-field">
+                          <label>URL esperada tras click <span style="color:var(--text-tertiary);font-weight:400;">(opcional)</span></label>
+                          <input class="wizard-input" type="text" placeholder="/build.php?gid=13" aria-label="URL esperada tras ejecutar el paso"/>
+                        </div>
+                        <div class="wizard-footer">
+                          <button class="btn-ghost" type="button">Cancelar</button>
+                          <button class="btn-secondary" type="button" style="font-size:12px;padding:5px 12px;">Añadir paso</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Botón probar ruta -->
+                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+                  <button class="btn-secondary" type="button" aria-label="Probar esta ruta en Chrome real">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Probar en Chrome real
+                  </button>
+                  <!-- Selector de mundo para el test -->
+                  <select class="form-select" style="font-size:12px;padding:5px 8px;width:auto;" aria-label="Seleccionar mundo para el test">
+                    <option value="">— Elegir mundo —</option>
+                    <option value="1">ts1.travian.com (cuenta@email.com)</option>
+                    <option value="2">ts5.travian.com (otra@email.com)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Sección: Mundos con esta plantilla (re-sync) -->
+              <div class="drawer-section">
+                <div class="drawer-section-title">Mundos con esta plantilla</div>
+                <div class="resync-panel">
+                  <div class="resync-header">Instancias clonadas</div>
+                  <div class="resync-row">
+                    <div style="flex:1;">
+                      <div class="resync-world-name">ts1.travian.com</div>
+                      <div class="resync-template-id">noise_destination #47 · template_id=2</div>
+                    </div>
+                    <button class="btn-secondary" type="button" style="font-size:11px;padding:4px 10px;" aria-label="Re-sincronizar instancia en ts1.travian.com">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                      Sincronizar
+                    </button>
+                  </div>
+                  <div class="resync-row">
+                    <div style="flex:1;">
+                      <div class="resync-world-name">ts5.travian.com</div>
+                      <div class="resync-template-id">noise_destination #83 · template_id=2</div>
+                    </div>
+                    <button class="btn-secondary" type="button" style="font-size:11px;padding:4px 10px;" aria-label="Re-sincronizar instancia en ts5.travian.com">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                      Sincronizar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /drawer-body -->
+
+            <!-- Footer del drawer -->
+            <div class="drawer-footer">
+              <button class="btn-danger" type="button" aria-label="Eliminar plantilla rally-point-view">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                Eliminar
+              </button>
+              <div style="display:flex;gap:8px;">
+                <button class="btn-secondary" type="button">Cancelar</button>
+                <button class="btn-primary" type="button" aria-label="Guardar cambios en la plantilla">Guardar cambios</button>
+              </div>
+            </div>
+          </div><!-- /drawer-panel-inline -->
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE F — Modal "Clonar a mundo"
+             Selector de mundos + force checkbox + resultado bulk con 3 casos:
+             clonado OK / ya existe / conflicto
+             ===================================================================== -->
+        <div class="drag-block" id="block-F" data-block="F"
+             style="top:0;left:0;display:none;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="modal-inline">
+            <div class="modal-title">Clonar plantilla a mundo</div>
+            <div class="modal-subtitle">
+              Elige el mundo destino. Se creará una copia independiente de
+              <strong>rally-point-view</strong> en ese mundo como
+              <code style="font-family:var(--font-mono);font-size:12px;">noise_destination</code>.
+            </div>
+
+            <!-- Selector de mundo -->
+            <div class="modal-field">
+              <label for="clone-world-select">Mundo destino</label>
+              <select id="clone-world-select" class="world-selector" aria-label="Seleccionar mundo destino para clonar">
+                <option value="">— Seleccionar mundo —</option>
+                <option value="1">ts1.travian.com (cuenta@email.com)</option>
+                <option value="2">ts5.travian.com (otra@email.com)</option>
+                <option value="3">ts4.travian.es (tercera@email.com)</option>
+              </select>
+            </div>
+
+            <!-- Opción force=true -->
+            <div class="modal-field">
+              <label class="checkbox-label">
+                <input type="checkbox" aria-label="Sobreescribir si ya existe un destino con la misma URL"/>
+                Sobreescribir si ya existe (force=true)
+              </label>
+              <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;padding-inline-start:23px;line-height:1.4;">
+                Si el mundo ya tiene un destino con la misma URL pattern, lo reemplaza.
+                Úsalo solo si sabes que el conflicto es intencional.
+              </p>
+            </div>
+
+            <!-- Resultado bulk (EP-RT08) -->
+            <div style="margin-top:4px;">
+              <p style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">
+                Resultado del clonado en bloque (EP-RT08)
+              </p>
+              <div class="bulk-result">
+                <div class="bulk-result-header">Resultados por plantilla</div>
+                <!-- clonado OK -->
+                <div class="bulk-result-row">
+                  <svg class="result-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style="font-family:var(--font-mono);font-size:12px;flex:1;">rally-point-view</span>
+                  <span class="result-ok" style="font-size:11px;">clonado</span>
+                </div>
+                <!-- ya existía -->
+                <div class="bulk-result-row">
+                  <svg class="result-dupe" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span style="font-family:var(--font-mono);font-size:12px;flex:1;">map-explore</span>
+                  <span class="result-dupe" style="font-size:11px;">ya existe</span>
+                </div>
+                <!-- conflicto -->
+                <div class="bulk-result-row">
+                  <svg class="result-conflict" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span style="font-family:var(--font-mono);font-size:12px;flex:1;">reports-inbox</span>
+                  <span class="result-conflict" style="font-size:11px;">conflicto · dest #83</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer del modal -->
+            <div class="modal-footer">
+              <button class="btn-secondary" type="button">Cancelar</button>
+              <button class="btn-primary" type="button" aria-label="Confirmar clonado al mundo seleccionado">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Clonar plantilla
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE G — [OBSOLETO] Panel "Probar ruta" (v1)
+             Tenía: selector de mundo propio + desplegable path_index + botón "Ejecutar".
+             ELIMINADO porque provocaba error "path_index N fuera de rango / 0 path(s)"
+             en rutas compuestas (sin path propio: su recorrido vive en la cadena raíz→hoja).
+
+             REEMPLAZADO POR:
+             - Botón ▶ por fila en el bloque C (colum. Acciones, P1 siempre visible)
+             - Barra global de mundo J (sticky bottom bar)
+             - Resultado inline expandible bajo la fila activa
+             ===================================================================== -->
+        <div class="drag-block" id="block-G" data-block="G"
+             style="top:0;left:0;display:none;min-width:440px;max-width:560px;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="obsolete-note">
+            <div class="obsolete-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Bloque G — Obsoleto (v1)
+            </div>
+            <p>Este panel ("Probar ruta") ha sido eliminado del diseño porque usaba un <code style="font-family:var(--font-mono);font-size:12px;">path_index</code> compartido que provocaba el error <em>"path_index N fuera de rango / 0 path(s)"</em> en rutas compuestas.</p>
+            <p style="margin-top:8px;">La nueva interacción usa un <strong>▶ por fila</strong> en la tabla (bloque C) y una <strong>barra de mundo global</strong> fija abajo (bloque J), que no dependen de índices.</p>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE H — Panel "Re-sincronizar plantilla a mundos"
+             Vista ampliada del panel de mundos con esta plantilla
+             ===================================================================== -->
+        <div class="drag-block" id="block-H" data-block="H"
+             style="top:0;left:0;display:none;width:100%;max-width:700px;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface-2);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+              <span style="font-size:14px;font-weight:600;flex:1;">Sincronizar rally-point-view a mundos</span>
+              <span style="font-size:12px;color:var(--text-secondary);">2 instancias activas</span>
+            </div>
+            <div style="padding:10px 18px;font-size:12px;color:var(--text-tertiary);border-bottom:1px solid var(--border);line-height:1.5;">
+              Las instancias por-mundo son copias independientes. Al sincronizar se reemplazan
+              sus paths/steps pero se preservan el peso, estado y configuración del usuario.
+            </div>
+            <div class="resync-panel" style="border:none;border-radius:0;">
+              <!-- Mundo 1 -->
+              <div class="resync-row">
+                <div style="flex:1;">
+                  <div class="resync-world-name">ts1.travian.com</div>
+                  <div class="resync-template-id">dest #47 · actualizado hace 3 días</div>
+                </div>
+                <span class="badge" style="background:var(--success-subtle);color:var(--success);font-size:11px;">Sincronizado</span>
+                <button class="btn-secondary" type="button" style="font-size:11px;padding:4px 10px;" aria-label="Re-sincronizar instancia en ts1.travian.com">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                  Sincronizar
+                </button>
+              </div>
+              <!-- Mundo 2 — necesita sync (plantilla editada después del clon) -->
+              <div class="resync-row" style="background:rgba(138,100,24,.04);">
+                <div style="flex:1;">
+                  <div class="resync-world-name">ts5.travian.com</div>
+                  <div class="resync-template-id">dest #83 · clonado hace 8 días — plantilla actualizada desde entonces</div>
+                </div>
+                <span class="badge badge-template" style="font-size:11px;">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  Desactualizado
+                </span>
+                <button class="btn-primary" type="button" style="font-size:11px;padding:4px 10px;" aria-label="Re-sincronizar instancia desactualizada en ts5.travian.com">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                  Sincronizar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =====================================================================
+             BLOQUE I — Banner seed inicial
+             Informa que ~20 plantillas vienen precargadas al arrancar el servidor
+             Aparece en la vista 7 (primera vez / catálogo recién inicializado)
+             ===================================================================== -->
+        <div class="drag-block" id="block-I" data-block="I"
+             style="top:100px;left:0;width:100%;max-width:900px;display:none;">
+          <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
+          <div class="seed-banner">
+            <div class="seed-banner-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div class="seed-banner-text">
+              <div class="seed-banner-title">Catálogo pre-cargado con ~20 plantillas</div>
+              <div class="seed-banner-desc">
+                Al arrancar el servidor se cargaron automáticamente las plantillas del seed
+                (<code style="font-family:var(--font-mono);font-size:11px;">seeds/route_templates.json</code>):
+                navegación estándar, 10 edificios (gid verificados), perfil, oasis y mensajes.
+                Son un punto de partida — edítalas, bórralas o añade las tuyas.
+              </div>
+            </div>
+            <button class="tb-icon-btn" type="button" style="align-self:flex-start;" aria-label="Cerrar aviso del seed">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /drag-canvas -->
+    </main>
+  </div><!-- /app-shell -->
+</div><!-- /app-wrapper -->
+
+<!-- =====================================================================
+     BLOQUE J — Barra global de mundo (sticky bottom)
+     Siempre visible cuando hay tabla. Compartida por todos los ▶ de la tabla.
+     No es arrastrable — es UI estructural (como AgentBottomBar en WorldSpace).
+     El usuario elige el mundo UNA vez; todos los ▶ lo usan.
+
+     Estados:
+     - Sin mundo elegido (value=""): ▶ deshabilitados, hint "Elige un mundo para probar"
+     - Con mundo elegido: ▶ habilitados, hint vacío o nombre del mundo
+     - Ejecutando: indicador de spinner + nombre de la ruta en ejecución
+     ===================================================================== -->
+<div id="world-bottom-bar" role="region" aria-label="Selector global de mundo para test de rutas">
+  <!-- Icono globo -->
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style="color:var(--text-secondary);flex-shrink:0;">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M12 3c-2 3-3 5-3 9s1 6 3 9"/>
+    <path d="M12 3c2 3 3 5 3 9s-1 6-3 9"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+  </svg>
+  <span class="world-bar-label">Mundo para test:</span>
+  <select id="world-bar-select" class="world-bar-select" aria-label="Elegir mundo para ejecutar tests de ruta">
+    <option value="">— Elige un mundo —</option>
+    <option value="1">ts1.travian.com (cuenta@email.com)</option>
+    <option value="2">ts5.travian.com (otra@email.com)</option>
+    <option value="3">ts4.travian.es (tercera@email.com)</option>
+  </select>
+  <div class="world-bar-sep"></div>
+  <!-- Hint dinámico: sin mundo → aviso, con mundo → vacío, ejecutando → spinner+nombre -->
+  <span class="world-bar-hint warn" id="world-bar-hint">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Elige un mundo para activar los ▶
+  </span>
+  <!-- Estado "ejecutando" (oculto por defecto) -->
+  <div class="world-bar-running" id="world-bar-running" style="display:none;" aria-live="polite">
+    <span class="spinner"></span>
+    <span id="world-bar-running-label">Ejecutando ruta…</span>
+  </div>
+</div>
+
+<!-- ===== PANEL DE EXPORTACIÓN DE LAYOUT ===== -->
+<div id="export-panel" role="dialog" aria-label="Exportar layout" aria-modal="true">
+  <h3>Layout exportado (JSON)</h3>
+  <textarea id="export-textarea" readonly aria-label="JSON del layout de bloques"></textarea>
+  <div class="export-actions">
+    <button class="btn-secondary" id="btn-copy-export" style="font-size:12px;padding:4px 10px;">Copiar</button>
+    <button class="btn-primary" id="btn-close-export" style="font-size:12px;padding:4px 10px;">Cerrar</button>
+  </div>
+</div>
+
+<script>
+/* ===== CONFIGURACIÓN DE VISTAS =====
+   Cada vista define qué bloques son visibles y sus posiciones iniciales.
+   Las posiciones son las del layout inicial; el usuario las puede reordenar en modo Editar.
+   Las vistas 5, 8, 9, 10 muestran estados de interacción del nuevo ▶ por fila.
+*/
+const VIEWS = {
+  /* Vista 1 — Lista con datos (estado base, sin test activo) */
+  '1': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: null },
+  /* Vista 2 — Lista vacía */
+  '2': { visible: ['A','B','D'], hidden: ['C','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, D:{top:168,left:0,width:'100%'} },
+    testState: null },
+  /* Vista 3 — Drawer de edición */
+  '3': { visible: ['C','E'], hidden: ['A','B','D','F','G','H','I'],
+    positions: { C:{top:0,left:0,width:'54%'}, E:{top:0,left:'58%'} },
+    testState: null },
+  /* Vista 4 — Modal clonar */
+  '4': { visible: ['A','C','F'], hidden: ['B','D','E','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, C:{top:108,left:0,width:'100%'}, F:{top:520,left:'50%',transform:'translateX(-50%)'} },
+    testState: null },
+  /* Vista 5 — [NUEVO] ▶ activo: resultado OK en fila 1 */
+  '5': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'1', expandRow:'1', rowClass:'row-ok' } },
+  /* Vista 6 — Re-sync */
+  '6': { visible: ['H'], hidden: ['A','B','C','D','E','F','G','I'],
+    positions: { H:{top:0,left:0,width:'100%'} },
+    testState: null },
+  /* Vista 7 — Lista + banner seed */
+  '7': { visible: ['A','I','C'], hidden: ['B','D','E','F','G','H'],
+    positions: { A:{top:0,left:0,width:'100%'}, I:{top:108,left:0,width:'100%'}, C:{top:220,left:0,width:'100%'} },
+    testState: null },
+  /* Vista 8 — [NUEVO] ▶ activo: resultado ERROR en fila 2 */
+  '8': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'1', expandRow:'2', rowClass:'row-err' } },
+  /* Vista 9 — [NUEVO] ▶ ejecutando: spinner en fila 3 */
+  '9': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'2', expandRow:'3', rowClass:null, running:true } },
+  /* Vista 10 — [NUEVO] Sin mundo elegido: ▶ deshabilitados */
+  '10': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'', expandRow:null, rowClass:null } },
+};
+
+/* ===== ESTADO ===== */
+let editMode = false;
+let isDragging = false;
+let dragBlock = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+const GRID = 8; // imán de 8px
+
+/* ===== TEMA ===== */
+function getTheme() { return document.documentElement.dataset.theme || 'light'; }
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('travian_playground_theme_rutas', t);
+  document.getElementById('btn-theme').textContent = t === 'dark' ? 'Oscuro' : 'Claro';
+}
+// Inicializar tema
+(function() {
+  const stored = localStorage.getItem('travian_playground_theme_rutas');
+  if (stored) { applyTheme(stored); return; }
+  const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  applyTheme(sys);
+})();
+document.getElementById('btn-theme').addEventListener('click', () => {
+  applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+});
+document.getElementById('tb-theme-toggle').addEventListener('click', () => {
+  applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+});
+
+/* ===== LÓGICA DE ESTADO DEL TEST ===== */
+
+// Todos los IDs de fila (sin expand)
+const ROW_IDS = ['1','2','3','4','5'];
+
+/**
+ * Resetea todos los estados visuales del test:
+ * - Oculta todas las filas expand
+ * - Quita clases row-ok / row-err de todas las filas
+ * - Restaura iconos ▶ a todas las filas con paths
+ * - Habilita todos los ▶ con paths
+ * - Limpia el hint de la barra
+ * - Oculta el indicador "ejecutando"
+ */
+function resetTestState() {
+  ROW_IDS.forEach(id => {
+    const row = document.getElementById('row-' + id);
+    const expandRow = document.getElementById('expand-row-' + id);
+    const playBtn = document.getElementById('play-row-' + id);
+    const playIcon = document.getElementById('play-icon-' + id);
+    if (expandRow) expandRow.style.display = 'none';
+    if (row) { row.classList.remove('row-ok','row-err'); }
+    if (playBtn && playIcon) {
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (!hasPaths) return;
+      playBtn.disabled = false;
+      playBtn.classList.remove('running');
+      // Restaurar icono play
+      playIcon.outerHTML = `<svg id="play-icon-${id}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    }
+  });
+  document.getElementById('world-bar-running').style.display = 'none';
+  document.getElementById('world-bar-hint').style.display = '';
+}
+
+/**
+ * Aplica el estado de test descrito por la vista.
+ * testState: { worldValue, expandRow, rowClass, running? }
+ */
+function applyTestState(testState) {
+  resetTestState();
+  if (!testState) return;
+
+  // 1. Selector de mundo en la barra
+  const worldSelect = document.getElementById('world-bar-select');
+  worldSelect.value = testState.worldValue || '';
+
+  // 2. Hint de la barra y estado ▶
+  const hint = document.getElementById('world-bar-hint');
+  if (!testState.worldValue) {
+    // Sin mundo: hint de aviso, todos los ▶ deshabilitados (excepto los que ya están por no tener paths)
+    hint.style.display = '';
+    hint.classList.add('warn');
+    hint.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Elige un mundo para activar los ▶`;
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = true;
+    });
+    return;
+  } else {
+    hint.style.display = 'none';
+  }
+
+  // 3. Fila expandida
+  if (testState.expandRow) {
+    const expandRow = document.getElementById('expand-row-' + testState.expandRow);
+    const dataRow = document.getElementById('row-' + testState.expandRow);
+    if (expandRow) expandRow.style.display = '';
+    if (dataRow && testState.rowClass) {
+      dataRow.classList.add(testState.rowClass);
+    }
+  }
+
+  // 4. Estado "ejecutando" en la barra y spinner en el botón
+  if (testState.running && testState.expandRow) {
+    const playBtn = document.getElementById('play-row-' + testState.expandRow);
+    const playIcon = document.getElementById('play-icon-' + testState.expandRow);
+    if (playBtn) {
+      playBtn.disabled = true;
+      playBtn.classList.add('running');
+    }
+    if (playIcon) {
+      // Reemplazar el icono por un spinner inline
+      playIcon.outerHTML = `<span class="spinner" id="play-icon-${testState.expandRow}" aria-label="Ejecutando" style="width:12px;height:12px;border-width:2px;"></span>`;
+    }
+    const running = document.getElementById('world-bar-running');
+    const runningLabel = document.getElementById('world-bar-running-label');
+    const dataRow = document.getElementById('row-' + testState.expandRow);
+    const tplId = dataRow ? dataRow.dataset.templateId : 'ruta';
+    running.style.display = 'flex';
+    runningLabel.textContent = `Ejecutando ${tplId}…`;
+  }
+}
+
+/* ===== VISTAS ===== */
+function applyView(viewId) {
+  const v = VIEWS[viewId];
+  if (!v) return;
+  // Visibles
+  v.visible.forEach(id => {
+    const el = document.getElementById('block-' + id);
+    if (!el) return;
+    el.style.display = '';
+    const pos = v.positions[id] || {};
+    if (pos.top !== undefined) el.style.top = (typeof pos.top === 'number' ? pos.top + 'px' : pos.top);
+    if (pos.left !== undefined) el.style.left = (typeof pos.left === 'number' ? pos.left + 'px' : pos.left);
+    if (pos.width) el.style.width = pos.width;
+    if (pos.transform) el.style.transform = pos.transform;
+    else el.style.transform = '';
+  });
+  // Ocultos
+  v.hidden.forEach(id => {
+    const el = document.getElementById('block-' + id);
+    if (el) el.style.display = 'none';
+  });
+  // Estado del test (nuevo)
+  applyTestState(v.testState || null);
+  // Mostrar/ocultar barra J según si hay tabla con ▶ en la vista
+  const hasTable = v.visible.includes('C') || v.visible.includes('D');
+  document.getElementById('world-bottom-bar').style.display = hasTable ? 'flex' : 'none';
+}
+document.getElementById('view-select').addEventListener('change', e => {
+  applyView(e.target.value);
+  // Al cambiar vista, salir del modo edición para no confundir
+  if (editMode) toggleEditMode();
+});
+// Inicializar con vista 1
+applyView('1');
+
+/* ===== BARRA DE MUNDO — interactividad ===== */
+document.getElementById('world-bar-select').addEventListener('change', function() {
+  const val = this.value;
+  const hint = document.getElementById('world-bar-hint');
+  if (!val) {
+    hint.style.display = '';
+    hint.classList.add('warn');
+    hint.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Elige un mundo para activar los ▶`;
+    // Deshabilitar ▶ con paths
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = true;
+    });
+  } else {
+    hint.style.display = 'none';
+    // Habilitar ▶ con paths
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = false;
+    });
+  }
+});
+
+/* ===== MODO EDICIÓN ===== */
+function toggleEditMode() {
+  editMode = !editMode;
+  const btn = document.getElementById('btn-edit');
+  btn.classList.toggle('active', editMode);
+  btn.setAttribute('aria-pressed', String(editMode));
+  btn.textContent = editMode ? 'Editar (activo)' : 'Editar';
+  document.querySelectorAll('.drag-block').forEach(b => {
+    b.classList.toggle('edit-mode', editMode);
+    b.style.cursor = editMode ? 'grab' : 'default';
+  });
+}
+document.getElementById('btn-edit').addEventListener('click', toggleEditMode);
+
+/* ===== DRAG & DROP (imán de 8px — mismo motor que noise-catalog.playground.html) ===== */
+function snap(v, grid) { return Math.round(v / grid) * grid; }
+
+document.addEventListener('mousedown', e => {
+  if (!editMode) return;
+  const block = e.target.closest('.drag-block.edit-mode');
+  if (!block) return;
+  // No arrastrar si el clic fue en un control interactivo dentro del bloque
+  if (e.target.closest('button,select,input,textarea,a')) return;
+  e.preventDefault();
+  isDragging = true;
+  dragBlock = block;
+  dragBlock.classList.add('dragging');
+  const rect = dragBlock.getBoundingClientRect();
+  const canvasRect = document.getElementById('drag-canvas').getBoundingClientRect();
+  dragOffsetX = e.clientX - rect.left;
+  dragOffsetY = e.clientY - rect.top;
+});
+
+document.addEventListener('mousemove', e => {
+  if (!isDragging || !dragBlock) return;
+  const canvasRect = document.getElementById('drag-canvas').getBoundingClientRect();
+  let x = snap(e.clientX - canvasRect.left - dragOffsetX, GRID);
+  let y = snap(e.clientY - canvasRect.top - dragOffsetY, GRID);
+  x = Math.max(0, x);
+  y = Math.max(0, y);
+  dragBlock.style.left = x + 'px';
+  dragBlock.style.top = y + 'px';
+  dragBlock.style.width = ''; // limpiar ancho relativo al mover
+  dragBlock.style.transform = '';
+  dragBlock.style.maxWidth = '';
+});
+
+document.addEventListener('mouseup', () => {
+  if (isDragging && dragBlock) {
+    dragBlock.classList.remove('dragging');
+    dragBlock.style.cursor = 'grab';
+  }
+  isDragging = false;
+  dragBlock = null;
+});
+
+/* ===== GUARDAR LAYOUT (localStorage) ===== */
+const STORAGE_KEY = 'travian_rutas_playground_layout_v1';
+
+function captureLayout() {
+  const blocks = document.querySelectorAll('.drag-block');
+  const layout = {};
+  blocks.forEach(b => {
+    layout[b.id] = {
+      top: b.style.top,
+      left: b.style.left,
+      width: b.style.width,
+      display: b.style.display,
+    };
+  });
+  return { view: document.getElementById('view-select').value, blocks: layout, savedAt: new Date().toISOString() };
+}
+
+document.getElementById('btn-save-layout').addEventListener('click', () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(captureLayout()));
+  // Feedback visual breve
+  const btn = document.getElementById('btn-save-layout');
+  const orig = btn.textContent;
+  btn.textContent = 'Guardado';
+  setTimeout(() => { btn.textContent = orig; }, 1200);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  localStorage.removeItem(STORAGE_KEY);
+  applyView(document.getElementById('view-select').value);
+  if (editMode) toggleEditMode();
+  const btn = document.getElementById('btn-reset');
+  const orig = btn.textContent;
+  btn.textContent = 'Restablecido';
+  setTimeout(() => { btn.textContent = orig; }, 1200);
+});
+
+/* Restaurar layout guardado al cargar */
+(function() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return;
+  try {
+    const layout = JSON.parse(saved);
+    if (layout.view) {
+      document.getElementById('view-select').value = layout.view;
+      applyView(layout.view);
+    }
+    if (layout.blocks) {
+      Object.entries(layout.blocks).forEach(([id, pos]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (pos.top) el.style.top = pos.top;
+        if (pos.left) el.style.left = pos.left;
+        if (pos.width) el.style.width = pos.width;
+        if (pos.display !== undefined) el.style.display = pos.display;
+      });
+    }
+  } catch(_) {}
+})();
+
+/* ===== EXPORTAR LAYOUT (JSON) ===== */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const panel = document.getElementById('export-panel');
+  const ta = document.getElementById('export-textarea');
+  ta.value = JSON.stringify(captureLayout(), null, 2);
+  panel.style.display = 'block';
+  ta.focus(); ta.select();
+});
+document.getElementById('btn-close-export').addEventListener('click', () => {
+  document.getElementById('export-panel').style.display = 'none';
+});
+document.getElementById('btn-copy-export').addEventListener('click', () => {
+  const ta = document.getElementById('export-textarea');
+  ta.select();
+  try { document.execCommand('copy'); } catch(_) {}
+  const btn = document.getElementById('btn-copy-export');
+  btn.textContent = 'Copiado';
+  setTimeout(() => { btn.textContent = 'Copiar'; }, 1500);
+});
+
+/* Cerrar el panel de exportación con Escape */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('export-panel').style.display = 'none';
+    if (editMode) toggleEditMode();
+  }
+});
+</script>
+</body>
+</html>
