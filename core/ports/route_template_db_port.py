@@ -5,7 +5,12 @@ ABC RouteTemplateDbPort — contrato que el adaptador SQLite debe implementar.
 Las plantillas son globales (sin world_id) y se clonan a mundos concretos
 a través del subsistema de noise (NoiseDbPort.create_destination).
 
-Spec route-templates-developer-portal.md §7.1, §8, §14 Paso 2.
+NOTA (v2 rev.2): navigation_weight eliminado de RouteTemplate y de update_template.
+  El peso vive en NoiseDestination.frequency_weight (por-mundo). Ver §v2-PESO.
+
+NOTA (v2): añadido get_templates_by_origin para listar hijas de una plantilla.
+
+Spec route-templates-developer-portal.md §7.1, §8, §14 Paso 2, §v2.3.
 """
 from __future__ import annotations
 
@@ -36,7 +41,7 @@ class RouteTemplateDbPort(ABC):
     @abstractmethod
     async def list_templates(
         self,
-        category: NoiseCategory | None = None,
+        category: "NoiseCategory | str | None" = None,
         include_paths: bool = False,
         limit: int = 100,
         offset: int = 0,
@@ -44,7 +49,8 @@ class RouteTemplateDbPort(ABC):
         """
         Lista plantillas globales con filtros opcionales.
 
-        - category: filtra por categoría si se pasa.
+        - category: filtra por categoría si se pasa. Acepta NoiseCategory enum
+          (compatibilidad legacy) o str libre (categorías nuevas como "Estadísticas").
         - include_paths: si True, carga paths y steps de cada plantilla.
         - limit / offset: paginación (limit en [1, 500]).
 
@@ -66,16 +72,25 @@ class RouteTemplateDbPort(ABC):
         self,
         template_id: int,
         label: str | None = None,
-        navigation_weight: float | None = None,
         is_safe: bool | None = None,
+        category: str | None = None,           # editable desde v2-cat-libre
+        origin_template_id: int | None | type[...] = ...,  # Ellipsis = no cambiar
         paths: list[RouteTemplatePath] | None = None,
     ) -> RouteTemplate:
         """
         PATCH parcial de una plantilla.
 
-        slug, category y url_pattern son inmutables (RN-RT02, §10).
+        slug y url_pattern son inmutables (RN-RT02, §10).
+        category ahora es EDITABLE (texto libre ≤ 50 chars, no vacío). Pasar None
+          para no cambiarla.
+        navigation_weight eliminado (v2 rev.2): el peso vive en NoiseDestination.
+        origin_template_id: usar Ellipsis (...) para no cambiar el valor actual;
+          pasar None para quitar el origen (plantilla pasa a raíz);
+          pasar un int para reasignar el origen.
         Si se pasa paths (no None), es un reemplazo ATÓMICO de los paths+steps.
         Lanza ValueError si template_id no existe.
+
+        Spec §v2.3, §v2 rev.2.
         """
 
     @abstractmethod
@@ -86,6 +101,22 @@ class RouteTemplateDbPort(ABC):
         Los noise_destinations clonados de esta plantilla quedan con template_id=NULL
         (FK ON DELETE SET NULL en noise_destinations.template_id).
         Idempotente: no lanza si la plantilla no existe.
+        """
+
+    # ------------------------------------------------------------------
+    # Consulta de hijas (v2 — composición atómica)
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    async def get_templates_by_origin(self, origin_template_id: int) -> list[RouteTemplate]:
+        """
+        Devuelve las plantillas que tienen origin_template_id = <id>.
+
+        Usado para mostrar las hijas de una plantilla en la UI y para
+        verificar el impacto de su borrado (cuántas plantillas quedarían raíz).
+        Devuelve [] si ninguna plantilla tiene ese origen.
+
+        Spec §v2.3, Paso v2-3.
         """
 
     # ------------------------------------------------------------------

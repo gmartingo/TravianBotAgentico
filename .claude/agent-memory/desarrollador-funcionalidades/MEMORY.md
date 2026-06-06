@@ -34,3 +34,4 @@
 - [sqlite-rename-fk-gotcha](sqlite-rename-fk-gotcha.md) — RENAME TABLE con FK hijas corrompe la BD (SQLite >= 3.25); patrón correcto: CREATE _new + DROP vieja + RENAME con foreign_keys=OFF
 - [noise-frequency-weight-pattern](noise-frequency-weight-pattern.md) — req_per_hour→interval_seconds; navigation_weight alias; jitter SIEMPRE; clamp 60%; piso 30 s guardian
 - [route-templates-pattern](route-templates-pattern.md) — catálogo plantillas rutas: gotcha FK-nueva-tabla en migración; SELECTs dinámicos; seed JSON externo idempotente por slug
+- [free-category-pattern](free-category-pattern.md) — category libre (str, no enum): M-RT04+M-ND02 reconstruyen tablas con foreign_keys=OFF; NoiseDestination.category normaliza enum→str; _dest_to_response usa hasattr(.value)

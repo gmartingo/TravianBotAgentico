@@ -88,6 +88,12 @@ class NoiseDestination:
     url_pattern y category son inmutables tras la creación (no se permiten
     cambiar via update — spec §port.update_destination).
 
+    category: acepta tanto NoiseCategory (enum legacy) como str libre (≤ 50
+    chars, no vacío). Se normaliza a str en __post_init__ para que el resto del
+    código pueda comparar sin llamar a .value. Esto permite clonar plantillas
+    con categorías nuevas (p.ej. "Estadísticas") sin romper los destinos creados
+    con el enum original.
+
     template_id (nullable): FK a route_templates.id cuando este destino fue
     creado clonando una plantilla maestra (M-RT01). None si fue creado a mano.
     Spec route-templates-developer-portal.md §7.3.
@@ -96,7 +102,7 @@ class NoiseDestination:
     world_id: int
     url_pattern: str
     label: str
-    category: NoiseCategory
+    category: "NoiseCategory | str"           # enum legacy O texto libre ≤ 50 chars
     frequency_weight: float                   # > 0
     is_safe: bool = True
     is_dead: bool = False
@@ -104,6 +110,8 @@ class NoiseDestination:
     created_at: datetime | None = None
     last_used_at: datetime | None = None
     template_id: int | None = None            # M-RT01: NULL si creado a mano
+
+    _MAX_CATEGORY_LEN = 50
 
     def __post_init__(self) -> None:
         # RN-FW07 (GUARDIAN — NO NEGOCIABLE): rango cerrado [0.1, 5.0].
@@ -117,6 +125,16 @@ class NoiseDestination:
             raise ValueError("url_pattern no puede estar vacío")
         if not self.label.strip():
             raise ValueError("label no puede estar vacío")
+        # Normalizar category: NoiseCategory enum → su valor str
+        if isinstance(self.category, NoiseCategory):
+            object.__setattr__(self, "category", self.category.value)
+        cat_str = str(self.category)
+        if not cat_str.strip():
+            raise ValueError("category no puede estar vacío")
+        if len(cat_str.strip()) > self._MAX_CATEGORY_LEN:
+            raise ValueError(
+                f"category no puede superar {self._MAX_CATEGORY_LEN} caracteres"
+            )
 
 
 @dataclass
@@ -223,25 +241,36 @@ class RouteTemplate:
     Slug único globalmente (RN-RT02).
     Los steps siguen las mismas restricciones anti-detección que NavigationStep.
 
-    Spec route-templates-developer-portal.md §7.1.
+    NOTA (v2 rev.2): navigation_weight NO pertenece a la plantilla global.
+    El peso (frecuencia de ruido) se fija por-mundo al clonar/asignar la ruta
+    a un mundo concreto; vive en NoiseDestination.frequency_weight. Ver §v2-PESO.
+
+    NOTA (v2): origin_template_id — FK nullable a otra RouteTemplate (composición
+    atómica). NULL = ruta raíz (visible desde cualquier página). INT = al ejecutar,
+    navegar primero la cadena de esa plantilla origen antes del clic propio.
+    La detección de ciclos vive en core/use_cases/route_template_service.py.
+
+    NOTA (category libre): category es texto libre (≤ 50 chars, no vacío).
+    Se aceptan los 7 valores históricos del enum NoiseCategory y cualquier
+    valor nuevo (p.ej. "Estadísticas", "Top 10"). No hay validación de enum
+    para poder extender las categorías sin tocar el código.
+
+    Spec route-templates-developer-portal.md §7.1, §v2.2.3.
     """
     id: int | None
     slug: str                              # kebab-case, UNIQUE global
     label: str
-    category: NoiseCategory
+    category: str                          # texto libre, no vacío, ≤ 50 chars
     url_pattern: str
-    navigation_weight: float = 1.0         # peso inicial sugerido al clonar (0.1–5.0)
     is_safe: bool = True
+    origin_template_id: int | None = None  # v2 — FK nullable a otra RouteTemplate
     paths: list[RouteTemplatePath] = field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+    _MAX_CATEGORY_LEN = 50
+
     def __post_init__(self) -> None:
-        if not (0.1 <= self.navigation_weight <= 5.0):
-            raise ValueError(
-                "navigation_weight debe estar entre 0.1 y 5.0 "
-                "(anti-detección: pesos extremos hacen el ruido predecible)"
-            )
         if not self.slug.strip():
             raise ValueError("slug no puede estar vacío")
         if not re.match(r'^[a-z0-9]+(?:-[a-z0-9]+)*$', self.slug):
@@ -252,6 +281,17 @@ class RouteTemplate:
             raise ValueError("label no puede estar vacío")
         if not self.url_pattern.strip():
             raise ValueError("url_pattern no puede estar vacío")
+        if not str(self.category).strip():
+            raise ValueError("category no puede estar vacío")
+        if len(str(self.category).strip()) > self._MAX_CATEGORY_LEN:
+            raise ValueError(
+                f"category no puede superar {self._MAX_CATEGORY_LEN} caracteres"
+            )
+        # Normalizar: si se pasa un NoiseCategory enum, guardarlo como su valor str
+        if isinstance(self.category, NoiseCategory):
+            object.__setattr__(self, "category", self.category.value)  # type: ignore[arg-type]
+        # v2: auto-referencia no se puede validar en __post_init__ (sin acceso a BD).
+        # La detección de ciclos vive en el use case de escritura.
 
 
 @dataclass

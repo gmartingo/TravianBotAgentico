@@ -2398,6 +2398,26 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
+    delete:
+      tags: [route-templates, session-management]
+      summary: "EP-RT12 — Cerrar sesión Chrome de un mundo (v3)"
+      description: |
+        Cierra la sesión Chrome de un mundo sin necesidad de WorldAgent activo.
+        Idempotente: si no hay sesión activa → 204 igualmente.
+        Para cerrar sesión desde el panel global /rutas.
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "204":
+          description: Sesión cerrada (o no existía — idempotente).
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
 
   /worlds/{world_id}/session/timeline:
     get:
@@ -3240,8 +3260,10 @@ paths:
               schema: { $ref: '#/components/schemas/DetailError' }
 
   # -------------------------------------------------------------------------
-  # Portal de Desarrollador de Rutas — EP-RT01..EP-RT10
-  # Spec: route-templates-developer-portal.md §8
+  # Portal de Desarrollador de Rutas — EP-RT01..EP-RT12
+  # Spec: route-templates-developer-portal.md §8, §v2.8, §v3.4
+  # v2: origin_template_id añadido; navigation_weight ELIMINADO de plantillas.
+  # v3: EP-RT10 con ensure_session (login on-demand). EP-RT11 y EP-RT12 nuevos.
   # Sin Accept-Language: labels y slugs son texto libre del desarrollador.
   # -------------------------------------------------------------------------
 
@@ -3300,8 +3322,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
+        "404":
+          description: Plantilla origen no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "409":
+          description: "Slug duplicado o ciclo en origin_template_id: {message, cycle_path?}."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
         "422":
-          description: Slug inválido / navigation_weight fuera de rango / delay_min_ms < 200 ms.
+          description: Slug inválido / delay_min_ms < 200 ms / selector por texto visible.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
@@ -3350,8 +3382,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
+        "404":
+          description: Plantilla o plantilla origen no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "409":
+          description: "Ciclo en origin_template_id o cadena demasiado profunda: {message, cycle_path?}."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
         "422":
-          description: Body vacío / campos inmutables / valores fuera de rango.
+          description: Body vacío / campos inmutables / delay < 200 ms / selector por texto visible.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
@@ -3399,6 +3441,8 @@ paths:
     post:
       tags: [route-templates]
       summary: "EP-RT07 — Clonar plantilla a un mundo"
+      description: |
+        v2: navigation_weight llega del REQUEST body (default 1.0), NO de la plantilla.
       parameters:
         - name: template_id
           in: path
@@ -3412,6 +3456,19 @@ paths:
           in: query
           required: false
           schema: { type: boolean, default: false }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                navigation_weight:
+                  type: number
+                  minimum: 0.1
+                  maximum: 5.0
+                  default: 1.0
+                  description: Frecuencia con la que ESE mundo usará esta ruta para ruido.
       responses:
         "201":
           description: Clon nuevo creado.
@@ -3428,6 +3485,7 @@ paths:
                   world_id: { type: integer }
                   template_id: { type: integer }
                   url_pattern: { type: string }
+                  navigation_weight: { type: number }
         "200":
           description: Misma plantilla ya estaba clonada (idempotente).
           content:
@@ -3452,7 +3510,7 @@ paths:
                       message: { type: string }
                       conflicting_destination_id: { type: integer }
         "422":
-          description: URL absoluta incompatible con el servidor del mundo.
+          description: URL absoluta incompatible / navigation_weight fuera de rango.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
@@ -3486,6 +3544,12 @@ paths:
                 force:
                   type: boolean
                   default: false
+                default_navigation_weight:
+                  type: number
+                  minimum: 0.1
+                  maximum: 5.0
+                  default: 1.0
+                  description: Peso aplicado uniformemente a todos los ítems del bulk (v2).
       responses:
         "200":
           description: Resultado por plantilla (no atómico).
@@ -3502,6 +3566,7 @@ paths:
                         template_id: { type: integer }
                         result: { type: string, enum: [cloned, already_exists, conflict] }
                         destination_id: { type: integer, nullable: true }
+                        navigation_weight: { type: number, nullable: true, description: "Solo en result=cloned (v2)" }
                         conflicting_destination_id: { type: integer, nullable: true }
                         error: { type: string, nullable: true }
         "422":
@@ -3572,7 +3637,10 @@ paths:
   /route-templates/{template_id}/test:
     post:
       tags: [route-templates]
-      summary: "EP-RT10 — Probar plantilla en vivo (wrapper de EP-N14)"
+      summary: "EP-RT10 — Probar plantilla en vivo (v3: ensure_session)"
+      description: |
+        v3: No requiere WorldAgent activo. Hace login on-demand idempotente si no hay sesión.
+        La sesión se mantiene entre pruebas (no se cierra al acabar el test).
       parameters:
         - name: template_id
           in: path
@@ -3594,13 +3662,18 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PathTestResponse' }
+        "401":
+          description: Credenciales indescifrables (Fernet) o login fallido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
         "404":
-          description: Plantilla o mundo no encontrado.
+          description: Plantilla no encontrada / mundo no encontrado / mundo sin cuenta asociada.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
         "409":
-          description: Agente desconectado o browser ocupado.
+          description: Browser ocupado con otra tarea.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
@@ -3610,7 +3683,55 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
         "500":
-          description: Error interno del servidor.
+          description: Error interno del servidor / error interno al abrir la sesión.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  /route-templates/{template_id}/chain:
+    get:
+      tags: [route-templates]
+      summary: "EP-RT11 — Cadena de pasos resuelta raíz→hoja (v2 NUEVO)"
+      description: |
+        Devuelve la cadena de clics en orden de ejecución. Uso: mostrar pasos heredados en la UI.
+        steps[] vacío si la plantilla no tiene path/step. Los 409 son defensivos (datos corruptos).
+      parameters:
+        - name: template_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cadena de pasos resuelta.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template_id: { type: integer }
+                  template_slug: { type: string }
+                  depth: { type: integer, description: "Número de nodos con step definido." }
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        position: { type: integer }
+                        template_id: { type: integer }
+                        template_slug: { type: string }
+                        label: { type: string }
+                        selector: { type: string }
+                        expected_url: { type: string, nullable: true }
+                        delay_min_ms: { type: integer }
+                        delay_max_ms: { type: integer }
+                        is_root: { type: boolean }
+        "404":
+          description: Plantilla no encontrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "409":
+          description: "Ciclo en datos corruptos — {message, cycle_path?}."
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }

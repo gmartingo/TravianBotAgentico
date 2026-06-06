@@ -35,7 +35,12 @@ import { ConfirmDeleteModal } from '../components/ui/ConfirmDeleteModal.jsx'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const CATEGORIES = ['MAP', 'OASIS_INFO', 'PLAYER_PROFILE', 'MESSAGES', 'REPORTS', 'BUILDING_VIEW', 'OTHER']
+// Lista de sugerencias de categoría: las 7 históricas + nuevas personalizables.
+// El usuario puede elegir una sugerencia o escribir una nueva categoría libre.
+const CATEGORIES = [
+  'MAP', 'OASIS_INFO', 'PLAYER_PROFILE', 'MESSAGES', 'REPORTS', 'BUILDING_VIEW', 'OTHER',
+  'Estadísticas', 'Top 10',
+]
 
 // ── Iconos SVG inline ─────────────────────────────────────────────────────────
 
@@ -168,11 +173,64 @@ function SkeletonTable() {
 }
 
 // ── Modal Crear Plantilla ─────────────────────────────────────────────────────
+// NOTA v2 rev.2: sin campo navigation_weight — el peso se fija al CLONAR a un mundo,
+// no en la plantilla global.
+// NOTA v2: origin_template_id como desplegable (selección de "Origen" de la ruta).
 
-function NewTemplateModal({ onClose, onCreated }) {
+/**
+ * Deriva un selector CSS estructural a partir del elemento HTML pegado por el usuario
+ * (modelo "html clicable"). Si el input ya parece un selector CSS, se devuelve tal cual.
+ * Prioriza atributos estables: id > href > name > accesskey > clases. Nunca por texto.
+ */
+function htmlToCssSelector(input) {
+  const raw = (input || '').trim()
+  if (!raw.startsWith('<')) return raw   // ya es un selector CSS
+  try {
+    const el = new DOMParser().parseFromString(raw, 'text/html').body.firstElementChild
+    if (!el) return raw
+    const tag = el.tagName.toLowerCase()
+    const esc = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : v)
+    if (el.id) return `${tag}#${esc(el.id)}`
+    const href = el.getAttribute('href')
+    if (href) return `${tag}[href="${href}"]`
+    const name = el.getAttribute('name')
+    if (name) return `${tag}[name="${name}"]`
+    const ak = el.getAttribute('accesskey')
+    if (ak) return `${tag}[accesskey="${ak}"]`
+    const cls = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean)
+    if (cls.length) return `${tag}.${cls.map(esc).join('.')}`
+    return tag
+  } catch {
+    return raw
+  }
+}
+
+/**
+ * Trunca una URL pegada quitando el mundo (scheme + host), dejando solo la ruta
+ * efectiva (path + query + fragment) con '/' inicial. El usuario pega la URL larga
+ * del mundo (https://ts20.x2.america.travian.com/dorf2.php) y el campo muestra
+ * directamente "/dorf2.php". Si no es una URL absoluta, se deja tal cual (para no
+ * estorbar mientras se teclea un selector/ruta relativa).
+ */
+function truncateWorldFromUrl(value) {
+  const v = value ?? ''
+  if (!v.includes('://')) return v   // no es URL absoluta: no tocar
+  try {
+    const u = new URL(v.trim())
+    return (u.pathname || '/') + (u.search || '') + (u.hash || '')
+  } catch {
+    // URL incompleta a medio pegar: recorta desde el primer '/' tras el host
+    const m = v.match(/^[a-zA-Z][\w+.-]*:\/\/[^/]+(\/.*)$/)
+    return m ? m[1] : v
+  }
+}
+
+function NewTemplateModal({ onClose, onCreated, templates }) {
   const [form, setForm] = useState({
     slug: '', label: '', category: 'MAP',
-    url_pattern: '', navigation_weight: 1.0, is_safe: true,
+    url_pattern: '', is_safe: true,
+    origin_template_id: null,
+    selector: '',
   })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState({})
@@ -183,9 +241,8 @@ function NewTemplateModal({ onClose, onCreated }) {
     else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug.trim()))
       e.slug = 'Debe ser kebab-case: letras minúsculas, dígitos y guiones'
     if (!form.label.trim()) e.label = 'El nombre es obligatorio'
-    if (!form.url_pattern.trim()) e.url_pattern = 'La URL pattern es obligatoria'
-    if (form.navigation_weight < 0.1 || form.navigation_weight > 5.0)
-      e.navigation_weight = 'Entre 0.1 y 5.0'
+    if (!form.url_pattern.trim()) e.url_pattern = 'La URL de destino es obligatoria'
+    if (!form.selector.trim()) e.selector = 'El elemento clicable (selector) es obligatorio'
     return e
   }
 
@@ -196,18 +253,57 @@ function NewTemplateModal({ onClose, onCreated }) {
     setSaving(true)
     setErrors({})
     try {
-      const created = await api.createRouteTemplate({
-        ...form,
+      // Modelo atómico: 1 ruta = 1 clic. El origen del path es "ROUTE_TEMPLATE:<id>"
+      // si la ruta parte de otra ruta, o "ANY" si es raíz (clicable desde cualquier parte).
+      const pathOrigin = form.origin_template_id != null
+        ? `ROUTE_TEMPLATE:${form.origin_template_id}`
+        : 'ANY'
+      const payload = {
         slug: form.slug.trim(),
         label: form.label.trim(),
+        category: form.category,
         url_pattern: form.url_pattern.trim(),
-      })
+        is_safe: form.is_safe,
+        paths: [{
+          origin: pathOrigin,
+          label: form.label.trim(),
+          is_active: true,
+          steps: [{
+            step_order: 0,
+            action: 'CLICK',
+            // Si el usuario pegó la etiqueta HTML, se deriva el selector CSS estructural.
+            selector: htmlToCssSelector(form.selector),
+            value: '',
+            delay_min_ms: 500,
+            delay_max_ms: 900,
+            // La URL de destino se usa SOLO para verificar la llegada del clic (no para navegar).
+            expected_url_after_click: form.url_pattern.trim(),
+          }],
+        }],
+      }
+      if (form.origin_template_id != null) {
+        payload.origin_template_id = form.origin_template_id
+      }
+      const created = await api.createRouteTemplate(payload)
       showToast('Plantilla creada correctamente')
       onCreated(created)
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.status === 409) setErrors({ slug: err.detail })
-        else setErrors({ _global: err.detail })
+        if (err.status === 409) {
+          // Puede ser slug duplicado o ciclo en origen
+          const detail = typeof err.detail === 'object' ? err.detail : { message: err.detail }
+          if (detail.cycle_path) {
+            setErrors({ _global: `El origen crearía un ciclo en la cadena: ${detail.message}` })
+          } else {
+            setErrors({ slug: detail.message ?? err.detail })
+          }
+        } else if (err.status === 422) {
+          // Selector con texto visible u otros errores de formato
+          const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)
+          setErrors({ _global: msg })
+        } else {
+          setErrors({ _global: err.detail })
+        }
       } else {
         setErrors({ _global: 'Error de red' })
       }
@@ -275,6 +371,7 @@ function NewTemplateModal({ onClose, onCreated }) {
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
           Define una ruta reutilizable. El identificador es permanente y no se puede cambiar tras la creación.
+          El peso de la ruta se configura al clonarla a cada mundo.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -287,26 +384,32 @@ function NewTemplateModal({ onClose, onCreated }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
             {/* Identificador (slug) */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Identificador <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <label style={labelStyle} htmlFor="new-tpl-slug">
+                Identificador <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
               <input
+                id="new-tpl-slug"
                 type="text"
                 placeholder="rally-point-view"
                 value={form.slug}
                 onChange={e => setForm(f => ({ ...f, slug: e.target.value }))}
                 style={{ ...inputStyle(!!errors.slug), fontFamily: 'var(--font-mono)' }}
                 autoFocus
-                aria-describedby={errors.slug ? 'err-slug' : undefined}
+                aria-describedby={errors.slug ? 'err-slug' : 'hint-slug'}
               />
               {errors.slug && <span id="err-slug" role="alert" style={errorStyle}>{errors.slug}</span>}
-              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
-                Kebab-case, solo minúsculas, dígitos y guiones. Inmutable tras la creación.
+              <span id="hint-slug" style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
+                Kebab-case: solo minúsculas, dígitos y guiones. Inmutable tras la creación.
               </span>
             </div>
 
             {/* Nombre (label) */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Nombre <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <label style={labelStyle} htmlFor="new-tpl-label">
+                Nombre <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
               <input
+                id="new-tpl-label"
                 type="text"
                 placeholder="Rally Point — ver edificio"
                 value={form.label}
@@ -317,43 +420,103 @@ function NewTemplateModal({ onClose, onCreated }) {
               {errors.label && <span id="err-label" role="alert" style={errorStyle}>{errors.label}</span>}
             </div>
 
-            {/* Categoría */}
-            <div>
-              <label style={labelStyle}>Categoría <span style={{ color: 'var(--danger)' }}>*</span></label>
+            {/* Origen (origin_template_id) — DESPLEGABLE, NUNCA input libre (spec no negociable) */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle} htmlFor="new-tpl-origin">
+                Origen
+              </label>
               <select
+                id="new-tpl-origin"
+                value={form.origin_template_id ?? ''}
+                onChange={e => setForm(f => ({
+                  ...f,
+                  origin_template_id: e.target.value === '' ? null : parseInt(e.target.value, 10),
+                }))}
+                style={{ ...inputStyle(false), cursor: 'pointer' }}
+                aria-describedby="hint-origin"
+              >
+                <option value="">Libre (sin origen) — visible desde cualquier página</option>
+                {(templates ?? []).filter(t => t.id != null).map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.label} ({t.slug})
+                  </option>
+                ))}
+              </select>
+              <span id="hint-origin" style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
+                Si seleccionas una ruta como origen, al ejecutar se recorrerá primero la cadena de clics hasta llegar a esta.
+              </span>
+            </div>
+
+            {/* Categoría — texto libre con sugerencias */}
+            <div>
+              <label style={labelStyle} htmlFor="new-tpl-category">
+                Categoría <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <input
+                id="new-tpl-category"
+                type="text"
+                list="category-datalist"
+                placeholder="MAP, Estadísticas, Top 10…"
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                style={{ ...inputStyle(false), cursor: 'pointer' }}
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-
-            {/* Peso */}
-            <div>
-              <label style={labelStyle}>Peso inicial</label>
-              <input
-                type="number" min="0.1" max="5" step="0.1"
-                value={form.navigation_weight}
-                onChange={e => setForm(f => ({ ...f, navigation_weight: parseFloat(e.target.value) || 1.0 }))}
-                style={{ ...inputStyle(!!errors.navigation_weight), width: '100px', fontFamily: 'var(--font-mono)' }}
-                aria-describedby={errors.navigation_weight ? 'err-weight' : undefined}
+                style={inputStyle(false)}
+                maxLength={50}
+                autoComplete="off"
               />
-              {errors.navigation_weight && <span id="err-weight" role="alert" style={errorStyle}>{errors.navigation_weight}</span>}
+              <datalist id="category-datalist">
+                {CATEGORIES.map(c => <option key={c} value={c} />)}
+              </datalist>
+              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
+                Elige una sugerencia o escribe una categoría nueva (máx. 50 chars).
+              </span>
             </div>
 
-            {/* URL pattern */}
+            {/* URL de destino */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>URL pattern <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <label style={labelStyle} htmlFor="new-tpl-url">
+                URL de destino <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
               <input
+                id="new-tpl-url"
                 type="text"
                 placeholder="/build.php?gid=13"
                 value={form.url_pattern}
-                onChange={e => setForm(f => ({ ...f, url_pattern: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, url_pattern: truncateWorldFromUrl(e.target.value) }))}
                 style={{ ...inputStyle(!!errors.url_pattern), fontFamily: 'var(--font-mono)' }}
-                aria-describedby={errors.url_pattern ? 'err-url' : undefined}
+                aria-describedby={errors.url_pattern ? 'err-url' : 'hint-url'}
               />
               {errors.url_pattern && <span id="err-url" role="alert" style={errorStyle}>{errors.url_pattern}</span>}
+              <span id="hint-url" style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
+                Se usa para verificar la llegada del clic, no para navegar directamente.
+              </span>
+            </div>
+
+            {/* Elemento clicable (selector CSS) — el clic atómico de la ruta */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle} htmlFor="new-tpl-selector">
+                Elemento clicable <span style={{ color: 'var(--danger)' }}>*</span>
+              </label>
+              <input
+                id="new-tpl-selector"
+                type="text"
+                placeholder="Pega la etiqueta HTML: <a href=&quot;/dorf2.php&quot; ...> o un selector CSS"
+                value={form.selector}
+                onChange={e => setForm(f => ({ ...f, selector: e.target.value }))}
+                style={{ ...inputStyle(!!errors.selector), fontFamily: 'var(--font-mono)' }}
+                aria-describedby={errors.selector ? 'err-selector' : 'hint-selector'}
+              />
+              {errors.selector && <span id="err-selector" role="alert" style={errorStyle}>{errors.selector}</span>}
+              {/* Vista previa del selector derivado cuando se pega HTML */}
+              {form.selector.trim().startsWith('<') && (
+                <span style={{ fontSize: '11px', color: 'var(--accent-text)', display: 'block', marginTop: '3px', fontFamily: 'var(--font-mono)' }}>
+                  → se guardará: <strong>{htmlToCssSelector(form.selector)}</strong>
+                </span>
+              )}
+              <span id="hint-selector" style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '3px' }}>
+                Pega el <strong>elemento HTML</strong> del enlace/botón a clicar (Inspeccionar → Copiar → Copy outerHTML)
+                y se deriva el selector estructural automáticamente. También puedes escribir un selector CSS
+                (atributo href/id/class/name), nunca por texto visible.
+              </span>
             </div>
 
             {/* is_safe */}
@@ -404,19 +567,25 @@ function NewTemplateModal({ onClose, onCreated }) {
 }
 
 // ── Modal Clonar a Mundo ──────────────────────────────────────────────────────
+// El peso (navigation_weight) se fija AQUÍ, no en la plantilla (v2 rev.2).
+// Cada mundo puede dar un peso distinto a la misma plantilla.
 
 function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
   const [worldId, setWorldId] = useState('')
   const [force, setForce] = useState(false)
+  const [navWeight, setNavWeight] = useState(1.0)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null) // respuesta del servidor
+
+  const selectedWorld = worlds.find(w => String(w.id) === String(worldId))
 
   async function handleClone() {
     if (!worldId) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await api.cloneRouteTemplate(template.id, parseInt(worldId), force)
+      const weight = Math.min(5.0, Math.max(0.1, parseFloat(navWeight) || 1.0))
+      const res = await api.cloneRouteTemplate(template.id, parseInt(worldId), force, weight)
       setResult({ ok: true, data: res })
       showToast(
         res.result === 'already_exists'
@@ -443,6 +612,13 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
+  const inputSm = {
+    padding: '6px 10px',
+    border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
+    background: 'var(--surface)', color: 'var(--text)',
+    fontFamily: 'inherit', fontSize: '13px',
+  }
+
   return (
     <>
       <div aria-hidden="true" onClick={onClose}
@@ -463,23 +639,25 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
           Clonar plantilla a mundo
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: 1.5 }}>
-          Elige el mundo destino. Se creará una copia independiente de{' '}
-          <strong>{template.slug}</strong> en ese mundo como <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>noise_destination</code>.
+          Elige el mundo destino y la frecuencia de uso. Se creará una copia independiente de{' '}
+          <strong>{template.slug}</strong> en ese mundo.
         </p>
 
         {/* Selector de mundo */}
         <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+          <label
+            htmlFor="clone-world-select"
+            style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}
+          >
             Mundo destino
           </label>
           <select
+            id="clone-world-select"
             value={worldId}
             onChange={e => { setWorldId(e.target.value); setResult(null) }}
             style={{
-              width: '100%', padding: '8px 12px',
-              border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
-              background: 'var(--surface)', color: worldId ? 'var(--text)' : 'var(--text-tertiary)',
-              fontFamily: 'inherit', fontSize: '13px', cursor: 'pointer',
+              ...inputSm, width: '100%', cursor: 'pointer',
+              color: worldId ? 'var(--text)' : 'var(--text-tertiary)',
             }}
             aria-label="Seleccionar mundo destino para clonar"
           >
@@ -491,6 +669,45 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
             ))}
           </select>
         </div>
+
+        {/* Frecuencia (navigation_weight) — visible cuando hay mundo seleccionado */}
+        {worldId && (
+          <div style={{ marginBottom: '14px' }}>
+            <label
+              htmlFor="clone-nav-weight"
+              style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}
+            >
+              Frecuencia en {selectedWorld?.server_url ?? 'este mundo'}
+              <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginInlineStart: '6px' }}>0.1 – 5.0</span>
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                id="clone-nav-weight"
+                type="range"
+                min="0.1" max="5.0" step="0.1"
+                value={navWeight}
+                onChange={e => setNavWeight(parseFloat(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--accent)' }}
+                aria-label="Frecuencia de uso de la ruta en este mundo"
+              />
+              <input
+                type="number"
+                min="0.1" max="5.0" step="0.1"
+                value={navWeight}
+                onChange={e => {
+                  const v = parseFloat(e.target.value)
+                  if (!isNaN(v)) setNavWeight(Math.min(5.0, Math.max(0.1, v)))
+                }}
+                style={{ ...inputSm, width: '72px', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', textAlign: 'end' }}
+                aria-label="Valor numérico de la frecuencia"
+              />
+            </div>
+            <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', lineHeight: 1.4, margin: '4px 0 0 0' }}>
+              Controla con qué frecuencia el bot usará esta ruta para meter ruido en ese mundo.
+              1.0 = frecuencia normal; 2.0 = el doble; 0.5 = la mitad.
+            </p>
+          </div>
+        )}
 
         {/* Opción force */}
         <div style={{ marginBottom: '14px' }}>
@@ -504,7 +721,7 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
             Sobreescribir si ya existe (force=true)
           </label>
           <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', paddingInlineStart: '23px', lineHeight: 1.4 }}>
-            Si el mundo ya tiene un destino con la misma URL pattern, lo reemplaza. Úsalo solo si sabes que el conflicto es intencional.
+            Si el mundo ya tiene un destino con la misma URL pattern, lo reemplaza.
           </p>
         </div>
 
@@ -525,7 +742,9 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
             <div style={{ padding: '10px 12px', fontSize: '13px' }}>
               {result.ok ? (
                 <span style={{ color: result.data?.result === 'already_exists' ? 'var(--text-secondary)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {result.data?.result === 'already_exists' ? 'ℹ Ya existía · dest #' + result.data.destination_id : '✓ Clonado · dest #' + result.data?.destination_id}
+                  {result.data?.result === 'already_exists'
+                    ? 'ℹ Ya existía · dest #' + result.data.destination_id
+                    : '✓ Clonado · dest #' + result.data?.destination_id + (result.data?.navigation_weight ? ` · peso ${result.data.navigation_weight}` : '')}
                 </span>
               ) : result.conflict ? (
                 <span style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -579,7 +798,132 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
   )
 }
 
-// ── Panel "Probar ruta" ───────────────────────────────────────────────────────
+// ── Panel de pasos heredados (cadena de orígenes) ─────────────────────────────
+// Muestra la secuencia raíz→hoja de clics heredados cuando la plantilla tiene origen.
+// Llama EP-RT11 GET /route-templates/{id}/chain.
+// NOTA: Si el origen fue eliminado, la cadena devuelve la plantilla actual como raíz
+// y se muestra un aviso "ejecutará desde cualquier punto" (EC-V2-03).
+
+function InheritedStepsPanel({ templateId, originTemplateId }) {
+  const [chain, setChain] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!templateId) return
+    setLoading(true)
+    setError(null)
+    api.getRouteTemplateChain(templateId)
+      .then(data => setChain(data))
+      .catch(err => setError(err instanceof ApiError ? err.detail : 'Error al cargar la cadena'))
+      .finally(() => setLoading(false))
+  }, [templateId])
+
+  // Panel solo visible si hay origen
+  if (!originTemplateId) return null
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-md)', overflow: 'hidden',
+      marginTop: '16px',
+    }}>
+      {/* Cabecera */}
+      <div style={{
+        background: 'var(--surface-2)', padding: '8px 14px',
+        fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)',
+        textTransform: 'uppercase', letterSpacing: '0.04em',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: '8px',
+      }}>
+        <span>Pasos heredados (cadena de orígenes)</span>
+        <span style={{ fontSize: '10px', fontWeight: 400, color: 'var(--text-tertiary)', textTransform: 'none', letterSpacing: 0 }}>
+          raíz → hoja
+        </span>
+      </div>
+
+      {loading && (
+        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-tertiary)', fontSize: '13px' }}>
+          <Spinner size={12} /> Cargando cadena de orígenes…
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--danger)' }} role="alert">
+          {error}
+        </div>
+      )}
+
+      {chain && !loading && (
+        <>
+          {/* Aviso si el origen fue eliminado (chain solo tiene la plantilla actual como raíz) */}
+          {chain.steps?.length <= 1 && (
+            <div style={{
+              padding: '10px 14px', fontSize: '12px', color: 'var(--text-secondary)',
+              borderBottom: '1px solid var(--border)',
+              background: 'var(--accent-subtle)',
+            }}>
+              El origen de esta plantilla fue eliminado. Ejecutará desde cualquier punto de Travian.
+            </div>
+          )}
+
+          {/* Tabla de pasos */}
+          {chain.steps?.length > 0 ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)', padding: '5px 10px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'start', width: '28px' }}>#</th>
+                  <th style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)', padding: '5px 10px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'start' }}>Plantilla origen</th>
+                  <th style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)', padding: '5px 10px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'start' }}>Selector clicable</th>
+                  <th style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--text-secondary)', padding: '5px 10px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'start' }}>URL esperada</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chain.steps.map((step, idx) => {
+                  const isOwn = idx === chain.steps.length - 1 // último = el clic propio
+                  return (
+                    <tr key={idx} style={{ background: isOwn ? 'var(--accent-subtle)' : undefined }}>
+                      <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                        {idx + 1}
+                      </td>
+                      <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--border)', fontSize: '12px' }}>
+                        <span style={{ fontWeight: isOwn ? 600 : 400, color: isOwn ? 'var(--accent-text)' : 'var(--text)' }}>
+                          {step.label}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-tertiary)', display: 'block' }}>
+                          {step.template_slug}
+                          {isOwn && <span style={{ marginInlineStart: '4px', color: 'var(--accent-text)', fontWeight: 600 }}>← este clic</span>}
+                        </span>
+                      </td>
+                      <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--border)' }}>
+                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)' }}>
+                          {step.step?.selector ?? step.selector ?? '—'}
+                        </code>
+                      </td>
+                      <td style={{ padding: '5px 10px', borderBottom: '1px solid var(--border)' }}>
+                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                          {step.expected_url ?? step.step?.expected_url_after_click ?? '—'}
+                        </code>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ padding: '12px 16px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+              La cadena no tiene pasos definidos aún.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── Panel "Probar ruta" (v3) ───────────────────────────────────────────────────
+// v3: muestra estado de sesión del mundo seleccionado + botón "Cerrar sesión" (EP-RT12).
+// La sesión persiste entre pruebas; ensure_session en el backend hace login on-demand.
 
 function TestRoutePanel({ template, worlds, onClose }) {
   const [worldId, setWorldId] = useState('')
@@ -590,8 +934,33 @@ function TestRoutePanel({ template, worlds, onClose }) {
   const [apiError, setApiError] = useState(null)
   const closeRef = useRef(null)
 
+  // Estado de sesión del mundo seleccionado (v3)
+  const [sessionStatus, setSessionStatus] = useState(null) // null | { active: boolean, state: string }
+  const [loadingSession, setLoadingSession] = useState(false)
+  const [closingSession, setClosingSession] = useState(false)
+
   const paths = template?.paths ?? []
   const currentPath = paths[pathIndex]
+
+  // Cargar estado de sesión REAL cuando se selecciona un mundo.
+  // Antes usaba getAgentStatus (estado del AGENTE), que daba "cerrada" aunque el bot
+  // tuviera el Chrome abierto vía ensure_session. Ahora consulta la SESIÓN real
+  // (SessionRegistry.is_active) con getSession(account_id, world_id).
+  useEffect(() => {
+    if (!worldId) { setSessionStatus(null); return }
+    const w = worlds.find(x => String(x.id) === String(worldId))
+    if (!w || w.account_id == null) { setSessionStatus(null); return }
+    setLoadingSession(true)
+    api.getSession(w.account_id, parseInt(worldId))
+      .then(status => {
+        setSessionStatus({
+          active: status?.active === true,
+          state: status?.active ? 'session_open' : 'closed',
+        })
+      })
+      .catch(() => setSessionStatus(null)) // No es crítico si falla
+      .finally(() => setLoadingSession(false))
+  }, [worldId, worlds])
 
   async function handleTest() {
     if (!worldId) return
@@ -606,6 +975,8 @@ function TestRoutePanel({ template, worlds, onClose }) {
       })
       setDurationMs(Date.now() - t0)
       setResult(res)
+      // Tras el test, la sesión puede haberse abierto por ensure_session — refrescar estado
+      setSessionStatus(prev => prev ? { ...prev, active: true } : { active: true, state: 'session_open' })
     } catch (err) {
       if (err instanceof ApiError) {
         setApiError(err.detail)
@@ -614,6 +985,20 @@ function TestRoutePanel({ template, worlds, onClose }) {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleCloseSession() {
+    if (!worldId || closingSession) return
+    setClosingSession(true)
+    try {
+      await api.closeWorldSession(parseInt(worldId))
+      setSessionStatus(prev => prev ? { ...prev, active: false } : { active: false, state: 'closed' })
+      showToast('Sesión de Chrome cerrada correctamente')
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.detail : 'Error al cerrar la sesión')
+    } finally {
+      setClosingSession(false)
     }
   }
 
@@ -647,14 +1032,18 @@ function TestRoutePanel({ template, worlds, onClose }) {
 
       {/* Controles */}
       <div style={{ padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {/* Mundo */}
-        <div style={{ flex: '1 1 180px' }}>
-          <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+        {/* Mundo + estado de sesión (v3) */}
+        <div style={{ flex: '1 1 200px' }}>
+          <label
+            htmlFor="test-world-select"
+            style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}
+          >
             Mundo
           </label>
           <select
+            id="test-world-select"
             value={worldId}
-            onChange={e => setWorldId(e.target.value)}
+            onChange={e => { setWorldId(e.target.value); setResult(null); setApiError(null) }}
             style={{
               width: '100%', padding: '6px 10px',
               border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
@@ -670,15 +1059,69 @@ function TestRoutePanel({ template, worlds, onClose }) {
               </option>
             ))}
           </select>
+
+          {/* Estado de sesión (v3) — debajo del selector de mundo */}
+          {worldId && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+              {loadingSession ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  <Spinner size={10} /> Verificando sesión…
+                </span>
+              ) : sessionStatus ? (
+                <>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 500 }}>
+                    <span style={{
+                      width: '7px', height: '7px', borderRadius: '50%',
+                      background: sessionStatus.active ? 'var(--success)' : 'var(--text-disabled)',
+                      flexShrink: 0,
+                    }} aria-hidden="true" />
+                    <span style={{ color: sessionStatus.active ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                      Sesión {sessionStatus.active ? 'abierta' : 'cerrada'}
+                    </span>
+                  </span>
+                  {/* Botón Cerrar sesión — visible solo si hay sesión activa */}
+                  {sessionStatus.active && (
+                    <button
+                      type="button"
+                      onClick={handleCloseSession}
+                      disabled={closingSession || loading}
+                      aria-label="Cerrar sesión Chrome de este mundo"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '4px',
+                        height: '22px', padding: '0 8px',
+                        border: '1px solid var(--border-strong)',
+                        background: 'var(--surface)', color: 'var(--text-secondary)',
+                        borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: '11px',
+                        cursor: (closingSession || loading) ? 'not-allowed' : 'pointer',
+                        opacity: (closingSession || loading) ? 0.6 : 1,
+                      }}
+                    >
+                      {closingSession ? <Spinner size={9} /> : null}
+                      {closingSession ? 'Cerrando…' : 'Cerrar sesión'}
+                    </button>
+                  )}
+                  {!sessionStatus.active && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                      — el test abrirá la sesión automáticamente
+                    </span>
+                  )}
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Path index (solo si hay más de 1 path) */}
         {paths.length > 1 && (
           <div style={{ flex: '0 0 120px' }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+            <label
+              htmlFor="test-path-select"
+              style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}
+            >
               Ruta (índice)
             </label>
             <select
+              id="test-path-select"
               value={pathIndex}
               onChange={e => setPathIndex(parseInt(e.target.value))}
               style={{
@@ -696,7 +1139,7 @@ function TestRoutePanel({ template, worlds, onClose }) {
           </div>
         )}
 
-        {/* Botón */}
+        {/* Botón ejecutar */}
         <button
           type="button" onClick={handleTest}
           disabled={!worldId || loading}
@@ -712,7 +1155,9 @@ function TestRoutePanel({ template, worlds, onClose }) {
           aria-label="Ejecutar test de la ruta"
         >
           {loading ? <Spinner size={12} /> : <IconPlay size={12} />}
-          {loading ? 'Probando…' : 'Ejecutar'}
+          {loading
+            ? (sessionStatus && !sessionStatus.active ? 'Abriendo sesión / probando…' : 'Probando…')
+            : 'Ejecutar'}
         </button>
       </div>
 
@@ -842,10 +1287,12 @@ function ResyncPanel({ template, worlds }) {
 }
 
 // ── Fila de la tabla de plantillas ────────────────────────────────────────────
+// NOTA v2 rev.2: sin columna de Peso — el peso vive en NoiseDestination por-mundo.
+// NOTA v2: badge "encadenada" si origin_template_id != null.
 
 function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
-  const totalSteps = (tpl.paths ?? []).reduce((acc, p) => acc + (p.steps?.length ?? 0), 0)
   const pathsCount = tpl.paths_count ?? (tpl.paths?.length ?? 0)
+  const isChained = tpl.origin_template_id != null
 
   const tdBase = {
     padding: '10px 12px',
@@ -875,30 +1322,46 @@ function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
     >
       {/* Nombre / Identificador / URL */}
       <td role="cell" style={tdBase}>
-        <button
-          ref={editBtnRef}
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onEdit(tpl) }}
-          style={{
-            appearance: 'none', border: 'none', background: 'transparent',
-            padding: 0, cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit',
-            color: 'var(--accent-text)', fontWeight: 500, fontSize: '14px',
-            display: 'block',
-          }}
-          aria-label={`Abrir plantilla ${tpl.slug}`}
-        >
-          {tpl.label}
-        </button>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-          {tpl.slug}
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: '11px',
-          color: tpl.url_pattern?.startsWith('http') ? 'var(--accent-text)' : 'var(--text-tertiary)',
-          fontStyle: tpl.url_pattern?.startsWith('http') ? 'normal' : undefined,
-          marginTop: '1px',
-        }}>
-          {tpl.url_pattern}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <button
+              ref={editBtnRef}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(tpl) }}
+              style={{
+                appearance: 'none', border: 'none', background: 'transparent',
+                padding: 0, cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit',
+                color: 'var(--accent-text)', fontWeight: 500, fontSize: '14px',
+              }}
+              aria-label={`Abrir plantilla ${tpl.slug}`}
+            >
+              {tpl.label}
+            </button>
+            {/* Badge "encadenada" — visible si la plantilla tiene origen (v2) */}
+            {isChained && (
+              <span
+                style={{
+                  display: 'inline-flex', alignItems: 'center',
+                  padding: '1px 7px', borderRadius: 'var(--radius-full)',
+                  fontSize: '10px', fontWeight: 500,
+                  background: 'var(--accent-subtle)', color: 'var(--accent-text)',
+                  whiteSpace: 'nowrap',
+                }}
+                title={`Encadenada — origen: plantilla #${tpl.origin_template_id}`}
+              >
+                ↗ encadenada
+              </span>
+            )}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+            {tpl.slug}
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: '11px',
+            color: tpl.url_pattern?.startsWith('http') ? 'var(--accent-text)' : 'var(--text-tertiary)',
+          }}>
+            {tpl.url_pattern}
+          </div>
         </div>
       </td>
 
@@ -915,13 +1378,7 @@ function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
         </span>
       </td>
 
-      {/* Peso — P2, oculto en móvil */}
-      <td role="cell" style={{ ...tdBase, textAlign: 'end', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}
-        className="rt-col-weight">
-        {tpl.navigation_weight}
-      </td>
-
-      {/* Estado — P2, oculto en móvil */}
+      {/* Estado (is_safe) — P2, oculto en móvil. Sin columna de Peso (v2 rev.2) */}
       <td role="cell" style={{ ...tdBase, textAlign: 'center' }} className="rt-col-status">
         {tpl.is_safe ? (
           <span style={{
@@ -947,7 +1404,7 @@ function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
       </td>
 
       {/* Acciones */}
-      <td role="cell" style={{ ...tdBase, width: '136px', textAlign: 'end' }}
+      <td role="cell" style={{ ...tdBase, width: '120px', textAlign: 'end' }}
         onClick={e => e.stopPropagation()}
         onKeyDown={e => e.stopPropagation()}
       >
@@ -1054,7 +1511,7 @@ export function RouteTemplatesPage() {
       // Cargamos todas las cuentas y luego todos sus mundos para el selector
       const accounts = await api.getAccounts()
       const worldPromises = accounts.map(acc => api.getWorlds(acc.id).then(ws =>
-        ws.map(w => ({ ...w, account_email: acc.email }))
+        ws.map(w => ({ ...w, account_email: acc.email, account_id: acc.id }))
       ))
       const worldArrays = await Promise.all(worldPromises)
       setWorlds(worldArrays.flat())
@@ -1130,11 +1587,11 @@ export function RouteTemplatesPage() {
   return (
     <div style={{ padding: '28px 32px', maxWidth: '960px' }}>
 
-      {/* Estilos responsivos y hover */}
+      {/* Estilos responsivos y hover — sin columna Peso (v2 rev.2) */}
       <style>{`
         @media (max-width: 767px) {
-          .rt-col-steps, .rt-col-weight, .rt-col-status { display: none !important; }
-          .rt-th-steps, .rt-th-weight, .rt-th-status { display: none !important; }
+          .rt-col-steps, .rt-col-status { display: none !important; }
+          .rt-th-steps, .rt-th-status { display: none !important; }
         }
         .rt-tpl-row:hover td { background: var(--surface-2); }
         .rt-btn-icon:hover { background: var(--surface-2); color: var(--text); }
@@ -1250,21 +1707,26 @@ export function RouteTemplatesPage() {
           />
         </div>
 
-        {/* Filtro de categoría */}
-        <select
+        {/* Filtro de categoría — texto libre con sugerencias */}
+        <input
+          type="text"
+          list="filter-category-datalist"
           value={filterCategory}
           onChange={e => setFilterCategory(e.target.value)}
+          placeholder="Todas las categorías"
           style={{
             padding: '6px 8px',
             border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
             background: 'var(--surface)', color: 'var(--text)',
-            fontFamily: 'inherit', fontSize: '12px', cursor: 'pointer',
+            fontFamily: 'inherit', fontSize: '12px', minWidth: '160px',
           }}
           aria-label="Filtrar por categoría"
-        >
-          <option value="">Todas las categorías</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+          maxLength={50}
+          autoComplete="off"
+        />
+        <datalist id="filter-category-datalist">
+          {CATEGORIES.map(c => <option key={c} value={c} />)}
+        </datalist>
 
         {/* Contador */}
         {!loading && !error && (
@@ -1399,7 +1861,7 @@ export function RouteTemplatesPage() {
           </div>
         )}
 
-        {/* Tabla con datos (BLOQUE C) */}
+        {/* Tabla con datos (BLOQUE C) — sin columna Peso (v2 rev.2) */}
         {!loading && !error && filtered.length > 0 && (
           <div style={{ overflowX: 'auto' }}>
             <table
@@ -1412,9 +1874,8 @@ export function RouteTemplatesPage() {
                   <th scope="col" style={thStyle}>Plantilla</th>
                   <th scope="col" style={thStyle}>Categoría</th>
                   <th scope="col" style={{ ...thStyle, textAlign: 'end' }} className="rt-th-steps rt-col-steps">Pasos</th>
-                  <th scope="col" style={{ ...thStyle, textAlign: 'end' }} className="rt-th-weight rt-col-weight">Peso</th>
                   <th scope="col" style={{ ...thStyle, textAlign: 'center' }} className="rt-th-status rt-col-status">Estado</th>
-                  <th scope="col" style={{ ...thStyle, textAlign: 'end', width: '136px' }} aria-label="Acciones">Acciones</th>
+                  <th scope="col" style={{ ...thStyle, textAlign: 'end', width: '120px' }} aria-label="Acciones">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -1495,11 +1956,12 @@ export function RouteTemplatesPage() {
         />
       )}
 
-      {/* Modal nueva plantilla */}
+      {/* Modal nueva plantilla — se pasa la lista de plantillas para el selector de origen */}
       {showNewModal && (
         <NewTemplateModal
           onClose={() => setShowNewModal(false)}
           onCreated={handleCreated}
+          templates={templates}
         />
       )}
     </div>

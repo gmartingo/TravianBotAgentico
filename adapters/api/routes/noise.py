@@ -534,7 +534,7 @@ def _dest_to_response(dest: NoiseDestination) -> NoiseDestinationResponse:
         world_id=dest.world_id,
         url_pattern=dest.url_pattern,
         label=dest.label,
-        category=dest.category.value,
+        category=dest.category.value if hasattr(dest.category, "value") else str(dest.category),
         navigation_weight=dest.frequency_weight,   # alias RN-FW06
         is_safe=dest.is_safe,
         is_dead=dest.is_dead,

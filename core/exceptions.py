@@ -398,3 +398,49 @@ class NoiseStepError(TravianBotError):
         self.selector = selector
         self.reason = reason
         self.params = {"action": action, "selector": selector, "reason": reason}
+
+
+class WorldOrphanError(TravianBotError):
+    """
+    El mundo no tiene ninguna cuenta registrada asociada.
+
+    Se lanza desde _ensure_session cuando accounts_db.get_account_id_for_world
+    devuelve None: el mundo existe en BD pero no tiene cuenta asignada.
+    El handler HTTP lo convierte en HTTP 404 con detail legible.
+
+    Spec route-templates-developer-portal.md §v3.3.
+    """
+
+    error_code = "WORLD_ORPHAN"
+
+    def __init__(self, world_id: int) -> None:
+        super().__init__(f"Mundo {world_id} no tiene cuenta asociada.")
+        self.world_id = world_id
+        self.params = {"world_id": world_id}
+
+
+class ColdStartAbortError(TravianBotError):
+    """
+    El motor de ruido abortó porque el browser no está en una página válida
+    de Travian con sesión activa al comenzar la ejecución de una cadena atómica.
+
+    Causas típicas: about:blank, pestaña de otra web, pantalla de login,
+    sesión expirada.
+
+    El scheduler NO marca la noise_destination como is_dead=True por este fallo:
+    el fallo es de contexto (sesión no disponible), no de la ruta.
+    El scheduler reintenta en la siguiente ventana de tiempo.
+
+    Spec route-templates-developer-portal.md §v2-ARRANQUE-FRIO, CA-V2-17.
+    """
+
+    error_code = "COLD_START_ABORT"
+
+    def __init__(self, world_id: int = 0, current_url: str = "") -> None:
+        super().__init__(
+            f"Mundo {world_id}: browser no está en Travian (URL actual: '{current_url}'). "
+            "Abortando cadena de ruido — la sesión debe establecerse antes de ejecutar rutas."
+        )
+        self.world_id = world_id
+        self.current_url = current_url
+        self.params = {"world_id": world_id, "current_url": current_url}
