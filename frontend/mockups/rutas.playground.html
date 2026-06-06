@@ -11,24 +11,35 @@
     A — Cabecera de página: título "Catálogo de rutas" + descripción + botón "Nueva plantilla"
     B — Barra de filtros/búsqueda: texto libre + filtro por categoría (7 categorías)
     C — Tabla de plantillas (lista con datos): identificador, nombre, categoría, pasos, peso, estado, acciones
+        → Cada fila tiene un botón ▶ por fila (P1 — siempre visible).
+        → Al pulsar ▶: se expande una fila inline debajo con el resultado paso a paso.
+        → El ▶ usa el mundo elegido en la barra global J (sticky bottom).
     D — Tabla vacía (estado vacío: sin plantillas en el catálogo)
     E — Drawer de edición de plantilla (panel lateral): campos RO + editables + lista de pasos + wizard
     F — Modal "Clonar a mundo": selector de mundos + checkbox force + resultado bulk
-    G — Panel "Probar ruta": selector de mundo + resultado paso a paso (PathTestResult)
+    G — [OBSOLETO - v1] Panel "Probar ruta": selector de mundo propio + desplegable de índice + botón "Ejecutar"
+        ELIMINADO: provocaba error "path_index fuera de rango" en rutas compuestas.
+        Reemplazado por ▶ por fila (bloque C) + barra global J.
     H — Panel "Actualizar desde plantilla" (re-sync): listado de mundos con la plantilla + botón sync
     I — Aviso seed inicial: banner informativo de ~20 plantillas precargadas
 
+  BARRA FIJA (no arrastrable, sticky bottom):
+    J — WorldSelector bar: selector de mundo global + hint estado.
+        Compartido por todos los ▶ de la tabla. El usuario elige el mundo UNA vez.
+        Siempre visible cuando hay tabla. height: 48px, igual que AgentBottomBar de WorldSpace.
+
   VISTAS DEL SELECTOR:
-    1 — Lista con datos (bloques A + B + C visibles)
-    2 — Lista vacía (bloques A + B + D visibles)
-    3 — Drawer de edición abierto (bloque E visible)
-    4 — Modal clonar a mundo abierto (bloque F visible)
-    5 — Panel probar ruta (bloque G visible)
-    6 — Panel re-sync (bloque H visible)
-    7 — Banner seed + tabla inicial (bloques A + B + C + I visibles)
+    1 — Lista con datos (bloques A + B + C + barra J)
+    2 — Lista vacía (bloques A + B + D + barra J)
+    3 — Drawer de edición abierto (bloque E)
+    4 — Modal clonar a mundo abierto (bloque F)
+    5 — [NUEVO] Tabla con ▶ activo: fila expandida OK (bloques A + B + C + barra J — fila 1 expandida con resultado ok)
+    6 — Panel re-sync (bloque H)
+    7 — Banner seed + tabla inicial (bloques A + B + C + I + barra J)
+    8 — [NUEVO] Tabla con ▶ activo: fila expandida ERROR (bloques A + B + C + barra J — fila 2 expandida con resultado error)
 
   Spec funcional: docs/specs/route-templates-developer-portal.md
-  Spec de diseño: docs/design/ (pendiente de crear tras aprobación del mockup)
+  Spec de diseño: docs/design/route-test-interaction.md
 -->
 <html lang="es" dir="ltr">
 <head>
@@ -558,9 +569,126 @@ button,select,input,textarea{font-family:inherit;}
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ===== BOTÓN PLAY POR FILA ===== */
+/* El ▶ usa el mismo .btn-row-icon base que el resto de acciones de fila.
+   Estados visuales: normal (gris), ejecutando (spinner reemplaza icono),
+   resultado ok (success sutil), resultado error (danger sutil).
+   NO va en oro — botones monocromos según DESIGN.md §4 y §12. */
+.btn-play{
+  /* Heredado de .btn-row-icon: 28px × 28px, ghost, text-tertiary */
+  width:28px;height:28px;border:none;border-radius:var(--radius-sm);
+  background:transparent;color:var(--text-secondary);cursor:pointer;
+  display:grid;place-items:center;font-size:13px;flex-shrink:0;
+  transition:background var(--dur-fast),color var(--dur-fast);
+  min-height:44px;  /* target táctil ≥44px en coarse */
+  /* Visualmente 28px × 28px centrado dentro del target de 44px */
+  padding:8px;
+}
+.btn-play:hover{background:var(--surface-2);color:var(--text);}
+.btn-play:disabled{opacity:.4;cursor:not-allowed;}
+/* Estado: esta fila está ejecutando */
+.btn-play.running{color:var(--text-secondary);}
+/* Estado resultado ok — la fila completa recibe .row-ok */
+tr.row-ok .btn-play{color:var(--success);}
+tr.row-ok td{background:var(--success-subtle);}
+/* Estado resultado error — la fila completa recibe .row-err */
+tr.row-err .btn-play{color:var(--danger);}
+tr.row-err td{background:var(--danger-subtle);}
+
+/* ===== FILA DE RESULTADO INLINE (expandible debajo de la fila de plantilla) ===== */
+/* Una fila <tr class="test-expand-row"> se inserta dinámicamente tras la fila activa.
+   El contenido vive en un <td colspan="6"> con animación de altura. */
+.test-expand-row td{
+  padding:0;border-bottom:1px solid var(--border);
+}
+.test-expand-inner{
+  padding:12px 16px 14px 40px; /* sangría para alinear con el contenido de la fila padre */
+  background:var(--surface-2);
+  border-top:1px dashed var(--border-strong);
+  display:flex;flex-direction:column;gap:8px;
+}
+.test-expand-meta{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  font-size:12px;color:var(--text-secondary);margin-bottom:2px;
+}
+.test-expand-meta strong{color:var(--text);}
+.test-expand-steps{
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  overflow:hidden;background:var(--surface);
+}
+.test-expand-note{
+  font-size:11px;color:var(--text-tertiary);margin-top:2px;
+}
+/* Título de la sección inline */
+.test-expand-heading{
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-secondary);margin-bottom:4px;
+  display:flex;align-items:center;gap:6px;
+}
+
+/* ===== BARRA GLOBAL DE MUNDO (sticky bottom — bloque J) ===== */
+/* Patrón derivado de AgentBottomBar (DESIGN.md §19.4):
+   position:fixed; inset-inline:0; bottom:0; height:48px; z-index:200.
+   No es un .drag-block — es UI estructural siempre presente cuando hay tabla. */
+#world-bottom-bar{
+  position:fixed;inset-inline:0;bottom:0;height:48px;
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  padding-inline:16px;
+  z-index:200;
+  box-shadow:0 -1px 0 var(--border);
+  transition:background var(--dur-base) var(--ease);
+}
+.world-bar-label{
+  font-size:13px;font-weight:500;color:var(--text-secondary);
+  white-space:nowrap;flex-shrink:0;
+}
+.world-bar-select{
+  font-family:inherit;font-size:13px;padding:5px 10px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);color:var(--text);cursor:pointer;
+  max-width:360px;flex:1;min-width:0;
+  transition:border-color var(--dur-fast),outline var(--dur-fast);
+}
+.world-bar-select:focus{outline:2px solid var(--accent);outline-offset:2px;}
+/* Hint: sin mundo elegido */
+.world-bar-hint{
+  font-size:12px;color:var(--text-tertiary);
+  white-space:nowrap;flex-shrink:0;
+}
+.world-bar-hint.warn{
+  color:var(--accent-text);font-weight:500;
+}
+/* Divisor vertical */
+.world-bar-sep{
+  width:1px;height:20px;background:var(--border);flex-shrink:0;
+}
+/* Estado: ejecutando algún test */
+.world-bar-running{
+  display:flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--text-secondary);
+  flex-shrink:0;
+}
+/* Clearance en main-content para que la barra no tape el final de la tabla */
+.main-content-with-bar{
+  padding-bottom:64px; /* 48px barra + 16px extra */
+}
+
+/* ===== NOTA "OBSOLETO" para bloque G ===== */
+.obsolete-note{
+  border:1px dashed var(--border-strong);border-radius:var(--radius-md);
+  padding:16px 20px;background:var(--surface-2);
+}
+.obsolete-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-disabled);margin-bottom:8px;
+}
+.obsolete-note p{font-size:13px;color:var(--text-secondary);line-height:1.6;}
+
 /* ===== LAYOUT EXPORT PANEL ===== */
 #export-panel{
-  position:fixed;inset-inline-end:16px;bottom:80px;
+  position:fixed;inset-inline-end:16px;bottom:64px; /* 48px barra J + 16px margen */
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
   padding:14px;width:320px;z-index:400;display:none;
@@ -593,9 +721,12 @@ button,select,input,textarea{font-family:inherit;}
     <option value="2">2 — Lista vacía (catálogo sin plantillas)</option>
     <option value="3">3 — Drawer de edición de plantilla</option>
     <option value="4">4 — Modal "Clonar a mundo"</option>
-    <option value="5">5 — Panel "Probar ruta" con resultado</option>
+    <option value="5">5 — ▶ Resultado OK inline (fila 1 expandida)</option>
     <option value="6">6 — Panel "Re-sincronizar a mundos"</option>
     <option value="7">7 — Lista + banner seed inicial</option>
+    <option value="8">8 — ▶ Resultado ERROR inline (fila 2 expandida)</option>
+    <option value="9">9 — ▶ Ejecutando (spinner en fila 3)</option>
+    <option value="10">10 — Sin mundo elegido (▶ deshabilitados)</option>
   </select>
 
   <div class="toolbar-sep"></div>
@@ -665,8 +796,8 @@ button,select,input,textarea{font-family:inherit;}
       <div class="nav-version" aria-hidden="true">v0.1.0</div>
     </nav>
 
-    <!-- Contenido principal -->
-    <main class="main-content" id="main-content" aria-label="Catálogo de rutas">
+    <!-- Contenido principal — padding-bottom extra para que la barra J no tape el final -->
+    <main class="main-content main-content-with-bar" id="main-content" aria-label="Catálogo de rutas">
 
       <!-- CANVAS DE ARRASTRE -->
       <div class="drag-canvas" id="drag-canvas">
@@ -763,13 +894,17 @@ button,select,input,textarea{font-family:inherit;}
                     <th scope="col" class="tpl-col-weight right">Peso</th>
                     <!-- P2 -->
                     <th scope="col" class="tpl-col-status center">Estado</th>
-                    <!-- P1 — acciones siempre -->
-                    <th scope="col" style="width:120px;text-align:end;" aria-label="Acciones">Acciones</th>
+                    <!-- P1 — ▶ Probar siempre visible + resto de acciones -->
+                    <th scope="col" style="width:148px;text-align:end;" aria-label="Acciones">Acciones</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <!-- Fila 1 — MAP (segura) -->
-                  <tr>
+                <tbody id="tpl-tbody">
+
+                  <!-- ─── Iconos SVG reutilizados como <template> ─── -->
+                  <!-- (se definen en JS, los SVGs inline están abajo) -->
+
+                  <!-- ─── Fila 1 — MAP (segura) ─── estado base -->
+                  <tr id="row-1" data-template-id="map-explore" data-has-paths="true">
                     <td>
                       <button class="tpl-label" type="button" aria-label="Abrir plantilla map-explore">
                         Explorar el mapa
@@ -788,27 +923,59 @@ button,select,input,textarea{font-family:inherit;}
                     </td>
                     <td>
                       <div class="row-actions">
-                        <!-- Editar -->
+                        <!-- ▶ Probar — P1, siempre visible, primero en el flujo visual -->
+                        <button class="btn-play" id="play-row-1" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar map-explore en Chrome real">
+                          <!-- Icono play — se sustituye por spinner cuando ejecuta -->
+                          <svg id="play-icon-1" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
+                        <!-- Resto de acciones -->
                         <button class="btn-row-icon" type="button" title="Editar plantilla" aria-label="Editar map-explore">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
-                        <!-- Probar -->
-                        <button class="btn-row-icon" type="button" title="Probar ruta en Chrome real" aria-label="Probar map-explore">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                        </button>
-                        <!-- Clonar a mundo -->
                         <button class="btn-row-icon" type="button" title="Clonar a mundo" aria-label="Clonar map-explore a un mundo">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
-                        <!-- Borrar -->
                         <button class="btn-row-icon danger" type="button" title="Eliminar plantilla" aria-label="Eliminar map-explore">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                         </button>
                       </div>
                     </td>
                   </tr>
-                  <!-- Fila 2 — BUILDING_VIEW (segura) -->
-                  <tr>
+                  <!-- Fila de resultado inline para row-1 (oculta por defecto) -->
+                  <tr class="test-expand-row" id="expand-row-1" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner">
+                        <div class="test-expand-heading">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                          Resultado — map-explore
+                          <span class="badge badge-safe" style="margin-inline-start:4px;">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            OK
+                          </span>
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts1.travian.com</strong></span>
+                          <span>Ancla: <code style="font-family:var(--font-mono);">/dorf2.php</code></span>
+                        </div>
+                        <div class="test-expand-steps">
+                          <div class="test-step-row">
+                            <span class="test-step-order">0</span>
+                            <svg class="test-step-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">NAVIGATE</span>
+                            <span class="test-step-selector">/karte.php</span>
+                            <span style="font-family:var(--font-mono);font-size:11px;color:var(--info);">/karte.php</span>
+                          </div>
+                        </div>
+                        <div class="test-expand-note">El browser queda en la última página visitada durante el test.</div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 2 — BUILDING_VIEW ─── -->
+                  <tr id="row-2" data-template-id="rally-point-view" data-has-paths="true">
                     <td>
                       <button class="tpl-label" type="button" aria-label="Abrir plantilla rally-point-view">
                         Rally Point — ver edificio
@@ -827,11 +994,14 @@ button,select,input,textarea{font-family:inherit;}
                     </td>
                     <td>
                       <div class="row-actions">
+                        <button class="btn-play" id="play-row-2" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar rally-point-view en Chrome real">
+                          <svg id="play-icon-2" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
                         <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar rally-point-view">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button class="btn-row-icon" type="button" title="Probar" aria-label="Probar rally-point-view">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </button>
                         <button class="btn-row-icon" type="button" title="Clonar a mundo" aria-label="Clonar rally-point-view">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -842,8 +1012,45 @@ button,select,input,textarea{font-family:inherit;}
                       </div>
                     </td>
                   </tr>
-                  <!-- Fila 3 — REPORTS (peso alto) -->
-                  <tr>
+                  <!-- Resultado inline fila 2 — ERROR -->
+                  <tr class="test-expand-row" id="expand-row-2" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner">
+                        <div class="test-expand-heading">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                          Resultado — rally-point-view
+                          <span class="badge badge-dead" style="margin-inline-start:4px;">
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            Error en paso 1
+                          </span>
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts1.travian.com</strong></span>
+                          <span>Ancla: <code style="font-family:var(--font-mono);">/dorf2.php</code></span>
+                        </div>
+                        <div class="test-expand-steps">
+                          <div class="test-step-row">
+                            <span class="test-step-order">0</span>
+                            <svg class="test-step-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">CLICK</span>
+                            <span class="test-step-selector">a[href*='gid=13']</span>
+                            <span style="font-family:var(--font-mono);font-size:11px;color:var(--info);">/build.php?gid=13</span>
+                          </div>
+                          <div class="test-step-row">
+                            <span class="test-step-order">1</span>
+                            <svg class="test-step-err" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            <span class="step-action-badge" style="font-size:10px;">WAIT</span>
+                            <span class="test-step-selector">.build-title</span>
+                            <span class="test-step-reason">Selector .build-title no encontrado tras 5000 ms.</span>
+                          </div>
+                        </div>
+                        <div class="test-expand-note">El browser queda en la última página visitada durante el test.</div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 3 — REPORTS ─── -->
+                  <tr id="row-3" data-template-id="reports-inbox" data-has-paths="true">
                     <td>
                       <button class="tpl-label" type="button" aria-label="Abrir plantilla reports-inbox">
                         Bandeja de reportes
@@ -862,11 +1069,14 @@ button,select,input,textarea{font-family:inherit;}
                     </td>
                     <td>
                       <div class="row-actions">
+                        <button class="btn-play" id="play-row-3" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar reports-inbox en Chrome real">
+                          <svg id="play-icon-3" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
                         <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar reports-inbox">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button class="btn-row-icon" type="button" title="Probar" aria-label="Probar reports-inbox">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </button>
                         <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar reports-inbox">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -877,8 +1087,24 @@ button,select,input,textarea{font-family:inherit;}
                       </div>
                     </td>
                   </tr>
-                  <!-- Fila 4 — PLAYER_PROFILE (sin pasos — placeholder) -->
-                  <tr>
+                  <!-- Resultado inline fila 3 — oculto -->
+                  <tr class="test-expand-row" id="expand-row-3" style="display:none;">
+                    <td colspan="6">
+                      <div class="test-expand-inner" id="expand-inner-3">
+                        <!-- Se rellena con spinner cuando la vista es "ejecutando" -->
+                        <div class="test-expand-heading">
+                          <span class="spinner"></span>
+                          Ejecutando reports-inbox…
+                        </div>
+                        <div class="test-expand-meta">
+                          <span>Mundo: <strong>ts5.travian.com</strong></span>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  <!-- ─── Fila 4 — PLAYER_PROFILE (sin pasos) ─── -->
+                  <tr id="row-4" data-template-id="player-own-profile" data-has-paths="false">
                     <td>
                       <button class="tpl-label" type="button" aria-label="Abrir plantilla player-own-profile">
                         Perfil propio
@@ -887,7 +1113,6 @@ button,select,input,textarea{font-family:inherit;}
                       <div class="tpl-url" style="color:var(--accent-text);font-style:italic;">URL dinámica</div>
                     </td>
                     <td><span class="badge badge-PLAYER_PROFILE">PLAYER_PROFILE</span></td>
-                    <!-- Sin pasos: mostrado en color atenuado -->
                     <td class="tpl-col-steps" style="text-align:end;"><span class="num-val" style="color:var(--text-tertiary);">0</span></td>
                     <td class="tpl-col-weight" style="text-align:end;"><span class="num-val">1.0</span></td>
                     <td class="tpl-col-status" style="text-align:center;">
@@ -898,11 +1123,17 @@ button,select,input,textarea{font-family:inherit;}
                     </td>
                     <td>
                       <div class="row-actions">
+                        <!-- ▶ deshabilitado: sin pasos no se puede probar -->
+                        <button class="btn-play" id="play-row-4" type="button"
+                          disabled
+                          title="Sin pasos de navegación — añade pasos antes de probar"
+                          aria-label="Sin pasos — no se puede probar player-own-profile"
+                          aria-disabled="true">
+                          <svg id="play-icon-4" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
                         <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar player-own-profile">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button class="btn-row-icon" type="button" title="Probar" aria-label="Probar player-own-profile" disabled style="opacity:.4;cursor:not-allowed;" title="Sin pasos — añade pasos antes de probar">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </button>
                         <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar player-own-profile">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -913,8 +1144,9 @@ button,select,input,textarea{font-family:inherit;}
                       </div>
                     </td>
                   </tr>
-                  <!-- Fila 5 — MESSAGES -->
-                  <tr>
+
+                  <!-- ─── Fila 5 — MESSAGES ─── -->
+                  <tr id="row-5" data-template-id="messages-inbox" data-has-paths="true">
                     <td>
                       <button class="tpl-label" type="button" aria-label="Abrir plantilla messages-inbox">
                         Bandeja de mensajes
@@ -933,11 +1165,14 @@ button,select,input,textarea{font-family:inherit;}
                     </td>
                     <td>
                       <div class="row-actions">
+                        <button class="btn-play" id="play-row-5" type="button"
+                          title="Probar ruta con el mundo elegido abajo"
+                          aria-label="Probar messages-inbox en Chrome real">
+                          <svg id="play-icon-5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                        <div class="world-bar-sep" style="height:16px;margin-inline:2px;"></div>
                         <button class="btn-row-icon" type="button" title="Editar" aria-label="Editar messages-inbox">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button class="btn-row-icon" type="button" title="Probar" aria-label="Probar messages-inbox">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </button>
                         <button class="btn-row-icon" type="button" title="Clonar" aria-label="Clonar messages-inbox">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -948,6 +1183,9 @@ button,select,input,textarea{font-family:inherit;}
                       </div>
                     </td>
                   </tr>
+                  <!-- Resultado inline fila 5 — oculto -->
+                  <tr class="test-expand-row" id="expand-row-5" style="display:none;"><td colspan="6"></td></tr>
+
                 </tbody>
               </table>
             </div>
@@ -1305,52 +1543,26 @@ button,select,input,textarea{font-family:inherit;}
         </div>
 
         <!-- =====================================================================
-             BLOQUE G — Panel "Probar ruta en Chrome real"
-             Resultado paso a paso de EP-RT10 (mismo shape que EP-N14 PathTestResult)
-             Estado: OK global con un paso fallido para mostrar ambos estados
+             BLOQUE G — [OBSOLETO] Panel "Probar ruta" (v1)
+             Tenía: selector de mundo propio + desplegable path_index + botón "Ejecutar".
+             ELIMINADO porque provocaba error "path_index N fuera de rango / 0 path(s)"
+             en rutas compuestas (sin path propio: su recorrido vive en la cadena raíz→hoja).
+
+             REEMPLAZADO POR:
+             - Botón ▶ por fila en el bloque C (colum. Acciones, P1 siempre visible)
+             - Barra global de mundo J (sticky bottom bar)
+             - Resultado inline expandible bajo la fila activa
              ===================================================================== -->
         <div class="drag-block" id="block-G" data-block="G"
              style="top:0;left:0;display:none;min-width:440px;max-width:560px;">
           <div class="drag-handle"><span class="drag-handle-dots">· · · · ·</span></div>
-          <div class="card" style="padding:0;overflow:hidden;">
-            <!-- Cabecera del panel -->
-            <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface-2);">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              <span style="font-size:14px;font-weight:600;flex:1;">Resultado del test — rally-point-view</span>
-              <!-- Indicador overall: error -->
-              <span class="badge badge-dead">
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                Error en paso 1
-              </span>
+          <div class="obsolete-note">
+            <div class="obsolete-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Bloque G — Obsoleto (v1)
             </div>
-            <!-- Meta: mundo + URL de anclaje -->
-            <div style="padding:10px 18px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-secondary);display:flex;gap:16px;flex-wrap:wrap;">
-              <span>Mundo: <strong style="color:var(--text);">ts1.travian.com</strong></span>
-              <span>Ancla: <code style="font-family:var(--font-mono);color:var(--text);">/dorf2.php</code></span>
-            </div>
-            <!-- Pasos -->
-            <div class="test-result-panel" style="border:none;border-radius:0;">
-              <!-- Paso 0: OK -->
-              <div class="test-step-row">
-                <span class="test-step-order">0</span>
-                <svg class="test-step-ok" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-                <span class="step-action-badge" style="font-size:10px;">CLICK</span>
-                <span class="test-step-selector">a[href*='gid=13']</span>
-                <span style="font-family:var(--font-mono);font-size:11px;color:var(--info);">/build.php?gid=13</span>
-              </div>
-              <!-- Paso 1: error -->
-              <div class="test-step-row">
-                <span class="test-step-order">1</span>
-                <svg class="test-step-err" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                <span class="step-action-badge" style="font-size:10px;">WAIT</span>
-                <span class="test-step-selector">.build-title</span>
-                <span class="test-step-reason">Selector .build-title no encontrado tras 5000 ms.</span>
-              </div>
-            </div>
-            <!-- Nota browser -->
-            <div style="padding:10px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text-tertiary);">
-              El browser queda en la última página visitada durante el test.
-            </div>
+            <p>Este panel ("Probar ruta") ha sido eliminado del diseño porque usaba un <code style="font-family:var(--font-mono);font-size:12px;">path_index</code> compartido que provocaba el error <em>"path_index N fuera de rango / 0 path(s)"</em> en rutas compuestas.</p>
+            <p style="margin-top:8px;">La nueva interacción usa un <strong>▶ por fila</strong> en la tabla (bloque C) y una <strong>barra de mundo global</strong> fija abajo (bloque J), que no dependen de índices.</p>
           </div>
         </div>
 
@@ -1439,6 +1651,45 @@ button,select,input,textarea{font-family:inherit;}
   </div><!-- /app-shell -->
 </div><!-- /app-wrapper -->
 
+<!-- =====================================================================
+     BLOQUE J — Barra global de mundo (sticky bottom)
+     Siempre visible cuando hay tabla. Compartida por todos los ▶ de la tabla.
+     No es arrastrable — es UI estructural (como AgentBottomBar en WorldSpace).
+     El usuario elige el mundo UNA vez; todos los ▶ lo usan.
+
+     Estados:
+     - Sin mundo elegido (value=""): ▶ deshabilitados, hint "Elige un mundo para probar"
+     - Con mundo elegido: ▶ habilitados, hint vacío o nombre del mundo
+     - Ejecutando: indicador de spinner + nombre de la ruta en ejecución
+     ===================================================================== -->
+<div id="world-bottom-bar" role="region" aria-label="Selector global de mundo para test de rutas">
+  <!-- Icono globo -->
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style="color:var(--text-secondary);flex-shrink:0;">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M12 3c-2 3-3 5-3 9s1 6 3 9"/>
+    <path d="M12 3c2 3 3 5 3 9s-1 6-3 9"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+  </svg>
+  <span class="world-bar-label">Mundo para test:</span>
+  <select id="world-bar-select" class="world-bar-select" aria-label="Elegir mundo para ejecutar tests de ruta">
+    <option value="">— Elige un mundo —</option>
+    <option value="1">ts1.travian.com (cuenta@email.com)</option>
+    <option value="2">ts5.travian.com (otra@email.com)</option>
+    <option value="3">ts4.travian.es (tercera@email.com)</option>
+  </select>
+  <div class="world-bar-sep"></div>
+  <!-- Hint dinámico: sin mundo → aviso, con mundo → vacío, ejecutando → spinner+nombre -->
+  <span class="world-bar-hint warn" id="world-bar-hint">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Elige un mundo para activar los ▶
+  </span>
+  <!-- Estado "ejecutando" (oculto por defecto) -->
+  <div class="world-bar-running" id="world-bar-running" style="display:none;" aria-live="polite">
+    <span class="spinner"></span>
+    <span id="world-bar-running-label">Ejecutando ruta…</span>
+  </div>
+</div>
+
 <!-- ===== PANEL DE EXPORTACIÓN DE LAYOUT ===== -->
 <div id="export-panel" role="dialog" aria-label="Exportar layout" aria-modal="true">
   <h3>Layout exportado (JSON)</h3>
@@ -1453,29 +1704,49 @@ button,select,input,textarea{font-family:inherit;}
 /* ===== CONFIGURACIÓN DE VISTAS =====
    Cada vista define qué bloques son visibles y sus posiciones iniciales.
    Las posiciones son las del layout inicial; el usuario las puede reordenar en modo Editar.
+   Las vistas 5, 8, 9, 10 muestran estados de interacción del nuevo ▶ por fila.
 */
 const VIEWS = {
-  /* Vista 1 — Lista con datos */
+  /* Vista 1 — Lista con datos (estado base, sin test activo) */
   '1': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
-    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} } },
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: null },
   /* Vista 2 — Lista vacía */
   '2': { visible: ['A','B','D'], hidden: ['C','E','F','G','H','I'],
-    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, D:{top:168,left:0,width:'100%'} } },
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, D:{top:168,left:0,width:'100%'} },
+    testState: null },
   /* Vista 3 — Drawer de edición */
   '3': { visible: ['C','E'], hidden: ['A','B','D','F','G','H','I'],
-    positions: { C:{top:0,left:0,width:'54%'}, E:{top:0,left:'58%'} } },
+    positions: { C:{top:0,left:0,width:'54%'}, E:{top:0,left:'58%'} },
+    testState: null },
   /* Vista 4 — Modal clonar */
   '4': { visible: ['A','C','F'], hidden: ['B','D','E','G','H','I'],
-    positions: { A:{top:0,left:0,width:'100%'}, C:{top:108,left:0,width:'100%'}, F:{top:520,left:'50%',transform:'translateX(-50%)'} } },
-  /* Vista 5 — Probar ruta */
-  '5': { visible: ['E','G'], hidden: ['A','B','C','D','F','H','I'],
-    positions: { E:{top:0,left:0}, G:{top:0,left:'55%'} } },
+    positions: { A:{top:0,left:0,width:'100%'}, C:{top:108,left:0,width:'100%'}, F:{top:520,left:'50%',transform:'translateX(-50%)'} },
+    testState: null },
+  /* Vista 5 — [NUEVO] ▶ activo: resultado OK en fila 1 */
+  '5': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'1', expandRow:'1', rowClass:'row-ok' } },
   /* Vista 6 — Re-sync */
   '6': { visible: ['H'], hidden: ['A','B','C','D','E','F','G','I'],
-    positions: { H:{top:0,left:0,width:'100%'} } },
+    positions: { H:{top:0,left:0,width:'100%'} },
+    testState: null },
   /* Vista 7 — Lista + banner seed */
   '7': { visible: ['A','I','C'], hidden: ['B','D','E','F','G','H'],
-    positions: { A:{top:0,left:0,width:'100%'}, I:{top:108,left:0,width:'100%'}, C:{top:220,left:0,width:'100%'} } },
+    positions: { A:{top:0,left:0,width:'100%'}, I:{top:108,left:0,width:'100%'}, C:{top:220,left:0,width:'100%'} },
+    testState: null },
+  /* Vista 8 — [NUEVO] ▶ activo: resultado ERROR en fila 2 */
+  '8': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'1', expandRow:'2', rowClass:'row-err' } },
+  /* Vista 9 — [NUEVO] ▶ ejecutando: spinner en fila 3 */
+  '9': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'2', expandRow:'3', rowClass:null, running:true } },
+  /* Vista 10 — [NUEVO] Sin mundo elegido: ▶ deshabilitados */
+  '10': { visible: ['A','B','C'], hidden: ['D','E','F','G','H','I'],
+    positions: { A:{top:0,left:0,width:'100%'}, B:{top:108,left:0,width:'100%'}, C:{top:168,left:0,width:'100%'} },
+    testState: { worldValue:'', expandRow:null, rowClass:null } },
 };
 
 /* ===== ESTADO ===== */
@@ -1507,6 +1778,103 @@ document.getElementById('tb-theme-toggle').addEventListener('click', () => {
   applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
 });
 
+/* ===== LÓGICA DE ESTADO DEL TEST ===== */
+
+// Todos los IDs de fila (sin expand)
+const ROW_IDS = ['1','2','3','4','5'];
+
+/**
+ * Resetea todos los estados visuales del test:
+ * - Oculta todas las filas expand
+ * - Quita clases row-ok / row-err de todas las filas
+ * - Restaura iconos ▶ a todas las filas con paths
+ * - Habilita todos los ▶ con paths
+ * - Limpia el hint de la barra
+ * - Oculta el indicador "ejecutando"
+ */
+function resetTestState() {
+  ROW_IDS.forEach(id => {
+    const row = document.getElementById('row-' + id);
+    const expandRow = document.getElementById('expand-row-' + id);
+    const playBtn = document.getElementById('play-row-' + id);
+    const playIcon = document.getElementById('play-icon-' + id);
+    if (expandRow) expandRow.style.display = 'none';
+    if (row) { row.classList.remove('row-ok','row-err'); }
+    if (playBtn && playIcon) {
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (!hasPaths) return;
+      playBtn.disabled = false;
+      playBtn.classList.remove('running');
+      // Restaurar icono play
+      playIcon.outerHTML = `<svg id="play-icon-${id}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+    }
+  });
+  document.getElementById('world-bar-running').style.display = 'none';
+  document.getElementById('world-bar-hint').style.display = '';
+}
+
+/**
+ * Aplica el estado de test descrito por la vista.
+ * testState: { worldValue, expandRow, rowClass, running? }
+ */
+function applyTestState(testState) {
+  resetTestState();
+  if (!testState) return;
+
+  // 1. Selector de mundo en la barra
+  const worldSelect = document.getElementById('world-bar-select');
+  worldSelect.value = testState.worldValue || '';
+
+  // 2. Hint de la barra y estado ▶
+  const hint = document.getElementById('world-bar-hint');
+  if (!testState.worldValue) {
+    // Sin mundo: hint de aviso, todos los ▶ deshabilitados (excepto los que ya están por no tener paths)
+    hint.style.display = '';
+    hint.classList.add('warn');
+    hint.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Elige un mundo para activar los ▶`;
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = true;
+    });
+    return;
+  } else {
+    hint.style.display = 'none';
+  }
+
+  // 3. Fila expandida
+  if (testState.expandRow) {
+    const expandRow = document.getElementById('expand-row-' + testState.expandRow);
+    const dataRow = document.getElementById('row-' + testState.expandRow);
+    if (expandRow) expandRow.style.display = '';
+    if (dataRow && testState.rowClass) {
+      dataRow.classList.add(testState.rowClass);
+    }
+  }
+
+  // 4. Estado "ejecutando" en la barra y spinner en el botón
+  if (testState.running && testState.expandRow) {
+    const playBtn = document.getElementById('play-row-' + testState.expandRow);
+    const playIcon = document.getElementById('play-icon-' + testState.expandRow);
+    if (playBtn) {
+      playBtn.disabled = true;
+      playBtn.classList.add('running');
+    }
+    if (playIcon) {
+      // Reemplazar el icono por un spinner inline
+      playIcon.outerHTML = `<span class="spinner" id="play-icon-${testState.expandRow}" aria-label="Ejecutando" style="width:12px;height:12px;border-width:2px;"></span>`;
+    }
+    const running = document.getElementById('world-bar-running');
+    const runningLabel = document.getElementById('world-bar-running-label');
+    const dataRow = document.getElementById('row-' + testState.expandRow);
+    const tplId = dataRow ? dataRow.dataset.templateId : 'ruta';
+    running.style.display = 'flex';
+    runningLabel.textContent = `Ejecutando ${tplId}…`;
+  }
+}
+
 /* ===== VISTAS ===== */
 function applyView(viewId) {
   const v = VIEWS[viewId];
@@ -1528,6 +1896,11 @@ function applyView(viewId) {
     const el = document.getElementById('block-' + id);
     if (el) el.style.display = 'none';
   });
+  // Estado del test (nuevo)
+  applyTestState(v.testState || null);
+  // Mostrar/ocultar barra J según si hay tabla con ▶ en la vista
+  const hasTable = v.visible.includes('C') || v.visible.includes('D');
+  document.getElementById('world-bottom-bar').style.display = hasTable ? 'flex' : 'none';
 }
 document.getElementById('view-select').addEventListener('change', e => {
   applyView(e.target.value);
@@ -1536,6 +1909,35 @@ document.getElementById('view-select').addEventListener('change', e => {
 });
 // Inicializar con vista 1
 applyView('1');
+
+/* ===== BARRA DE MUNDO — interactividad ===== */
+document.getElementById('world-bar-select').addEventListener('change', function() {
+  const val = this.value;
+  const hint = document.getElementById('world-bar-hint');
+  if (!val) {
+    hint.style.display = '';
+    hint.classList.add('warn');
+    hint.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Elige un mundo para activar los ▶`;
+    // Deshabilitar ▶ con paths
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = true;
+    });
+  } else {
+    hint.style.display = 'none';
+    // Habilitar ▶ con paths
+    ROW_IDS.forEach(id => {
+      const row = document.getElementById('row-' + id);
+      const playBtn = document.getElementById('play-row-' + id);
+      if (!playBtn) return;
+      const hasPaths = row && row.dataset.hasPaths === 'true';
+      if (hasPaths) playBtn.disabled = false;
+    });
+  }
+});
 
 /* ===== MODO EDICIÓN ===== */
 function toggleEditMode() {

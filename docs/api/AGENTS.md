@@ -1263,7 +1263,7 @@ curl -X POST http://localhost:8000/worlds/3/noise/apply-templates \
 
 **Response OK (200):** `{overall:"ok"|"error", aborted_at_step, anchor_navigated_to, steps[{step_order, action, selector, status, reason, current_url}], browser_note}`. HTTP 200 aunque `overall="error"`.
 
-**Errores:** `401` Fernet indescifrables / login fallido · `404` plantilla/mundo/sin cuenta asociada · `409` browser ocupado · `422` `path_index` fuera de rango · `500`.
+**Errores:** `401` Fernet indescifrables / login fallido · `404` plantilla/mundo/sin cuenta asociada · `409 BROWSER_BUSY` browser ocupado con otra tarea · `409 COLD_START_ABORT` Chrome no está en página de Travian (detail incluye URL actual; llevar Chrome al mundo y reintentar) · `422` `path_index` fuera de rango · `500`.
 
 **Nota v3:** si no hay sesión activa, se hace login automático. La sesión se mantiene entre tests (no se cierra). Para cerrarla usar EP-RT12.
 

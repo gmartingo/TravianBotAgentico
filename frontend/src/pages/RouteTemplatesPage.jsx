@@ -11,7 +11,7 @@
  *  D — Estado vacío (sin plantillas)
  *  E — Drawer de edición (reutiliza NoiseDestinationDrawer mode="template")
  *  F — Modal "Clonar a mundo"
- *  G — Panel resultado del test (reutiliza PathTestResultPanel)
+ *  G — [ELIMINADO] Panel resultado del test — reemplazado por ▶ inline + barra J. Ver spec route-test-interaction.md
  *  H — Panel re-sync (mundos con la plantilla, botón Sincronizar)
  *  I — Banner seed inicial (se muestra solo la primera vez)
  *
@@ -29,7 +29,9 @@ import { useI18n } from '../i18n/index.jsx'
 import { api, ApiError } from '../api/client.js'
 import { Spinner, showToast } from '../components/ui/uiUtils.jsx'
 import { NoiseDestinationDrawer } from '../components/world/noise/NoiseDestinationDrawer.jsx'
-import { PathTestResultPanel } from '../components/world/noise/PathTestResultPanel.jsx'
+// PathTestResultPanel (eliminado en esta versión): el resultado del test se renderiza inline
+// en TestExpandRow (dentro de TemplateRow) sin necesidad del panel separado.
+// Ver spec: docs/design/route-test-interaction.md §8.
 import { NoiseCategoryBadge } from '../components/world/noise/NoiseDestinationsTable.jsx'
 import { ConfirmDeleteModal } from '../components/ui/ConfirmDeleteModal.jsx'
 import { CategoryCombobox } from '../components/ui/CategoryCombobox.jsx'
@@ -88,6 +90,17 @@ function IconTrash({ size = 13 }) {
       <path d="M19 6l-1 14H6L5 6" />
       <path d="M10 11v6M14 11v6" />
       <path d="M9 6V4h6v2" />
+    </svg>
+  )
+}
+
+function IconX({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   )
 }
@@ -642,7 +655,7 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
             <option value="">— Seleccionar mundo —</option>
             {worlds.map(w => (
               <option key={w.id} value={w.id}>
-                {w.server_url} {w.account_email ? `(${w.account_email})` : ''}
+                {w.server} {w.account_email ? `(${w.account_email})` : ''}
               </option>
             ))}
           </select>
@@ -655,7 +668,7 @@ function CloneToWorldModal({ template, worlds, onClose, onCloned }) {
               htmlFor="clone-nav-weight"
               style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}
             >
-              Frecuencia en {selectedWorld?.server_url ?? 'este mundo'}
+              Frecuencia en {selectedWorld?.server ?? 'este mundo'}
               <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginInlineStart: '6px' }}>0.1 – 5.0</span>
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -899,275 +912,14 @@ function InheritedStepsPanel({ templateId, originTemplateId }) {
   )
 }
 
-// ── Panel "Probar ruta" (v3) ───────────────────────────────────────────────────
-// v3: muestra estado de sesión del mundo seleccionado + botón "Cerrar sesión" (EP-RT12).
-// La sesión persiste entre pruebas; ensure_session en el backend hace login on-demand.
+// ── Panel "Probar ruta" (ELIMINADO — BLOQUE G obsoleto) ──────────────────────
+// Reemplazado por: ▶ por fila + TestExpandRow (inline) + WorldBottomBar (barra J).
+// Spec: docs/design/route-test-interaction.md
+// La función TestRoutePanel ha sido eliminada. El estado de sesión y el selector de mundo
+// ahora viven en WorldBottomBar (global); el resultado del test vive en TestExpandRow (por fila).
+// ─────────────────────────────────────────────────────────────────────────────────────────────
 
-function TestRoutePanel({ template, worlds, onClose }) {
-  const [worldId, setWorldId] = useState('')
-  const [pathIndex, setPathIndex] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)
-  const [durationMs, setDurationMs] = useState(null)
-  const [apiError, setApiError] = useState(null)
-  const closeRef = useRef(null)
 
-  // Estado de sesión del mundo seleccionado (v3)
-  const [sessionStatus, setSessionStatus] = useState(null) // null | { active: boolean, state: string }
-  const [loadingSession, setLoadingSession] = useState(false)
-  const [closingSession, setClosingSession] = useState(false)
-
-  const paths = template?.paths ?? []
-  const hasPaths = paths.length > 0
-  const currentPath = paths[pathIndex]
-
-  // Cargar estado de sesión REAL cuando se selecciona un mundo.
-  // Antes usaba getAgentStatus (estado del AGENTE), que daba "cerrada" aunque el bot
-  // tuviera el Chrome abierto vía ensure_session. Ahora consulta la SESIÓN real
-  // (SessionRegistry.is_active) con getSession(account_id, world_id).
-  useEffect(() => {
-    if (!worldId) { setSessionStatus(null); return }
-    const w = worlds.find(x => String(x.id) === String(worldId))
-    if (!w || w.account_id == null) { setSessionStatus(null); return }
-    setLoadingSession(true)
-    api.getSession(w.account_id, parseInt(worldId))
-      .then(status => {
-        setSessionStatus({
-          active: status?.active === true,
-          state: status?.active ? 'session_open' : 'closed',
-        })
-      })
-      .catch(() => setSessionStatus(null)) // No es crítico si falla
-      .finally(() => setLoadingSession(false))
-  }, [worldId, worlds])
-
-  async function handleTest() {
-    if (!worldId || !hasPaths) return
-    setLoading(true)
-    setResult(null)
-    setApiError(null)
-    const t0 = Date.now()
-    try {
-      const res = await api.testRouteTemplate(template.id, {
-        world_id: parseInt(worldId),
-        path_index: pathIndex,
-      })
-      setDurationMs(Date.now() - t0)
-      setResult(res)
-      // Tras el test, la sesión puede haberse abierto por ensure_session — refrescar estado
-      setSessionStatus(prev => prev ? { ...prev, active: true } : { active: true, state: 'session_open' })
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setApiError(err.detail)
-      } else {
-        setApiError('Error de red')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleCloseSession() {
-    if (!worldId || closingSession) return
-    setClosingSession(true)
-    try {
-      await api.closeWorldSession(parseInt(worldId))
-      setSessionStatus(prev => prev ? { ...prev, active: false } : { active: false, state: 'closed' })
-      showToast('Sesión de Chrome cerrada correctamente')
-    } catch (err) {
-      showToast(err instanceof ApiError ? err.detail : 'Error al cerrar la sesión')
-    } finally {
-      setClosingSession(false)
-    }
-  }
-
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-md)', overflow: 'hidden',
-      marginTop: '16px',
-    }}>
-      {/* Cabecera */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '10px 16px', background: 'var(--surface-2)',
-        borderBottom: '1px solid var(--border)',
-      }}>
-        <span style={{ fontSize: '13px', fontWeight: 600, flex: 1 }}>
-          Probar ruta en Chrome real
-        </span>
-        <button
-          type="button" onClick={onClose}
-          aria-label="Cerrar panel de prueba"
-          style={{
-            width: '28px', height: '28px', border: 'none', background: 'transparent',
-            cursor: 'pointer', color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          ×
-        </button>
-      </div>
-
-      {/* Aviso: plantilla sin rutas → nada que probar (EC-RT05) */}
-      {!hasPaths && (
-        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '12px 16px 0', margin: 0 }}>
-          Esta plantilla no tiene rutas definidas, así que no hay nada que probar.
-          Añade al menos una ruta (con sus pasos) editando la plantilla antes de ejecutar el test.
-        </p>
-      )}
-
-      {/* Controles */}
-      <div style={{ padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {/* Mundo + estado de sesión (v3) */}
-        <div style={{ flex: '1 1 200px' }}>
-          <label
-            htmlFor="test-world-select"
-            style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}
-          >
-            Mundo
-          </label>
-          <select
-            id="test-world-select"
-            value={worldId}
-            onChange={e => { setWorldId(e.target.value); setResult(null); setApiError(null) }}
-            style={{
-              width: '100%', padding: '6px 10px',
-              border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
-              background: 'var(--surface)', color: worldId ? 'var(--text)' : 'var(--text-tertiary)',
-              fontFamily: 'inherit', fontSize: '12px', cursor: 'pointer',
-            }}
-            aria-label="Seleccionar mundo para el test"
-          >
-            <option value="">— Elegir mundo —</option>
-            {worlds.map(w => (
-              <option key={w.id} value={w.id}>
-                {w.server_url} {w.account_email ? `(${w.account_email})` : ''}
-              </option>
-            ))}
-          </select>
-
-          {/* Estado de sesión (v3) — debajo del selector de mundo */}
-          {worldId && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-              {loadingSession ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                  <Spinner size={10} /> Verificando sesión…
-                </span>
-              ) : sessionStatus ? (
-                <>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 500 }}>
-                    <span style={{
-                      width: '7px', height: '7px', borderRadius: '50%',
-                      background: sessionStatus.active ? 'var(--success)' : 'var(--text-disabled)',
-                      flexShrink: 0,
-                    }} aria-hidden="true" />
-                    <span style={{ color: sessionStatus.active ? 'var(--success)' : 'var(--text-tertiary)' }}>
-                      Sesión {sessionStatus.active ? 'abierta' : 'cerrada'}
-                    </span>
-                  </span>
-                  {/* Botón Cerrar sesión — visible solo si hay sesión activa */}
-                  {sessionStatus.active && (
-                    <button
-                      type="button"
-                      onClick={handleCloseSession}
-                      disabled={closingSession || loading}
-                      aria-label="Cerrar sesión Chrome de este mundo"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '4px',
-                        height: '22px', padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        background: 'var(--surface)', color: 'var(--text-secondary)',
-                        borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: '11px',
-                        cursor: (closingSession || loading) ? 'not-allowed' : 'pointer',
-                        opacity: (closingSession || loading) ? 0.6 : 1,
-                      }}
-                    >
-                      {closingSession ? <Spinner size={9} /> : null}
-                      {closingSession ? 'Cerrando…' : 'Cerrar sesión'}
-                    </button>
-                  )}
-                  {!sessionStatus.active && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                      — el test abrirá la sesión automáticamente
-                    </span>
-                  )}
-                </>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        {/* Path index (solo si hay más de 1 path) */}
-        {paths.length > 1 && (
-          <div style={{ flex: '0 0 120px' }}>
-            <label
-              htmlFor="test-path-select"
-              style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '4px' }}
-            >
-              Ruta (índice)
-            </label>
-            <select
-              id="test-path-select"
-              value={pathIndex}
-              onChange={e => setPathIndex(parseInt(e.target.value))}
-              style={{
-                width: '100%', padding: '6px 10px',
-                border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
-                background: 'var(--surface)', color: 'var(--text)',
-                fontFamily: 'inherit', fontSize: '12px', cursor: 'pointer',
-              }}
-              aria-label="Seleccionar índice de ruta a probar"
-            >
-              {paths.map((p, i) => (
-                <option key={i} value={i}>{i}: {p.label ?? p.origin}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Botón ejecutar */}
-        <button
-          type="button" onClick={handleTest}
-          disabled={!worldId || loading || !hasPaths}
-          style={{
-            height: '34px', padding: '0 14px',
-            border: 'none',
-            background: (!worldId || loading || !hasPaths) ? 'var(--surface-2)' : 'var(--btn-primary-bg)',
-            color: (!worldId || loading || !hasPaths) ? 'var(--text-disabled)' : 'var(--btn-primary-text)',
-            borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500,
-            cursor: (!worldId || loading || !hasPaths) ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: '6px',
-          }}
-          aria-label="Ejecutar test de la ruta"
-        >
-          {loading ? <Spinner size={12} /> : <IconPlay size={12} />}
-          {loading
-            ? (sessionStatus && !sessionStatus.active ? 'Abriendo sesión / probando…' : 'Probando…')
-            : 'Ejecutar'}
-        </button>
-      </div>
-
-      {/* Error de API */}
-      {apiError && (
-        <p role="alert" style={{ fontSize: '12px', color: 'var(--danger)', padding: '0 16px 12px', margin: 0 }}>
-          {apiError}
-        </p>
-      )}
-
-      {/* Resultado */}
-      {result && (
-        <PathTestResultPanel
-          result={result}
-          pathSteps={currentPath?.steps ?? []}
-          durationMs={durationMs}
-          onClose={() => setResult(null)}
-          closeRef={closeRef}
-        />
-      )}
-    </div>
-  )
-}
 
 // ── Panel Re-sync ──────────────────────────────────────────────────────────────
 
@@ -1235,7 +987,7 @@ function ResyncPanel({ template, worlds }) {
             fontSize: '13px',
           }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 500 }}>{w.server_url}</div>
+              <div style={{ fontWeight: 500 }}>{w.server}</div>
               {sr && (
                 <div style={{
                   fontSize: '11px', marginTop: '2px',
@@ -1261,7 +1013,7 @@ function ResyncPanel({ template, worlds }) {
                 cursor: isSyncing ? 'not-allowed' : 'pointer',
                 opacity: isSyncing ? 0.6 : 1,
               }}
-              aria-label={`Re-sincronizar instancia en ${w.server_url}`}
+              aria-label={`Re-sincronizar instancia en ${w.server}`}
             >
               {isSyncing ? <Spinner size={10} /> : <IconRefresh size={11} />}
               Sincronizar
@@ -1273,19 +1025,451 @@ function ResyncPanel({ template, worlds }) {
   )
 }
 
+// ── Barra global de mundo — sticky bottom (BLOQUE J) ─────────────────────────
+// Patrón AgentBottomBar (DESIGN.md §19.4): position:fixed; bottom:0; inset-inline:0;
+// height:48px; z-index:200. Contiene: selector de mundo, indicador sesión y botón
+// "Cerrar sesión" cuando hay sesión activa. Nunca se desplaza con el scroll.
+
+function WorldBottomBar({
+  worlds,
+  selectedWorldId,
+  onWorldChange,
+  sessionStatus,       // null | { active: boolean }
+  loadingSession,
+  closingSession,
+  onCloseSession,
+  runningSlug,         // string | null — slug del test en curso (para indicador)
+}) {
+  const hasWorld = Boolean(selectedWorldId)
+
+  return (
+    <>
+      {/* Estilos de la barra — aislados aquí para no contaminar el bloque de estilos globales */}
+      <style>{`
+        #world-bottom-bar {
+          position: fixed;
+          inset-inline: 0;
+          bottom: 0;
+          height: 48px;
+          background: var(--surface);
+          border-top: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding-inline: 20px;
+          z-index: 200;
+          box-shadow: 0 -1px 0 var(--border);
+        }
+        .world-bar-label {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .world-bar-select {
+          font-family: inherit;
+          font-size: 13px;
+          padding: 5px 10px;
+          border: 1px solid var(--border-strong);
+          border-radius: var(--radius-sm);
+          background: var(--surface);
+          color: var(--text);
+          cursor: pointer;
+          max-width: 360px;
+          flex: 1;
+          min-width: 0;
+        }
+        .world-bar-select:focus {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+        .world-bar-sep-v {
+          width: 1px;
+          height: 20px;
+          background: var(--border);
+          flex-shrink: 0;
+        }
+        .world-bar-hint {
+          font-size: 12px;
+          color: var(--accent-text);
+          font-weight: 500;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .world-bar-running {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: var(--text-secondary);
+          flex-shrink: 0;
+        }
+        .world-bar-session {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+        .world-bar-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+        .world-bar-close-session {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          height: 24px;
+          padding: 0 8px;
+          border: 1px solid var(--border-strong);
+          background: var(--surface);
+          color: var(--text-secondary);
+          border-radius: var(--radius-sm);
+          font-family: inherit;
+          font-size: 11px;
+          cursor: pointer;
+        }
+        .world-bar-close-session:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        @media (max-width: 767px) {
+          #world-bottom-bar { padding-inline: 12px; gap: 8px; }
+          .world-bar-select { max-width: none; }
+        }
+      `}</style>
+
+      <div
+        id="world-bottom-bar"
+        role="region"
+        aria-label="Selector global de mundo para test de rutas"
+      >
+        {/* Icono globo + label */}
+        <span className="world-bar-label" aria-hidden="true">🌐</span>
+        <span className="world-bar-label">Mundo para test:</span>
+
+        {/* Selector de mundo */}
+        <select
+          className="world-bar-select"
+          value={selectedWorldId}
+          onChange={e => onWorldChange(e.target.value)}
+          aria-label="Seleccionar mundo para probar rutas"
+        >
+          <option value="">— Elige un mundo —</option>
+          {worlds.map(w => (
+            <option key={w.id} value={String(w.id)}>
+              {w.server}{w.account_email ? ` (${w.account_email})` : ''}
+            </option>
+          ))}
+        </select>
+
+        {/* Sin mundo: hint en oro */}
+        {!hasWorld && (
+          <span className="world-bar-hint" aria-live="polite">
+            Elige un mundo para activar los ▶
+          </span>
+        )}
+
+        {/* Con mundo: estado sesión + botón cerrar sesión */}
+        {hasWorld && (
+          <>
+            <div className="world-bar-sep-v" aria-hidden="true" />
+            <div className="world-bar-session">
+              {loadingSession ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  <Spinner size={10} /> Verificando sesión…
+                </span>
+              ) : sessionStatus ? (
+                <>
+                  <div
+                    className="world-bar-dot"
+                    style={{ background: sessionStatus.active ? 'var(--success)' : 'var(--text-disabled)' }}
+                    aria-hidden="true"
+                  />
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: sessionStatus.active ? 'var(--success)' : 'var(--text-tertiary)' }}>
+                    Sesión {sessionStatus.active ? 'abierta' : 'cerrada'}
+                  </span>
+                  {sessionStatus.active && (
+                    <button
+                      type="button"
+                      className="world-bar-close-session"
+                      onClick={onCloseSession}
+                      disabled={closingSession}
+                      aria-label="Cerrar sesión Chrome del mundo seleccionado"
+                    >
+                      {closingSession ? <Spinner size={9} /> : null}
+                      {closingSession ? 'Cerrando…' : 'Cerrar sesión'}
+                    </button>
+                  )}
+                  {!sessionStatus.active && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                      — el test abrirá la sesión automáticamente
+                    </span>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </>
+        )}
+
+        {/* Indicador de test en curso */}
+        {runningSlug && (
+          <>
+            <div className="world-bar-sep-v" aria-hidden="true" />
+            <div className="world-bar-running" aria-live="polite">
+              <Spinner size={12} />
+              <span>Ejecutando <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>{runningSlug}</code>…</span>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ── Fila de resultado inline (test-expand-row) ────────────────────────────────
+// Se inserta como <tr> inmediatamente después de la fila de la plantilla.
+// Muestra: ejecutando (spinner) | ok (badge verde + pasos) | error (badge rojo + pasos).
+
+function TestExpandRow({ tpl, testState, colSpan }) {
+  if (!testState) return null
+  const { status, result, durationMs, worldLabel, apiError } = testState
+
+  const isOk = result?.overall === 'ok'
+  const isError = result?.overall === 'error'
+
+  // Pasos ejecutados del resultado
+  const executedSteps = result?.steps ?? []
+  const abortedAt = result?.aborted_at_step
+  const browserNote = result?.browser_note
+
+  // Cabecera del badge de resultado
+  function ResultBadge() {
+    if (status === 'running') return null
+    if (isOk) return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+        fontSize: '11px', fontWeight: 600,
+        background: 'var(--success-subtle)', color: 'var(--success)',
+        whiteSpace: 'nowrap',
+      }}>
+        ✓ OK
+      </span>
+    )
+    if (isError) return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 8px', borderRadius: 'var(--radius-full)',
+        fontSize: '11px', fontWeight: 600,
+        background: 'var(--danger-subtle)', color: 'var(--danger)',
+        whiteSpace: 'nowrap',
+      }}>
+        ✗ Error en paso {abortedAt ?? '?'}
+      </span>
+    )
+    return null
+  }
+
+  return (
+    <tr style={{ display: 'table-row' }}>
+      <td
+        colSpan={colSpan}
+        style={{ padding: 0, borderBottom: '1px solid var(--border)' }}
+      >
+        <div
+          role="region"
+          aria-live="polite"
+          aria-label={`Resultado del test de ${tpl.slug}`}
+          style={{
+            paddingInlineStart: '40px', // sangría para alinear con contenido de la fila
+            paddingInlineEnd: '16px',
+            paddingTop: '10px',
+            paddingBottom: '12px',
+            background: 'var(--surface-2)',
+            borderTop: '1px dashed var(--border-strong)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          {/* Cabecera de la sección */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap',
+            fontSize: '11px', fontWeight: 600, letterSpacing: '.04em',
+            textTransform: 'uppercase', color: 'var(--text-secondary)',
+          }}>
+            {status === 'running' ? (
+              <>
+                <Spinner size={11} />
+                <span>Ejecutando <code style={{ fontFamily: 'var(--font-mono)', textTransform: 'none', letterSpacing: 0 }}>{tpl.slug}</code>…</span>
+              </>
+            ) : (
+              <>
+                <IconPlay size={11} />
+                <span>Resultado — <code style={{ fontFamily: 'var(--font-mono)', textTransform: 'none', letterSpacing: 0 }}>{tpl.slug}</code></span>
+                <ResultBadge />
+                {durationMs != null && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--text-tertiary)' }}>
+                    {durationMs < 1000 ? `${Math.round(durationMs)} ms` : `${(durationMs / 1000).toFixed(1)} s`}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Meta: mundo + URL ancla (solo cuando hay resultado) */}
+          {status !== 'running' && worldLabel && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+              fontSize: '12px', color: 'var(--text-secondary)',
+            }}>
+              <span>Mundo: <strong style={{ color: 'var(--text)' }}>{worldLabel}</strong></span>
+              {result?.anchor_url && (
+                <span>Ancla: <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px' }}>{result.anchor_url}</code></span>
+              )}
+            </div>
+          )}
+
+          {/* Estado ejecutando: mundo */}
+          {status === 'running' && worldLabel && (
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+              Mundo: <strong style={{ color: 'var(--text)' }}>{worldLabel}</strong>
+            </div>
+          )}
+
+          {/* Error de API */}
+          {apiError && status !== 'running' && (
+            <p role="alert" style={{ fontSize: '12px', color: 'var(--danger)', margin: 0 }}>
+              {apiError}
+            </p>
+          )}
+
+          {/* Pasos del resultado */}
+          {executedSteps.length > 0 && (
+            <div style={{
+              border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+              overflow: 'hidden', background: 'var(--surface)',
+            }}>
+              {executedSteps.map(step => {
+                const ok = step.status === 'ok'
+                return (
+                  <div key={step.step_order} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '6px',
+                    padding: '6px 10px',
+                    borderBottom: '1px solid var(--border)',
+                    fontSize: '12px',
+                  }}>
+                    <span style={{
+                      color: ok ? 'var(--success)' : 'var(--danger)',
+                      flexShrink: 0, width: '14px', textAlign: 'center', fontWeight: 700,
+                    }}>
+                      {ok ? '✓' : '✗'}
+                    </span>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)',
+                      fontSize: '11px', width: '16px', textAlign: 'end', flexShrink: 0,
+                    }}>
+                      {step.step_order}
+                    </span>
+                    <span style={{
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-full)', padding: '0 5px',
+                      fontFamily: 'var(--font-mono)', fontSize: '10px',
+                      color: 'var(--text-secondary)', flexShrink: 0,
+                    }}>
+                      {step.action}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <code style={{
+                        fontFamily: 'var(--font-mono)', fontSize: '11px',
+                        wordBreak: 'break-all',
+                        color: ok ? 'var(--text)' : 'var(--text-secondary)',
+                      }}>
+                        {step.selector}
+                      </code>
+                      {!ok && step.reason && (
+                        <span style={{ fontSize: '11px', color: 'var(--danger)' }}>{step.reason}</span>
+                      )}
+                      {step.current_url && (
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: '10px',
+                          color: 'var(--text-tertiary)', whiteSpace: 'nowrap',
+                          overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          → {step.current_url}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Nota al pie */}
+          {(isOk || isError) && (
+            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+              {browserNote || 'El browser queda en la última página visitada durante el test.'}
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // ── Fila de la tabla de plantillas ────────────────────────────────────────────
 // NOTA v2 rev.2: sin columna de Peso — el peso vive en NoiseDestination por-mundo.
 // NOTA v2: badge "encadenada" si origin_template_id != null.
 
-function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelete, editBtnRef }) {
+function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelete, editBtnRef, selectedWorldId, testState, colSpan }) {
   const pathsCount = tpl.paths_count ?? (tpl.paths?.length ?? 0)
   const isChained = tpl.origin_template_id != null
+  const hasPaths = pathsCount > 0
+
+  // Determinar el estado del botón ▶
+  const isRunning = testState?.status === 'running'
+  const isResultOk = testState?.status === 'done' && testState?.result?.overall === 'ok'
+  const isResultErr = testState?.status === 'done' && testState?.result?.overall === 'error'
+  const hasExpand = Boolean(testState)
+
+  // Disabled si: sin paths O (tiene paths pero no hay mundo elegido y no está en test activo)
+  const disabledNoPaths = !hasPaths
+  const disabledNoWorld = hasPaths && !selectedWorldId && !isRunning
+  const isDisabled = disabledNoPaths || disabledNoWorld || isRunning
+
+  // aria-label del ▶ según estado
+  function getPlayLabel() {
+    if (disabledNoPaths) return `Sin pasos de navegación — añade pasos antes de probar`
+    if (disabledNoWorld) return `Elige primero un mundo en la barra inferior`
+    if (isRunning) return `Ejecutando…`
+    return `Probar ${tpl.label} con el mundo elegido abajo`
+  }
+
+  // Color del ▶ según resultado
+  function getPlayColor() {
+    if (isResultOk) return 'var(--success)'
+    if (isResultErr) return 'var(--danger)'
+    return 'var(--text-secondary)'
+  }
+
+  // Fondo sutil de toda la fila según resultado
+  function getRowBg() {
+    if (isResultOk) return 'var(--success-subtle)'
+    if (isResultErr) return 'var(--danger-subtle)'
+    return undefined
+  }
 
   const tdBase = {
     padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
+    borderBottom: hasExpand ? 'none' : '1px solid var(--border)',
     verticalAlign: 'middle',
     fontSize: '13px',
+    background: getRowBg(),
+    transition: 'background 200ms ease',
   }
 
   const btnIcon = {
@@ -1299,6 +1483,7 @@ function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelet
   }
 
   return (
+    <>
     <tr
       style={{ cursor: 'pointer' }}
       className="rt-tpl-row"
@@ -1391,14 +1576,48 @@ function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelet
       </td>
 
       {/* Acciones */}
-      <td role="cell" style={{ ...tdBase, width: '120px', textAlign: 'end' }}
+      <td role="cell" style={{ ...tdBase, width: '148px', textAlign: 'end' }}
         onClick={e => e.stopPropagation()}
         onKeyDown={e => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
+          {/* ▶ Probar — P1, primero, separado del resto por divisor hairline.
+              btn-play: 28×28px ghost; target táctil ≥44px con padding:8px. */}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); if (!isDisabled) onTest(tpl) }}
+            title={getPlayLabel()}
+            aria-label={getPlayLabel()}
+            disabled={isDisabled}
+            aria-disabled={isDisabled}
+            style={{
+              width: '28px', height: '28px',
+              minHeight: '44px', // target táctil ≥44px
+              padding: '8px',
+              border: 'none',
+              background: 'transparent',
+              borderRadius: 'var(--radius-sm)',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: isDisabled ? 'var(--text-disabled)' : getPlayColor(),
+              opacity: isDisabled ? 0.4 : 1,
+              transition: 'background var(--dur-fast), color var(--dur-fast)',
+              flexShrink: 0,
+            }}
+            className="rt-btn-play"
+          >
+            {isRunning
+              ? <Spinner size={12} />
+              : <IconPlay size={13} />
+            }
+          </button>
+
+          {/* Divisor hairline vertical entre ▶ y acciones de gestión */}
+          <div style={{ width: '1px', height: '16px', background: 'var(--border)', flexShrink: 0, marginInline: '2px' }} aria-hidden="true" />
+
           {/* Editar */}
           <button
-            type="button" onClick={() => onEdit(tpl)}
+            type="button" onClick={e => { e.stopPropagation(); onEdit(tpl) }}
             title="Editar plantilla"
             aria-label={`Editar ${tpl.slug}`}
             style={btnIcon}
@@ -1406,19 +1625,9 @@ function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelet
           >
             <IconEdit />
           </button>
-          {/* Probar */}
-          <button
-            type="button" onClick={() => onTest(tpl)}
-            title="Probar ruta en Chrome real"
-            aria-label={`Probar ${tpl.slug}`}
-            style={btnIcon}
-            className="rt-btn-icon"
-          >
-            <IconPlay />
-          </button>
           {/* Clonar */}
           <button
-            type="button" onClick={() => onClone(tpl)}
+            type="button" onClick={e => { e.stopPropagation(); onClone(tpl) }}
             title="Clonar a mundo"
             aria-label={`Clonar ${tpl.slug} a un mundo`}
             style={btnIcon}
@@ -1428,7 +1637,7 @@ function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelet
           </button>
           {/* Borrar */}
           <button
-            type="button" onClick={() => onDelete(tpl)}
+            type="button" onClick={e => { e.stopPropagation(); onDelete(tpl) }}
             title="Eliminar plantilla"
             aria-label={`Eliminar ${tpl.slug}`}
             style={btnIcon}
@@ -1439,6 +1648,12 @@ function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelet
         </div>
       </td>
     </tr>
+
+    {/* Fila expand de resultado — inline bajo la fila activa, una a la vez */}
+    {hasExpand && (
+      <TestExpandRow tpl={tpl} testState={testState} colSpan={colSpan ?? 5} />
+    )}
+    </>
   )
 }
 
@@ -1468,10 +1683,26 @@ export function RouteTemplatesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerTpl, setDrawerTpl] = useState(null) // template activo en el drawer
   const [cloneTarget, setCloneTarget] = useState(null) // template para modal clonar
-  const [testTarget, setTestTarget] = useState(null)   // template para panel test
+  // testTarget ELIMINADO: ahora el test es inline por fila. El bloque G (TestRoutePanel) ya no existe.
   const [resyncTarget, setResyncTarget] = useState(null) // template para panel resync
   const [deleteTarget, setDeleteTarget] = useState(null) // template para confirmación borrado
   const [deleting, setDeleting] = useState(false)
+
+  // ─── Estado global de mundo (barra J) ────────────────────────────────────────
+  // Un mundo elegido una vez para todos los ▶ de la tabla.
+  const [selectedWorldId, setSelectedWorldId] = useState('')
+
+  // Estado de sesión del mundo seleccionado (se recarga al cambiar el mundo)
+  const [sessionStatus, setSessionStatus] = useState(null) // null | { active: boolean }
+  const [loadingSession, setLoadingSession] = useState(false)
+  const [closingSession, setClosingSession] = useState(false)
+
+  // ─── Estado de test por fila ──────────────────────────────────────────────────
+  // testStates: Map { tpl.id → { status: 'running'|'done', result, durationMs, worldLabel, apiError } }
+  // Solo una fila con resultado visible a la vez (activeTestTplId). Al pulsar ▶ en otra fila
+  // se limpia el resultado anterior.
+  const [testStates, setTestStates] = useState({}) // { [tplId]: {...} }
+  const [activeTestTplId, setActiveTestTplId] = useState(null) // id de la fila con expand visible
 
   // Refs para devolver el foco
   const drawerTriggerRef = useRef(null)
@@ -1525,6 +1756,83 @@ export function RouteTemplatesPage() {
     loadWorlds()
     loadCategories()
   }, [loadTemplates, loadWorlds, loadCategories])
+
+  // ─── Carga del estado de sesión cuando cambia el mundo seleccionado ───────────
+  useEffect(() => {
+    if (!selectedWorldId) { setSessionStatus(null); return }
+    const w = worlds.find(x => String(x.id) === String(selectedWorldId))
+    if (!w || w.account_id == null) { setSessionStatus(null); return }
+    setLoadingSession(true)
+    api.getSession(w.account_id, parseInt(selectedWorldId))
+      .then(status => {
+        setSessionStatus({
+          active: status?.active === true,
+        })
+      })
+      .catch(() => setSessionStatus(null))
+      .finally(() => setLoadingSession(false))
+  }, [selectedWorldId, worlds])
+
+  // ─── Cerrar sesión del mundo seleccionado ─────────────────────────────────────
+  async function handleCloseSession() {
+    if (!selectedWorldId || closingSession) return
+    setClosingSession(true)
+    try {
+      await api.closeWorldSession(parseInt(selectedWorldId))
+      setSessionStatus({ active: false })
+      showToast('Sesión de Chrome cerrada correctamente')
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.detail : 'Error al cerrar la sesión')
+    } finally {
+      setClosingSession(false)
+    }
+  }
+
+  // ─── Handler del botón ▶ por fila ─────────────────────────────────────────────
+  // Ejecuta la ruta con el mundo elegido en la barra J. Sin path_index (siempre 0 por defecto).
+  // Solo una fila expand visible a la vez: al pulsar ▶ en otra fila se cierra la anterior.
+  async function handlePlayTest(tpl) {
+    if (!selectedWorldId) return
+    const worldId = parseInt(selectedWorldId)
+    const w = worlds.find(x => String(x.id) === String(selectedWorldId))
+    const worldLabel = w ? `${w.server}${w.account_email ? ` (${w.account_email})` : ''}` : String(selectedWorldId)
+
+    // Cerrar resultado de la fila anteriormente activa (si es distinta)
+    if (activeTestTplId && activeTestTplId !== tpl.id) {
+      setTestStates(prev => {
+        const next = { ...prev }
+        delete next[activeTestTplId]
+        return next
+      })
+    }
+
+    // Marcar esta fila como "ejecutando"
+    setActiveTestTplId(tpl.id)
+    setTestStates(prev => ({
+      ...prev,
+      [tpl.id]: { status: 'running', result: null, durationMs: null, worldLabel, apiError: null },
+    }))
+
+    const t0 = Date.now()
+    try {
+      // Payload sin path_index: el backend usa 0 por defecto
+      const res = await api.testRouteTemplate(tpl.id, { world_id: worldId })
+      const durationMs = Date.now() - t0
+      setTestStates(prev => ({
+        ...prev,
+        [tpl.id]: { status: 'done', result: res, durationMs, worldLabel, apiError: null },
+      }))
+      // Tras el test, la sesión puede haberse abierto: refrescar indicador
+      setSessionStatus(prev => prev ? { ...prev, active: true } : { active: true })
+    } catch (err) {
+      const durationMs = Date.now() - t0
+      const detail = err instanceof ApiError ? err.detail : 'Error de red'
+      setTestStates(prev => ({
+        ...prev,
+        [tpl.id]: { status: 'done', result: null, durationMs, worldLabel, apiError: detail },
+      }))
+    }
+  }
 
   // Helper: dada una plantilla, devuelve {label, color} de su categoría
   function getCatMeta(tpl) {
@@ -1595,7 +1903,7 @@ export function RouteTemplatesPage() {
   }
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: '960px' }}>
+    <div style={{ padding: '28px 32px', maxWidth: '960px', paddingBottom: '80px' /* 48px barra J + 32px holgura */ }}>
 
       {/* Estilos responsivos y hover — sin columna Peso (v2 rev.2) */}
       <style>{`
@@ -1606,6 +1914,7 @@ export function RouteTemplatesPage() {
         .rt-tpl-row:hover td { background: var(--surface-2); }
         .rt-btn-icon:hover { background: var(--surface-2); color: var(--text); }
         .rt-btn-icon-danger:hover { background: var(--danger-subtle) !important; color: var(--danger) !important; }
+        .rt-btn-play:not(:disabled):hover { background: var(--surface-2); }
       `}</style>
 
       {/* ── BLOQUE A — Cabecera ─────────────────────────────────────────────── */}
@@ -1897,6 +2206,8 @@ export function RouteTemplatesPage() {
               <tbody>
                 {filtered.map(tpl => {
                   const { label: catLabel, color: catColor } = getCatMeta(tpl)
+                  // Número de columnas: Plantilla + Categoría + Pasos(P2) + Estado(P2) + Acciones = 5
+                  const colSpan = 5
                   return (
                     <TemplateRow
                       key={tpl.id}
@@ -1904,10 +2215,13 @@ export function RouteTemplatesPage() {
                       catLabel={catLabel}
                       catColor={catColor}
                       onEdit={handleOpenDrawer}
-                      onTest={(t) => { setTestTarget(t); setResyncTarget(null) }}
+                      onTest={handlePlayTest}
                       onClone={(t) => setCloneTarget(t)}
                       onDelete={(t) => setDeleteTarget(t)}
                       editBtnRef={el => { editBtnRefs.current[tpl.id] = el }}
+                      selectedWorldId={selectedWorldId}
+                      testState={activeTestTplId === tpl.id ? testStates[tpl.id] : undefined}
+                      colSpan={colSpan}
                     />
                   )
                 })}
@@ -1917,14 +2231,8 @@ export function RouteTemplatesPage() {
         )}
       </div>
 
-      {/* ── Panel "Probar ruta" (BLOQUE G) — inline bajo la tabla ─────────────── */}
-      {testTarget && (
-        <TestRoutePanel
-          template={testTarget}
-          worlds={worlds}
-          onClose={() => setTestTarget(null)}
-        />
-      )}
+      {/* BLOQUE G (TestRoutePanel) ELIMINADO: el test ahora es inline por fila (▶ + fila expand).
+           Ver spec docs/design/route-test-interaction.md */}
 
       {/* ── Panel "Re-sync" (BLOQUE H) — inline bajo la tabla ─────────────────── */}
       {resyncTarget && (
@@ -1985,6 +2293,29 @@ export function RouteTemplatesPage() {
           templates={templates}
         />
       )}
+
+      {/* ── BLOQUE J — Barra global de mundo (sticky bottom) ────────────────────
+           Siempre presente en esta página. El usuario elige el mundo UNA vez;
+           todos los ▶ de la tabla lo usan. Sigue patrón AgentBottomBar §19.4. */}
+      <WorldBottomBar
+        worlds={worlds}
+        selectedWorldId={selectedWorldId}
+        onWorldChange={id => {
+          setSelectedWorldId(id)
+          // Al cambiar de mundo, limpiar el resultado activo para evitar confusión
+          setActiveTestTplId(null)
+          setTestStates({})
+        }}
+        sessionStatus={sessionStatus}
+        loadingSession={loadingSession}
+        closingSession={closingSession}
+        onCloseSession={handleCloseSession}
+        runningSlug={
+          activeTestTplId && testStates[activeTestTplId]?.status === 'running'
+            ? (templates.find(t => t.id === activeTestTplId)?.slug ?? null)
+            : null
+        }
+      />
     </div>
   )
 }

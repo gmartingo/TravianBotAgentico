@@ -31,12 +31,12 @@ Si `tpl.origin_template_id != null` → badge "↗ encadenada" en `var(--accent-
 - `InheritedStepsPanel` (en `RouteTemplatesPage.jsx`): versión independiente para uso fuera del drawer.
 - Aviso cuando origen eliminado (EC-V2-03): "Ejecutará desde cualquier punto".
 
-### TestRoutePanel v3 (estado de sesión + cerrar sesión)
-- Al seleccionar mundo: llama `getAgentStatus(worldId)` para inferir sesión activa.
-- Badge verde si `state === 'running'` o `session_active === true`.
-- Botón "Cerrar sesión" visible si sesión activa → llama `api.closeWorldSession(worldId)`.
-- Texto del botón de ejecutar: "Abriendo sesión / probando…" si sesión estaba cerrada.
-- La sesión persiste entre tests (no se cierra tras cada test).
+### TestRoutePanel v3 — ELIMINADO (2026-06-06)
+Reemplazado completamente por:
+- **`WorldBottomBar`** (barra J sticky) — selector de mundo global + estado de sesión + botón cerrar sesión.
+- **`TestExpandRow`** — fila expand inline bajo la fila activa.
+- **`handlePlayTest`** — llama `api.testRouteTemplate(id, {world_id})` SIN `path_index`.
+Ver [[patterns-route-test-interaction]] para todos los detalles del nuevo patrón.
 
 ### Métodos client.js añadidos
 - `cloneRouteTemplate(id, worldId, force, navigationWeight)`: envía `{ navigation_weight }` en body.

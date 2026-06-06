@@ -347,6 +347,11 @@ async def execute_path_test_standalone(
                             current_url=current_url,
                         ))
 
+                    except (asyncio.CancelledError, asyncio.TimeoutError, ColdStartAbortError):
+                        # Control de flujo: propagar para que lo gestionen los bloques
+                        # externos (timeout global → paso TIMEOUT; cold-start → 409 en
+                        # el handler). NUNCA degradar estos a paso fallido.
+                        raise
                     except (NoiseStepError, BrowserError) as exc:
                         reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
                         report.steps.append(PathTestStepResult(
@@ -360,6 +365,25 @@ async def execute_path_test_standalone(
                         report.overall = "error"
                         report.aborted_at_step = position
                         # Abortar cadena al primer fallo — sin reintentos, sin browser.get.
+                        break
+                    except Exception as exc:
+                        # GAP-DIAG: cualquier OTRA excepción (típicamente un error CDP de
+                        # zendriver porque la sesión Chrome del mundo está muerta/cerrada,
+                        # o cualquier fallo inesperado del browser) se reporta como paso
+                        # fallido con razón legible EN LUGAR de propagarse como un 500 opaco.
+                        # Reproduce la degradación elegante del motor de PRODUCCIÓN
+                        # (ver bloque "except Exception" del flujo atómico en _execute_noise).
+                        reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
+                        report.steps.append(PathTestStepResult(
+                            step_order=position,
+                            action="CLICK",
+                            selector=resolved_step.step.selector,
+                            status="error",
+                            reason=f"error inesperado del browser: {reason}",
+                            current_url=current_url,
+                        ))
+                        report.overall = "error"
+                        report.aborted_at_step = position
                         break
 
                 # ============================================================
@@ -476,8 +500,28 @@ async def execute_path_test_standalone(
         # Re-raise: el scheduler/handler lo captura para decidir si reintentar.
         raise
 
-    except Exception:
-        raise
+    except Exception as exc:
+        # GAP-DIAG: red de seguridad. Cualquier excepción inesperada que NO sea
+        # control de flujo (timeout / cold-start, gestionados arriba) — típicamente
+        # un error CDP de zendriver por sesión Chrome muerta — se LOGUEA con traceback
+        # completo y se degrada a un reporte de error legible, en vez de propagarse
+        # como un 500 opaco en el handler EP-RT10. Cubre también fallos PREVIOS al
+        # loop de pasos (p. ej. el primer tab.evaluate o _check_cold_start interno).
+        logger.exception(
+            "Mundo %d: execute_path_test_standalone — excepción inesperada", world_id
+        )
+        reason = getattr(exc, "reason", None) or str(exc) or exc.__class__.__name__
+        last_order = report.steps[-1].step_order if report.steps else -1
+        report.steps.append(PathTestStepResult(
+            step_order=last_order + 1,
+            action="ERROR",
+            selector="",
+            status="error",
+            reason=f"error inesperado del browser: {reason}",
+            current_url=None,
+        ))
+        report.overall = "error"
+        report.aborted_at_step = last_order + 1
 
     finally:
         lock.release()

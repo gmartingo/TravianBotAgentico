@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from adapters.db.noise_sqlite_adapter import _validate_url_pattern  # Opción A: importar privado
 from core.entities.noise import (
+    NavigationPath,
     NavigationStep,
     NoiseAction,
     RouteTemplate,
@@ -1385,7 +1386,7 @@ async def test_template(
 
     HTTP 200 tanto si la ruta pasó (overall="ok") como si falló (overall="error").
     """
-    from core.exceptions import BrowserBusyError  # import local para evitar ciclos
+    from core.exceptions import BrowserBusyError, ColdStartAbortError  # import local para evitar ciclos
     from core.scheduling.world_agent import AgentState, execute_path_test_standalone
 
     rt_port = _get_rt_port(request)
@@ -1417,53 +1418,75 @@ async def test_template(
     if instance is not None:
         dest_id = instance.id
     else:
-        # Clonar temporalmente
-        dest = await noise_db.create_destination(
-            world_id=body.world_id,
-            url_pattern=template.url_pattern,
-            label="[TEST TEMPORAL]",
-            category_slug=template.category_slug,
-            frequency_weight=1.0,   # peso irrelevante para un test temporal
-            is_safe=False,
-            template_id=template.id,
-        )
-        dest_id = dest.id
-        temporal_dest_id = dest.id
-
-        # Clonar paths y steps
-        for tpath in template.paths:
-            await noise_db.create_path(
-                dest_id=dest_id,
-                origin=tpath.origin,
-                label=tpath.label,
-                steps=[
-                    NavigationStep(
-                        id=None,
-                        path_id=None,
-                        step_order=s.step_order,
-                        action=s.action,
-                        selector=s.selector,
-                        value=s.value,
-                        delay_min_ms=s.delay_min_ms,
-                        delay_max_ms=s.delay_max_ms,
-                        expected_url_after_click=s.expected_url_after_click,
-                    )
-                    for s in tpath.steps
-                ],
+        # La constraint UNIQUE(world_id, url_pattern) impide crear DOS destinos con
+        # la misma URL en el mundo. Antes de crear el portador temporal, comprobar si
+        # ya existe un destino con esa URL (find_destination_by_template solo busca por
+        # template_id, así que no lo detecta si el portador quedó huérfano o pertenece
+        # a otra plantilla / al ruido real). Casos:
+        #   - PORTADOR TEMPORAL huérfano de un test anterior (label "[TEST TEMPORAL]",
+        #     p. ej. tras borrar y recrear la plantilla → template_id quedó NULL): lo
+        #     ADOPTAMOS para reutilizarlo y borrarlo al final (autolimpieza).
+        #   - Destino REAL de ruido con esa misma URL: lo reutilizamos como portador
+        #     SIN borrarlo. El motor ROUTE_TEMPLATE ignora los paths del destino y
+        #     re-resuelve la cadena desde la BD de plantillas; el destino solo
+        #     transporta la URL, no se modifica.
+        existing = await noise_db.find_destination_by_url(body.world_id, template.url_pattern)
+        if existing is not None:
+            dest_id = existing.id
+            if getattr(existing, "label", None) == "[TEST TEMPORAL]":
+                temporal_dest_id = existing.id  # huérfano adoptado → se borra en finally
+        else:
+            # No hay ningún destino con esa URL: crear el portador temporal.
+            dest = await noise_db.create_destination(
+                world_id=body.world_id,
+                url_pattern=template.url_pattern,
+                label="[TEST TEMPORAL]",
+                category_slug=template.category_slug,
+                frequency_weight=1.0,   # peso irrelevante para un test temporal
+                is_safe=False,
+                template_id=template.id,
             )
+            dest_id = dest.id
+            temporal_dest_id = dest.id
+
+            # NO clonamos los paths del template al portador temporal: el motor v3
+            # (ROUTE_TEMPLATE) IGNORA los paths del destino y RE-RESUELVE la cadena
+            # raíz→hoja desde la BD de plantillas (resolve_origin_chain). El portador
+            # solo necesita existir como fila con la URL; el path se SINTETIZA abajo y
+            # se le fuerza el origin "ROUTE_TEMPLATE:<id>". Clonar los paths aquí era
+            # vestigial y además ROMPÍA con plantillas COMPUESTAS, cuyo path tiene
+            # origin "ROUTE_TEMPLATE:<id>" — un valor que create_path/NavigationPath
+            # rechazan como NavigationOrigin (ValueError → 500).
 
     try:
-        # Paso 6: obtener NavigationPath real de BD
-        paths = await noise_db.list_paths(dest_id)
-        if body.path_index >= len(paths):
+        # Paso 6: construir el path PORTADOR del test.
+        #
+        # Una plantilla componible representa UNA sola ruta testeable: la cadena
+        # resuelta raíz→hoja (resolve_origin_chain). El motor (world_agent §v2.6)
+        # resuelve esa cadena COMPLETA desde la BD de plantillas a partir del origin
+        # "ROUTE_TEMPLATE:<id>" e IGNORA los paths del destino clonado; el path solo
+        # TRANSPORTA ese origin. De ahí dos consecuencias:
+        #   - el único path_index válido es 0 (no se indexan paths atómicos; una ruta
+        #     atómica tiene a lo sumo 1 path y la cadena se trata como una sola ruta);
+        #   - una ruta COMPUESTA sin path propio (nodo puente, EC-V2-07) también es
+        #     testeable: antes saltaba un 422 falso "0 path(s)" porque no había nada
+        #     que clonar que transportara el origin.
+        if body.path_index != 0:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"path_index {body.path_index} fuera de rango — "
-                    f"la plantilla tiene {len(paths)} path(s)."
+                    f"path_index {body.path_index} fuera de rango — una plantilla "
+                    f"componible solo tiene la ruta 0 (la cadena resuelta)."
                 ),
             )
-        path = paths[body.path_index]
+        clonados = await noise_db.list_paths(dest_id)
+        path = clonados[0] if clonados else NavigationPath(
+            id=None,
+            destination_id=dest_id,
+            origin="",            # se sobrescribe abajo con "ROUTE_TEMPLATE:<id>"
+            label=template.label,
+            steps=[],
+        )
 
         # El test de plantilla SIEMPRE es atómico: forzamos el origen del path al id de
         # ESTA plantilla para que el motor resuelva la cadena COMPLETA (raíz→hoja) con
@@ -1504,24 +1527,37 @@ async def test_template(
                     "Espera a que finalice e inténtalo de nuevo."
                 ),
             )
+        except ColdStartAbortError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"El navegador del mundo no está en una página de Travian "
+                    f"(URL actual: {exc.current_url}). "
+                    "Lleva el Chrome a una página del mundo y reintenta. "
+                    "[COLD_START_ABORT]"
+                ),
+            )
         except RuntimeError as exc:
             logger.error(
                 "execute_path_test RT10 mundo %d: RuntimeError: %s", body.world_id, exc
             )
+            # Red de seguridad: superficie el motivo real (herramienta interna local)
+            # en vez de un 500 opaco. El motor ya degrada errores de browser; este
+            # RuntimeError suele ser configuración (p. ej. browser no disponible).
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error interno del servidor.",
+                detail=f"Error interno del servidor: {exc}",
             ) from exc
         except HTTPException:
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "execute_path_test RT10 mundo %d: error inesperado", body.world_id
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error interno del servidor.",
-            )
+                detail=f"Error interno del servidor: {type(exc).__name__}: {exc}",
+            ) from exc
 
     finally:
         # Paso 8: borrar instancia temporal siempre (incluso si hubo excepción)

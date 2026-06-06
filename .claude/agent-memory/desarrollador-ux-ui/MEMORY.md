@@ -14,3 +14,4 @@
 - [patterns-animal-frequency](patterns-animal-frequency.md) — AnimalFrequencyPanel: normalización array→objeto, arcilla→barro, ResIcon para botín, coordUtils, tablist ARIA con flechas
 - [patterns-category-combobox](patterns-category-combobox.md) — CategoryCombobox CRUD inline, CategoryBadge dinámico, ColorSwatchPicker, integración RouteTemplatesPage + NoiseCategoryBadge dual
 - [patterns-route-templates](patterns-route-templates.md) — RouteTemplatesPage /rutas: sin peso en plantilla, origen=desplegable, InheritedStepsPanel EP-RT11, TestRoutePanel v3 sesión+cierre
+- [patterns-route-test-interaction](patterns-route-test-interaction.md) — ▶ inline por fila + WorldBottomBar (barra J sticky) + TestExpandRow: mundo global, sesión global, resultado inline sin path_index

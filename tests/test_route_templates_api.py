@@ -23,7 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adapters.api.main import app
-from core.exceptions import BrowserBusyError
+from core.exceptions import BrowserBusyError, ColdStartAbortError
 
 
 # ---------------------------------------------------------------------------
@@ -891,6 +891,42 @@ def test_RT10_test_plantilla_path_index_fuera_de_rango_devuelve_422(client):
     app.state.world_agents = {}
 
 
+def test_RT10_test_ruta_compuesta_sin_path_propio_no_devuelve_422(client):
+    """
+    REGRESIÓN — Una ruta COMPUESTA sin path propio (nodo puente, EC-V2-07) debe ser
+    testeable con path_index=0. Antes saltaba un 422 falso "0 path(s)" porque el test
+    clonaba template.paths (vacío) para transportar el origin. El motor resuelve la
+    cadena raíz→hoja desde la BD de plantillas, no desde los paths del clon.
+    """
+    _, world_id = _setup_world(client)
+    # Raíz con su clic atómico.
+    raiz_id = _make_chain_template(client, "raiz-compuesta")
+    # Compuesta SIN path propio que encadena la raíz (nodo puente).
+    r = client.post("/route-templates", json={
+        "slug": "compuesta-puente",
+        "label": "Compuesta puente",
+        "category_slug": "uncategorized",
+        "url_pattern": "/path-raiz-compuesta",
+        "is_safe": True,
+        "origin_template_id": raiz_id,
+        "paths": [],
+    })
+    assert r.status_code == 201, r.text
+    compuesta_id = r.json()["id"]
+
+    report = _make_report(overall="ok", steps=[
+        SimpleNamespace(step_order=0, action="CLICK", selector="a[href*='raiz-compuesta']",
+                        status="ok", reason=None, current_url="/path-raiz-compuesta"),
+    ])
+    app.state.world_agents = {world_id: _running_agent(report)}
+
+    r = client.post(f"/route-templates/{compuesta_id}/test", json={"world_id": world_id})
+    assert r.status_code == 200, r.text
+    assert r.json()["overall"] == "ok"
+
+    app.state.world_agents = {}
+
+
 def test_RT10_test_plantilla_browser_busy_devuelve_409(client):
     """EP-RT10 con BrowserBusyError → 409 browser ocupado."""
     _, world_id = _setup_world(client)
@@ -904,6 +940,28 @@ def test_RT10_test_plantilla_browser_busy_devuelve_409(client):
     r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
     assert r.status_code == 409, r.text
     assert "ocupado" in r.json()["detail"].lower()
+
+    app.state.world_agents = {}
+
+
+def test_RT10_test_plantilla_cold_start_devuelve_409(client):
+    """EP-RT10 con ColdStartAbortError → 409 con URL actual y etiqueta COLD_START_ABORT."""
+    _, world_id = _setup_world(client)
+    r = client.post("/route-templates", json=_make_template_with_path())
+    tpl_id = r.json()["id"]
+
+    agent = _running_agent()
+    agent.execute_path_test = AsyncMock(
+        side_effect=ColdStartAbortError(world_id=world_id, current_url="about:blank")
+    )
+    app.state.world_agents = {world_id: agent}
+
+    r = client.post(f"/route-templates/{tpl_id}/test", json={"world_id": world_id})
+    assert r.status_code == 409, r.text
+    detail = r.json()["detail"]
+    assert "COLD_START_ABORT" in detail
+    assert "about:blank" in detail
+    assert "no está en una página de Travian" in detail
 
     app.state.world_agents = {}
 
@@ -1620,3 +1678,4 @@ def test_CAT08_url_pattern_invalido_devuelve_422_en_putcategory(client):
     tpl_id = r.json()["id"]
     r = client.put(f"/route-templates/{tpl_id}", json={"url_pattern": "/new.php"})
     assert r.status_code == 422, r.text
+

@@ -3673,7 +3673,12 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
         "409":
-          description: Browser ocupado con otra tarea.
+          description: |
+            Dos causas posibles:
+            - BROWSER_BUSY: browser ocupado con otra tarea; espera a que finalice e inténtalo de nuevo.
+            - COLD_START_ABORT: el navegador no está en una página válida de Travian (about:blank,
+              login, lobby, sesión expirada). El detail incluye la URL actual. Lleva el Chrome a
+              una página del mundo y reintenta.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
