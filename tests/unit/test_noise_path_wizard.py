@@ -25,7 +25,6 @@ from core.entities.noise import (
     NoiseAction,
     NoiseConfig,
     NoiseDestination,
-    NoiseCategory,
 )
 from core.entities.session import SessionMode
 from core.scheduling.world_agent import (
@@ -45,11 +44,11 @@ def make_destination(
     world_id: int = 1,
     url_pattern: str = "/karte.php",
     label: str = "Mapa",
-    category: NoiseCategory = NoiseCategory.MAP,
+    category_slug: str = "uncategorized",
 ) -> NoiseDestination:
     return NoiseDestination(
         id=id, world_id=world_id, url_pattern=url_pattern,
-        label=label, category=category, frequency_weight=1.0,
+        label=label, category_slug=category_slug, frequency_weight=1.0,
     )
 
 

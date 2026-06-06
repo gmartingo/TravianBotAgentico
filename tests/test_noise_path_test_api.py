@@ -62,7 +62,7 @@ def _setup_world(c: TestClient) -> tuple[int, int]:
 def _create_path(c: TestClient, world_id: int, origin: str = "MAP") -> tuple[int, int]:
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     assert r.status_code == 201, r.text
     dest_id = r.json()["id"]

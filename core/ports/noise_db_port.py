@@ -14,7 +14,6 @@ from typing import Any
 from core.entities.noise import (
     NavigationPath,
     NavigationStep,
-    NoiseCategory,
     NoiseConfig,
     NoiseDestination,
     NavigationOrigin,
@@ -51,7 +50,7 @@ class NoiseDbPort(ABC):
     async def list_destinations(
         self,
         world_id: int,
-        category: NoiseCategory | None = None,
+        category_slug: str | None = None,
         include_dead: bool = False,
         include_unsafe: bool = False,
     ) -> list[NoiseDestination]:
@@ -59,6 +58,7 @@ class NoiseDbPort(ABC):
         Lista destinos del mundo, con filtros opcionales.
 
         Por defecto excluye muertos (is_dead=True) y no seguros (is_safe=False).
+        category_slug: filtrar por slug de RouteCategory (antes era NoiseCategory enum).
         """
 
     @abstractmethod
@@ -71,9 +71,10 @@ class NoiseDbPort(ABC):
         world_id: int,
         url_pattern: str,
         label: str,
-        category: NoiseCategory,
-        frequency_weight: float,
+        category_slug: str = "uncategorized",
+        frequency_weight: float = 1.0,
         is_safe: bool = True,
+        template_id: int | None = None,
     ) -> NoiseDestination:
         """
         Crea un nuevo destino de navegación de ruido.
@@ -85,7 +86,40 @@ class NoiseDbPort(ABC):
           - frequency_weight > 0.
           - UNIQUE (world_id, url_pattern): si ya existe, lanza ValueError.
 
+        template_id (opcional, default None): FK a route_templates.id para rastrear
+          el origen del clon (M-RT01). Retrocompatible: los call-sites existentes
+          que no lo pasan reciben None y el comportamiento no cambia.
+
         Lanza ValueError con mensaje descriptivo en caso de validación fallida.
+
+        Spec route-templates-developer-portal.md §14 Paso 4.
+        """
+
+    @abstractmethod
+    async def find_destination_by_url(
+        self, world_id: int, url_pattern: str
+    ) -> NoiseDestination | None:
+        """
+        Devuelve el primer NoiseDestination de ese mundo con esa url_pattern,
+        o None si no existe.
+
+        Usado para detectar colisiones UNIQUE(world_id, url_pattern) antes de
+        clonar una plantilla (RN-RT05, §9.1).
+
+        Spec route-templates-developer-portal.md §14 Paso 4.
+        """
+
+    @abstractmethod
+    async def find_destination_by_template(
+        self, world_id: int, template_id: int
+    ) -> NoiseDestination | None:
+        """
+        Devuelve el NoiseDestination de ese mundo cuyo template_id coincide,
+        o None si no existe.
+
+        Usado por EP-RT09 (sync) para localizar la instancia a re-sincronizar (§9.2).
+
+        Spec route-templates-developer-portal.md §14 Paso 4.
         """
 
     @abstractmethod
@@ -95,10 +129,12 @@ class NoiseDbPort(ABC):
         label: str | None = None,
         frequency_weight: float | None = None,
         is_safe: bool | None = None,
+        category_slug: str | None = None,
     ) -> NoiseDestination:
         """
         PATCH parcial de un destino.
-        url_pattern y category NO se pueden cambiar (ignorados si se pasan).
+        url_pattern NO se puede cambiar.
+        category_slug SÍ se puede cambiar (spec route-categories-dynamic.md RN-CAT11).
         Lanza ValueError si dest_id no existe.
         """
 

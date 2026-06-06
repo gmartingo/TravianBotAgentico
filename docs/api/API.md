@@ -1896,132 +1896,131 @@ curl -X POST http://localhost:8000/worlds/1/noise/paths/42/test
 
 ---
 
-## Radar de ataques entrantes
+## Portal de Desarrollador de Rutas — EP-RT01..EP-RT12
 
-> **Sin `Accept-Language`** en estos dos endpoints. Los datos devueltos son
-> coordenadas, conteos y texto crudo del juego — no texto localizado. Desviación
-> consciente documentada en `docs/specs/radar-ataques-entrantes.md §8`.
+Catálogo maestro global de plantillas de rutas de navegación de ruido. Los labels y slugs son texto libre del desarrollador; no requieren `Accept-Language`.
 
----
+**v2 rev.2:** `navigation_weight` ELIMINADO de las plantillas (vive en `NoiseDestination.frequency_weight` por-mundo). `origin_template_id` (int|null) añadido para rutas componibles atómicas.
+**v2 GAP-4:** selectores por texto visible (`:has-text(`, `:contains(`, `text()=`, `contains(text(),`) → 422.
+**v3:** EP-RT10 con login on-demand idempotente (no requiere WorldAgent). EP-RT11 cadena de pasos. EP-RT12 cierre de sesión.
 
-### EP-RA01 — Lista ataques entrantes de un mundo
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/route-templates` | Listar plantillas (filtro category, include_paths) |
+| POST | `/route-templates` | Crear plantilla nueva |
+| GET | `/route-templates/{id}` | Obtener plantilla con paths+steps |
+| PUT | `/route-templates/{id}` | Actualizar plantilla (PATCH parcial) |
+| DELETE | `/route-templates/{id}` | Borrar plantilla (instancias quedan huérfanas) |
+| GET | `/route-templates/{id}/paths` | Listar paths de una plantilla |
+| GET | `/route-templates/{id}/chain` | Cadena de pasos resuelta raíz→hoja (v2) |
+| POST | `/route-templates/{id}/clone-to-world/{world_id}` | Clonar al mundo |
+| POST | `/worlds/{world_id}/noise/apply-templates` | Bulk clone |
+| POST | `/route-templates/{id}/sync-to-world/{world_id}` | Re-sync instancia |
+| POST | `/route-templates/{id}/test` | Probar en vivo (v3: login on-demand) |
+| DELETE | `/worlds/{world_id}/session` | Cerrar sesión Chrome de un mundo (v3) |
 
-**Ruta:** `GET /game/incoming-attacks/{world_id}`
+### EP-RT02 — Crear plantilla
 
-**Descripción de negocio:** Devuelve todos los ataques entrantes detectados para
-un mundo concreto. Por defecto filtra solo los ataques pendientes (aquellos cuyo
-timer no ha expirado aún, o los que no tienen timer todavía — detectados solo
-por el sidebar). Con `include_past=true` también se incluyen los ya impactados.
+Crea una plantilla global reutilizable. `slug` es kebab-case único (ej. `"rally-point-view"`). El campo `origin_template_id` (v2) permite encadenar rutas atómicas componibles. Los steps siguen las mismas restricciones que los steps de producción (`delay_min_ms >= 200 ms`). Los selectores DEBEN ser estructurales (sin texto visible).
 
-El campo `seconds_remaining` se calcula en el use case (no en el handler):
-- `null` si `impact_at` es `null` (sin timer todavía — postura conservadora RT-05).
-- `max(0, int(delta))` si `impact_at` no es `null`. Nunca negativo.
+**Nota v2 rev.2:** `navigation_weight` ya NO va en la plantilla. Se fija al clonar a un mundo (EP-RT07/RT08).
 
-**Request — headers:**
-```
-(ninguno obligatorio)
-```
-
-**Request — query params:**
-
-| Parámetro | Tipo | Default | Descripción |
-|---|---|---|---|
-| `include_past` | bool | false | Incluir ataques con impact_at ya pasado |
-| `village_game_id` | int (ge=1) | null | Filtro por aldea (game_id de Travian) |
-| `limit` | int (1–100) | 50 | Máximo de items por página |
-| `offset` | int (ge=0) | 0 | Desplazamiento para paginación |
-
-**Response 200:**
-```json
-{
-  "items": [
-    {
-      "id": 1,
-      "village_game_id": 12345,
-      "village_name": "Mi Aldea",
-      "village_coord_x": 100,
-      "village_coord_y": -50,
-      "attack_count": 2,
-      "impact_at": "2026-06-05T18:30:00+00:00",
-      "seconds_remaining": 3600,
-      "rally_point_href": "/build.php?gid=16&id=1",
-      "attacker_name": null,
-      "origin_village_name": null,
-      "origin_village_coord_x": null,
-      "origin_village_coord_y": null,
-      "operation_type": null,
-      "attacker_snapshot": null,
-      "source": "dorf1",
-      "detected_at": "2026-06-05T17:30:00+00:00"
-    }
-  ],
-  "total": 1,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-**Errores:**
-
-| Código | Cuándo |
-|--------|--------|
-| `404` | Mundo no encontrado |
-| `422` | Query param inválido (`limit=0`, `limit>100`, `offset<0`, `village_game_id=0`) |
-| `500` | Error interno del servidor |
-
-**Ejemplo curl:**
 ```bash
-# Listar ataques pendientes del mundo 1
-curl http://localhost:8000/game/incoming-attacks/1
-
-# Con ataques pasados, filtrado por aldea y paginación
-curl "http://localhost:8000/game/incoming-attacks/1?include_past=true&village_game_id=12345&limit=10&offset=0"
+curl -X POST http://localhost:8000/route-templates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "rally-point-view",
+    "label": "Rally Point — ver edificio",
+    "category": "BUILDING_VIEW",
+    "url_pattern": "/build.php?gid=13",
+    "origin_template_id": null,
+    "paths": [{
+      "origin": "DORF2",
+      "label": "Desde edificios",
+      "steps": [{"step_order":0,"action":"CLICK","selector":"a[href*='\''gid=13'\'']","delay_min_ms":500,"delay_max_ms":900}]
+    }]
+  }'
+# → 201, Location: /route-templates/42
 ```
 
-**Enlace OpenAPI:** `docs/api/openapi.yaml` → `paths./game/incoming-attacks/{world_id}`
+**Errores:** `404` origen no encontrado · `409` slug duplicado / ciclo en `origin_template_id` · `422` slug no kebab-case / delay_min_ms < 200 ms / selector por texto visible.
 
----
+### EP-RT11 — Cadena resuelta (v2)
 
-### EP-RA02 — Dispara lectura inmediata del radar de ataques
+Devuelve la cadena de clics en orden de ejecución (raíz → hoja). Uso principal: mostrar los pasos heredados en la UI cuando el usuario selecciona un origen. `steps[]` vacío si la plantilla no tiene paths/steps definidos (no es error).
 
-**Ruta:** `POST /game/incoming-attacks/{world_id}/check`
-
-**Descripción de negocio:** Fuerza una lectura inmediata del radar de ataques
-entrantes para el mundo indicado. El handler navega dorf1 a través del browser
-autenticado, parsea el timer de cada ataque entrante y persiste los resultados
-en la BD. Devuelve cuántos ataques se detectaron en esta lectura. El contador
-`attacks_detected` refleja los ataques procesados en este check, no el total en BD.
-
-Requiere sesión activa para el mundo (hacer login primero con `POST /login/{account_id}/{world_id}`).
-
-**Request — headers:** ninguno.
-
-**Request — body:** ninguno.
-
-**Response 200:**
-```json
-{
-  "world_id": 1,
-  "attacks_detected": 3,
-  "message": "Check completado"
-}
-```
-
-**Errores:**
-
-| Código | Cuándo |
-|--------|--------|
-| `404` | Mundo no encontrado |
-| `503` | No hay sesión activa para el mundo — hacer login primero |
-| `500` | Error interno del servidor |
-
-**Ejemplo curl:**
 ```bash
-curl -X POST http://localhost:8000/game/incoming-attacks/1/check
+curl http://localhost:8000/route-templates/7/chain
+# → 200: {template_id, template_slug, depth, steps:[{position, is_root, selector, expected_url, ...}]}
 ```
 
-**Enlace OpenAPI:** `docs/api/openapi.yaml` → `paths./game/incoming-attacks/{world_id}/check`
+### EP-RT07 — Clonar plantilla a un mundo
+
+Materializa una `noise_destination` + paths+steps en el mundo destino. El `navigation_weight` del body del REQUEST fija la frecuencia de esa ruta en ESE mundo (default 1.0, rango [0.1,5.0]). Tres casos según RN-RT05:
+
+- **Sin conflicto** → `201` + `Location`, `result:"cloned"`, `navigation_weight` en response.
+- **Misma plantilla ya clonada** → `200`, `result:"already_exists"` (idempotente).
+- **URL ocupada por otro destino** → `409`, `detail.conflicting_destination_id`.
+
+`?force=true` sobreescribe el destino conflictivo → `201`.
+
+```bash
+# Clone con peso personalizado
+curl -X POST http://localhost:8000/route-templates/1/clone-to-world/3 \
+  -H "Content-Type: application/json" \
+  -d '{"navigation_weight": 2.0}'
+
+# Sin body → navigation_weight=1.0 por defecto
+curl -X POST http://localhost:8000/route-templates/1/clone-to-world/3
+```
+
+### EP-RT08 — Bulk clone
+
+Clona en masa una lista de plantillas al mundo. `default_navigation_weight` (default 1.0) se aplica uniformemente. No atómico: si una falla, las demás siguen. Ítems `"cloned"` incluyen `navigation_weight`.
+
+```bash
+curl -X POST http://localhost:8000/worlds/3/noise/apply-templates \
+  -H "Content-Type: application/json" \
+  -d '{"template_ids":[1,2,3,4],"default_navigation_weight":1.5}'
+```
+
+### EP-RT09 — Re-sincronizar instancia
+
+Reemplaza los paths/steps de la instancia clonada con los de la plantilla maestra. **Preserva** `navigation_weight` (frequency_weight), `is_dead`, `consecutive_failures_count` y `last_used_at` (estado operacional del usuario).
+
+Si no existe instancia → actúa como clone y devuelve `201`.
+
+### EP-RT10 — Probar plantilla en vivo (v3)
+
+v3: ya no requiere WorldAgent en RUNNING. Llama a `_ensure_session` de forma idempotente (si no hay sesión, hace login automático). La sesión Chrome se mantiene entre tests. Si hay WorldAgent en RUNNING, lo usa (serialización con su lock); si no, usa `execute_path_test_standalone` con un lock ad-hoc.
+
+HTTP 200 tanto si la ruta pasó (`overall:"ok"`) como si falló (`overall:"error"`).
+
+```bash
+curl -X POST http://localhost:8000/route-templates/1/test \
+  -H "Content-Type: application/json" \
+  -d '{"world_id":3,"path_index":0}'
+```
+
+**Errores v3:** `401` Fernet indescifrables / login fallido · `404` plantilla/mundo/sin cuenta asociada · `409` browser ocupado · `422` path_index fuera de rango.
+
+### EP-RT12 — Cerrar sesión Chrome (v3)
+
+Cierra la sesión Chrome de un mundo desde el panel global `/rutas`, sin necesidad de WorldAgent activo. Idempotente: si no hay sesión → 204 igualmente.
+
+```bash
+curl -X DELETE http://localhost:8000/worlds/3/session
+```
+
+**Nota:** `POST /farm/worlds/{id}/agent/stop` también cierra la sesión Chrome automáticamente (v3 ajuste en `stop_agent`).
+
+### Modificaciones EP-N03 / EP-N04
+
+- **EP-N03** (`GET /worlds/{id}/noise/destinations`): campo `template_id` (int|null) añadido al response. `null` si creado a mano; `int` si clonado.
+- **EP-N04** (`POST /worlds/{id}/noise/destinations`): campo `template_id` (int|null, opcional) añadido al request body.
+
+Ambos cambios son retrocompatibles (nullable/opcional).
 
 ---
 
-🔖 Última revisión: 2026-06-05 (añadidos EP-RA01 y EP-RA02 radar de ataques entrantes; sin Accept-Language por ser datos numéricos/texto crudo del juego)
+🔖 Última revisión: 2026-06-06 (v2+v3: EP-RT11 cadena, EP-RT12 close-session, navigation_weight del REQUEST en EP-RT07/RT08, origin_template_id, validate_no_cycle, validate_selector, _ensure_session en EP-RT10, stop_agent cierra Chrome)

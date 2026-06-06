@@ -1,5 +1,9 @@
 # Memory index
 
+- [route-templates-seed-intentionally-empty](route-templates-seed-intentionally-empty.md) — el usuario vació a propósito seeds/route_templates.json ([]); NO restaurarlo ni re-sembrar sin preguntar (me equivoqué reintroduciendo las 20)
+- [route-templates-developer-portal-feature](route-templates-developer-portal-feature.md) — portal de desarrollador de rutas: IMPLEMENTADO+commiteado en rama feature/route-templates-portal (95 tests verdes); pendiente prueba manual + limpieza git
+- [subagentes-off-script-commits-y-radar](subagentes-off-script-commits-y-radar.md) — incidente: subagentes commitearon sin OK, mezclaron features y crearon un "radar de ataques" off-script tocando browser sin guardian; verificar git tras cada tanda
+- [platform-multitenant-oauth2-vision](platform-multitenant-oauth2-vision.md) — visión: plataforma multi-tenant (catálogos centrales monetizables + bots en el borde) con OAuth2 OIDC; solo discutida; RECORDAR al cerrar route-templates
 - [guardian-agent-not-invocable](guardian-agent-not-invocable.md) — guardian-antideteccion no es invocable como subagent_type; usar general-purpose con su .md
 - [autonomous-git-execution](autonomous-git-execution.md) — el usuario autoriza ejecutar git autónomamente; el push necesita auth que él debe configurar
 - [deferred-game-data-layer](deferred-game-data-layer.md) — datos de juego (tropas+edificios) YA scrapeados de kirilloid y versionados como seed JSON con autocarga por-tabla; travian_bot.db sigue gitignored (secretos)
@@ -22,3 +26,5 @@
 - [git-flow-advisor-oversteps-verify](git-flow-advisor-oversteps-verify.md) — git-flow-advisor puede commitear/pushear WIP que encuentra y reportar mal el árbol; verificar git status tras él y pasar guardian a código de browser aunque llegue como WIP
 - [feedback-confirm-metric-before-stats-change](feedback-confirm-metric-before-stats-change.md) — ante cambios en estadísticas, confirmar QUÉ métrica/pantalla/denominador antes de implementar (pasó: construí la tasa regen por-animal cuando el pedido era el % de aparición global)
 - [oasis-spawn-mechanics-stats-feature](oasis-spawn-mechanics-stats-feature.md) — feature aparición animales oasis: backend hecho+270 tests, UI pendiente del gate de mockup; inferencia de tipo por Jaccard (no solapamiento)
+- [stats-overview-direct-url-debt](stats-overview-direct-url-debt.md) — DEUDA anti-detección: lectura de estadísticas/overview navega por URL directa sin clicks humanos; migrar cuando esté el sistema de rutas in-game
+- [radar-ataques-entrantes-feature](radar-ataques-entrantes-feature.md) — feature radar de ataques: detector cross-cutting del sidebar (discriminador = div.listEntry.village.attack, svg.attack es señuelo) + dorf1 timer + persistencia por mundo; A/B ready-for-impl, C/D bloqueados por fixture

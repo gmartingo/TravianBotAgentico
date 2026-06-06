@@ -34,7 +34,6 @@ from core.entities.noise import (
     NavigationOrigin,
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
 )
 from core.entities.village import Village
 
@@ -77,7 +76,7 @@ async def _create_destination(noise_adapter: NoiseSQLiteAdapter, world_id: int):
         world_id=world_id,
         url_pattern="/karte.php",
         label="Mapa",
-        category=NoiseCategory.MAP,
+        category_slug="uncategorized",
         frequency_weight=1.0,
     )
 

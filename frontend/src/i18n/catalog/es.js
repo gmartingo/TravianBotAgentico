@@ -17,6 +17,7 @@ const es = {
   'nav.construction': 'Construcción',
   'nav.comingSoon':   'Próximamente',
   'nav.attackReports': 'Reportes de oasis',
+  'nav.routeTemplates': 'Catálogo de rutas',
 
   // ── Topbar ─────────────────────────────────────────────
   'topbar.toggleTheme':    'Cambiar tema',

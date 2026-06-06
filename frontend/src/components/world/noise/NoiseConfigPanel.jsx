@@ -2,26 +2,29 @@
  * NoiseConfigPanel — Panel colapsable de configuración global de ruido.
  *
  * Props:
- *  - config    {object|null}  — datos de EP-N01 ({noise_enabled, hardcore_*, passive_*, dwell_*})
+ *  - config    {object|null}  — datos de EP-N01 ({noise_enabled, hardcore_interval_*_seconds,
+ *                               passive_interval_*_seconds, dwell_*})
  *  - loading   {boolean}
  *  - onSaved   {Function}     — fn(newConfig) — callback tras guardar con éxito
  *  - worldId   {number}
  *
  * Comportamiento:
  *  - Toggle noise_enabled → PUT EP-N02 inmediato, sin "Guardar"
- *  - "Guardar config" → PUT EP-N02 con los 6 campos numéricos
+ *  - "Guardar config" → PUT EP-N02 con los nuevos campos de intervalo en segundos
  *  - El toggle siempre visible aunque el panel esté colapsado
  *  - Panel colapsable con transición max-height
  *  - Respeta prefers-reduced-motion
+ *  - MM:SS: la UI muestra/edita en formato MM:SS; envía/recibe SEGUNDOS (int) (RN-FW01)
+ *  - Mínimo 00:30 (30 s) — blindado en backend y validado en cliente (RN-FW02, CA-FW16)
  *
- * Spec: docs/design/noise-catalog-ui.md §6, §7
+ * Spec: docs/specs/noise-frequency-and-destination-weight.md §8.1, §8.2, CA-FW16/17
  */
 import { useState, useId, memo } from 'react'
 import { useI18n } from '../../../i18n/index.jsx'
 import { api, ApiError } from '../../../api/client.js'
 import { Spinner, showToast } from '../../ui/uiUtils.jsx'
 import { Toggle } from '../../ui/Toggle.jsx'
-import { MinMaxInput } from '../../ui/MinMaxInput.jsx'
+import { mmssToSeconds, secondsToMmss, validateMmss } from '../../../utils/time.js'
 
 const PANEL_ANIM = `
   @keyframes noise-config-expand {
@@ -33,6 +36,104 @@ const PANEL_ANIM = `
   }
 `
 
+// Mínimo absoluto en segundos (RN-FW02, guardian): 30 s
+const MIN_INTERVAL_SECONDS = 30
+
+/**
+ * MmssMinMaxInput — Par de inputs MM:SS (mín – máx) para un modo.
+ *
+ * Props:
+ *  - minVal   {string}   — valor del mínimo en MM:SS
+ *  - maxVal   {string}   — valor del máximo en MM:SS
+ *  - onMinChange {fn}    — fn(newMmss)
+ *  - onMaxChange {fn}    — fn(newMmss)
+ *  - disabled  {boolean}
+ *  - labelMin  {string}  — aria-label del input mínimo
+ *  - labelMax  {string}  — aria-label del input máximo
+ *  - errorId   {string}  — id del span de error
+ */
+function MmssMinMaxInput({ minVal, maxVal, onMinChange, onMaxChange, disabled, labelMin, labelMax, errorId }) {
+  // Validación: formato MM:SS + mínimo 30 s + mín <= máx
+  const minErr = validateMmss(minVal, MIN_INTERVAL_SECONDS)
+  const maxErr = validateMmss(maxVal, MIN_INTERVAL_SECONDS)
+
+  // Validación cruzada mín <= máx (solo si ambos formatos son válidos)
+  let crossErr = null
+  if (!minErr && !maxErr) {
+    try {
+      const minS = mmssToSeconds(minVal)
+      const maxS = mmssToSeconds(maxVal)
+      if (minS > maxS) {
+        crossErr = 'El mínimo debe ser ≤ al máximo'
+      }
+    } catch (_) { /* ya manejado por minErr/maxErr */ }
+  }
+
+  const errMsg = minErr || maxErr || crossErr
+  const hasError = errMsg !== null
+
+  const inputBase = {
+    width: '72px',
+    padding: '4px 6px',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '13px',
+    fontVariantNumeric: 'tabular-nums',
+    minHeight: '32px',
+    textAlign: 'center',
+    opacity: disabled ? 0.6 : 1,
+    boxSizing: 'border-box',
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={minVal}
+          placeholder="mm:ss"
+          disabled={disabled}
+          aria-label={labelMin}
+          aria-describedby={hasError ? errorId : undefined}
+          onChange={e => onMinChange(e.target.value)}
+          style={{
+            ...inputBase,
+            border: `1px solid ${minErr || crossErr ? 'var(--danger)' : 'var(--border-strong)'}`,
+          }}
+        />
+        <span style={{ color: 'var(--text-secondary)', fontSize: '13px', userSelect: 'none' }}>—</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={maxVal}
+          placeholder="mm:ss"
+          disabled={disabled}
+          aria-label={labelMax}
+          aria-describedby={hasError ? errorId : undefined}
+          onChange={e => onMaxChange(e.target.value)}
+          style={{
+            ...inputBase,
+            border: `1px solid ${maxErr || crossErr ? 'var(--danger)' : 'var(--border-strong)'}`,
+          }}
+        />
+      </span>
+      {hasError && (
+        <span
+          id={errorId}
+          role="alert"
+          style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '2px' }}
+        >
+          {errMsg}
+        </span>
+      )}
+    </span>
+  )
+}
+
 // React.memo: evita re-render cuando NoiseTab re-renderiza por cambio de estado del drawer.
 // config, loading, onSaved y worldId no cambian al abrir/cambiar de destino.
 export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading, onSaved, worldId }) {
@@ -40,33 +141,59 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
 
-  // Estado local de los 6 campos numéricos
-  const [local, setLocal] = useState(null) // null = usa config como fuente
+  // Estado local en MM:SS (los inputs trabajan con strings)
+  // null = usa config como fuente de verdad
+  const [localMmss, setLocalMmss] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toggleLoading, setToggleLoading] = useState(false)
   const [apiError, setApiError] = useState(null)
 
-  // Datos efectivos (local tiene precedencia cuando existe)
-  const eff = local ?? config ?? {}
+  // Datos efectivos en segundos (config es la fuente canónica en segundos)
+  const effCfg = config ?? {}
+  const noiseEnabled = effCfg.noise_enabled ?? false
 
-  const hardcoreMin    = eff.hardcore_total_req_per_hour_min  ?? 80
-  const hardcoreMax    = eff.hardcore_total_req_per_hour_max  ?? 150
-  const passiveMin     = eff.passive_total_req_per_hour_min   ?? 15
-  const passiveMax     = eff.passive_total_req_per_hour_max   ?? 40
-  const dwellMin       = eff.dwell_min_seconds                ?? 2.0
-  const dwellMax       = eff.dwell_max_seconds                ?? 30.0
-  const noiseEnabled   = eff.noise_enabled                    ?? false
+  // Convertir config (segundos) a MM:SS para mostrar, si no hay edición local
+  const hcMinDefault  = secondsToMmss(effCfg.hardcore_interval_min_seconds ?? 30)
+  const hcMaxDefault  = secondsToMmss(effCfg.hardcore_interval_max_seconds ?? 90)
+  const paMinDefault  = secondsToMmss(effCfg.passive_interval_min_seconds  ?? 180)
+  const paMaxDefault  = secondsToMmss(effCfg.passive_interval_max_seconds  ?? 1200)
+  const dwellMin      = effCfg.dwell_min_seconds ?? 2.0
+  const dwellMax      = effCfg.dwell_max_seconds ?? 30.0
 
-  const isDirty = local !== null
+  // Los strings editables (local tiene precedencia)
+  const hcMin = localMmss?.hcMin ?? hcMinDefault
+  const hcMax = localMmss?.hcMax ?? hcMaxDefault
+  const paMin = localMmss?.paMin ?? paMinDefault
+  const paMax = localMmss?.paMax ?? paMaxDefault
+
+  const isDirty = localMmss !== null
+
+  // Validaciones globales: si algún campo tiene error, no se puede guardar
+  function fieldError(mmssStr) {
+    return validateMmss(mmssStr, MIN_INTERVAL_SECONDS)
+  }
+  function crossError(minStr, maxStr) {
+    if (fieldError(minStr) || fieldError(maxStr)) return true
+    try {
+      return mmssToSeconds(minStr) > mmssToSeconds(maxStr)
+    } catch (_) { return true }
+  }
+
   const hasError = (
-    hardcoreMax < hardcoreMin ||
-    passiveMax  < passiveMin  ||
-    dwellMax    < dwellMin
+    fieldError(hcMin) !== null ||
+    fieldError(hcMax) !== null ||
+    crossError(hcMin, hcMax) ||
+    fieldError(paMin) !== null ||
+    fieldError(paMax) !== null ||
+    crossError(paMin, paMax)
   )
 
   function patch(field, value) {
-    setLocal(prev => ({
-      ...(prev ?? config ?? {}),
+    setLocalMmss(prev => ({
+      hcMin:  prev?.hcMin  ?? hcMinDefault,
+      hcMax:  prev?.hcMax  ?? hcMaxDefault,
+      paMin:  prev?.paMin  ?? paMinDefault,
+      paMax:  prev?.paMax  ?? paMaxDefault,
       [field]: value,
     }))
   }
@@ -75,11 +202,9 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
     setToggleLoading(true)
     try {
       const updated = await api.putNoiseConfig(worldId, {
-        ...(config ?? {}),
-        ...(local ?? {}),
         noise_enabled: newVal,
       })
-      setLocal(null)
+      setLocalMmss(null)
       onSaved(updated)
       showToast(newVal ? t('noise.config.enabled') + ' ✓' : t('noise.config.disabled') + ' ✓')
     } catch (e) {
@@ -94,17 +219,17 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
     setSaving(true)
     setApiError(null)
     try {
-      const updated = await api.putNoiseConfig(worldId, {
-        ...(config ?? {}),
-        noise_enabled:                       noiseEnabled,
-        hardcore_total_req_per_hour_min:     hardcoreMin,
-        hardcore_total_req_per_hour_max:     hardcoreMax,
-        passive_total_req_per_hour_min:      passiveMin,
-        passive_total_req_per_hour_max:      passiveMax,
-        dwell_min_seconds:                   dwellMin,
-        dwell_max_seconds:                   dwellMax,
-      })
-      setLocal(null)
+      // Convertir MM:SS → segundos antes de enviar (RN-FW01)
+      const body = {
+        hardcore_interval_min_seconds: mmssToSeconds(hcMin),
+        hardcore_interval_max_seconds: mmssToSeconds(hcMax),
+        passive_interval_min_seconds:  mmssToSeconds(paMin),
+        passive_interval_max_seconds:  mmssToSeconds(paMax),
+        dwell_min_seconds: dwellMin,
+        dwell_max_seconds: dwellMax,
+      }
+      const updated = await api.putNoiseConfig(worldId, body)
+      setLocalMmss(null)
       onSaved(updated)
       showToast(t('noise.config.saved'))
     } catch (e) {
@@ -115,7 +240,7 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
   }
 
   function handleCancel() {
-    setLocal(null)
+    setLocalMmss(null)
     setApiError(null)
   }
 
@@ -204,62 +329,93 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
             </div>
           ) : (
             <>
-              {/* HARDCORE */}
+              {/* HARDCORE — intervalo MM:SS mín – máx */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                   {t('noise.config.hardcoreLabel')}
+                  <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginInlineStart: '6px' }}>
+                    (MM:SS)
+                  </span>
                 </label>
-                <MinMaxInput
-                  minVal={hardcoreMin}
-                  maxVal={hardcoreMax}
-                  onMinChange={v => patch('hardcore_total_req_per_hour_min', v)}
-                  onMaxChange={v => patch('hardcore_total_req_per_hour_max', v)}
+                <MmssMinMaxInput
+                  minVal={hcMin}
+                  maxVal={hcMax}
+                  onMinChange={v => patch('hcMin', v)}
+                  onMaxChange={v => patch('hcMax', v)}
                   disabled={saving}
-                  step={1}
-                  minLimit={1}
-                  labelMin={t('noise.config.hardcoreLabel') + ' mín'}
-                  labelMax={t('noise.config.hardcoreLabel') + ' máx'}
+                  labelMin={t('noise.config.hardcoreLabel') + ' — mínimo (mm:ss)'}
+                  labelMax={t('noise.config.hardcoreLabel') + ' — máximo (mm:ss)'}
                   errorId="err-hardcore"
                 />
               </div>
 
-              {/* PASIVO */}
+              {/* PASIVO — intervalo MM:SS mín – máx */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                   {t('noise.config.passiveLabel')}
+                  <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginInlineStart: '6px' }}>
+                    (MM:SS)
+                  </span>
                 </label>
-                <MinMaxInput
-                  minVal={passiveMin}
-                  maxVal={passiveMax}
-                  onMinChange={v => patch('passive_total_req_per_hour_min', v)}
-                  onMaxChange={v => patch('passive_total_req_per_hour_max', v)}
+                <MmssMinMaxInput
+                  minVal={paMin}
+                  maxVal={paMax}
+                  onMinChange={v => patch('paMin', v)}
+                  onMaxChange={v => patch('paMax', v)}
                   disabled={saving}
-                  step={1}
-                  minLimit={1}
-                  labelMin={t('noise.config.passiveLabel') + ' mín'}
-                  labelMax={t('noise.config.passiveLabel') + ' máx'}
+                  labelMin={t('noise.config.passiveLabel') + ' — mínimo (mm:ss)'}
+                  labelMax={t('noise.config.passiveLabel') + ' — máximo (mm:ss)'}
                   errorId="err-passive"
                 />
               </div>
 
-              {/* DWELL */}
+              {/* DWELL — en segundos (sin cambio) */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '8px' }}>
                   {t('noise.config.dwellLabel')} ({t('noise.config.dwellUnit')})
                 </label>
-                <MinMaxInput
-                  minVal={dwellMin}
-                  maxVal={dwellMax}
-                  onMinChange={v => patch('dwell_min_seconds', v)}
-                  onMaxChange={v => patch('dwell_max_seconds', v)}
-                  disabled={saving}
-                  step={0.5}
-                  minLimit={0.5}
-                  isFloat
-                  labelMin={t('noise.config.dwellLabel') + ' mín'}
-                  labelMax={t('noise.config.dwellLabel') + ' máx'}
-                  errorId="err-dwell"
-                />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={dwellMin}
+                    disabled
+                    aria-label={t('noise.config.dwellLabel') + ' mín'}
+                    style={{
+                      width: '72px', padding: '4px 6px',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--surface)', color: 'var(--text)',
+                      fontFamily: 'var(--font-mono)', fontSize: '13px',
+                      fontVariantNumeric: 'tabular-nums',
+                      minHeight: '32px', textAlign: 'center',
+                      opacity: 0.6,
+                    }}
+                  />
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '13px', userSelect: 'none' }}>—</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={dwellMax}
+                    disabled
+                    aria-label={t('noise.config.dwellLabel') + ' máx'}
+                    style={{
+                      width: '72px', padding: '4px 6px',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'var(--surface)', color: 'var(--text)',
+                      fontFamily: 'var(--font-mono)', fontSize: '13px',
+                      fontVariantNumeric: 'tabular-nums',
+                      minHeight: '32px', textAlign: 'center',
+                      opacity: 0.6,
+                    }}
+                  />
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginTop: '4px' }}>
+                  {t('noise.config.dwellReadOnly')}
+                </span>
               </div>
 
               {/* Hint anti-detección (P3 — oculto en móvil) */}
@@ -270,7 +426,7 @@ export const NoiseConfigPanel = memo(function NoiseConfigPanel({ config, loading
                 {t('noise.config.antiDetectionHint')}
               </p>
 
-              {/* Error de API */}
+              {/* Error de API (incl. 422) */}
               {apiError && (
                 <p role="alert" style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '10px' }}>
                   {apiError}

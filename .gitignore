@@ -56,7 +56,7 @@ frontend/.vite/
 logs/
 
 # Scripts de prueba manual (pueden contener credenciales reales)
-test_login_manual.py
+scripts/login_manual.py
 
 # Guía de agentes (documentación interna generada, no versionada)
 documentacion/guia-agentes/

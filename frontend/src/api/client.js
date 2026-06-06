@@ -476,6 +476,141 @@ export const api = {
   testNoisePath: (worldId, pathId) =>
     request('POST', `/worlds/${worldId}/noise/paths/${pathId}/test`),
 
+  // ── Plantillas de rutas (Portal del desarrollador /rutas) ────────────────
+  // EP-RT01..EP-RT10 — /route-templates/...
+  // Nota: estos endpoints no requieren Accept-Language (labels = texto libre del dev).
+  // buildHeaders() ya lo incluye igualmente (inofensivo).
+
+  /**
+   * EP-RT01 GET /route-templates — lista plantillas.
+   * params: { category?, include_paths?, limit?, offset? }
+   */
+  listRouteTemplates: (params = {}) => {
+    const qs = new URLSearchParams()
+    if (params.category)      qs.set('category', params.category)
+    if (params.include_paths) qs.set('include_paths', 'true')
+    if (params.limit != null) qs.set('limit', params.limit)
+    if (params.offset != null) qs.set('offset', params.offset)
+    const q = qs.toString()
+    return request('GET', `/route-templates${q ? '?' + q : ''}`)
+  },
+
+  /** EP-RT02 POST /route-templates — crear plantilla → 201 */
+  createRouteTemplate: (data) =>
+    request('POST', '/route-templates', data),
+
+  /** EP-RT03 GET /route-templates/:id — obtener plantilla con paths+steps */
+  getRouteTemplate: (id) =>
+    request('GET', `/route-templates/${id}`),
+
+  /** EP-RT04 PUT /route-templates/:id — PATCH parcial de plantilla */
+  updateRouteTemplate: (id, data) =>
+    request('PUT', `/route-templates/${id}`, data),
+
+  /** EP-RT05 DELETE /route-templates/:id — borrar plantilla → 204 */
+  deleteRouteTemplate: (id) =>
+    request('DELETE', `/route-templates/${id}`),
+
+  /** EP-RT06 GET /route-templates/:id/paths — listar paths de la plantilla */
+  getRouteTemplatePaths: (id) =>
+    request('GET', `/route-templates/${id}/paths`),
+
+  /**
+   * EP-RT07 POST /route-templates/:id/clone-to-world/:worldId — clonar plantilla a un mundo.
+   * force: boolean (default false) — sobreescribe si hay conflicto.
+   * navigation_weight: float [0.1-5.0] (default 1.0) — frecuencia con la que ESE mundo usará la ruta.
+   * El peso vive en NoiseDestination por-mundo (v2 rev.2); la plantilla no tiene peso propio.
+   */
+  cloneRouteTemplate: (id, worldId, force = false, navigationWeight = 1.0) =>
+    request(
+      'POST',
+      `/route-templates/${id}/clone-to-world/${worldId}${force ? '?force=true' : ''}`,
+      { navigation_weight: navigationWeight },
+    ),
+
+  /**
+   * EP-RT08 POST /worlds/:worldId/noise/apply-templates — bulk clone.
+   * data: { template_ids: [...], force?: boolean, default_navigation_weight?: float }
+   * default_navigation_weight: peso aplicado uniformemente a todos los clones del bulk (default 1.0).
+   */
+  applyRouteTemplatesBulk: (worldId, data) =>
+    request('POST', `/worlds/${worldId}/noise/apply-templates`, data),
+
+  /**
+   * EP-RT09 POST /route-templates/:id/sync-to-world/:worldId — re-sincronizar instancia.
+   */
+  syncRouteTemplate: (id, worldId) =>
+    request('POST', `/route-templates/${id}/sync-to-world/${worldId}`),
+
+  /**
+   * EP-RT10 POST /route-templates/:id/test — probar plantilla en vivo.
+   * data: { world_id, path_index? }
+   */
+  testRouteTemplate: (id, data) =>
+    request('POST', `/route-templates/${id}/test`, data),
+
+  // ── Categorías de rutas ───────────────────────────────────────────────────
+  // EP-CAT01..EP-CAT05 — /route-categories/
+  // Nota: no requieren Accept-Language (labels = texto libre del usuario).
+  // buildHeaders() ya lo incluye igualmente (inofensivo).
+
+  /**
+   * EP-CAT01 GET /route-categories → lista todas las categorías
+   * Respuesta: [{ slug, label, color, is_default, created_at }]
+   * Orden: is_default DESC, created_at ASC (la default siempre primera).
+   */
+  listCategories: () =>
+    request('GET', '/route-categories'),
+
+  /**
+   * EP-CAT02 POST /route-categories → crear categoría
+   * Body: { label, color? }
+   * Respuesta 201: { slug, label, color, is_default, created_at }
+   * 409 si label duplicado CI.
+   */
+  createCategory: (data) =>
+    request('POST', '/route-categories', data),
+
+  /**
+   * EP-CAT03 GET /route-categories/:slug → obtener una categoría por slug
+   */
+  getCategory: (slug) =>
+    request('GET', `/route-categories/${slug}`),
+
+  /**
+   * EP-CAT04 PATCH /route-categories/:slug → actualizar label y/o color
+   * Body: { label?, color? } — al menos uno de los dos.
+   * color ausente → conservar; color: null → quitar color.
+   * 409 si nuevo label duplicado CI; 404 si slug no existe.
+   */
+  patchCategory: (slug, data) =>
+    request('PATCH', `/route-categories/${slug}`, data),
+
+  /**
+   * EP-CAT05 DELETE /route-categories/:slug → borrar categoría
+   * Reasigna atómicamente sus plantillas/destinos a 'uncategorized'.
+   * Respuesta 200: { deleted_slug, reassigned_count, reassigned_to }
+   * 409 si es la categoría default.
+   */
+  deleteCategory: (slug) =>
+    request('DELETE', `/route-categories/${slug}`),
+
+  /**
+   * EP-RT11 GET /route-templates/:id/chain — resolver cadena de orígenes.
+   * Devuelve la secuencia ordenada de pasos [raíz → hoja] que el motor ejecutaría.
+   * Usado por la tabla de "pasos heredados" en el portal de rutas.
+   */
+  getRouteTemplateChain: (id) =>
+    request('GET', `/route-templates/${id}/chain`),
+
+  /**
+   * EP-RT12 DELETE /worlds/:worldId/session — cerrar sesión Chrome de un mundo.
+   * Cierra la sesión activa del mundo (browser + session_registry) sin hacer logout de Travian.
+   * Usado por TestRoutePanel (v3) para liberar el browser tras el test.
+   */
+  closeWorldSession: (worldId) =>
+    request('DELETE', `/worlds/${worldId}/session`),
+
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 

@@ -444,6 +444,36 @@ chmod +x start.sh && ./start.sh
 
 ---
 
+## Frontera hexagonal verificable — `import-linter`
+
+La arquitectura hexagonal ya **no se confía, se verifica**. El fichero `.importlinter`
+(raíz) define contratos que `import-linter` hace cumplir:
+
+1. **Core no depende de adapters** — `core/` no puede importar nada de `adapters/`.
+2. **Core no importa librerías de infraestructura** — nada de `zendriver`, `bs4`,
+   `fastapi`, `uvicorn`, `aiosqlite` dentro de `core/` (el core recibe DTOs/dicts,
+   nunca HTML crudo ni drivers).
+
+**Ejecutar antes de cerrar cualquier tarea que toque `core/` o `adapters/`:**
+
+```bash
+.venv/bin/lint-imports     # debe decir "Contracts: 2 kept, 0 broken"
+```
+
+**Patrón "ratchet" (trinquete):** las violaciones que existían al montar la barrera
+(auditoría 2026-06-05: C-1 `world_agent`→browser, C-2 `village_map`→bs4) están
+listadas como `ignore_imports` en `.importlinter`, cada una con su nº de
+recomendación. Son **deuda conocida, no permiso para crecer**: NO añadir entradas
+nuevas a esas listas; al saldar una violación se borra su línea. La lista solo encoge.
+Si un cambio nuevo cruza la frontera, `lint-imports` falla → es señal de que la
+lógica está en la capa equivocada, no de que haya que añadir un ignore.
+
+Deuda pendiente de saldar (vía `analista` por requerir cambio de firma/diseño):
+**R3/C-1** (extraer un `BrowserExecutionPort` para `world_agent`) y **R2/C-2**
+(mover `VillageOverviewParser` a `adapters/browser/parsers/`).
+
+---
+
 ## Estructura de carpetas objetivo
 
 ```
@@ -585,4 +615,4 @@ Esto es la única forma de que el usuario sepa qué agente está activo en cada 
 11. **Documentación primero** — antes de editar, leer `documentacion/README.md`. Después de editar, actualizar lo afectado y bumpear la marca de agua.
 12. **Orquesta, no implementes solo** — delega en los agentes cuando la tarea encaje con su responsabilidad.
 
-🔖 Última revisión: 2026-06-01 (añadida capa de anti-detección "Click humano": `human_click()` y `human_click_at_rect()` en `adapters/browser/driver.py` reemplazan todo `element.click()` y `btn.click()` JS — gaussiana truncada + Bézier path + cursor persistente + mousedown/up separados. Ver `docs/specs/human-click.md`. + convención previa de ramas Git Flow + gobernanza de idioma)
+🔖 Última revisión: 2026-06-05 (añadida "Frontera hexagonal verificable": `import-linter` + `.importlinter` con 2 contratos —core sin adapters / core sin infra— en patrón ratchet; correr `lint-imports` antes de cerrar tareas que toquen `core/` o `adapters/`. + auditoría de código 2026-06-05: limpieza de huérfanos y dedup de helpers del frontend. + capa de anti-detección "Click humano": `human_click()` y `human_click_at_rect()` en `adapters/browser/driver.py` reemplazan todo `element.click()` y `btn.click()` JS — gaussiana truncada + Bézier path + cursor persistente + mousedown/up separados. Ver `docs/specs/human-click.md`. + convención previa de ramas Git Flow + gobernanza de idioma)

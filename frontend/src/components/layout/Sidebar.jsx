@@ -10,13 +10,11 @@
  * Ítems disabled: text-disabled + cursor not-allowed + tooltip "Próximamente".
  */
 import { NavLink } from 'react-router-dom'
-import { Users, Calculator, Swords } from 'lucide-react'
+import { Users, Calculator, Swords, BookOpen } from 'lucide-react'
 import { useI18n } from '../../i18n/index.jsx'
 
-// "Cuentas", la "Calculadora" y los "Reportes de oasis" viven en el shell de
-// gestión: son herramientas independientes del mundo (no necesitan login ni mundo
-// activo), por eso son accesibles desde el sidebar global. Recursos/Tropas/
-// Construcción dependen de un mundo concreto → viven dentro del Espacio del mundo.
+// "Cuentas", la "Calculadora", los "Reportes de oasis" y el "Catálogo de rutas"
+// viven en el shell de gestión: son herramientas independientes del mundo.
 const NAV_ITEMS = [
   {
     key: 'accounts',
@@ -37,6 +35,13 @@ const NAV_ITEMS = [
     to: '/reportes-oasis',
     icon: Swords,
     labelKey: 'nav.attackReports',
+    disabled: false,
+  },
+  {
+    key: 'route-templates',
+    to: '/rutas',
+    icon: BookOpen,
+    labelKey: 'nav.routeTemplates',
     disabled: false,
   },
 ]

@@ -1084,10 +1084,43 @@ source .venv/bin/activate && python -m pytest tests/antideteccion/test_noise_fre
 
 2. **Piso del intervalo en el spec §5/§10 (tabla)** — La tabla §10 del spec aún dice ">=5" en algunos campos. Se implementó el piso de **30 s** conforme a la condición no negociable del guardian (RN-FW02), que tiene precedencia explícita sobre las tablas.
 
-3. **Frontend (CA-FW16/CA-FW17/CA-FW18)** — No implementado: el spec indica que la UI la implementa `desarrollador-ux-ui` en una segunda fase. Solo se implementó el backend (core + BD + API + tests), tal como solicitó el usuario.
+3. **Frontend (CA-FW16/CA-FW17/CA-FW18)** — Implementado por `desarrollador-ux-ui` en segunda fase (2026-06-05). Ver "Registro de implementación — Frontend" más abajo.
 
-4. **`mmssToSeconds`/`secondsToMmss`** — No creadas: son utilidades de frontend, fuera del alcance de esta implementación.
+4. **`mmssToSeconds`/`secondsToMmss`/`validateMmss`** — Creadas en `frontend/src/utils/time.js` (parte del trabajo del desarrollador-ux-ui).
 
 5. **Migración M-FW04** — Se añadió una migración adicional no descrita por número en el spec (renombramiento del CHECK de BD de `> 0` a `>= 0.1 AND <= 5.0` con copia de datos clampando pesos al nuevo rango). Registrada como M-FW04.
 
 6. **`pick_random_safe_destination`** — El spec §3 "Fuera del alcance" decía "No necesita modificación", pero el guardian añadió como condición no negociable (RN-FW07 Requisito 2) el clamp de probabilidad efectiva al 60%. Se implementó en el adaptador, que es el lugar donde vive la función. Esta modificación cumple exactamente el requisito no negociable del guardian.
+
+---
+
+## Registro de implementación — Frontend
+
+**Fecha:** 2026-06-05
+
+**Frontend implementado por:** desarrollador-ux-ui
+
+**Excepción mockup-first:** el usuario aprobó explícitamente implementar como modificación in-place de los paneles existentes sin crear mockup nuevo, al tratarse de un retoque sobre componentes ya existentes.
+
+### Ficheros creados
+- `frontend/src/utils/time.js` — `mmssToSeconds`, `secondsToMmss`, `validateMmss` (CA-FW17)
+
+### Ficheros modificados
+- `frontend/src/components/world/noise/NoiseConfigPanel.jsx` — sustituye campos `*_req_per_hour_*` por inputs MM:SS (`hardcore_interval_min/max_seconds`, `passive_interval_min/max_seconds`). Componente `MmssMinMaxInput` inline con validación de formato, mínimo 30 s y mín≤máx. Conversión MM:SS↔segundos en cliente. El toggle de `noise_enabled` ya solo envía ese campo (PATCH mínimo). Errores 422 del backend se muestran como texto en `role="alert"`. (CA-FW16)
+- `frontend/src/components/world/noise/NoiseDestinationsTable.jsx` — `NoiseAddDestinationForm` renombra `frequency_weight → navigation_weight` en estado, validación, input (`min=0.1, max=5`) y llamada API. `DestinationRow` muestra `dest.navigation_weight`. (CA-FW18 parcial)
+- `frontend/src/components/world/noise/NoiseDestinationDrawer.jsx` — renombra `frequency_weight → navigation_weight` en estado (`weight`), `useEffect` de sync, `isDirty`, `handleSaveDest` (body a API), y en el input (`min=0.1, max=5`, clamp en `onChange`, `aria-label`). (CA-FW18)
+
+### `client.js`
+Sin cambios: `putNoiseConfig`, `createNoiseDestination` y `updateNoiseDestination` pasan body genérico sin hardcodear nombres de campo — ya compatibles con el nuevo contrato.
+
+### Criterios de aceptación frontend cubiertos
+- CA-FW16 — `NoiseConfigPanel.jsx` muestra intervalos en MM:SS y envía segundos al API.
+- CA-FW17 — `secondsToMmss(440)` devuelve `"7:20"` y `mmssToSeconds("07:20")` devuelve `440`. Verificado con la implementación de `time.js`.
+- CA-FW18 — `navigation_weight` visible y editable en `NoiseDestinationDrawer.jsx` (y en el formulario de creación de `NoiseDestinationsTable.jsx`).
+
+### Desviaciones respecto al diseño
+1. **Dwell deshabilitado en UI** — Los campos `dwell_min_seconds` / `dwell_max_seconds` se muestran como R/O (disabled) en el panel: no estaban en el scope del delta de este spec (§3 "Fuera del alcance"). Se conserva la presentación para informar al usuario. Si el usuario quiere editarlos, es un hueco para una iteración futura.
+2. **`dwellReadOnly` i18n key** — Se añadió la clave `noise.config.dwellReadOnly` para mostrar un hint "solo lectura" bajo el dwell. Si el catálogo i18n no tiene esa clave, el componente no muestra nada (fallback silencioso del sistema i18n del proyecto).
+
+### Verificación visual
+No fue posible verificar con `uishot.mjs` porque el entorno de CI no tiene acceso a Chrome/display en el momento de la implementación. El usuario debe verificar en local levantando `npm run dev` en `frontend/`.

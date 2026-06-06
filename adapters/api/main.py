@@ -32,6 +32,8 @@ from adapters.api.routes.incoming_attacks import router as incoming_attacks_rout
 from adapters.api.routes.game_resources import router as game_resources_router
 from adapters.api.routes.game_troops import router as game_troops_router
 from adapters.api.routes.noise import router as noise_router
+from adapters.api.routes.route_categories import router as route_categories_router
+from adapters.api.routes.route_templates import router as route_templates_router
 from adapters.api.routes.session import router as session_router
 from adapters.browser.fixture_overview_adapter import FixtureOverviewAdapter
 from adapters.browser.live_farm_list_adapter import LiveFarmListAdapter
@@ -45,6 +47,11 @@ from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
 from adapters.db.incoming_attack_sqlite_adapter import IncomingAttackSQLiteAdapter
 from adapters.db.seed_loader import load_if_empty
 from adapters.db.noise_sqlite_adapter import NoiseSQLiteAdapter
+from adapters.db.route_category_sqlite_adapter import RouteCategorySQLiteAdapter
+from adapters.db.route_template_sqlite_adapter import (
+    RouteTemplateSQLiteAdapter,
+    seed_route_templates,
+)
 from adapters.db.session_sqlite_adapter import SessionSQLiteAdapter
 from adapters.translations.json_translation_adapter import JsonTranslationAdapter
 from core.crypto import load_fernet_key
@@ -249,6 +256,28 @@ async def lifespan(application: FastAPI):
     await incoming_attack_adapter.ensure_tables()
     application.state.incoming_attack_port = incoming_attack_adapter
 
+    # -----------------------------------------------------------------------
+    # Catálogo dinámico de Categorías de Rutas — RouteCategorySQLiteAdapter
+    # (comparte la misma conexión SQLite)
+    # DEBE inicializarse ANTES de RouteTemplateSQLiteAdapter (M-CAT01/M-CAT02
+    # crean la tabla route_categories que las migraciones M-CAT03/M-CAT04 necesitan).
+    # Spec route-categories-dynamic.md §9.1, §14 Paso 5 y 6.
+    # -----------------------------------------------------------------------
+    route_category_adapter = RouteCategorySQLiteAdapter(conn)
+    await route_category_adapter.ensure_tables()
+    application.state.route_category_port = route_category_adapter
+
+    # -----------------------------------------------------------------------
+    # Catálogo maestro de Plantillas de Rutas — RouteTemplateSQLiteAdapter
+    # (comparte la misma conexión SQLite)
+    # Spec route-templates-developer-portal.md §14 Paso 3 y 8.
+    # -----------------------------------------------------------------------
+    route_template_adapter = RouteTemplateSQLiteAdapter(conn)
+    await route_template_adapter.ensure_tables()
+    # Seed idempotente: inserta ~20 plantillas si aún no existen (por slug).
+    await seed_route_templates(route_template_adapter)
+    application.state.route_template_port = route_template_adapter
+
     # Dict de LiveFarmListAdapter por world_id.
     # Se puebla on-demand cuando el usuario arranca el WorldAgent para un mundo
     # (endpoint POST /farm/worlds/{world_id}/agent/start).
@@ -327,7 +356,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=_CORS_ORIGIN_REGEX,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Accept-Language", "X-Request-ID", "X-Verbose", "Authorization"],
 )
 
@@ -469,6 +498,8 @@ app.include_router(game_resources_router)
 app.include_router(game_culture_points_router)
 app.include_router(game_troops_router)
 app.include_router(noise_router)
+app.include_router(route_categories_router)
+app.include_router(route_templates_router)
 app.include_router(session_router)
 
 

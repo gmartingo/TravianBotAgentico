@@ -942,6 +942,9 @@ async def stop_agent(world_id: int, request: Request) -> dict:
     """
     Solicita parada limpia del agente (la tarea en curso termina antes).
     404 si el agente no existe para ese mundo.
+
+    v3 (spec §v3.4.2 + §v3.2.3): tras request_stop(), cierra también la sesión
+    Chrome del mundo (close_session). Retrocompatible: mismo 200/404.
     """
     agent = _get_world_agent(request, world_id)
     if agent is None:
@@ -950,7 +953,18 @@ async def stop_agent(world_id: int, request: Request) -> dict:
             detail=f"No existe WorldAgent para el mundo {world_id}.",
         )
     agent.request_stop()
+    # v3: cerrar sesión Chrome del mundo al parar el agente (spec §v3.4.2)
+    session_registry = getattr(request.app.state, "world_runtime_port", None)
+    if session_registry is not None:
+        try:
+            await session_registry.close_session(world_id)
+        except Exception:
+            logger.warning(
+                "stop_agent: no se pudo cerrar sesión Chrome para world_id=%d", world_id
+            )
     return {"status": "stop_requested", "world_id": world_id}
+
+
 
 
 @router.get(

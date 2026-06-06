@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — CategoryCombobox
+  HTML autocontenido — cero dependencias del backend ni build.
+  Abrir directamente en el navegador con doble clic.
+
+  BLOQUES ARRASTRABLES:
+    1 — Trigger cerrado (categoría con color asignado)
+    2 — Desplegable abierto con lista completa
+    3 — Lista con búsqueda + match parcial
+    4 — Lista sin resultados + CTA crear
+    5 — Item en hover con acciones inline visibles
+    6 — Item en modo renombrar inline
+    7 — ColorSwatchPicker abierto
+    8 — DeletePopover abierto
+    9 — Estado cargando / skeleton
+   10 — Estado error de red
+
+  Spec de diseño: docs/design/route-categories-combobox.md
+  Spec funcional:  docs/specs/route-categories-dynamic.md
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · CategoryCombobox (playground)</title>
+<style>
+/* ===== TOKENS (DESIGN.md §19.16) ===== */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--surface-2:#EFEFF2;
+  --border:#D2D2D7;--border-strong:#C7C7CC;
+  --text:#1D1D1F;--text-secondary:#6E6E73;--text-tertiary:#8E8E93;--text-disabled:#AEAEB2;
+  --accent:#8A6418;--accent-text:#8A6418;--accent-hover:#6F5012;--accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F;--btn-primary-text:#FFFFFF;--btn-primary-hover:#3A3A3C;
+  --success:#248A3D;--success-subtle:rgba(36,138,61,.12);
+  --danger:#C9352C;--danger-subtle:rgba(201,53,44,.08);
+  --info:#0A6FCC;--info-subtle:rgba(10,111,204,.10);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px;--radius-md:10px;--radius-lg:14px;--radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1);--dur-fast:150ms;--dur-base:220ms;--dur-slow:300ms;
+  /* paleta de categorías */
+  --cat-steel:#2E6DAD;--cat-moss:#3D7A4E;--cat-amber:#A66521;--cat-terracot:#B5453A;
+  --cat-mauve:#7A5FAF;--cat-teal:#2E8B8B;--cat-salmon:#C4604E;--cat-slate:#5C6B7A;
+  --cat-indigo:#4A5AC0;--cat-sienna:#8B4513;--cat-forest:#2D6A4F;--cat-warmgra:#6B5B4E;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F;--surface:#2C2C2E;--surface-2:#3A3A3C;
+  --border:#3A3A3C;--border-strong:#48484A;
+  --text:#F5F5F7;--text-secondary:#AEAEB2;--text-tertiary:#8E8E93;--text-disabled:#636366;
+  --accent:#CBB079;--accent-text:#CBB079;--accent-hover:#D8C089;--accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7;--btn-primary-text:#1D1D1F;--btn-primary-hover:#E2E2E6;
+  --success:#34C759;--success-subtle:rgba(52,199,89,.12);
+  --danger:#FF453A;--danger-subtle:rgba(255,69,58,.10);
+  --info:#0A84FF;--info-subtle:rgba(10,132,255,.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);--shadow-md:0 4px 12px rgba(0,0,0,.5);--shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:14px;color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;min-height:100vh}
+
+/* ===== TOPBAR ===== */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:48px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:12px;z-index:1000;
+}
+#topbar .tb-logo{
+  width:28px;height:28px;border-radius:7px;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-weight:700;font-size:12px;display:grid;place-items:center;flex-shrink:0;
+}
+#topbar .tb-title{font-size:13px;font-weight:600;color:var(--text);flex:1}
+#topbar .tb-subtitle{font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono)}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.btn-topbar{
+  height:28px;padding:0 10px;border-radius:var(--radius-sm);font-size:12px;font-family:inherit;
+  cursor:pointer;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  display:inline-flex;align-items:center;gap:5px;
+}
+.btn-topbar:hover{background:var(--surface-2)}
+.btn-topbar.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent}
+.btn-topbar.primary:hover{background:var(--btn-primary-hover)}
+
+/* ===== CANVAS ===== */
+#canvas{
+  position:relative;margin-top:48px;min-height:calc(100vh - 48px);
+  background:var(--bg);
+  background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);
+  background-size:20px 20px;
+  overflow:hidden;
+}
+#canvas.edit-mode .drag-block{cursor:grab}
+#canvas.edit-mode .drag-block:active{cursor:grabbing}
+
+/* ===== BLOQUES ===== */
+.drag-block{
+  position:absolute;user-select:none;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);
+  min-width:200px;
+  transition:box-shadow var(--dur-fast) var(--ease);
+}
+.drag-block.dragging{box-shadow:var(--shadow-lg);opacity:.92;z-index:500}
+#canvas.edit-mode .drag-block:hover{box-shadow:var(--shadow-md)}
+
+.block-label{
+  padding:6px 10px 5px;
+  font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--text-tertiary);border-bottom:1px solid var(--border);
+  background:var(--surface-2);border-radius:var(--radius-md) var(--radius-md) 0 0;
+  display:flex;align-items:center;gap:6px;
+}
+.block-label .block-num{
+  width:16px;height:16px;border-radius:var(--radius-full);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  font-size:9px;font-weight:700;display:grid;place-items:center;flex-shrink:0;
+}
+.block-body{padding:14px 16px}
+
+/* ===== COMPONENTES DEL COMBOBOX ===== */
+
+/* Trigger */
+.cc-trigger{
+  display:inline-flex;align-items:center;gap:8px;
+  height:32px;padding:0 10px 0 8px;
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  cursor:pointer;font-size:14px;color:var(--text);font-family:inherit;
+  min-width:180px;max-width:260px;
+  transition:border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease);
+}
+.cc-trigger:hover{border-color:var(--accent)}
+.cc-trigger:focus{outline:2px solid var(--accent);outline-offset:2px}
+.cc-trigger .cat-swatch{
+  width:12px;height:12px;border-radius:3px;flex-shrink:0;
+}
+.cc-trigger .cat-swatch.no-color{
+  border:1.5px dashed var(--border-strong);background:transparent;
+}
+.cc-trigger .cat-label{flex:1;text-align:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-trigger .chevron{
+  width:14px;height:14px;flex-shrink:0;color:var(--text-tertiary);
+  transition:transform var(--dur-base) var(--ease);
+}
+.cc-trigger.open .chevron{transform:rotate(180deg)}
+
+/* Panel desplegable */
+.cc-panel{
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;
+  min-width:240px;max-width:320px;
+}
+
+/* Input de búsqueda */
+.cc-search-wrap{
+  display:flex;align-items:center;gap:6px;
+  padding:0 10px;height:38px;
+  border-bottom:1px solid var(--border);
+}
+.cc-search-icon{color:var(--text-tertiary);flex-shrink:0}
+.cc-search-input{
+  flex:1;border:none;outline:none;background:transparent;
+  font-size:14px;color:var(--text);font-family:inherit;
+}
+.cc-search-input::placeholder{color:var(--text-tertiary)}
+.cc-search-clear{
+  width:18px;height:18px;border-radius:var(--radius-full);
+  background:var(--surface-2);border:none;cursor:pointer;
+  color:var(--text-secondary);display:grid;place-items:center;
+  flex-shrink:0;font-size:11px;
+}
+.cc-search-clear:hover{background:var(--border)}
+
+/* Lista de items */
+.cc-list{max-height:220px;overflow-y:auto;padding:4px 0}
+.cc-list::-webkit-scrollbar{width:4px}
+.cc-list::-webkit-scrollbar-track{background:transparent}
+.cc-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:var(--radius-full)}
+
+.cc-item{
+  display:flex;align-items:center;gap:8px;
+  padding:0 10px;height:36px;cursor:pointer;position:relative;
+  transition:background var(--dur-fast) var(--ease);
+}
+.cc-item:hover,.cc-item.hovered{background:var(--surface-2)}
+.cc-item.selected .cc-item-check{opacity:1}
+.cc-item .check-placeholder{width:14px;flex-shrink:0}
+.cc-item-check{
+  width:14px;flex-shrink:0;color:var(--accent-text);opacity:0;
+  transition:opacity var(--dur-fast) var(--ease);
+}
+.cc-item-swatch{
+  width:12px;height:12px;border-radius:3px;flex-shrink:0;
+}
+.cc-item-swatch.no-color{
+  border:1.5px dashed var(--border-strong);background:transparent;
+}
+.cc-item-label{flex:1;font-size:14px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-item-actions{
+  display:flex;align-items:center;gap:2px;flex-shrink:0;
+  opacity:0;transition:opacity 100ms var(--ease);
+}
+.cc-item:hover .cc-item-actions,.cc-item.hovered .cc-item-actions{opacity:1}
+.cc-action-btn{
+  width:24px;height:24px;border-radius:var(--radius-sm);border:none;
+  background:transparent;cursor:pointer;
+  color:var(--text-tertiary);display:grid;place-items:center;
+  transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease);
+}
+.cc-action-btn:hover{background:var(--surface);color:var(--text)}
+.cc-action-btn.danger:hover{background:var(--danger-subtle,rgba(201,53,44,.08));color:var(--danger)}
+
+/* Item en modo renombrar */
+.cc-rename-row{
+  display:flex;align-items:center;gap:6px;
+  padding:0 10px;height:40px;background:var(--surface-2);
+}
+.cc-rename-swatch{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.cc-rename-input{
+  flex:1;height:28px;padding:0 8px;
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  background:var(--surface);font-size:13px;color:var(--text);font-family:inherit;
+  outline:none;
+}
+.cc-rename-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-subtle)}
+.cc-rename-confirm,.cc-rename-cancel{
+  width:26px;height:26px;border:none;border-radius:var(--radius-sm);
+  background:transparent;cursor:pointer;display:grid;place-items:center;
+}
+.cc-rename-confirm{color:var(--success)}
+.cc-rename-confirm:hover{background:var(--success-subtle,rgba(36,138,61,.12))}
+.cc-rename-cancel{color:var(--text-secondary)}
+.cc-rename-cancel:hover{background:var(--surface)}
+.cc-rename-error{
+  font-size:11px;color:var(--danger);padding:2px 10px 4px 36px;
+  display:flex;align-items:center;gap:4px;
+  border-bottom:1px solid var(--border);
+}
+
+/* Divisor y footer del panel */
+.cc-divider{height:1px;background:var(--border);margin:4px 0}
+.cc-footer{padding:4px 0 4px}
+
+/* Botón + Crear */
+.cc-create-btn{
+  display:flex;align-items:center;gap:8px;
+  width:100%;padding:0 10px;height:34px;
+  border:none;background:transparent;cursor:pointer;
+  font-size:13px;color:var(--accent-text);font-family:inherit;text-align:start;
+  transition:background var(--dur-fast) var(--ease);
+}
+.cc-create-btn:hover{background:var(--accent-subtle)}
+
+/* Sin resultados */
+.cc-no-results{
+  padding:12px 10px;font-size:12px;color:var(--text-tertiary);
+  display:flex;align-items:center;gap:6px;
+}
+
+/* ColorSwatchPicker */
+.cc-swatch-picker{
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);padding:10px;
+  display:flex;flex-direction:column;gap:8px;
+  width:192px;
+}
+.cc-swatches-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.cs-swatch{
+  width:24px;height:24px;border-radius:var(--radius-sm);cursor:pointer;border:none;
+  transition:transform var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease);
+  position:relative;
+}
+.cs-swatch:hover{transform:scale(1.12)}
+.cs-swatch.active{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--accent)}
+.cc-no-color-btn{
+  display:flex;align-items:center;gap:7px;padding:4px 6px;
+  border:none;background:transparent;cursor:pointer;font-size:12px;font-family:inherit;
+  color:var(--text-secondary);border-radius:var(--radius-sm);
+  transition:background var(--dur-fast) var(--ease);
+}
+.cc-no-color-btn:hover{background:var(--surface-2)}
+.cc-no-color-circle{
+  width:18px;height:18px;border-radius:var(--radius-full);
+  border:1.5px dashed var(--border-strong);background:transparent;flex-shrink:0;
+}
+
+/* DeletePopover (reutiliza el estilo del componente real) */
+.cc-delete-popover{
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);padding:12px 14px;
+  min-width:220px;max-width:280px;display:flex;flex-direction:column;gap:10px;
+}
+.cc-delete-question{font-size:13px;color:var(--text);line-height:1.4}
+.cc-delete-actions{display:flex;gap:6px;justify-content:flex-end}
+.cc-delete-cancel{
+  height:28px;padding:0 12px;border-radius:var(--radius-sm);font-size:12px;font-family:inherit;
+  background:var(--surface);border:1px solid var(--border-strong);color:var(--text);cursor:pointer;
+}
+.cc-delete-confirm{
+  height:28px;padding:0 12px;border-radius:var(--radius-sm);font-size:12px;font-family:inherit;
+  background:var(--danger);border:none;color:#fff;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;
+}
+
+/* Badge dinámico */
+.cat-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  border-radius:var(--radius-full);padding:2px 8px;
+  font-size:11px;font-weight:500;letter-spacing:.03em;white-space:nowrap;
+}
+.cat-badge .badge-swatch{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.cat-badge.neutral{background:var(--surface-2);color:var(--text-secondary)}
+
+/* Skeleton */
+@keyframes skeleton-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.skeleton{
+  background:var(--surface-2);border-radius:var(--radius-sm);
+  animation:skeleton-pulse 1.4s ease-in-out infinite;
+}
+.cc-trigger-skeleton{
+  display:inline-flex;align-items:center;gap:8px;
+  height:32px;padding:0 10px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface-2);min-width:180px;
+  animation:skeleton-pulse 1.4s ease-in-out infinite;
+}
+.skeleton-swatch{width:12px;height:12px;border-radius:3px}
+.skeleton-label{height:12px;width:80px;border-radius:var(--radius-sm)}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{
+  width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--text-secondary);
+  border-radius:var(--radius-full);animation:spin .6s linear infinite;flex-shrink:0;
+}
+
+/* Etiqueta de contexto */
+.ctx-label{
+  font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);
+  margin-bottom:8px;letter-spacing:.02em;
+}
+
+/* ===== MODO EDITAR ===== */
+#edit-overlay{
+  position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  padding:8px 16px;border-radius:var(--radius-full);font-size:12px;font-weight:600;
+  box-shadow:var(--shadow-lg);z-index:999;
+  display:none;pointer-events:none;letter-spacing:.03em;
+}
+#canvas.edit-mode #edit-overlay{display:block}
+
+/* Grid snap visual (solo en edit-mode) */
+#canvas.edit-mode{
+  background-image:radial-gradient(circle,var(--accent-subtle) 1px,transparent 1px);
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="tb-logo">TB</div>
+  <div class="tb-title">CategoryCombobox</div>
+  <div class="tb-subtitle">playground · docs/design/route-categories-combobox.md</div>
+  <div class="topbar-actions">
+    <button class="btn-topbar" id="btn-edit">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Editar
+    </button>
+    <button class="btn-topbar" id="btn-reset">Restablecer</button>
+    <button class="btn-topbar primary" id="btn-export">Exportar layout</button>
+    <button class="btn-topbar" id="btn-theme">Modo oscuro</button>
+  </div>
+</div>
+
+<!-- CANVAS -->
+<div id="canvas">
+  <div id="edit-overlay">MODO EDITAR — arrastra los bloques</div>
+
+  <!-- BLOQUE 1: Trigger cerrado -->
+  <div class="drag-block" id="block-1" style="left:40px;top:40px;width:340px">
+    <div class="block-label"><span class="block-num">1</span>Trigger cerrado (reposo)</div>
+    <div class="block-body">
+      <div class="ctx-label">Campo "Categoría" en el drawer de edición</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <!-- Con color asignado -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px">Con color asignado</div>
+          <button class="cc-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Categoría: Oasis">
+            <span class="cat-swatch" style="background:var(--cat-teal)"></span>
+            <span class="cat-label">Oasis</span>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <!-- Sin color asignado -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px">Sin color asignado ("Sin categoría")</div>
+          <button class="cc-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Categoría: Sin categoría">
+            <span class="cat-swatch no-color"></span>
+            <span class="cat-label">Sin categoría</span>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <!-- Badge dinámico (lectura) -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px">CategoryBadge (solo lectura, en tabla)</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="cat-badge" style="background:var(--cat-teal);color:#fff">
+              <span class="badge-swatch" style="background:rgba(255,255,255,.4)"></span>
+              Oasis
+            </span>
+            <span class="cat-badge" style="background:var(--cat-mauve);color:#fff">
+              <span class="badge-swatch" style="background:rgba(255,255,255,.4)"></span>
+              Mapa
+            </span>
+            <span class="cat-badge neutral">Sin categoría</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 2: Lista abierta completa -->
+  <div class="drag-block" id="block-2" style="left:420px;top:40px;width:320px">
+    <div class="block-label"><span class="block-num">2</span>Desplegable abierto — lista completa</div>
+    <div class="block-body">
+      <div class="ctx-label">Sin texto en el buscador</div>
+      <div class="cc-panel">
+        <!-- Input búsqueda -->
+        <div class="cc-search-wrap">
+          <svg class="cc-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="cc-search-input" type="text" placeholder="Buscar o crear..." value="" aria-label="Buscar categoría" aria-autocomplete="list"/>
+        </div>
+        <!-- Items -->
+        <div class="cc-list" role="listbox" aria-label="Categorías disponibles">
+          <div class="cc-item selected" role="option" aria-selected="true">
+            <svg class="cc-item-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="cc-item-swatch no-color"></span>
+            <span class="cc-item-label">Sin categoría</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="cc-action-btn" title="Cambiar color">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              </button>
+              <!-- Sin papelera para uncategorized -->
+            </div>
+          </div>
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-teal)"></span>
+            <span class="cc-item-label">Oasis</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button class="cc-action-btn" title="Cambiar color">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+              </button>
+              <button class="cc-action-btn danger" title="Eliminar categoría">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-mauve)"></span>
+            <span class="cc-item-label">Mapa</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-slate)"></span>
+            <span class="cc-item-label">Perfiles de jugador</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="cc-divider"></div>
+        <div class="cc-footer">
+          <button class="cc-create-btn" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nueva categoría
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 3: Búsqueda con match parcial -->
+  <div class="drag-block" id="block-3" style="left:40px;top:340px;width:320px">
+    <div class="block-label"><span class="block-num">3</span>Búsqueda con match parcial</div>
+    <div class="block-body">
+      <div class="ctx-label">El usuario ha escrito "ma"</div>
+      <div class="cc-panel">
+        <div class="cc-search-wrap">
+          <svg class="cc-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="cc-search-input" type="text" value="ma" aria-label="Buscar categoría"/>
+          <button class="cc-search-clear" title="Limpiar">×</button>
+        </div>
+        <div class="cc-list" role="listbox">
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-mauve)"></span>
+            <span class="cc-item-label">Mapa</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-steel)"></span>
+            <span class="cc-item-label">Mapas estratégicos</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="cc-divider"></div>
+        <div class="cc-footer">
+          <button class="cc-create-btn" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Crear "ma"
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 4: Sin resultados -->
+  <div class="drag-block" id="block-4" style="left:400px;top:340px;width:300px">
+    <div class="block-label"><span class="block-num">4</span>Sin resultados → CTA crear</div>
+    <div class="block-body">
+      <div class="ctx-label">El usuario ha escrito "conquista"</div>
+      <div class="cc-panel">
+        <div class="cc-search-wrap">
+          <svg class="cc-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="cc-search-input" type="text" value="conquista" aria-label="Buscar categoría"/>
+          <button class="cc-search-clear" title="Limpiar">×</button>
+        </div>
+        <div class="cc-no-results">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Sin resultados
+        </div>
+        <div class="cc-divider"></div>
+        <div class="cc-footer">
+          <button class="cc-create-btn" type="button" style="font-weight:500">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Crear "conquista"
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 5: Item en hover con acciones -->
+  <div class="drag-block" id="block-5" style="left:740px;top:40px;width:320px">
+    <div class="block-label"><span class="block-num">5</span>Item en hover — acciones visibles</div>
+    <div class="block-body">
+      <div class="ctx-label">Cursor sobre "Oasis" — acciones aparecen</div>
+      <div class="cc-panel">
+        <div class="cc-list" role="listbox">
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch no-color"></span>
+            <span class="cc-item-label">Sin categoría</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <!-- SIN papelera para uncategorized -->
+              <span style="font-size:9px;color:var(--text-disabled);padding:0 2px">—</span>
+            </div>
+          </div>
+          <!-- Item con hover activo -->
+          <div class="cc-item hovered" role="option" aria-selected="false" style="background:var(--surface-2)">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-teal)"></span>
+            <span class="cc-item-label">Oasis</span>
+            <div class="cc-item-actions" style="opacity:1">
+              <button class="cc-action-btn" title="Renombrar" style="color:var(--text-secondary)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color" style="color:var(--text-secondary)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar" style="color:var(--danger)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-mauve)"></span>
+            <span class="cc-item-label">Mapa</span>
+            <div class="cc-item-actions">
+              <button class="cc-action-btn" title="Renombrar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="cc-action-btn" title="Cambiar color"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></button>
+              <button class="cc-action-btn danger" title="Eliminar"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="cc-divider"></div>
+        <div class="cc-footer">
+          <button class="cc-create-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nueva categoría</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 6: Item en modo renombrar -->
+  <div class="drag-block" id="block-6" style="left:740px;top:360px;width:320px">
+    <div class="block-label"><span class="block-num">6</span>Item en modo renombrar inline</div>
+    <div class="block-body">
+      <div class="ctx-label">Después de clic en lápiz de "Oasis"</div>
+      <div class="cc-panel">
+        <div class="cc-list" role="listbox">
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch no-color"></span>
+            <span class="cc-item-label">Sin categoría</span>
+          </div>
+        </div>
+        <!-- Item en modo renombrar -->
+        <div class="cc-rename-row">
+          <span class="cc-rename-swatch" style="background:var(--cat-teal)"></span>
+          <input class="cc-rename-input" type="text" value="Oasis" aria-label="Nuevo nombre de la categoría"/>
+          <button class="cc-rename-confirm" title="Confirmar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+          <button class="cc-rename-cancel" title="Cancelar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <!-- Variante: con error de duplicado -->
+        <div style="padding:6px 10px 8px;border-bottom:1px solid var(--border)">
+          <div style="font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Variante: error de duplicado</div>
+          <div class="cc-rename-row" style="border:1px solid var(--danger);border-radius:var(--radius-sm)">
+            <span class="cc-rename-swatch" style="background:var(--cat-teal)"></span>
+            <input class="cc-rename-input" type="text" value="Mapa" style="border-color:var(--danger)" aria-describedby="rename-err"/>
+            <button class="cc-rename-confirm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></button>
+            <button class="cc-rename-cancel"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+          <div id="rename-err" class="cc-rename-error" style="padding:3px 0 0 4px;border:none">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Ya existe una categoría con este nombre
+          </div>
+        </div>
+        <div class="cc-list" role="listbox">
+          <div class="cc-item" role="option" aria-selected="false">
+            <span class="check-placeholder"></span>
+            <span class="cc-item-swatch" style="background:var(--cat-mauve)"></span>
+            <span class="cc-item-label">Mapa</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 7: ColorSwatchPicker -->
+  <div class="drag-block" id="block-7" style="left:40px;top:620px;width:340px">
+    <div class="block-label"><span class="block-num">7</span>ColorSwatchPicker abierto</div>
+    <div class="block-body">
+      <div class="ctx-label">Tras clic en icono de color del item "Oasis"</div>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <!-- Swatch picker -->
+        <div class="cc-swatch-picker">
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);letter-spacing:.03em;padding:0 0 2px">Seleccionar color</div>
+          <div class="cc-swatches-grid">
+            <button class="cs-swatch active" style="background:var(--cat-steel)" title="Acero" aria-label="Color acero"></button>
+            <button class="cs-swatch" style="background:var(--cat-moss)" title="Musgo" aria-label="Color musgo"></button>
+            <button class="cs-swatch" style="background:var(--cat-amber)" title="Ámbar" aria-label="Color ámbar"></button>
+            <button class="cs-swatch" style="background:var(--cat-terracot)" title="Terracota" aria-label="Color terracota"></button>
+            <button class="cs-swatch" style="background:var(--cat-mauve)" title="Malva" aria-label="Color malva"></button>
+            <button class="cs-swatch" style="background:var(--cat-teal)" title="Teal" aria-label="Color teal"></button>
+            <button class="cs-swatch" style="background:var(--cat-salmon)" title="Salmón" aria-label="Color salmón"></button>
+            <button class="cs-swatch" style="background:var(--cat-slate)" title="Pizarra" aria-label="Color pizarra"></button>
+            <button class="cs-swatch" style="background:var(--cat-indigo)" title="Índigo" aria-label="Color índigo"></button>
+            <button class="cs-swatch" style="background:var(--cat-sienna)" title="Siena" aria-label="Color siena"></button>
+            <button class="cs-swatch" style="background:var(--cat-forest)" title="Bosque" aria-label="Color bosque"></button>
+            <button class="cs-swatch" style="background:var(--cat-warmgra)" title="Grafito cálido" aria-label="Color grafito cálido"></button>
+          </div>
+          <div style="height:1px;background:var(--border);margin:2px 0"></div>
+          <button class="cc-no-color-btn" type="button" aria-label="Sin color asignado">
+            <span class="cc-no-color-circle" aria-hidden="true"></span>
+            Sin color
+          </button>
+        </div>
+        <!-- Paleta referencia -->
+        <div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-tertiary);margin-bottom:8px">Paleta completa (referencia)</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-steel);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Acero #2E6DAD</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-moss);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Musgo #3D7A4E</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-amber);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Ámbar #A66521</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-terracot);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Terracota #B5453A</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-mauve);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Malva #7A5FAF</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-teal);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Teal #2E8B8B</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-salmon);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Salmón #C4604E</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-slate);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Pizarra #5C6B7A</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-indigo);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Índigo #4A5AC0</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-sienna);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Siena #8B4513</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-forest);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Bosque #2D6A4F</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border-radius:3px;background:var(--cat-warmgra);display:inline-block"></span><span style="font-size:11px;color:var(--text-secondary)">Grafito cálido #6B5B4E</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 8: DeletePopover -->
+  <div class="drag-block" id="block-8" style="left:420px;top:620px;width:320px">
+    <div class="block-label"><span class="block-num">8</span>DeletePopover abierto</div>
+    <div class="block-body">
+      <div class="ctx-label">Confirmación de borrado de "Oasis" (7 rutas asignadas)</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <!-- Variante: con rutas asignadas -->
+        <div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Con N rutas asignadas</div>
+          <div class="cc-delete-popover">
+            <p class="cc-delete-question">¿Eliminar la categoría? 7 plantilla(s) pasarán a «Sin categoría».</p>
+            <div class="cc-delete-actions">
+              <button class="cc-delete-cancel">Cancelar</button>
+              <button class="cc-delete-confirm">Eliminar</button>
+            </div>
+          </div>
+        </div>
+        <!-- Variante: sin rutas -->
+        <div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Sin rutas asignadas</div>
+          <div class="cc-delete-popover">
+            <p class="cc-delete-question">¿Eliminar la categoría? No tiene plantillas asignadas.</p>
+            <div class="cc-delete-actions">
+              <button class="cc-delete-cancel">Cancelar</button>
+              <button class="cc-delete-confirm">Eliminar</button>
+            </div>
+          </div>
+        </div>
+        <!-- Variante: loading -->
+        <div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Durante el borrado (loading)</div>
+          <div class="cc-delete-popover">
+            <p class="cc-delete-question">¿Eliminar la categoría? 7 plantilla(s) pasarán a «Sin categoría».</p>
+            <div class="cc-delete-actions">
+              <button class="cc-delete-cancel" disabled style="opacity:.5">Cancelar</button>
+              <button class="cc-delete-confirm" disabled style="opacity:.7;cursor:not-allowed">
+                <span class="spinner"></span>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 9: Estado cargando / skeleton -->
+  <div class="drag-block" id="block-9" style="left:780px;top:620px;width:300px">
+    <div class="block-label"><span class="block-num">9</span>Estado cargando (skeleton)</div>
+    <div class="block-body">
+      <div class="ctx-label">Fetch inicial de GET /route-categories</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <!-- Trigger skeleton -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Trigger desactivado (skeleton)</div>
+          <div class="cc-trigger-skeleton" aria-disabled="true">
+            <div class="skeleton skeleton-swatch"></div>
+            <div class="skeleton skeleton-label"></div>
+          </div>
+        </div>
+        <!-- Item skeleton en lista -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Items en lista (loading mutación)</div>
+          <div class="cc-panel" style="pointer-events:none;opacity:.8">
+            <div class="cc-list">
+              <div class="cc-item">
+                <span class="check-placeholder"></span>
+                <div class="skeleton" style="width:12px;height:12px;border-radius:3px;flex-shrink:0"></div>
+                <div class="skeleton" style="flex:1;height:12px;max-width:100px"></div>
+              </div>
+              <div class="cc-item" style="opacity:.5">
+                <span class="check-placeholder"></span>
+                <div class="skeleton" style="width:12px;height:12px;border-radius:3px;flex-shrink:0"></div>
+                <div class="skeleton" style="flex:1;height:12px;max-width:70px"></div>
+                <span class="spinner" style="margin-inline-start:auto"></span>
+              </div>
+              <div class="cc-item">
+                <span class="check-placeholder"></span>
+                <div class="skeleton" style="width:12px;height:12px;border-radius:3px;flex-shrink:0"></div>
+                <div class="skeleton" style="flex:1;height:12px;max-width:80px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLOQUE 10: Error de red -->
+  <div class="drag-block" id="block-10" style="left:40px;top:960px;width:340px">
+    <div class="block-label"><span class="block-num">10</span>Estado error de red</div>
+    <div class="block-body">
+      <div class="ctx-label">Fallo en GET /route-categories al montar</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <!-- Trigger de error -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Trigger con error</div>
+          <button class="cc-trigger" type="button" disabled style="opacity:.7;border-color:var(--danger);cursor:not-allowed;gap:6px" aria-disabled="true" title="No se pudo cargar las categorías">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span style="color:var(--text-secondary)">Sin categoría</span>
+          </button>
+        </div>
+        <!-- Mensaje de error en panel -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Panel con error (si el usuario intenta abrir)</div>
+          <div class="cc-panel" style="padding:14px 12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+            <div style="display:flex;align-items:center;gap:7px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span style="font-size:13px;color:var(--text)">No se pudo cargar las categorías</span>
+            </div>
+            <button style="height:26px;padding:0 10px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);background:var(--surface);font-size:12px;color:var(--accent-text);cursor:pointer;font-family:inherit">
+              Reintentar
+            </button>
+          </div>
+        </div>
+        <!-- Toast de error (mutación fallida) -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Toast de error (mutación fallida)</div>
+          <div style="
+            background:var(--danger);color:#fff;
+            padding:9px 14px;border-radius:var(--radius-sm);
+            box-shadow:var(--shadow-lg);font-size:13px;
+            display:flex;align-items:center;gap:8px;width:fit-content;
+          ">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            No se pudo completar la acción
+          </div>
+        </div>
+        <!-- Toast de éxito (referencia) -->
+        <div>
+          <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:5px">Toast de éxito (referencia)</div>
+          <div style="
+            background:var(--btn-primary-bg);color:var(--btn-primary-text);
+            padding:9px 14px;border-radius:var(--radius-sm);
+            box-shadow:var(--shadow-lg);font-size:13px;
+            width:fit-content;
+          ">Categoría «Oasis» creada</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /canvas -->
+
+<script>
+// ===== DRAG & DROP + GRID SNAP =====
+const GRID = 8;
+let editMode = false;
+let dragging = null;
+let offsetX = 0, offsetY = 0;
+
+function snap(v) { return Math.round(v / GRID) * GRID; }
+
+document.querySelectorAll('.drag-block').forEach(block => {
+  block.addEventListener('mousedown', e => {
+    if (!editMode) return;
+    if (e.button !== 0) return;
+    // No arrastrar si el clic fue en un input, button, o textarea
+    if (['INPUT','BUTTON','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    dragging = block;
+    const rect = block.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    block.classList.add('dragging');
+    e.preventDefault();
+  });
+});
+
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const canvas = document.getElementById('canvas');
+  const cr = canvas.getBoundingClientRect();
+  const x = snap(e.clientX - cr.left - offsetX);
+  const y = snap(e.clientY - cr.top - offsetY);
+  dragging.style.left = Math.max(0, x) + 'px';
+  dragging.style.top  = Math.max(0, y) + 'px';
+});
+
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging.classList.remove('dragging');
+  dragging = null;
+});
+
+// ===== BOTONES TOPBAR =====
+const canvas = document.getElementById('canvas');
+
+document.getElementById('btn-edit').addEventListener('click', () => {
+  editMode = !editMode;
+  canvas.classList.toggle('edit-mode', editMode);
+  document.getElementById('btn-edit').textContent = editMode ? 'Salir de editar' : 'Editar';
+});
+
+const DEFAULT_POSITIONS = {
+  'block-1':  {left:'40px',  top:'40px'},
+  'block-2':  {left:'420px', top:'40px'},
+  'block-3':  {left:'40px',  top:'340px'},
+  'block-4':  {left:'400px', top:'340px'},
+  'block-5':  {left:'740px', top:'40px'},
+  'block-6':  {left:'740px', top:'360px'},
+  'block-7':  {left:'40px',  top:'620px'},
+  'block-8':  {left:'420px', top:'620px'},
+  'block-9':  {left:'780px', top:'620px'},
+  'block-10': {left:'40px',  top:'960px'},
+};
+
+function saveLayout() {
+  const layout = {};
+  document.querySelectorAll('.drag-block').forEach(b => {
+    layout[b.id] = { left: b.style.left, top: b.style.top };
+  });
+  localStorage.setItem('cc-playground-layout', JSON.stringify(layout));
+}
+
+function loadLayout() {
+  const raw = localStorage.getItem('cc-playground-layout');
+  if (!raw) return;
+  try {
+    const layout = JSON.parse(raw);
+    document.querySelectorAll('.drag-block').forEach(b => {
+      if (layout[b.id]) {
+        b.style.left = layout[b.id].left;
+        b.style.top  = layout[b.id].top;
+      }
+    });
+  } catch(e) { /* ignorar */ }
+}
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  document.querySelectorAll('.drag-block').forEach(b => {
+    const pos = DEFAULT_POSITIONS[b.id];
+    if (pos) { b.style.left = pos.left; b.style.top = pos.top; }
+  });
+  localStorage.removeItem('cc-playground-layout');
+});
+
+document.getElementById('btn-export').addEventListener('click', () => {
+  const layout = {};
+  document.querySelectorAll('.drag-block').forEach(b => {
+    layout[b.id] = {
+      left: b.style.left,
+      top: b.style.top,
+      label: b.querySelector('.block-label')?.textContent?.trim() ?? ''
+    };
+  });
+  const json = JSON.stringify(layout, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'category-combobox-layout.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Toggle tema
+let dark = document.documentElement.dataset.theme === 'dark'
+  || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+function applyTheme() {
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.getElementById('btn-theme').textContent = dark ? 'Modo claro' : 'Modo oscuro';
+}
+applyTheme();
+document.getElementById('btn-theme').addEventListener('click', () => {
+  dark = !dark;
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+  applyTheme();
+});
+
+// Auto-save en cada mouseup
+document.addEventListener('mouseup', () => {
+  if (editMode) saveLayout();
+});
+
+// Cargar posiciones guardadas al inicio
+loadLayout();
+</script>
+</body>
+</html>
