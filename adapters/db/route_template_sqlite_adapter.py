@@ -29,7 +29,6 @@ from aiosqlite import OperationalError
 
 from core.entities.noise import (
     NoiseAction,
-    NoiseCategory,
     NavigationStep,
     RouteTemplate,
     RouteTemplatePath,
@@ -44,20 +43,16 @@ logger = logging.getLogger(__name__)
 
 _CREATE_ROUTE_TEMPLATES = """
 CREATE TABLE IF NOT EXISTS route_templates (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug             TEXT    NOT NULL UNIQUE,
-    label            TEXT    NOT NULL,
-    category         TEXT    NOT NULL
-                             CHECK (category IN (
-                                 'MAP','OASIS_INFO','PLAYER_PROFILE',
-                                 'MESSAGES','REPORTS','BUILDING_VIEW','OTHER'
-                             )),
-    url_pattern      TEXT    NOT NULL,
-    navigation_weight REAL   NOT NULL DEFAULT 1.0
-                             CHECK (navigation_weight >= 0.1 AND navigation_weight <= 5.0),
-    is_safe          INTEGER NOT NULL DEFAULT 1,
-    created_at       TEXT    NOT NULL,
-    updated_at       TEXT    NOT NULL
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug              TEXT    NOT NULL UNIQUE,
+    label             TEXT    NOT NULL,
+    category_slug     TEXT    NOT NULL DEFAULT 'uncategorized',
+    url_pattern       TEXT    NOT NULL,
+    navigation_weight REAL    NOT NULL DEFAULT 1.0
+                              CHECK (navigation_weight >= 0.1 AND navigation_weight <= 5.0),
+    is_safe           INTEGER NOT NULL DEFAULT 1,
+    created_at        TEXT    NOT NULL,
+    updated_at        TEXT    NOT NULL
 );
 """
 
@@ -68,7 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_route_templates_slug
 
 _CREATE_IDX_ROUTE_TEMPLATES_CATEGORY = """
 CREATE INDEX IF NOT EXISTS idx_route_templates_category
-    ON route_templates(category);
+    ON route_templates(category_slug);
 """
 
 _CREATE_ROUTE_TEMPLATE_PATHS = """
@@ -148,11 +143,13 @@ def _row_to_template_path(row: aiosqlite.Row, steps: list[NavigationStep]) -> Ro
 
 def _row_to_template(row: aiosqlite.Row, paths: list[RouteTemplatePath]) -> RouteTemplate:
     row_dict = dict(row)
+    # Retrocompat: columna puede llamarse 'category_slug' (post-M-CAT03) o 'category' (pre-migración)
+    category_slug = row_dict.get("category_slug") or row_dict.get("category") or "uncategorized"
     return RouteTemplate(
         id=row_dict["id"],
         slug=row_dict["slug"],
         label=row_dict["label"],
-        category=NoiseCategory(row_dict["category"]),
+        category_slug=category_slug,
         url_pattern=row_dict["url_pattern"],
         navigation_weight=row_dict["navigation_weight"],
         is_safe=bool(row_dict["is_safe"]),
@@ -212,11 +209,20 @@ async def seed_route_templates(adapter: "RouteTemplateSQLiteAdapter") -> int:
                 steps=steps,
             ))
 
+        # Leer category_slug con fallback a "category" (retrocompat con JSON viejo)
+        # Ambos mapean a 'uncategorized' si no tienen un slug válido del catálogo nuevo.
+        category_slug_raw = item.get("category_slug") or item.get("category") or "uncategorized"
+        # Si viene el valor enum viejo (MAP, OASIS_INFO, etc.), mapearlo a 'uncategorized'
+        # porque el catálogo nuevo no tiene esos slugs (decisión T1 del spec).
+        _OLD_ENUM_VALUES = {"MAP", "OASIS_INFO", "PLAYER_PROFILE", "MESSAGES", "REPORTS", "BUILDING_VIEW", "OTHER"}
+        if category_slug_raw in _OLD_ENUM_VALUES:
+            category_slug_raw = "uncategorized"
+
         tpl = RouteTemplate(
             id=None,
             slug=item["slug"],
             label=item["label"],
-            category=NoiseCategory(item["category"]),
+            category_slug=category_slug_raw,
             url_pattern=item["url_pattern"],
             navigation_weight=item.get("navigation_weight", 1.0),
             is_safe=item.get("is_safe", True),
@@ -227,6 +233,95 @@ async def seed_route_templates(adapter: "RouteTemplateSQLiteAdapter") -> int:
 
     logger.info("seed_route_templates: %d plantillas insertadas (de %d en el fichero)", inserted, len(raw))
     return inserted
+
+
+# ---------------------------------------------------------------------------
+# Migración M-CAT03 — eliminar CHECK de category en route_templates
+# ---------------------------------------------------------------------------
+
+async def _migrate_route_templates_remove_check(
+    conn: aiosqlite.Connection,
+) -> None:
+    """
+    Migración M-CAT03: recrear route_templates sin el CHECK de 7 valores en category,
+    renombrando la columna 'category' a 'category_slug' y mapeando todos los valores
+    existentes a 'uncategorized'.
+
+    Idempotente: si la columna ya se llama 'category_slug', omite la migración.
+    Estrategia: procedimiento oficial SQLite de 12 pasos con foreign_keys=OFF.
+
+    Spec route-categories-dynamic.md §7.4 (M-CAT03) y §7.2.
+    """
+    # Comprobar si ya fue migrada: verificar si columna 'category_slug' existe
+    cursor = await conn.execute("PRAGMA table_info(route_templates)")
+    columns = {row[1] for row in await cursor.fetchall()}
+
+    if "category_slug" in columns:
+        # Ya migrada — idempotente
+        return
+
+    if "category" not in columns:
+        # Tabla nueva con DDL actualizado o tabla no existe — nada que migrar
+        return
+
+    logger.info(
+        "RouteTemplateSQLiteAdapter: migrando route_templates "
+        "(eliminar CHECK de category, renombrar a category_slug)"
+    )
+
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    await conn.execute("SAVEPOINT m_cat03")
+
+    try:
+        await conn.execute("""
+            CREATE TABLE route_templates_new (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug              TEXT    NOT NULL UNIQUE,
+                label             TEXT    NOT NULL,
+                category_slug     TEXT    NOT NULL DEFAULT 'uncategorized',
+                url_pattern       TEXT    NOT NULL,
+                navigation_weight REAL    NOT NULL DEFAULT 1.0
+                                          CHECK (navigation_weight >= 0.1 AND navigation_weight <= 5.0),
+                is_safe           INTEGER NOT NULL DEFAULT 1,
+                created_at        TEXT    NOT NULL,
+                updated_at        TEXT    NOT NULL
+            )
+        """)
+
+        # Copiar datos mapeando category → 'uncategorized' (T1 del spec)
+        await conn.execute("""
+            INSERT INTO route_templates_new
+                (id, slug, label, category_slug, url_pattern, navigation_weight, is_safe, created_at, updated_at)
+            SELECT id, slug, label, 'uncategorized', url_pattern, navigation_weight, is_safe, created_at, updated_at
+              FROM route_templates
+        """)
+
+        await conn.execute("DROP TABLE route_templates")
+        await conn.execute(
+            "ALTER TABLE route_templates_new RENAME TO route_templates"
+        )
+
+        # Recrear índices
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_route_templates_slug ON route_templates(slug)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_route_templates_category ON route_templates(category_slug)"
+        )
+
+        await conn.execute("PRAGMA foreign_key_check")
+        await conn.execute("RELEASE SAVEPOINT m_cat03")
+
+    except Exception:
+        await conn.execute("ROLLBACK TO SAVEPOINT m_cat03")
+        await conn.execute("RELEASE SAVEPOINT m_cat03")
+        raise
+
+    finally:
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+    await conn.commit()
+    logger.info("RouteTemplateSQLiteAdapter: migración M-CAT03 completada")
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +351,11 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
 
         Spec route-templates-developer-portal.md §14 Paso 3 y Paso 4.
         """
+        # M-CAT03: migrar route_templates (eliminar CHECK de category, renombrar columna)
+        # DEBE ejecutarse ANTES de crear la tabla con el DDL nuevo, por si la tabla
+        # ya existe con el esquema viejo.
+        await _migrate_route_templates_remove_check(self._conn)
+
         await self._conn.execute(_CREATE_ROUTE_TEMPLATES)
         await self._conn.execute(_CREATE_IDX_ROUTE_TEMPLATES_SLUG)
         await self._conn.execute(_CREATE_IDX_ROUTE_TEMPLATES_CATEGORY)
@@ -270,7 +370,7 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
         # RouteTemplateSQLiteAdapter sin NoiseSQLiteAdapter (poco probable pero seguro).
         await self._migrate_m_rt01()
 
-        logger.debug("RouteTemplateSQLiteAdapter: tablas y migración M-RT01 aseguradas")
+        logger.debug("RouteTemplateSQLiteAdapter: tablas y migraciones M-CAT03 + M-RT01 aseguradas")
 
     async def _migrate_m_rt01(self) -> None:
         """
@@ -404,7 +504,7 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
     async def get_template(self, template_id: int) -> RouteTemplate | None:
         rows = await self._conn.execute_fetchall(
             """
-            SELECT id, slug, label, category, url_pattern, navigation_weight,
+            SELECT id, slug, label, category_slug, url_pattern, navigation_weight,
                    is_safe, created_at, updated_at
               FROM route_templates
              WHERE id = ?
@@ -419,7 +519,7 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
     async def get_template_by_slug(self, slug: str) -> RouteTemplate | None:
         rows = await self._conn.execute_fetchall(
             """
-            SELECT id, slug, label, category, url_pattern, navigation_weight,
+            SELECT id, slug, label, category_slug, url_pattern, navigation_weight,
                    is_safe, created_at, updated_at
               FROM route_templates
              WHERE slug = ?
@@ -434,20 +534,20 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
 
     async def list_templates(
         self,
-        category: NoiseCategory | None = None,
+        category_slug: str | None = None,
         include_paths: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RouteTemplate]:
         query = """
-            SELECT id, slug, label, category, url_pattern, navigation_weight,
+            SELECT id, slug, label, category_slug, url_pattern, navigation_weight,
                    is_safe, created_at, updated_at
               FROM route_templates
         """
         params: list = []
-        if category is not None:
-            query += " WHERE category = ?"
-            params.append(category.value)
+        if category_slug is not None:
+            query += " WHERE category_slug = ?"
+            params.append(category_slug)
         query += " ORDER BY id ASC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
@@ -467,14 +567,14 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
             cursor = await self._conn.execute(
                 """
                 INSERT INTO route_templates
-                  (slug, label, category, url_pattern, navigation_weight, is_safe,
+                  (slug, label, category_slug, url_pattern, navigation_weight, is_safe,
                    created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     template.slug,
                     template.label,
-                    template.category.value,
+                    template.category_slug,
                     template.url_pattern,
                     template.navigation_weight,
                     int(template.is_safe),
@@ -498,7 +598,7 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
             id=template_id,
             slug=template.slug,
             label=template.label,
-            category=template.category,
+            category_slug=template.category_slug,
             url_pattern=template.url_pattern,
             navigation_weight=template.navigation_weight,
             is_safe=template.is_safe,
@@ -513,24 +613,26 @@ class RouteTemplateSQLiteAdapter(RouteTemplateDbPort):
         label: str | None = None,
         navigation_weight: float | None = None,
         is_safe: bool | None = None,
+        category_slug: str | None = None,
         paths: list[RouteTemplatePath] | None = None,
     ) -> RouteTemplate:
         existing = await self.get_template(template_id)
         if existing is None:
             raise ValueError(f"Plantilla {template_id} no encontrada.")
 
-        new_label  = label             if label             is not None else existing.label
-        new_weight = navigation_weight if navigation_weight is not None else existing.navigation_weight
-        new_safe   = is_safe           if is_safe           is not None else existing.is_safe
+        new_label    = label             if label             is not None else existing.label
+        new_weight   = navigation_weight if navigation_weight is not None else existing.navigation_weight
+        new_safe     = is_safe           if is_safe           is not None else existing.is_safe
+        new_cat_slug = category_slug     if category_slug     is not None else existing.category_slug
 
         now = _now_iso()
         await self._conn.execute(
             """
             UPDATE route_templates
-               SET label = ?, navigation_weight = ?, is_safe = ?, updated_at = ?
+               SET label = ?, navigation_weight = ?, is_safe = ?, category_slug = ?, updated_at = ?
              WHERE id = ?
             """,
-            (new_label, new_weight, int(new_safe), now, template_id),
+            (new_label, new_weight, int(new_safe), new_cat_slug, now, template_id),
         )
 
         # Reemplazo atómico de paths+steps si se pasan

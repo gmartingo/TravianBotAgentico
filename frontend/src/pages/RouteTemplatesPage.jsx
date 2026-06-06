@@ -32,10 +32,7 @@ import { NoiseDestinationDrawer } from '../components/world/noise/NoiseDestinati
 import { PathTestResultPanel } from '../components/world/noise/PathTestResultPanel.jsx'
 import { NoiseCategoryBadge } from '../components/world/noise/NoiseDestinationsTable.jsx'
 import { ConfirmDeleteModal } from '../components/ui/ConfirmDeleteModal.jsx'
-
-// ── Constantes ────────────────────────────────────────────────────────────────
-
-const CATEGORIES = ['MAP', 'OASIS_INFO', 'PLAYER_PROFILE', 'MESSAGES', 'REPORTS', 'BUILDING_VIEW', 'OTHER']
+import { CategoryCombobox } from '../components/ui/CategoryCombobox.jsx'
 
 // ── Iconos SVG inline ─────────────────────────────────────────────────────────
 
@@ -171,7 +168,7 @@ function SkeletonTable() {
 
 function NewTemplateModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
-    slug: '', label: '', category: 'MAP',
+    slug: '', label: '', category: null,
     url_pattern: '', navigation_weight: 1.0, is_safe: true,
   })
   const [saving, setSaving] = useState(false)
@@ -319,14 +316,12 @@ function NewTemplateModal({ onClose, onCreated }) {
 
             {/* Categoría */}
             <div>
-              <label style={labelStyle}>Categoría <span style={{ color: 'var(--danger)' }}>*</span></label>
-              <select
+              <label style={labelStyle}>Categoría</label>
+              <CategoryCombobox
                 value={form.category}
-                onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                style={{ ...inputStyle(false), cursor: 'pointer' }}
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+                onChange={(slug) => setForm(f => ({ ...f, category: slug }))}
+                id="new-template-category"
+              />
             </div>
 
             {/* Peso */}
@@ -591,10 +586,11 @@ function TestRoutePanel({ template, worlds, onClose }) {
   const closeRef = useRef(null)
 
   const paths = template?.paths ?? []
+  const hasPaths = paths.length > 0
   const currentPath = paths[pathIndex]
 
   async function handleTest() {
-    if (!worldId) return
+    if (!worldId || !hasPaths) return
     setLoading(true)
     setResult(null)
     setApiError(null)
@@ -644,6 +640,14 @@ function TestRoutePanel({ template, worlds, onClose }) {
           ×
         </button>
       </div>
+
+      {/* Aviso: plantilla sin rutas → nada que probar (EC-RT05) */}
+      {!hasPaths && (
+        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '12px 16px 0', margin: 0 }}>
+          Esta plantilla no tiene rutas definidas, así que no hay nada que probar.
+          Añade al menos una ruta (con sus pasos) editando la plantilla antes de ejecutar el test.
+        </p>
+      )}
 
       {/* Controles */}
       <div style={{ padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -699,14 +703,14 @@ function TestRoutePanel({ template, worlds, onClose }) {
         {/* Botón */}
         <button
           type="button" onClick={handleTest}
-          disabled={!worldId || loading}
+          disabled={!worldId || loading || !hasPaths}
           style={{
             height: '34px', padding: '0 14px',
             border: 'none',
-            background: (!worldId || loading) ? 'var(--surface-2)' : 'var(--btn-primary-bg)',
-            color: (!worldId || loading) ? 'var(--text-disabled)' : 'var(--btn-primary-text)',
+            background: (!worldId || loading || !hasPaths) ? 'var(--surface-2)' : 'var(--btn-primary-bg)',
+            color: (!worldId || loading || !hasPaths) ? 'var(--text-disabled)' : 'var(--btn-primary-text)',
             borderRadius: 'var(--radius-sm)', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500,
-            cursor: (!worldId || loading) ? 'not-allowed' : 'pointer',
+            cursor: (!worldId || loading || !hasPaths) ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', gap: '6px',
           }}
           aria-label="Ejecutar test de la ruta"
@@ -843,7 +847,7 @@ function ResyncPanel({ template, worlds }) {
 
 // ── Fila de la tabla de plantillas ────────────────────────────────────────────
 
-function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
+function TemplateRow({ tpl, catLabel, catColor, onEdit, onTest, onClone, onDelete, editBtnRef }) {
   const totalSteps = (tpl.paths ?? []).reduce((acc, p) => acc + (p.steps?.length ?? 0), 0)
   const pathsCount = tpl.paths_count ?? (tpl.paths?.length ?? 0)
 
@@ -902,9 +906,9 @@ function TemplateRow({ tpl, onEdit, onTest, onClone, onDelete, editBtnRef }) {
         </div>
       </td>
 
-      {/* Categoría */}
+      {/* Categoría — badge dinámico con datos del catálogo */}
       <td role="cell" style={tdBase}>
-        <NoiseCategoryBadge category={tpl.category} />
+        <NoiseCategoryBadge label={catLabel} color={catColor} />
       </td>
 
       {/* Pasos — P2, oculto en móvil */}
@@ -1009,6 +1013,9 @@ export function RouteTemplatesPage() {
   const [error, setError] = useState(null)
   const [showSeedBanner, setShowSeedBanner] = useState(false)
 
+  // ─── Catálogo de categorías (para cruzar con las plantillas al renderizar) ───
+  const [categories, setCategories] = useState([]) // [{slug, label, color, is_default}]
+
   // ─── Filtros ─────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
@@ -1063,15 +1070,35 @@ export function RouteTemplatesPage() {
     }
   }, [])
 
+  // Carga del catálogo de categorías (independiente de las plantillas)
+  const loadCategories = useCallback(async () => {
+    try {
+      const data = await api.listCategories()
+      setCategories(Array.isArray(data) ? data : [])
+    } catch {
+      // No es crítico: si falla, los badges muestran solo el slug
+    }
+  }, [])
+
   useEffect(() => {
     loadTemplates()
     loadWorlds()
-  }, [loadTemplates, loadWorlds])
+    loadCategories()
+  }, [loadTemplates, loadWorlds, loadCategories])
+
+  // Helper: dada una plantilla, devuelve {label, color} de su categoría
+  function getCatMeta(tpl) {
+    const slug = tpl.category_slug ?? tpl.category ?? null
+    if (!slug) return { label: 'Sin categoría', color: null }
+    const cat = categories.find(c => c.slug === slug)
+    return cat ? { label: cat.label, color: cat.color ?? null } : { label: slug, color: null }
+  }
 
   // ─── Filtrado ─────────────────────────────────────────────────────────────────
 
   const filtered = templates.filter(t => {
-    if (filterCategory && t.category !== filterCategory) return false
+    const tplSlug = t.category_slug ?? t.category ?? null
+    if (filterCategory && tplSlug !== filterCategory) return false
     if (search) {
       const q = search.toLowerCase()
       return t.label?.toLowerCase().includes(q) || t.slug?.toLowerCase().includes(q)
@@ -1250,21 +1277,32 @@ export function RouteTemplatesPage() {
           />
         </div>
 
-        {/* Filtro de categoría */}
-        <select
-          value={filterCategory}
-          onChange={e => setFilterCategory(e.target.value)}
-          style={{
-            padding: '6px 8px',
-            border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface)', color: 'var(--text)',
-            fontFamily: 'inherit', fontSize: '12px', cursor: 'pointer',
-          }}
-          aria-label="Filtrar por categoría"
-        >
-          <option value="">Todas las categorías</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {/* Filtro de categoría — CategoryCombobox en modo solo-selección */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {filterCategory && (
+            <button
+              type="button"
+              aria-label="Quitar filtro de categoría"
+              onClick={() => setFilterCategory('')}
+              style={{
+                border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
+                background: 'var(--surface)', color: 'var(--text-secondary)',
+                padding: '0 8px', height: '32px', cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: '12px',
+                display: 'flex', alignItems: 'center', gap: '4px',
+              }}
+            >
+              × Categoría
+            </button>
+          )}
+          {!filterCategory && (
+            <CategoryCombobox
+              value={filterCategory || null}
+              onChange={(slug) => setFilterCategory(slug ?? '')}
+              id="rt-filter-category"
+            />
+          )}
+        </div>
 
         {/* Contador */}
         {!loading && !error && (
@@ -1418,17 +1456,22 @@ export function RouteTemplatesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(tpl => (
-                  <TemplateRow
-                    key={tpl.id}
-                    tpl={tpl}
-                    onEdit={handleOpenDrawer}
-                    onTest={(t) => { setTestTarget(t); setResyncTarget(null) }}
-                    onClone={(t) => setCloneTarget(t)}
-                    onDelete={(t) => setDeleteTarget(t)}
-                    editBtnRef={el => { editBtnRefs.current[tpl.id] = el }}
-                  />
-                ))}
+                {filtered.map(tpl => {
+                  const { label: catLabel, color: catColor } = getCatMeta(tpl)
+                  return (
+                    <TemplateRow
+                      key={tpl.id}
+                      tpl={tpl}
+                      catLabel={catLabel}
+                      catColor={catColor}
+                      onEdit={handleOpenDrawer}
+                      onTest={(t) => { setTestTarget(t); setResyncTarget(null) }}
+                      onClone={(t) => setCloneTarget(t)}
+                      onDelete={(t) => setDeleteTarget(t)}
+                      editBtnRef={el => { editBtnRefs.current[tpl.id] = el }}
+                    />
+                  )
+                })}
               </tbody>
             </table>
           </div>

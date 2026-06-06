@@ -39,7 +39,6 @@ from core.entities.noise import (
     NavigationPath,
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     NoiseConfig,
     NoiseDestination,
     ORIGIN_PATHS,
@@ -223,12 +222,15 @@ class NoiseDestinationResponse(BaseModel):
     Delta EP-N03/EP-N04 (route-templates-developer-portal.md §8.12):
     template_id (int | null) añadido al response. Null si creado a mano;
     int si fue clonado desde una plantilla. Campo nullable → retrocompatible.
+
+    Delta route-categories-dynamic.md C-02:
+    category_slug (str) reemplaza el campo category (enum string).
     """
     id: int
     world_id: int
     url_pattern: str
     label: str
-    category: str
+    category_slug: str
     navigation_weight: float   # alias de frequency_weight — RN-FW06
     is_safe: bool
     is_dead: bool
@@ -246,10 +248,13 @@ class CreateDestinationRequest(BaseModel):
     Delta (route-templates-developer-portal.md §8.12):
     template_id: campo opcional para crear un destino con referencia explícita a una plantilla.
     Retrocompatible: default None, los clientes que no lo envían no cambian de comportamiento.
+
+    Delta route-categories-dynamic.md §8.4:
+    category_slug (str, default 'uncategorized') reemplaza category: NoiseCategory (enum).
     """
     url_pattern: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
-    category: NoiseCategory
+    category_slug: str = Field(default="uncategorized", min_length=1)
     navigation_weight: float = Field(
         default=1.0,
         ge=0.1,
@@ -264,6 +269,9 @@ class UpdateDestinationRequest(BaseModel):
     """
     Body EP-N05 (PATCH parcial).
     navigation_weight: alias de frequency_weight. Rango [0.1, 5.0] — GUARDIAN RN-FW07.
+
+    Delta route-categories-dynamic.md §8.4:
+    category_slug (str) añadido como campo editable (se elimina la restricción de inmutabilidad).
     """
     label: Optional[str] = Field(default=None, min_length=1)
     navigation_weight: Optional[float] = Field(
@@ -273,12 +281,13 @@ class UpdateDestinationRequest(BaseModel):
         description="Peso de navegación. Rango [0.1, 5.0] — anti-detección (RN-FW07).",
     )
     is_safe: Optional[bool] = None
+    category_slug: Optional[str] = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "UpdateDestinationRequest":
-        if all(v is None for v in [self.label, self.navigation_weight, self.is_safe]):
+        if all(v is None for v in [self.label, self.navigation_weight, self.is_safe, self.category_slug]):
             raise ValueError(
-                "El body debe contener al menos uno de: label, navigation_weight, is_safe."
+                "El body debe contener al menos uno de: label, navigation_weight, is_safe, category_slug."
             )
         return self
 
@@ -534,7 +543,7 @@ def _dest_to_response(dest: NoiseDestination) -> NoiseDestinationResponse:
         world_id=dest.world_id,
         url_pattern=dest.url_pattern,
         label=dest.label,
-        category=dest.category.value,
+        category_slug=dest.category_slug,
         navigation_weight=dest.frequency_weight,   # alias RN-FW06
         is_safe=dest.is_safe,
         is_dead=dest.is_dead,
@@ -763,7 +772,7 @@ async def update_noise_config(
 async def list_destinations(
     request: Request,
     world_id: int = Path(..., ge=1),
-    category: Optional[NoiseCategory] = Query(default=None),
+    category_slug: Optional[str] = Query(default=None, description="Filtrar por slug de categoría. Slug inexistente → [] (filtro silencioso, C-01)."),
     include_dead: bool = Query(default=False),
     include_unsafe: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
@@ -771,7 +780,8 @@ async def list_destinations(
 ) -> list[NoiseDestinationResponse]:
     """
     Lista los destinos de navegación de ruido del mundo.
-    Filtros: category, include_dead, include_unsafe, limit, offset.
+    Filtros: category_slug (string libre), include_dead, include_unsafe, limit, offset.
+    Slug inexistente en category_slug → 200 [] (filtro silencioso, C-01).
     """
     await _verify_world_exists(request, world_id)
     noise_db = _get_noise_db(request)
@@ -779,7 +789,7 @@ async def list_destinations(
     try:
         destinations = await noise_db.list_destinations(
             world_id,
-            category=category,
+            category_slug=category_slug,
             include_dead=include_dead,
             include_unsafe=include_unsafe,
         )
@@ -818,12 +828,22 @@ async def create_destination(
     await _verify_world_exists(request, world_id)
     noise_db = _get_noise_db(request)
 
+    # Validar que category_slug existe (C-03)
+    cat_port = getattr(request.app.state, "route_category_port", None)
+    if cat_port is not None:
+        cat = await cat_port.get_category(body.category_slug)
+        if cat is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Categoría no encontrada.",
+            )
+
     try:
         dest = await noise_db.create_destination(
             world_id=world_id,
             url_pattern=body.url_pattern,
             label=body.label,
-            category=body.category,
+            category_slug=body.category_slug,
             frequency_weight=body.navigation_weight,   # alias: navigation_weight → frequency_weight
             is_safe=body.is_safe,
             template_id=body.template_id,  # Delta §8.12 EP-N04 — None si no se envía
@@ -866,12 +886,24 @@ async def update_destination(
     noise_db = _get_noise_db(request)
     await _verify_destination_belongs_to_world(noise_db, dest_id, world_id)
 
+    # Validar category_slug si se envía (C-03)
+    if body.category_slug is not None:
+        cat_port = getattr(request.app.state, "route_category_port", None)
+        if cat_port is not None:
+            cat = await cat_port.get_category(body.category_slug)
+            if cat is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Categoría no encontrada.",
+                )
+
     try:
         updated = await noise_db.update_destination(
             dest_id=dest_id,
             label=body.label,
             frequency_weight=body.navigation_weight,   # alias: navigation_weight → frequency_weight
             is_safe=body.is_safe,
+            category_slug=body.category_slug,
         )
     except ValueError as exc:
         raise HTTPException(

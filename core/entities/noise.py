@@ -21,7 +21,15 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 
 class NoiseCategory(str, Enum):
-    """Categoría de destino de navegación de ruido."""
+    """
+    Categoría de destino de navegación de ruido.
+
+    DEPRECATED: reemplazado por RouteCategory (catálogo dinámico).
+    Spec route-categories-dynamic.md §2 (Paso 14 de implementación).
+    Se mantiene temporalmente para compatibilidad durante la migración.
+    Una vez que todos los tests y adaptadores usen category_slug: str,
+    este enum se eliminará del codebase.
+    """
     MAP             = "MAP"
     OASIS_INFO      = "OASIS_INFO"
     PLAYER_PROFILE  = "PLAYER_PROFILE"
@@ -85,8 +93,8 @@ class NoiseDestination:
     """
     Destino de navegación de ruido.
 
-    url_pattern y category son inmutables tras la creación (no se permiten
-    cambiar via update — spec §port.update_destination).
+    url_pattern es inmutable tras la creación.
+    category_slug es editable (spec route-categories-dynamic.md §4 RN-CAT11).
 
     template_id (nullable): FK a route_templates.id cuando este destino fue
     creado clonando una plantilla maestra (M-RT01). None si fue creado a mano.
@@ -96,7 +104,7 @@ class NoiseDestination:
     world_id: int
     url_pattern: str
     label: str
-    category: NoiseCategory
+    category_slug: str                        # slug de RouteCategory (antes: NoiseCategory enum)
     frequency_weight: float                   # > 0
     is_safe: bool = True
     is_dead: bool = False
@@ -228,7 +236,7 @@ class RouteTemplate:
     id: int | None
     slug: str                              # kebab-case, UNIQUE global
     label: str
-    category: NoiseCategory
+    category_slug: str                     # slug de RouteCategory (antes: NoiseCategory enum)
     url_pattern: str
     navigation_weight: float = 1.0         # peso inicial sugerido al clonar (0.1–5.0)
     is_safe: bool = True

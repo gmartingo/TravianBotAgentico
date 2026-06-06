@@ -542,6 +542,52 @@ export const api = {
   testRouteTemplate: (id, data) =>
     request('POST', `/route-templates/${id}/test`, data),
 
+  // ── Categorías de rutas ───────────────────────────────────────────────────
+  // EP-CAT01..EP-CAT05 — /route-categories/
+  // Nota: no requieren Accept-Language (labels = texto libre del usuario).
+  // buildHeaders() ya lo incluye igualmente (inofensivo).
+
+  /**
+   * EP-CAT01 GET /route-categories → lista todas las categorías
+   * Respuesta: [{ slug, label, color, is_default, created_at }]
+   * Orden: is_default DESC, created_at ASC (la default siempre primera).
+   */
+  listCategories: () =>
+    request('GET', '/route-categories'),
+
+  /**
+   * EP-CAT02 POST /route-categories → crear categoría
+   * Body: { label, color? }
+   * Respuesta 201: { slug, label, color, is_default, created_at }
+   * 409 si label duplicado CI.
+   */
+  createCategory: (data) =>
+    request('POST', '/route-categories', data),
+
+  /**
+   * EP-CAT03 GET /route-categories/:slug → obtener una categoría por slug
+   */
+  getCategory: (slug) =>
+    request('GET', `/route-categories/${slug}`),
+
+  /**
+   * EP-CAT04 PATCH /route-categories/:slug → actualizar label y/o color
+   * Body: { label?, color? } — al menos uno de los dos.
+   * color ausente → conservar; color: null → quitar color.
+   * 409 si nuevo label duplicado CI; 404 si slug no existe.
+   */
+  patchCategory: (slug, data) =>
+    request('PATCH', `/route-categories/${slug}`, data),
+
+  /**
+   * EP-CAT05 DELETE /route-categories/:slug → borrar categoría
+   * Reasigna atómicamente sus plantillas/destinos a 'uncategorized'.
+   * Respuesta 200: { deleted_slug, reassigned_count, reassigned_to }
+   * 409 si es la categoría default.
+   */
+  deleteCategory: (slug) =>
+    request('DELETE', `/route-categories/${slug}`),
+
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 

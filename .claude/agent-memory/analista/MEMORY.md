@@ -21,3 +21,4 @@
 - [project-noise-frequency-weight](project_noise_frequency_weight.md) — Frecuencia ruido MM:SS por modo + navigation_weight por destino; reemplaza req_per_hour; gates guardian+apis pendientes
 - [project-route-templates](project_route_templates.md) — Portal desarrollador rutas: RouteTemplate global, clonado/re-sync a mundos, 10 EP-RT nuevos, seed 20 plantillas
 - [project-radar-ataques](project_radar_ataques.md) — Radar ataques entrantes: 4 componentes (A+B ready, C+D bloqueados), tabla incoming_attacks, hook sidebar cross-cutting, 3 fixtures pendientes
+- [project-route-categories](project_route_categories.md) — Catálogo dinámico categorías rutas: RouteCategory, migración enum NoiseCategory (25 puntos blast radius), label_lower CI, spec draft pendiente apis+disenador

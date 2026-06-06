@@ -12,7 +12,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from core.entities.noise import (
-    NoiseCategory,
     RouteTemplate,
     RouteTemplatePath,
 )
@@ -36,7 +35,7 @@ class RouteTemplateDbPort(ABC):
     @abstractmethod
     async def list_templates(
         self,
-        category: NoiseCategory | None = None,
+        category_slug: str | None = None,
         include_paths: bool = False,
         limit: int = 100,
         offset: int = 0,
@@ -44,7 +43,7 @@ class RouteTemplateDbPort(ABC):
         """
         Lista plantillas globales con filtros opcionales.
 
-        - category: filtra por categoría si se pasa.
+        - category_slug: filtra por slug de RouteCategory si se pasa (antes era NoiseCategory enum).
         - include_paths: si True, carga paths y steps de cada plantilla.
         - limit / offset: paginación (limit en [1, 500]).
 
@@ -68,12 +67,14 @@ class RouteTemplateDbPort(ABC):
         label: str | None = None,
         navigation_weight: float | None = None,
         is_safe: bool | None = None,
+        category_slug: str | None = None,
         paths: list[RouteTemplatePath] | None = None,
     ) -> RouteTemplate:
         """
         PATCH parcial de una plantilla.
 
-        slug, category y url_pattern son inmutables (RN-RT02, §10).
+        slug y url_pattern son inmutables (RN-RT02, §10).
+        category_slug SÍ es editable (spec route-categories-dynamic.md RN-CAT11).
         Si se pasa paths (no None), es un reemplazo ATÓMICO de los paths+steps.
         Lanza ValueError si template_id no existe.
         """

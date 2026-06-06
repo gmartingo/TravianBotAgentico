@@ -31,7 +31,6 @@ from adapters.db.noise_sqlite_adapter import _validate_url_pattern  # Opción A:
 from core.entities.noise import (
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     RouteTemplate,
     RouteTemplatePath,
 )
@@ -173,7 +172,7 @@ class RouteTemplateListItem(BaseModel):
     id: int
     slug: str
     label: str
-    category: str
+    category_slug: str
     url_pattern: str
     navigation_weight: float
     is_safe: bool
@@ -188,7 +187,7 @@ class RouteTemplateResponse(BaseModel):
     id: int
     slug: str
     label: str
-    category: str
+    category_slug: str
     url_pattern: str
     navigation_weight: float
     is_safe: bool
@@ -200,7 +199,7 @@ class RouteTemplateResponse(BaseModel):
 class CreateTemplateRequest(BaseModel):
     slug: str = Field(..., min_length=1)
     label: str = Field(..., min_length=1)
-    category: NoiseCategory
+    category_slug: str = Field(default="uncategorized", min_length=1)
     url_pattern: str = Field(..., min_length=1)
     navigation_weight: float = Field(
         default=1.0,
@@ -213,15 +212,19 @@ class CreateTemplateRequest(BaseModel):
 
 
 class UpdateTemplateRequest(BaseModel):
-    """EP-RT04 — PATCH parcial. slug, category y url_pattern son inmutables."""
-    # Detectar si el cliente intenta cambiar campos inmutables
+    """
+    EP-RT04 — PATCH parcial.
+    slug y url_pattern son inmutables.
+    category_slug SÍ es editable (spec route-categories-dynamic.md RN-CAT11).
+    """
+    # Detectar si el cliente intenta cambiar campos realmente inmutables
     slug: Optional[str] = None
-    category: Optional[str] = None
     url_pattern: Optional[str] = None
     # Campos actualizables
     label: Optional[str] = Field(default=None, min_length=1)
     navigation_weight: Optional[float] = Field(default=None, ge=0.1, le=5.0)
     is_safe: Optional[bool] = None
+    category_slug: Optional[str] = Field(default=None, min_length=1)
     paths: Optional[list[TemplatePathRequest]] = None
 
     @model_validator(mode="after")
@@ -229,10 +232,6 @@ class UpdateTemplateRequest(BaseModel):
         if self.slug is not None:
             raise ValueError(
                 "slug no se puede cambiar tras la creación."
-            )
-        if self.category is not None:
-            raise ValueError(
-                "category no se puede cambiar tras la creación."
             )
         if self.url_pattern is not None:
             raise ValueError(
@@ -242,9 +241,9 @@ class UpdateTemplateRequest(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_mutable_field(self) -> "UpdateTemplateRequest":
-        if all(v is None for v in [self.label, self.navigation_weight, self.is_safe, self.paths]):
+        if all(v is None for v in [self.label, self.navigation_weight, self.is_safe, self.category_slug, self.paths]):
             raise ValueError(
-                "El body debe contener al menos uno de: label, navigation_weight, is_safe, paths."
+                "El body debe contener al menos uno de: label, navigation_weight, is_safe, category_slug, paths."
             )
         return self
 
@@ -341,7 +340,7 @@ def _template_to_full_response(tpl: RouteTemplate) -> RouteTemplateResponse:
         id=tpl.id,
         slug=tpl.slug,
         label=tpl.label,
-        category=tpl.category.value,
+        category_slug=tpl.category_slug,
         url_pattern=tpl.url_pattern,
         navigation_weight=tpl.navigation_weight,
         is_safe=tpl.is_safe,
@@ -360,7 +359,7 @@ def _template_to_list_item(
         id=tpl.id,
         slug=tpl.slug,
         label=tpl.label,
-        category=tpl.category.value,
+        category_slug=tpl.category_slug,
         url_pattern=tpl.url_pattern,
         navigation_weight=tpl.navigation_weight,
         is_safe=tpl.is_safe,
@@ -459,7 +458,7 @@ async def _clone_template_to_world(
         world_id=world.id,
         url_pattern=template.url_pattern,
         label=template.label,
-        category=template.category,
+        category_slug=template.category_slug,
         frequency_weight=template.navigation_weight,
         is_safe=template.is_safe,
         template_id=template.id,
@@ -501,7 +500,7 @@ async def _clone_template_to_world(
 )
 async def list_templates(
     request: Request,
-    category: Optional[NoiseCategory] = Query(default=None),
+    category_slug: Optional[str] = Query(default=None, description="Filtrar por slug de categoría. Slug inexistente → [] (filtro silencioso)."),
     include_paths: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -509,15 +508,15 @@ async def list_templates(
     """
     Lista el catálogo maestro de plantillas de rutas de navegación de ruido.
 
-    Filtros: category (enum), include_paths (boolean), limit, offset.
+    Filtros: category_slug (string libre), include_paths (boolean), limit, offset.
     Si include_paths=true, cada item incluye paths+steps. Por defecto solo metadata.
-    Nota: category inválida → 422 automático de FastAPI (no 400).
+    Slug inexistente en category_slug → 200 [] (filtro silencioso, C-01 del spec).
     """
     rt_port = _get_rt_port(request)
 
     try:
         templates = await rt_port.list_templates(
-            category=category,
+            category_slug=category_slug,
             include_paths=include_paths,
             limit=limit,
             offset=offset,
@@ -566,13 +565,23 @@ async def create_template(
     """
     rt_port = _get_rt_port(request)
 
+    # Validar que category_slug existe en el catálogo (C-03, AC-09)
+    cat_port = getattr(request.app.state, "route_category_port", None)
+    if cat_port is not None:
+        cat = await cat_port.get_category(body.category_slug)
+        if cat is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Categoría no encontrada.",
+            )
+
     # Construir la entidad (validación en __post_init__)
     try:
         tpl = RouteTemplate(
             id=None,
             slug=body.slug,
             label=body.label,
-            category=body.category,
+            category_slug=body.category_slug,
             url_pattern=body.url_pattern,
             navigation_weight=body.navigation_weight,
             is_safe=body.is_safe,
@@ -644,6 +653,17 @@ async def update_template(
     rt_port = _get_rt_port(request)
     await _require_template(rt_port, template_id)  # 404 si no existe
 
+    # Validar category_slug si se envía (C-03, AC-10)
+    if body.category_slug is not None:
+        cat_port = getattr(request.app.state, "route_category_port", None)
+        if cat_port is not None:
+            cat = await cat_port.get_category(body.category_slug)
+            if cat is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Categoría no encontrada.",
+                )
+
     # Convertir paths a entidades si se pasan
     paths_entities: list[RouteTemplatePath] | None = None
     if body.paths is not None:
@@ -661,6 +681,7 @@ async def update_template(
             label=body.label,
             navigation_weight=body.navigation_weight,
             is_safe=body.is_safe,
+            category_slug=body.category_slug,
             paths=paths_entities,
         )
     except ValueError as exc:
@@ -1025,7 +1046,7 @@ async def test_template(
             world_id=body.world_id,
             url_pattern=template.url_pattern,
             label="[TEST TEMPORAL]",
-            category=template.category,
+            category_slug=template.category_slug,
             frequency_weight=template.navigation_weight,
             is_safe=False,
             template_id=template.id,

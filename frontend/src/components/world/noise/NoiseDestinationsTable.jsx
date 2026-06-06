@@ -60,9 +60,38 @@ function IconWarning({ size = 14 }) {
 }
 
 // ── NoiseCategoryBadge ────────────────────────────────────────────────────────
+//
+// Acepta DOS formas de uso:
+//   1. <NoiseCategoryBadge category="MAP" />
+//      → Badge estático con enum hardcodeado (uso legacy, compatibilidad).
+//   2. <NoiseCategoryBadge label="Mi categoría" color="var(--cat-steel)" />
+//      → Badge dinámico con datos del servidor (nuevo, preferido).
+//   3. <NoiseCategoryBadge label="Mi categoría" color={null} />
+//      → Badge neutro sin color asignado.
 
-export function NoiseCategoryBadge({ category }) {
+export function NoiseCategoryBadge({ category, label, color }) {
   const { t } = useI18n()
+
+  // ── Modo dinámico (label + color vienen por props) ──────────────────────────
+  if (label !== undefined) {
+    const hasBg = Boolean(color)
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center',
+        borderRadius: 'var(--radius-full)',
+        padding: '2px 8px',
+        fontSize: '11px', fontWeight: 500,
+        letterSpacing: '0.03em',
+        background: hasBg ? color : 'var(--surface-2)',
+        color: hasBg ? '#FFFFFF' : 'var(--text-secondary)',
+        whiteSpace: 'nowrap',
+      }}>
+        {label}
+      </span>
+    )
+  }
+
+  // ── Modo legacy (enum category) ─────────────────────────────────────────────
   const s = CATEGORY_STYLE[category] ?? CATEGORY_STYLE.OTHER
   return (
     <span style={{

@@ -14,7 +14,6 @@ from typing import Any
 from core.entities.noise import (
     NavigationPath,
     NavigationStep,
-    NoiseCategory,
     NoiseConfig,
     NoiseDestination,
     NavigationOrigin,
@@ -51,7 +50,7 @@ class NoiseDbPort(ABC):
     async def list_destinations(
         self,
         world_id: int,
-        category: NoiseCategory | None = None,
+        category_slug: str | None = None,
         include_dead: bool = False,
         include_unsafe: bool = False,
     ) -> list[NoiseDestination]:
@@ -59,6 +58,7 @@ class NoiseDbPort(ABC):
         Lista destinos del mundo, con filtros opcionales.
 
         Por defecto excluye muertos (is_dead=True) y no seguros (is_safe=False).
+        category_slug: filtrar por slug de RouteCategory (antes era NoiseCategory enum).
         """
 
     @abstractmethod
@@ -71,8 +71,8 @@ class NoiseDbPort(ABC):
         world_id: int,
         url_pattern: str,
         label: str,
-        category: NoiseCategory,
-        frequency_weight: float,
+        category_slug: str = "uncategorized",
+        frequency_weight: float = 1.0,
         is_safe: bool = True,
         template_id: int | None = None,
     ) -> NoiseDestination:
@@ -129,10 +129,12 @@ class NoiseDbPort(ABC):
         label: str | None = None,
         frequency_weight: float | None = None,
         is_safe: bool | None = None,
+        category_slug: str | None = None,
     ) -> NoiseDestination:
         """
         PATCH parcial de un destino.
-        url_pattern y category NO se pueden cambiar (ignorados si se pasan).
+        url_pattern NO se puede cambiar.
+        category_slug SÍ se puede cambiar (spec route-categories-dynamic.md RN-CAT11).
         Lanza ValueError si dest_id no existe.
         """
 

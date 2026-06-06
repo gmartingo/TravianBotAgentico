@@ -12,3 +12,4 @@
 - [patterns-oasis-spawn](patterns-oasis-spawn.md) — S-SPAWN: SpawnMechanicsPanel+OasisCompositionPanel+WorstCasePlannerPanel, catálogo JS, claves NATURE_N, carga EP-SPAWN compartida
 - [patterns-noise-tab](patterns-noise-tab.md) — S-NOISE: pestaña Ruido, wizard de rutas, Toggle/MinMaxInput, DeletePopover inline, EP-N01..N13
 - [patterns-animal-frequency](patterns-animal-frequency.md) — AnimalFrequencyPanel: normalización array→objeto, arcilla→barro, ResIcon para botín, coordUtils, tablist ARIA con flechas
+- [patterns-category-combobox](patterns-category-combobox.md) — CategoryCombobox CRUD inline, CategoryBadge dinámico, ColorSwatchPicker, integración RouteTemplatesPage + NoiseCategoryBadge dual

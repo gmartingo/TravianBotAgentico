@@ -7,3 +7,4 @@
 - [project-noise-catalog-design](project_noise_catalog_design.md) — pestaña Ruido v4: renombrar ruta inline (✎), Editar pasos en cabecera, ⋯ overflow menu. Mockup 30 vistas.
 - [project-animal-frequency-panel](project_animal_frequency_panel.md) — AnimalFrequencyPanel: matriz empírica animal×franja, BucketSelector pills, sticky first col, posición 4 en StatsTab
 - [project-route-templates-design](project_route_templates_design.md) — página global /rutas (ManagementShell): catálogo de RouteTemplate, mockup playground 7 vistas, bloques A–I
+- [project-category-combobox-design](project_category_combobox_design.md) — CategoryCombobox estilo Notion: typeahead+CRUD inline, paleta 12 colores, mockup 10 vistas (gate humano pendiente)

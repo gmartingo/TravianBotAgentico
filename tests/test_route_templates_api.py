@@ -76,12 +76,16 @@ def _make_template_body(**overrides) -> dict:
     base = {
         "slug": "test-template",
         "label": "Plantilla de test",
-        "category": "MAP",
+        "category_slug": "uncategorized",
         "url_pattern": "/karte.php",
         "navigation_weight": 1.0,
         "is_safe": True,
         "paths": [],
     }
+    # Compatibilidad: si se pasa 'category' (viejo), mapearlo a 'category_slug'
+    if "category" in overrides:
+        overrides.setdefault("category_slug", "uncategorized")
+        del overrides["category"]
     base.update(overrides)
     return base
 
@@ -147,7 +151,7 @@ def test_TI_RT01_crear_plantilla_devuelve_201_y_cabeceras_minimas(client):
     data = r.json()
     assert data["slug"] == "test-template"
     assert data["label"] == "Plantilla de test"
-    assert data["category"] == "MAP"
+    assert data["category_slug"] == "uncategorized"
     assert data["url_pattern"] == "/karte.php"
     assert data["navigation_weight"] == 1.0
     assert data["is_safe"] is True
@@ -234,25 +238,31 @@ def test_TI_RT03_listar_plantillas_con_include_paths(client):
 # ---------------------------------------------------------------------------
 
 def test_TI_RT04_listar_por_categoria(client):
-    """GET /route-templates?category=MAP → solo plantillas de MAP."""
-    client.post("/route-templates", json=_make_template_body(slug="map-1", category="MAP"))
+    """GET /route-templates?category_slug=<slug> → solo plantillas de esa categoría."""
+    # Crear una categoría real
+    r_cat = client.post("/route-categories", json={"label": "Mapas"})
+    assert r_cat.status_code == 201
+    cat_slug = r_cat.json()["slug"]
+
+    client.post("/route-templates", json=_make_template_body(slug="map-1", category_slug=cat_slug))
     client.post(
         "/route-templates",
-        json=_make_template_body(slug="reports-1", category="REPORTS", url_pattern="/report"),
+        json=_make_template_body(slug="reports-1", url_pattern="/report"),  # queda en uncategorized
     )
-    r = client.get("/route-templates?category=MAP")
+    r = client.get(f"/route-templates?category_slug={cat_slug}")
     assert r.status_code == 200, r.text
     items = r.json()
-    assert all(t["category"] == "MAP" for t in items)
+    assert all(t["category_slug"] == cat_slug for t in items)
     slugs = [t["slug"] for t in items]
     assert "map-1" in slugs
     assert "reports-1" not in slugs
 
 
-def test_TI_RT04_categoria_invalida_devuelve_422(client):
-    """GET /route-templates?category=INVALIDA → 422 automático de FastAPI."""
-    r = client.get("/route-templates?category=INVALIDA")
-    assert r.status_code == 422, r.text
+def test_TI_RT04_categoria_invalida_devuelve_empty(client):
+    """GET /route-templates?category_slug=<slug-inexistente> → 200 [] (filtro silencioso, C-01)."""
+    r = client.get("/route-templates?category_slug=slug-inexistente")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
 
 
 # ---------------------------------------------------------------------------
@@ -468,7 +478,7 @@ def test_TI_RT13_clonar_con_colision_devuelve_409(client):
     # Crear destino con la misma URL
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa manual", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa manual", "category_slug": "uncategorized"},
     )
     assert r.status_code == 201, r.text
     conflicting_id = r.json()["id"]
@@ -493,7 +503,7 @@ def test_TI_RT14_clonar_con_force_sobre_conflicto_devuelve_201(client):
     # Crear destino conflictivo
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa manual", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa manual", "category_slug": "uncategorized"},
     )
     conflicting_id = r.json()["id"]
 
@@ -566,12 +576,12 @@ def test_TI_RT20_bulk_clone_mixto(client):
     # Plantilla 3: URL ocupada por destino sin template_id
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/messages", "label": "Mensajes manual", "category": "MESSAGES"},
+        json={"url_pattern": "/messages", "label": "Mensajes manual", "category_slug": "uncategorized"},
     )
     conflicting_id = r.json()["id"]
     r = client.post(
         "/route-templates",
-        json=_make_template_body(slug="tpl-3", url_pattern="/messages", category="MESSAGES"),
+        json=_make_template_body(slug="tpl-3", url_pattern="/messages"),
     )
     tpl3_id = r.json()["id"]
 
@@ -746,7 +756,7 @@ def test_EP_N03_response_incluye_template_id_null(client):
     _, world_id = _setup_world(client)
     client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     r = client.get(f"/worlds/{world_id}/noise/destinations")
     assert r.status_code == 200, r.text
@@ -761,7 +771,7 @@ def test_EP_N04_acepta_template_id_opcional_sin_romper(client):
     _, world_id = _setup_world(client)
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     assert r.status_code == 201, r.text
     assert r.json()["template_id"] is None

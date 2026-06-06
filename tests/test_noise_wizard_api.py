@@ -529,7 +529,7 @@ def _create_dest_and_path(c: TestClient, world_id: int, origin: str = "ANY") -> 
     """Crea un destino y una ruta básica. Devuelve (dest_id, path_id)."""
     r = c.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     assert r.status_code == 201, r.text
     dest_id = r.json()["id"]
@@ -585,7 +585,7 @@ def test_EP_N08_create_path_acepta_expected_url_after_click_en_steps(client):
 
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/statistics", "label": "Stats", "category": "OTHER"},
+        json={"url_pattern": "/statistics", "label": "Stats", "category_slug": "uncategorized"},
     )
     dest_id = r.json()["id"]
 
@@ -616,7 +616,7 @@ def test_EP_N08_create_path_acepta_nuevos_origins_del_enum(client):
 
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/statistics", "label": "Stats", "category": "OTHER"},
+        json={"url_pattern": "/statistics", "label": "Stats", "category_slug": "uncategorized"},
     )
     dest_id = r.json()["id"]
 
@@ -639,7 +639,7 @@ def test_EP_N08_create_path_selector_texto_visible_devuelve_422(client):
 
     r = client.post(
         f"/worlds/{world_id}/noise/destinations",
-        json={"url_pattern": "/karte.php", "label": "Mapa", "category": "MAP"},
+        json={"url_pattern": "/karte.php", "label": "Mapa", "category_slug": "uncategorized"},
     )
     dest_id = r.json()["id"]
 

@@ -37,7 +37,6 @@ from core.entities.noise import (
     NavigationPath,
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     NoiseConfig,
     NoiseDestination,
     ORIGIN_PATHS,

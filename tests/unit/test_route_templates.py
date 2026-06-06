@@ -12,7 +12,6 @@ import pytest
 from core.entities.noise import (
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     RouteTemplate,
     RouteTemplatePath,
 )
@@ -28,7 +27,7 @@ def test_TU_RT01_valid_slug():
         id=None,
         slug="rally-point-view",
         label="Rally Point",
-        category=NoiseCategory.BUILDING_VIEW,
+        category_slug="building-view",
         url_pattern="/build.php?gid=13",
     )
     assert tpl.slug == "rally-point-view"
@@ -40,7 +39,7 @@ def test_valid_slug_with_numbers():
         id=None,
         slug="map-v2",
         label="Mapa v2",
-        category=NoiseCategory.MAP,
+        category_slug="map",
         url_pattern="/karte.php",
     )
     assert tpl.slug == "map-v2"
@@ -57,7 +56,7 @@ def test_TU_RT02_invalid_slug_spaces():
             id=None,
             slug="Rally Point",
             label="Rally Point",
-            category=NoiseCategory.BUILDING_VIEW,
+            category_slug="building-view",
             url_pattern="/build.php?gid=13",
         )
 
@@ -68,7 +67,7 @@ def test_invalid_slug_uppercase():
             id=None,
             slug="Rally-Point",
             label="RP",
-            category=NoiseCategory.BUILDING_VIEW,
+            category_slug="building-view",
             url_pattern="/build.php?gid=13",
         )
 
@@ -80,7 +79,7 @@ def test_invalid_slug_exclamation():
             id=None,
             slug="bad slug!",
             label="Bad",
-            category=NoiseCategory.OTHER,
+            category_slug="other",
             url_pattern="/karte.php",
         )
 
@@ -91,7 +90,7 @@ def test_invalid_slug_empty():
             id=None,
             slug="",
             label="Bad",
-            category=NoiseCategory.OTHER,
+            category_slug="other",
             url_pattern="/karte.php",
         )
 
@@ -107,7 +106,7 @@ def test_TU_RT03_weight_too_high():
             id=None,
             slug="test-template",
             label="Test",
-            category=NoiseCategory.MAP,
+            category_slug="map",
             url_pattern="/karte.php",
             navigation_weight=5.01,
         )
@@ -124,7 +123,7 @@ def test_TU_RT04_weight_too_low():
             id=None,
             slug="test-template",
             label="Test",
-            category=NoiseCategory.MAP,
+            category_slug="map",
             url_pattern="/karte.php",
             navigation_weight=0.09,
         )
@@ -136,7 +135,7 @@ def test_weight_boundary_valid_low():
         id=None,
         slug="test-template",
         label="Test",
-        category=NoiseCategory.MAP,
+        category_slug="map",
         url_pattern="/karte.php",
         navigation_weight=0.1,
     )
@@ -149,7 +148,7 @@ def test_weight_boundary_valid_high():
         id=None,
         slug="test-template",
         label="Test",
-        category=NoiseCategory.MAP,
+        category_slug="map",
         url_pattern="/karte.php",
         navigation_weight=5.0,
     )
@@ -167,7 +166,7 @@ def test_TU_RT05_empty_url_pattern():
             id=None,
             slug="test-template",
             label="Test",
-            category=NoiseCategory.MAP,
+            category_slug="map",
             url_pattern="",
         )
 
@@ -179,7 +178,7 @@ def test_empty_label_raises():
             id=None,
             slug="test-template",
             label="",
-            category=NoiseCategory.MAP,
+            category_slug="map",
             url_pattern="/karte.php",
         )
 
@@ -270,7 +269,7 @@ def test_template_with_paths_and_steps():
         id=None,
         slug="rally-point-view",
         label="Rally Point",
-        category=NoiseCategory.BUILDING_VIEW,
+        category_slug="building-view",
         url_pattern="/build.php?gid=13",
         paths=[path],
     )
@@ -284,7 +283,7 @@ def test_template_zero_paths_valid():
         id=None,
         slug="player-own-profile",
         label="Perfil propio",
-        category=NoiseCategory.PLAYER_PROFILE,
+        category_slug="player-profile",
         url_pattern="/profile",
         paths=[],
     )

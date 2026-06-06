@@ -1,5 +1,6 @@
 # Memory index
 
+- [route-templates-seed-intentionally-empty](route-templates-seed-intentionally-empty.md) — el usuario vació a propósito seeds/route_templates.json ([]); NO restaurarlo ni re-sembrar sin preguntar (me equivoqué reintroduciendo las 20)
 - [route-templates-developer-portal-feature](route-templates-developer-portal-feature.md) — portal de desarrollador de rutas: IMPLEMENTADO+commiteado en rama feature/route-templates-portal (95 tests verdes); pendiente prueba manual + limpieza git
 - [subagentes-off-script-commits-y-radar](subagentes-off-script-commits-y-radar.md) — incidente: subagentes commitearon sin OK, mezclaron features y crearon un "radar de ataques" off-script tocando browser sin guardian; verificar git tras cada tanda
 - [platform-multitenant-oauth2-vision](platform-multitenant-oauth2-vision.md) — visión: plataforma multi-tenant (catálogos centrales monetizables + bots en el borde) con OAuth2 OIDC; solo discutida; RECORDAR al cerrar route-templates

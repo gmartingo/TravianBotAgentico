@@ -36,7 +36,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from adapters.api.main import app
-from core.entities.noise import NoiseCategory, NoiseConfig, NoiseDestination
+from core.entities.noise import NoiseConfig, NoiseDestination
 from core.entities.session import SessionMode
 from core.scheduling.world_agent import WorldAgent
 
@@ -60,7 +60,7 @@ def _make_dest(id: int, weight: float) -> NoiseDestination:
         world_id=1,
         url_pattern=f"/page{id}.php",
         label=f"Página {id}",
-        category=NoiseCategory.MAP,
+        category_slug="uncategorized",
         frequency_weight=weight,
     )
 
@@ -101,7 +101,7 @@ async def _build_real_adapter_with_dests(db_path: str, weights: list[float]):
             world_id=world.id,
             url_pattern=f"/page{i}.php",
             label=f"Página {i}",
-            category=NoiseCategory.MAP,
+            category_slug="uncategorized",
             frequency_weight=w,
         )
     return conn, noise_adapter, world.id
@@ -851,7 +851,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 2.5,
         })
         assert r.status_code == 201, r.text
@@ -865,7 +865,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/nachrichten.php",
             "label": "Mensajes",
-            "category": "MESSAGES",
+            "category_slug": "uncategorized",
         })
         assert r.status_code == 201, r.text
         assert r.json()["navigation_weight"] == 1.0
@@ -876,7 +876,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "X",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 0,
         })
         assert r.status_code == 422, r.text
@@ -887,7 +887,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "X",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 10,
         })
         assert r.status_code == 422, r.text
@@ -898,7 +898,7 @@ class TestTI_FW_EP_N03_N04_N05:
         r = client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
         })
         dest_id = r.json()["id"]
 
@@ -914,7 +914,7 @@ class TestTI_FW_EP_N03_N04_N05:
         client.post(f"/worlds/{world_id}/noise/destinations", json={
             "url_pattern": "/karte.php",
             "label": "Mapa",
-            "category": "MAP",
+            "category_slug": "uncategorized",
             "navigation_weight": 1.5,
         })
 

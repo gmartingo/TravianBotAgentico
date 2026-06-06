@@ -28,7 +28,6 @@ from adapters.db.route_template_sqlite_adapter import (
 from core.entities.noise import (
     NavigationStep,
     NoiseAction,
-    NoiseCategory,
     RouteTemplate,
     RouteTemplatePath,
 )
@@ -106,7 +105,7 @@ async def _insert_world(conn: aiosqlite.Connection, server: str = "https://ts1.t
 def _make_template(
     slug: str = "test-template",
     label: str = "Test Template",
-    category: NoiseCategory = NoiseCategory.MAP,
+    category_slug: str = "uncategorized",
     url_pattern: str = "/karte.php",
     navigation_weight: float = 1.0,
     with_path: bool = False,
@@ -134,7 +133,7 @@ def _make_template(
         id=None,
         slug=slug,
         label=label,
-        category=category,
+        category_slug=category_slug,
         url_pattern=url_pattern,
         navigation_weight=navigation_weight,
         paths=paths,
@@ -187,7 +186,7 @@ def test_TI_RT03_list_templates(tmp_path):
         conn, _, rt = await _setup_db(str(tmp_path / "test.db"))
         try:
             await rt.create_template(_make_template(slug="t1"))
-            await rt.create_template(_make_template(slug="t2", category=NoiseCategory.BUILDING_VIEW, url_pattern="/build.php?gid=13"))
+            await rt.create_template(_make_template(slug="t2", category_slug="building-view", url_pattern="/build.php?gid=13"))
             templates = await rt.list_templates()
             assert len(templates) == 2
         finally:
@@ -204,12 +203,12 @@ def test_TI_RT04_list_templates_by_category(tmp_path):
     async def run():
         conn, _, rt = await _setup_db(str(tmp_path / "test.db"))
         try:
-            await rt.create_template(_make_template(slug="map1", category=NoiseCategory.MAP))
-            await rt.create_template(_make_template(slug="map2", category=NoiseCategory.MAP, url_pattern="/karte2.php"))
-            await rt.create_template(_make_template(slug="bv1", category=NoiseCategory.BUILDING_VIEW, url_pattern="/build.php?gid=13"))
-            result = await rt.list_templates(category=NoiseCategory.MAP)
+            await rt.create_template(_make_template(slug="map1", category_slug="map"))
+            await rt.create_template(_make_template(slug="map2", category_slug="map", url_pattern="/karte2.php"))
+            await rt.create_template(_make_template(slug="bv1", category_slug="building-view", url_pattern="/build.php?gid=13"))
+            result = await rt.list_templates(category_slug="map")
             assert len(result) == 2
-            assert all(t.category == NoiseCategory.MAP for t in result)
+            assert all(t.category_slug == "map" for t in result)
         finally:
             await conn.close()
     asyncio.run(run())
@@ -318,7 +317,7 @@ def test_TI_RT10_delete_template_orphans_clones(tmp_path):
                 world_id=world_id,
                 url_pattern="/karte.php",
                 label="Mapa",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
                 is_safe=True,
                 template_id=tpl.id,
@@ -371,7 +370,7 @@ def test_find_destination_by_url_found(tmp_path):
                 world_id=world_id,
                 url_pattern="/karte.php",
                 label="Mapa",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
             )
             result = await noise.find_destination_by_url(world_id, "/karte.php")
@@ -420,7 +419,7 @@ def test_find_destination_by_url_cross_world(tmp_path):
                 world_id=world_id_1,
                 url_pattern="/karte.php",
                 label="Mapa",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
             )
             # Buscar en el segundo mundo — no debe encontrar nada
@@ -446,7 +445,7 @@ def test_find_destination_by_template_found(tmp_path):
                 world_id=world_id,
                 url_pattern="/karte.php",
                 label="Mapa clonado",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
                 template_id=tpl.id,
             )
@@ -486,7 +485,7 @@ def test_create_destination_without_template_id(tmp_path):
                 world_id=world_id,
                 url_pattern="/karte.php",
                 label="Mapa",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
             )
             assert dest.template_id is None
@@ -506,7 +505,7 @@ def test_create_destination_with_template_id(tmp_path):
                 world_id=world_id,
                 url_pattern="/karte.php",
                 label="Mapa clonado",
-                category=NoiseCategory.MAP,
+                category_slug="uncategorized",
                 frequency_weight=1.0,
                 template_id=tpl.id,
             )
