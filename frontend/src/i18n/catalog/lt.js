@@ -1108,6 +1108,8 @@ const lt = {
   'NATURE_8': 'krokodilas',
   'NATURE_9': 'tigras',
   'NATURE_10': 'dramblys',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Atakos',
 }
 
 export default lt

@@ -1108,6 +1108,8 @@ const ja = {
   'NATURE_8': 'ワニ',
   'NATURE_9': 'トラ',
   'NATURE_10': 'ゾウ',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': '攻撃',
 }
 
 export default ja

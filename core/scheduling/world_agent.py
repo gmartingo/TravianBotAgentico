@@ -29,7 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field as dc_field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from core.entities.farm_scheduler import FarmScheduler
 from core.entities.noise import (
@@ -580,6 +580,28 @@ class WorldAgent:
         account_id: int | None = None,  # para pasar a LoginUseCase.execute()
         queue: TaskQueue | None = None,
         noise_db: NoiseDbPort | None = None,  # puerto de ruido de navegación (v2.2)
+        incoming_db=None,               # IncomingAttackDbPort | None (radar ataques v1)
+        sidebar_attack_hook=None,       # async (html, world_id, db_port) -> list — Comp. A
+        dorf1_attack_reader=None,       # async (world_id) -> list[Dorf1AttackDTO]  — Comp. B
+        page_html_provider: Callable[[], Awaitable[str | None]] | None = None,
+        # Callable inyectado desde el composition root (adapters/api) para obtener el HTML
+        # de la página actualmente cargada en el browser sin hacer ninguna petición extra.
+        # Implementación: lambda que llama a tab.get_content() del tab activo.
+        # No se importa adapters.browser.* aquí — la frontera hexagonal se mantiene (RN-21).
+        incoming_attack_browser_adapter=None,
+        # IncomingAttackBrowserAdapter | None — inyectado desde el composition root.
+        # Patrón idéntico a noise_db: se pasa como objeto sin importar la clase concreta
+        # en el core (frontera hexagonal). Contiene navigate_to_village_dorf1,
+        # click_rally_point_link, click_origin_village_link, get_active_tab.
+        # Ver spec §9.9, §9.10. Requerido para Componentes C y D del radar.
+        rally_point_parser=None,
+        # Callable[str → list[RallyPointAttackDTO]] | None.
+        # Inyectado desde el composition root para no importar adapters desde core.
+        # Valor: RallyPointParser.parse (de adapters.browser.parsers.rally_point_parser).
+        village_profile_parser=None,
+        # Callable[str → VillageProfileDTO | None] | None.
+        # Inyectado desde el composition root para no importar adapters desde core.
+        # Valor: VillageProfileParser.parse (de adapters.browser.parsers.village_profile_parser).
     ) -> None:
         self.world_id    = world_id
         self._browser    = browser
@@ -589,6 +611,15 @@ class WorldAgent:
         self._login_use_case   = login_use_case
         self._account_id = account_id
         self._noise_db   = noise_db
+        self._incoming_db = incoming_db   # opcional, patrón P4 (igual que noise_db)
+        # Callables inyectados desde el composition root (adapters/api) para
+        # no importar adapters.browser.* dentro del core (frontera hexagonal).
+        self._sidebar_attack_hook = sidebar_attack_hook   # Comp. A
+        self._dorf1_attack_reader = dorf1_attack_reader   # Comp. B
+        self._page_html_provider = page_html_provider     # () -> Awaitable[str|None]
+        self._incoming_attack_browser_adapter = incoming_attack_browser_adapter  # Comp. C/D
+        self._rally_point_parser = rally_point_parser       # Callable: html → list[DTO]
+        self._village_profile_parser = village_profile_parser  # Callable: html → DTO|None
 
         self._queue: TaskQueue = queue or TaskQueue()
         self._stop_event   = asyncio.Event()
@@ -602,6 +633,13 @@ class WorldAgent:
         # Estado de sesión (runtime, nunca persistido — RN-HS02)
         self._active_mode: SessionMode = SessionMode.HARDCORE  # default provisional
         self._jitter_fin: datetime = datetime.now()            # se recalcula en run()
+
+        # Vigilancia híbrida — Componente E2 (RN-33 a RN-40, §9.12).
+        # Estado de runtime: NO se persiste en BD (RN-35). Se resetea con cada reinicio.
+        # _last_sidebar_scan: momento del último piggyback (None = nunca, EC-27).
+        # _heartbeat_interval_s: intervalo nominal del latido en segundos (default 600).
+        self._last_sidebar_scan: datetime | None = None
+        self._heartbeat_interval_s: int = 600
 
         # Estado de ruido — máquina de estados burst/silence (RN-HS24bis)
         self._noise_in_burst: bool = False
@@ -1061,6 +1099,38 @@ class WorldAgent:
     # Ejecución y reencole
     # ------------------------------------------------------------------
 
+    async def _maybe_run_page_hook(self) -> None:
+        """
+        Invoca _post_page_hook con el HTML de la página actualmente cargada.
+
+        Solo actúa si page_html_provider está inyectado (RN-21). Obtiene el HTML
+        llamando al provider (una sola lectura del DOM, sin navegación extra — coste
+        cero anti-detección, RN-01/G7). Si el provider o el hook fallan, loggea y
+        continúa: el radar nunca debe tumbar la tarea principal (EC-15).
+
+        [MODIFICADO v5]: actualiza _last_sidebar_scan = datetime.now() ANTES de invocar
+        _post_page_hook cuando obtenemos HTML válido (RN-35, RN-37, VH-04).
+        El timestamp refleja "el agente obtuvo y pasó HTML al hook", no "se detectaron
+        ataques". Esto garantiza que el latido (HEARTBEAT_SCAN) sepa que hubo actividad
+        reciente y no navegue dorf1 innecesariamente (EC-24).
+        """
+        if self._page_html_provider is None:
+            return
+        try:
+            html = await self._page_html_provider()
+        except Exception as exc:
+            logger.warning(
+                "Mundo %d: page_html_provider falló (no-op): %s", self.world_id, exc
+            )
+            return
+        if html is None:
+            return
+        # Actualizar timestamp del último scan SIEMPRE que se obtenga HTML válido (RN-35, RN-37).
+        # Se hace ANTES de _post_page_hook: el hook es función pura que no conoce al WorldAgent.
+        # El timestamp no depende de que el hook detecte ataques — basta con haber obtenido HTML.
+        self._last_sidebar_scan = datetime.now()
+        await self._post_page_hook(html, self.world_id)
+
     async def _execute(self, task: Task) -> None:
         """
         Ejecuta una tarea. Un fallo no mata el agente: se loguea y se sigue.
@@ -1076,9 +1146,42 @@ class WorldAgent:
                 # Contabilizar para que el ruido descuente este tráfico productivo
                 # al calcular el siguiente gap (guardian amber #1).
                 self._productive_recent_count += 1
+                # Componente A del radar — hook post-página (RN-21, §9.5).
+                # Punto ÚNICO de invocación: WorldAgent, aquí, tras la tarea productiva.
+                # Los adapters individuales (farm_lists.py) NO llaman al hook.
+                await self._maybe_run_page_hook()
 
             elif task.task_type == TaskType.NOISE_NAVIGATION:
                 await self._handle_noise_navigation()
+                # Hook post-página también tras ruido: la navegación de ruido carga
+                # páginas de Travian post-login y el sidebar estará presente (RN-21).
+                await self._maybe_run_page_hook()
+
+            elif task.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL:
+                # NO se invoca _maybe_run_page_hook aquí: esta tarea YA ES parte
+                # del radar (Componente B). Re-invocar el hook causaría re-entrada
+                # (detección en dorf1 → nueva tarea CHECK → hook en dorf1 → bucle).
+                await self._handle_check_incoming_attack_detail()
+
+            elif task.task_type == TaskType.FETCH_RALLY_POINT_DETAIL:
+                # Componente C — ruta reactiva prioridad-0 (RT-10, RN-23).
+                # NO pasa por el scheduler de ruido ni por NoiseDestination.
+                # NO se invoca _maybe_run_page_hook (ya es parte del radar).
+                await self._handle_fetch_rally_point_detail(task)
+
+            elif task.task_type == TaskType.FETCH_ATTACKER_VILLAGE_PROFILE:
+                # Componente D — ruta reactiva prioridad-0 (RT-10, RN-23).
+                # Aplica delay post-procesamiento (RN-12) y límite de 3 fichas (RN-11).
+                # NO se invoca _maybe_run_page_hook.
+                await self._handle_fetch_attacker_village_profile(task)
+
+            elif task.task_type == TaskType.HEARTBEAT_SCAN:
+                # Componente E — latido de vigilancia anti-detección (v5, RN-34..RN-40).
+                # No navega si el piggyback fue reciente (RN-37, EC-24).
+                # Sí invoca _post_page_hook directamente tras cargar dorf1 (RN-33).
+                # NO llama a _maybe_run_page_hook adicionalmente (el handler ya actualiza
+                # _last_sidebar_scan y llama a _post_page_hook — evita doble scan).
+                await self._handle_heartbeat_scan()
 
             else:
                 logger.warning(
@@ -1192,6 +1295,531 @@ class WorldAgent:
             "msg": msg,
         })
         logger.debug("[activity] %s", msg)
+
+    # ------------------------------------------------------------------
+    # Radar de ataques entrantes — §9.5/§9.6 (v1)
+    # ------------------------------------------------------------------
+
+    async def _handle_check_incoming_attack_detail(self) -> None:
+        """
+        Handler de TaskType.CHECK_INCOMING_ATTACK_DETAIL — Componente B del radar.
+
+        Obtiene el HTML de dorf1.php y parsea los ataques entrantes con timer.
+        Persiste el impact_at calculado en BD.
+
+        Componentes C/D están BLOQUEADOS (fixtures GAP-02/GAP-03 pendientes):
+        los campos attacker_name, origin_village_name, operation_type quedan None.
+
+        Lanza:
+          IncomingAttackPageError si dorf1 no carga → loggea ERROR, no re-encola.
+          SessionNotActiveError si no hay sesión → idem.
+        """
+        if self._incoming_db is None:
+            logger.warning(
+                "Mundo %d: CHECK_INCOMING_ATTACK_DETAIL pero incoming_db no inyectado",
+                self.world_id,
+            )
+            return
+
+        if self._dorf1_attack_reader is None:
+            logger.warning(
+                "Mundo %d: CHECK_INCOMING_ATTACK_DETAIL pero dorf1_attack_reader no inyectado",
+                self.world_id,
+            )
+            return
+
+        try:
+            attacks = await self._dorf1_attack_reader(self.world_id)
+        except Exception as exc:
+            logger.error(
+                "Mundo %d: error al leer dorf1 para radar: %s", self.world_id, exc
+            )
+            return
+        if not attacks:
+            logger.debug("Mundo %d: dorf1 sin ataques entrantes", self.world_id)
+            return
+
+        from datetime import timezone as _tz  # noqa: PLC0415
+        now = datetime.now(_tz.utc)
+        now_iso = now.isoformat()
+
+        from core.ports.incoming_attack_db_port import IncomingAttackRecord  # noqa: PLC0415
+        for dto in attacks:
+            impact_dt = now + timedelta(seconds=dto.seconds_to_impact)
+            impact_iso = impact_dt.isoformat()
+            # El village_game_id se desconoce en Comp. B (dorf1 no expone data-did directamente).
+            # Usamos 0 como placeholder hasta que Comp. C lo enriquezca, o el upsert
+            # del sidebar ya habrá creado la fila con el game_id correcto.
+            # El UNIQUE es (world_id, village_game_id, impact_at); si village_game_id
+            # viene del sidebar el upsert actualizará el impact_at en esa fila.
+            # NOTA: esta limitación es deuda de Comp. B (sin rallypoint no hay game_id exacto).
+            await self._incoming_db.upsert_attack(IncomingAttackRecord(
+                world_id=self.world_id,
+                village_game_id=0,      # placeholder — se enriquece en Comp. C
+                attack_count=dto.attack_count,
+                impact_at=impact_iso,
+                rally_point_href=dto.rally_point_href,
+                source="dorf1",
+                detected_at=now_iso,
+                updated_at=now_iso,
+            ))
+
+        logger.info(
+            "Mundo %d: %d ataque(s) dorf1 persistido(s) con impact_at",
+            self.world_id, len(attacks),
+        )
+
+    async def _post_page_hook(self, html: str, world_id: int) -> None:
+        """
+        Hook post-página transversal — Componente A del radar de ataques entrantes.
+
+        Llamado desde el WorldAgent tras CADA tarea de browser post-login que cargue HTML.
+        El HTML ya está en memoria; NO se hace ninguna petición HTTP adicional (RN-01).
+        NO se llama desde login.py ni desde adapters individuales (RN-21).
+
+        Solo aplica en páginas post-login: si #sidebarBoxVillageList no está en el HTML
+        → no-op silencioso (RN-19, EC-01).
+
+        Si el hook detecta ataques y no hay tarea CHECK_INCOMING_ATTACK_DETAIL ya encolada,
+        encola una con retraso variable 3-15 s (RN-22) y prioridad máxima (0).
+
+        Las excepciones no se propagan — el radar nunca debe bloquear el flujo (EC-15).
+        """
+        if self._incoming_db is None:
+            return
+
+        try:
+            if self._sidebar_attack_hook is None:
+                return
+            attacks = await self._sidebar_attack_hook(html, world_id, self._incoming_db)
+
+            if attacks and not self._has_pending_radar_task(world_id):
+                # Retraso humano variable antes de encolar Comp. B (RN-22)
+                import random as _random  # import diferido — patrón del proyecto (P5)
+                delay_s = _random.uniform(3, 15)
+                from datetime import timezone as _tz  # noqa: PLC0415
+                execute_at = datetime.now(_tz.utc).replace(tzinfo=None) + timedelta(seconds=delay_s)
+                self._queue.add(Task(
+                    task_type=TaskType.CHECK_INCOMING_ATTACK_DETAIL,
+                    world_id=world_id,
+                    priority=0,         # Prioridad máxima — más urgente que farm lists
+                    execute_at=execute_at,
+                    recurring=False,
+                ))
+                logger.info(
+                    "Mundo %d: %d aldea(s) bajo ataque detectadas — "
+                    "encolando CHECK_INCOMING_ATTACK_DETAIL en %.1fs",
+                    world_id, len(attacks), delay_s,
+                )
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: excepción inesperada en _post_page_hook: %s",
+                world_id, exc,
+            )
+
+    def _has_pending_radar_task(self, world_id: int) -> bool:
+        """
+        Comprueba si ya hay una tarea CHECK_INCOMING_ATTACK_DETAIL encolada para el mundo.
+        Evita encolar múltiples tareas de radar en el mismo ciclo (RN-22).
+        """
+        return any(
+            t.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL and t.world_id == world_id
+            for t in self._queue
+        )
+
+    def _count_pending_profile_tasks(self, world_id: int) -> int:
+        """
+        Cuenta tareas FETCH_ATTACKER_VILLAGE_PROFILE pendientes para el mundo.
+        Usado para garantizar el límite de 3 fichas por evento de radar (RN-11).
+        """
+        return sum(
+            1
+            for t in self._queue
+            if t.task_type == TaskType.FETCH_ATTACKER_VILLAGE_PROFILE
+            and t.world_id == world_id
+        )
+
+    # ------------------------------------------------------------------
+    # Vigilancia híbrida — Componente E2: latido HEARTBEAT_SCAN (v5)
+    # Spec §9.12, RN-33 a RN-40, RT-15, RT-16.
+    # ------------------------------------------------------------------
+
+    def _enqueue_heartbeat(self) -> None:
+        """
+        Encola el próximo HEARTBEAT_SCAN con jitter amplio (RN-36).
+
+        Jitter: uniform(intervalo*0.5, intervalo*1.5).
+        Para intervalo=600 s → rango 300-900 s (5-15 min). NUNCA intervalo fijo.
+        El jitter amplio hace el patrón indistinguible de la actividad humana esporádica.
+
+        Solo encola si:
+        - _should_reenqueue_noise() → True (modo HARDCORE o PASIVO, no DISCONNECTED).
+        - _incoming_db is not None (el radar está activo — sin radar el latido no tiene sentido).
+
+        Patrón idéntico a _enqueue_noise (P4, P5 — import diferido de random).
+        """
+        if not self._should_reenqueue_noise():
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — modo DISCONNECTED, no reencolar", self.world_id
+            )
+            return
+        if self._incoming_db is None:
+            return  # EC-25: radar no activo, latido sin propósito
+
+        import random as _random  # import diferido — patrón del proyecto (P5)
+        # Jitter amplio: uniform(0.5x, 1.5x) → para 600 s base = entre 300 s y 900 s (5-15 min)
+        gap = _random.uniform(
+            self._heartbeat_interval_s * 0.5,
+            self._heartbeat_interval_s * 1.5,
+        )
+        execute_at = datetime.now() + timedelta(seconds=gap)
+        self._queue.add(Task(
+            task_type=TaskType.HEARTBEAT_SCAN,
+            world_id=self.world_id,
+            execute_at=execute_at,
+            priority=2,       # misma prioridad que ruido: no compite con radar urgente (0)
+            payload={},
+            recurring=False,  # se reencola manualmente en el handler
+        ))
+        logger.debug(
+            "Mundo %d: próximo HEARTBEAT_SCAN en %.0f s (jitter=%.0f-%.0f s)",
+            self.world_id, gap,
+            self._heartbeat_interval_s * 0.5,
+            self._heartbeat_interval_s * 1.5,
+        )
+
+    async def _handle_heartbeat_scan(self) -> None:
+        """
+        Componente E — Latido de vigilancia (RN-34 a RN-39, §9.12).
+
+        Lógica:
+        a) Sin sesión activa → reencolar más tarde, sin navegar (RN-39, EC-26).
+        b) Piggyback reciente (< intervalo*0.5) → reencolar sin navegar (RN-37, EC-24).
+        c) Cargar dorf1 via _incoming_attack_browser_adapter.get_dorf1_html
+           → actualizar _last_sidebar_scan y llamar a _post_page_hook (RN-33, VH-01).
+        d) Reencolar con jitter amplio SOLO si la sesión sigue activa (RN-36, RN-39).
+
+        EC-25: si _incoming_db es None → return inmediato sin reencolar.
+        EC-27: si _last_sidebar_scan es None (primer arranque) → navega directamente.
+        EC-26: en modo DISCONNECTED → _session_active() False → skip + reencolar.
+
+        Anti-detección (checklist §11, puntos 12-17):
+        - Jitter amplio uniform(0.5x, 1.5x) — NUNCA intervalo fijo.
+        - Solo navega si realmente hubo inactividad (b evita cargas innecesarias).
+        - La carga de dorf1 es deuda RT-08 (URL directa) igual que Comp. B.
+        - priority=2: no compite con radar urgente priority=0.
+        - No opera en modo DISCONNECTED.
+        """
+        # EC-25: sin radar activo, el latido no tiene propósito
+        if self._incoming_db is None:
+            return
+
+        # ── a) Sin sesión → skip + reencolar ──────────────────────────────────
+        if not self._session_active():
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — sin sesión activa, reencolar más tarde (RN-39)",
+                self.world_id,
+            )
+            self._enqueue_heartbeat()
+            return
+
+        # ── b) Piggyback reciente → reencolar sin navegar (RN-37, EC-24) ───────
+        if self._last_sidebar_scan is not None:
+            elapsed = (datetime.now() - self._last_sidebar_scan).total_seconds()
+            min_threshold = self._heartbeat_interval_s * 0.5
+            if elapsed < min_threshold:
+                logger.debug(
+                    "Mundo %d: HEARTBEAT_SCAN diferido — piggyback reciente hace %.0f s "
+                    "(umbral=%.0f s)",
+                    self.world_id, elapsed, min_threshold,
+                )
+                self._enqueue_heartbeat()
+                return
+
+        # ── c) Navegar a dorf1 y escanear ─────────────────────────────────────
+        # Verificar que el browser adapter está inyectado (VH-01).
+        if self._incoming_attack_browser_adapter is None:
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — browser adapter no inyectado, skip",
+                self.world_id,
+            )
+            self._enqueue_heartbeat()
+            return
+
+        try:
+            # Reutilizar _incoming_attack_browser_adapter.get_dorf1_html (ya inyectado).
+            # La navegación usa browser.get + human_delay + wait DOM (deuda RT-08 conocida).
+            html = await self._incoming_attack_browser_adapter.get_dorf1_html(self.world_id)
+
+            # Actualizar _last_sidebar_scan y ejecutar el hook del radar.
+            # Se llama a _post_page_hook directamente (no a _maybe_run_page_hook, porque
+            # ya tenemos el HTML y no necesitamos el provider). VH-04: el timestamp se
+            # actualiza aquí, en el código del agente, no en el hook puro.
+            self._last_sidebar_scan = datetime.now()
+            await self._post_page_hook(html, self.world_id)
+
+            logger.info(
+                "Mundo %d: HEARTBEAT_SCAN completado (dorf1 cargado, sidebar escaneado)",
+                self.world_id,
+            )
+
+        except Exception as exc:
+            # Nunca bloquear el agente por un error del latido (EC-15 para heartbeat).
+            logger.warning(
+                "Mundo %d: HEARTBEAT_SCAN falló: %s",
+                self.world_id, exc,
+            )
+
+        # ── d) Reencolar siempre al final (con jitter) ────────────────────────
+        self._enqueue_heartbeat()
+
+    async def _handle_fetch_rally_point_detail(self, task: Task) -> None:
+        """
+        Handler de TaskType.FETCH_RALLY_POINT_DETAIL — Componente C del radar.
+
+        Ruta reactiva prioridad-0 (RT-10, RN-23). NO pasa por el scheduler de ruido.
+        Targets dinámicos en el payload: {'village_game_id': int, 'rally_point_href': str}.
+
+        Pasos:
+          1. Navegar a dorf1 de la aldea atacada (click sidebar > fallback URL — RN-24).
+          2. Click humano en el rally point (a[href*='gid=16'][href*='tt=1'] — RN-25).
+          3. Parsear table.troop_details.inAttack con RallyPointParser (§9.7).
+          4. Upsert en BD con attacker_name, coords, href, operation_type, tribe.
+          5. Encolar FETCH_ATTACKER_VILLAGE_PROFILE (RN-31) si origin_village_href.
+             Máximo 3 fichas por evento (RN-11).
+
+        Anti-detección:
+          - SIEMPRE human_click(element, tab) — PROHIBIDO el click sintetico por JS (tab.evaluate).
+          - navigate_to_village_dorf1 intenta click en sidebar antes de URL directa.
+
+        Ver spec §9.9, §9.10.
+        """
+        if self._incoming_db is None:
+            return
+
+        village_game_id = task.payload.get("village_game_id")
+        if not village_game_id:
+            logger.warning(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL sin village_game_id en payload",
+                self.world_id,
+            )
+            return
+
+        browser = self._incoming_attack_browser_adapter
+        if browser is None:
+            logger.warning(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL: incoming_attack_browser_adapter no disponible",
+                self.world_id,
+            )
+            return
+
+        try:
+            async with self._browser_lock:
+                # Paso 1: navegar a dorf1 de la aldea atacada
+                tab = await browser.navigate_to_village_dorf1(
+                    world_id=self.world_id,
+                    village_game_id=village_game_id,
+                )
+                # Paso 2: click en el rally point
+                html = await browser.click_rally_point_link(tab)
+
+            # Paso 3: parseo via callable inyectado (frontera hexagonal — P5)
+            if self._rally_point_parser is None:
+                logger.warning(
+                    "Mundo %d: FETCH_RALLY_POINT_DETAIL: rally_point_parser no inyectado",
+                    self.world_id,
+                )
+                return
+            dtos = self._rally_point_parser(html)
+
+            if not dtos:
+                logger.info(
+                    "Mundo %d: rally point sin filas de ataque activo (EC-11)",
+                    self.world_id,
+                )
+                return
+
+            from datetime import timezone as _tz  # noqa: PLC0415
+            now = datetime.now(_tz.utc)
+            now_iso = now.isoformat()
+
+            from core.ports.incoming_attack_db_port import IncomingAttackRecord  # noqa: PLC0415
+            for dto in dtos:
+                record = IncomingAttackRecord(
+                    world_id=self.world_id,
+                    village_game_id=village_game_id,
+                    source="rally_point",
+                    detected_at=now_iso,
+                    updated_at=now_iso,
+                    attacker_name=dto.attacker_name,
+                    origin_village_coord_x=dto.origin_village_coord_x,
+                    origin_village_coord_y=dto.origin_village_coord_y,
+                    origin_village_href=dto.origin_village_href,
+                    operation_type=dto.operation_type,
+                    attacker_snapshot_json=None,  # se poblará en Comp. D
+                )
+                attack_id = await self._incoming_db.upsert_attack(record)
+
+                # Paso 5: encolar Comp. D si tenemos href (RN-31, EC-23)
+                if dto.origin_village_href:
+                    n_pending = self._count_pending_profile_tasks(self.world_id)
+                    if n_pending >= 3:  # RN-11: máximo 3 fichas por evento
+                        logger.info(
+                            "Mundo %d: límite de 3 fichas alcanzado — "
+                            "no se encola FETCH_ATTACKER_VILLAGE_PROFILE (RN-11)",
+                            self.world_id,
+                        )
+                        continue
+
+                    import random as _rnd  # noqa: PLC0415 — import diferido (P5)
+                    delay_ms = _rnd.uniform(500, 900)
+                    execute_at = datetime.now(_tz.utc).replace(tzinfo=None) + timedelta(
+                        milliseconds=delay_ms
+                    )
+                    self._queue.add(Task(
+                        task_type=TaskType.FETCH_ATTACKER_VILLAGE_PROFILE,
+                        world_id=self.world_id,
+                        priority=0,
+                        execute_at=execute_at,
+                        recurring=False,
+                        payload={
+                            "incoming_attack_id": attack_id,
+                            "origin_village_href": dto.origin_village_href,
+                        },
+                    ))
+                    logger.info(
+                        "Mundo %d: encolando FETCH_ATTACKER_VILLAGE_PROFILE "
+                        "para attack_id=%d en %.0fms (RN-31)",
+                        self.world_id, attack_id, delay_ms,
+                    )
+                else:
+                    logger.warning(
+                        "Mundo %d: origin_village_href vacío en Comp.C — "
+                        "no se encola FETCH_ATTACKER_VILLAGE_PROFILE (EC-23)",
+                        self.world_id,
+                    )
+
+            logger.info(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL completado — %d DTO(s) procesados",
+                self.world_id, len(dtos),
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL: error inesperado: %s",
+                self.world_id, exc,
+            )
+
+    async def _handle_fetch_attacker_village_profile(self, task: Task) -> None:
+        """
+        Handler de TaskType.FETCH_ATTACKER_VILLAGE_PROFILE — Componente D del radar.
+
+        Ruta reactiva prioridad-0 (RT-10, RN-23). NO pasa por el scheduler de ruido.
+        Payload: {'incoming_attack_id': int, 'origin_village_href': str}.
+
+        Pasos:
+          1. Verificar idempotencia (RN-20): si snapshot ya existe → skip silencioso.
+          2. Click humano en a[href*='d=NNN'] (RN-29).
+          3. Esperar div#tileDetails.
+          4. Parsear con VillageProfileParser (§9.8).
+          5. update_snapshot en BD con el JSON del DTO.
+          6. human_delay(4000, 9000) DESPUÉS del procesamiento (RN-12).
+
+        Anti-detección:
+          - SIEMPRE human_click(element, tab) — PROHIBIDO el click sintetico por JS (tab.evaluate).
+          - human_delay(4000, 9000) después de cada ficha (rango de lectura humana).
+
+        Ver spec §9.9, §9.10.
+        """
+        if self._incoming_db is None:
+            return
+
+        attack_id = task.payload.get("incoming_attack_id")
+        origin_village_href = task.payload.get("origin_village_href")
+        if not attack_id or not origin_village_href:
+            logger.warning(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE con payload incompleto: %s",
+                self.world_id, task.payload,
+            )
+            return
+
+        # Paso 1: verificar idempotencia (RN-20)
+        try:
+            existing = await self._incoming_db.get_attack_by_id(attack_id)
+            if existing and existing.get("attacker_snapshot_json") is not None:
+                logger.info(
+                    "Mundo %d: snapshot ya existe para attack_id=%d — skip (RN-20)",
+                    self.world_id, attack_id,
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "Mundo %d: error verificando idempotencia attack_id=%d: %s",
+                self.world_id, attack_id, exc,
+            )
+
+        browser = self._incoming_attack_browser_adapter
+        if browser is None:
+            logger.warning(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: browser adapter no disponible",
+                self.world_id,
+            )
+            return
+
+        try:
+            async with self._browser_lock:
+                # Paso 2+3: click en href de la aldea atacante + espera div#tileDetails
+                tab = browser.get_active_tab(self.world_id)
+                html = await browser.click_origin_village_link(tab, origin_village_href)
+
+            # Paso 4: parseo via callable inyectado (frontera hexagonal — P5)
+            if self._village_profile_parser is None:
+                logger.warning(
+                    "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: "
+                    "village_profile_parser no inyectado",
+                    self.world_id,
+                )
+                return
+            dto = self._village_profile_parser(html)
+
+            if dto is None:
+                logger.warning(
+                    "Mundo %d: #tileDetails no encontrado para href=%r (EC-12)",
+                    self.world_id, origin_village_href,
+                )
+            else:
+                # Paso 5: persistir snapshot
+                import json as _json  # noqa: PLC0415
+                snapshot = _json.dumps({
+                    "village_name":  dto.village_name,
+                    "coord_x":       dto.coord_x,
+                    "coord_y":       dto.coord_y,
+                    "player_name":   dto.player_name,
+                    "player_href":   dto.player_href,
+                    "alliance_name": dto.alliance_name,
+                    "alliance_href": dto.alliance_href,
+                    "tribe":         dto.tribe,
+                    "population":    dto.population,
+                })
+                from datetime import timezone as _tz  # noqa: PLC0415
+                now_iso = datetime.now(_tz.utc).isoformat()
+                await self._incoming_db.update_snapshot(attack_id, snapshot, now_iso)
+                logger.info(
+                    "Mundo %d: snapshot guardado para attack_id=%d (player=%r)",
+                    self.world_id, attack_id, dto.player_name,
+                )
+
+            # Paso 6: delay de lectura humana DESPUÉS del procesamiento (RN-12).
+            # human_delay(4000, 9000) = asyncio.sleep(random.uniform(4.0, 9.0)).
+            # Se replica aquí con stdlib para no importar adapters.browser desde core/
+            # (frontera hexagonal). El comportamiento es idéntico.
+            await asyncio.sleep(random.uniform(4.0, 9.0))
+
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: error inesperado: %s",
+                self.world_id, exc,
+            )
 
     # ------------------------------------------------------------------
     # Ruido Humano de Navegación — §9.7-9.10 (Human Sessions v2.2)
@@ -1865,6 +2493,11 @@ class WorldAgent:
         """
         Encola la primera NOISE_NAVIGATION al arrancar en HARDCORE o PASIVO.
         El gap inicial se calcula con _calculate_next_noise_gap.
+
+        [MODIFICADO v5]: además del ruido, encola el primer HEARTBEAT_SCAN si el radar
+        está configurado (incoming_db != None) y el modo es HARDCORE o PASIVO (RN-38).
+        El gap inicial del latido usa el mismo rango que el reencole: uniform(0.5x, 1.5x).
+        En modo DISCONNECTED o sin radar inyectado → no se encola (EC-25, EC-26, VH-08).
         """
         if self._active_mode not in (SessionMode.HARDCORE, SessionMode.PASIVO):
             return
@@ -1885,6 +2518,29 @@ class WorldAgent:
             "Mundo %d: ruido inicializado — primera NOISE_NAVIGATION en %.0f s",
             self.world_id, gap,
         )
+
+        # Encolar primer latido si el radar está configurado (RN-38, VH-08).
+        # Solo si incoming_db está inyectado (sin radar el latido carece de sentido).
+        # _should_reenqueue_noise() ya garantiza HARDCORE o PASIVO (no DISCONNECTED).
+        if self._incoming_db is not None:
+            import random as _random  # import diferido — patrón del proyecto (P5)
+            hb_gap = _random.uniform(
+                self._heartbeat_interval_s * 0.5,
+                self._heartbeat_interval_s * 1.5,
+            )
+            hb_execute_at = datetime.now() + timedelta(seconds=hb_gap)
+            self._queue.add(Task(
+                task_type=TaskType.HEARTBEAT_SCAN,
+                world_id=self.world_id,
+                execute_at=hb_execute_at,
+                priority=2,
+                payload={},
+                recurring=False,
+            ))
+            logger.info(
+                "Mundo %d: latido radar inicializado — primer HEARTBEAT_SCAN en %.0f s",
+                self.world_id, hb_gap,
+            )
 
     async def _handle_noise_navigation(self) -> None:
         """

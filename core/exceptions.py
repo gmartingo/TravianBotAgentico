@@ -400,6 +400,27 @@ class NoiseStepError(TravianBotError):
         self.params = {"action": action, "selector": selector, "reason": reason}
 
 
+# --- Excepciones añadidas en la feature radar-ataques-entrantes ---
+
+class IncomingAttackPageError(TravianBotError):
+    """
+    Error al cargar la página requerida por el radar de ataques entrantes
+    (dorf1, rally point o ficha de atacante).
+
+    Se lanza por IncomingAttackBrowserAdapter cuando la navegación falla
+    o el DOM no responde en el timeout configurado.
+
+    Ver spec docs/specs/radar-ataques-entrantes.md §7.
+    Añadida en la feature radar-ataques-entrantes (2026-06-05).
+    """
+
+    error_code = "INCOMING_ATTACK_PAGE_ERROR"
+
+    def __init__(self, message: str = "") -> None:
+        super().__init__(message or "Error al cargar la página del radar de ataques")
+        self.params = {"message": message}
+
+
 class WorldOrphanError(TravianBotError):
     """
     El mundo no tiene ninguna cuenta registrada asociada.

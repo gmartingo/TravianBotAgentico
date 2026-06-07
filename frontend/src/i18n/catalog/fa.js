@@ -1109,6 +1109,8 @@ const fa = {
   'NATURE_8': 'تمساح',
   'NATURE_9': 'ببر',
   'NATURE_10': 'فیل',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'حملات',
 }
 
 export default fa

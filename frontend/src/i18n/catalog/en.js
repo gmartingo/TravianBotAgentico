@@ -1239,6 +1239,39 @@ const en = {
 
   'ar.freq.cereal_note':          'Crop oases have the most varied animal patterns. Data here are broader estimates.',
   'ar.freq.unclassified_note':    'These oases do not have enough successful attacks to determine their resource type. They could be any type.',
+
+  // ── Incoming attack radar (aviso-ataque-mundos) ───────────────────────────
+
+  'worldnav.attacks':                   'Attacks',
+
+  'radar.badge.aria_one':               '1 incoming attack on this world',
+  'radar.badge.aria_other':             '{count} incoming attacks on this world',
+
+  'radar.panel.title_one':              '1 incoming attack on {villages} village',
+  'radar.panel.title_other':            '{count} incoming attacks on {villages} villages',
+  'radar.panel.updated':                'updated {n}s ago',
+
+  'radar.panel.empty.title':            'No active attacks',
+  'radar.panel.empty.desc':             'The radar does not detect any threats at the moment',
+
+  'radar.panel.no_session':             'Start the bot to monitor incoming attacks',
+
+  'radar.panel.error.title':            'Could not load attack information',
+  'radar.panel.error.inline':           'Update failed ·',
+  'radar.panel.retry':                  'Retry',
+
+  'radar.attack.label':                 'Attack {n}',
+  'radar.attack.detected':              'Detected · no detail',
+  'radar.attack.attacker':              'Attacker',
+  'radar.attack.from':                  'From',
+  'radar.attack.tribe':                 'Tribe',
+  'radar.attack.alliance':              'Alliance',
+  'radar.attack.population':            'Pop.',
+  'radar.attack.troops':                'Troops',
+  'radar.attack.distance':              'fields',
+
+  'radar.village.attacks_one':          '1 attack',
+  'radar.village.attacks_other':        '{count} attacks',
 }
 
 export default en

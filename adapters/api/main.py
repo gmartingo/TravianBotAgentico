@@ -28,6 +28,7 @@ from adapters.api.routes.farm import router as farm_router
 from adapters.api.routes.game_data import router as game_data_router
 from adapters.api.routes.game_culture_points import router as game_culture_points_router
 from adapters.api.routes.game_overview import router as game_overview_router
+from adapters.api.routes.incoming_attacks import router as incoming_attacks_router
 from adapters.api.routes.game_resources import router as game_resources_router
 from adapters.api.routes.game_troops import router as game_troops_router
 from adapters.api.routes.noise import router as noise_router
@@ -43,6 +44,7 @@ from adapters.db.attack_report_sqlite_adapter import AttackReportSQLiteAdapter
 from adapters.db.database import get_connection
 from adapters.db.farm_list_sqlite_adapter import FarmListSQLiteAdapter
 from adapters.db.game_data_sqlite_adapter import GameDataSQLiteAdapter
+from adapters.db.incoming_attack_sqlite_adapter import IncomingAttackSQLiteAdapter
 from adapters.db.seed_loader import load_if_empty
 from adapters.db.noise_sqlite_adapter import NoiseSQLiteAdapter
 from adapters.db.route_category_sqlite_adapter import RouteCategorySQLiteAdapter
@@ -246,6 +248,13 @@ async def lifespan(application: FastAPI):
     noise_db_adapter = NoiseSQLiteAdapter(conn)
     await noise_db_adapter.ensure_tables()
     application.state.noise_db_port = noise_db_adapter
+
+    # -----------------------------------------------------------------------
+    # Radar de Ataques Entrantes — IncomingAttackSQLiteAdapter (comparte la misma conexión SQLite)
+    # -----------------------------------------------------------------------
+    incoming_attack_adapter = IncomingAttackSQLiteAdapter(conn)
+    await incoming_attack_adapter.ensure_tables()
+    application.state.incoming_attack_port = incoming_attack_adapter
 
     # -----------------------------------------------------------------------
     # Catálogo dinámico de Categorías de Rutas — RouteCategorySQLiteAdapter
@@ -484,6 +493,7 @@ app.include_router(combat_router)
 app.include_router(farm_router)
 app.include_router(game_data_router)
 app.include_router(game_overview_router)
+app.include_router(incoming_attacks_router)
 app.include_router(game_resources_router)
 app.include_router(game_culture_points_router)
 app.include_router(game_troops_router)

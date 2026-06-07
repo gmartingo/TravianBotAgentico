@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<!--
+  PLAYGROUND DE DISEÑO — Aviso de ataques entrantes (dos niveles).
+  HTML autocontenido, desacoplado del backend.
+  Abrir directamente en el navegador — sin build, sin servidor.
+
+  Vistas (selector "Vista"):
+    1  Lista de Mundos — SIN ataques (desktop)
+    2  Lista de Mundos — CON badge en mundo tx3 (desktop)
+    3  Lista de Mundos — CON badge, tarjeta móvil (< md)
+    4  WorldSpace — Pestaña Ataques · vacío (sin ataques)
+    5  WorldSpace — Pestaña Ataques · cargando (skeleton)
+    6  WorldSpace — Pestaña Ataques · detectado sin detalle
+    7  WorldSpace — Pestaña Ataques · detalle completo (1 aldea, 1 ataque)
+    8  WorldSpace — Pestaña Ataques · mixto (2 ataques: con+sin detalle)
+    9  WorldSpace — Pestaña Ataques · impacto inminente (countdown ≤ 60 s)
+   10  WorldSpace — Pestaña Ataques · error de polling (aviso inline)
+   11  WorldSpace — Pestaña Ataques · sin sesión activa
+   12  WorldSpace — Pestaña Ataques · RTL árabe
+-->
+<html lang="es" dir="ltr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>TravianBot · Aviso de ataques (playground)</title>
+<style>
+/* ===== TOKENS — idénticos a los playgrounds hermanos ===== */
+:root{
+  --bg:#F5F5F7; --surface:#FFFFFF; --surface-2:#EFEFF2;
+  --border:#D2D2D7; --border-strong:#C7C7CC;
+  --text:#1D1D1F; --text-secondary:#6E6E73; --text-tertiary:#8E8E93; --text-disabled:#AEAEB2;
+  --accent:#8A6418; --accent-text:#8A6418; --accent-hover:#6F5012; --accent-subtle:rgba(138,100,24,.14);
+  --btn-primary-bg:#1D1D1F; --btn-primary-text:#FFFFFF; --btn-primary-hover:#3A3A3C;
+  --success:#248A3D; --danger:#C9352C; --info:#0A6FCC;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.04),0 1px 3px rgba(0,0,0,.06);
+  --shadow-md:0 2px 8px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 8px 30px rgba(0,0,0,.12);
+  --radius-sm:6px; --radius-md:10px; --radius-lg:14px; --radius-full:9999px;
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  --ease:cubic-bezier(.4,0,.2,1); --dur-fast:150ms; --dur-base:220ms; --dur-slow:300ms;
+  --topbar-h:52px; --sidebar-w:180px; --bottombar-h:48px;
+  --sidebar-mgmt-w:200px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+    --border:#3A3A3C; --border-strong:#48484A;
+    --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+    --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+    --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+    --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1D1D1F; --surface:#2C2C2E; --surface-2:#3A3A3C;
+  --border:#3A3A3C; --border-strong:#48484A;
+  --text:#F5F5F7; --text-secondary:#AEAEB2; --text-tertiary:#8E8E93; --text-disabled:#636366;
+  --accent:#CBB079; --accent-text:#CBB079; --accent-hover:#D8C089; --accent-subtle:rgba(203,176,121,.16);
+  --btn-primary-bg:#F5F5F7; --btn-primary-text:#1D1D1F; --btn-primary-hover:#E2E2E6;
+  --success:#34C759; --danger:#FF453A; --info:#0A84FF;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 12px rgba(0,0,0,.5); --shadow-lg:0 12px 32px rgba(0,0,0,.6);
+}
+
+/* ===== RESET / BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-sans);background:var(--bg);color:var(--text);
+  -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;
+  transition:background var(--dur-base) var(--ease),color var(--dur-base) var(--ease);
+  display:flex;flex-direction:column;
+}
+a{color:var(--accent-text);text-decoration:none;}
+a:hover{color:var(--accent-hover);text-decoration:underline;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* ===== PLAYGROUND TOOLBAR ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:10px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:100;
+}
+.toolbar .grow{flex:1;min-width:0;}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-inline-end:4px;white-space:nowrap;}
+.logo{width:26px;height:26px;border-radius:7px;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+      display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0;}
+.tb-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;padding:0 12px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;display:flex;align-items:center;gap:6px;
+  transition:background var(--dur-fast) var(--ease);white-space:nowrap;
+}
+.tb-btn:hover{background:var(--surface-2);}
+.tb-btn.primary{background:var(--btn-primary-bg);color:var(--btn-primary-text);border-color:transparent;}
+.tb-btn.primary:hover{background:var(--btn-primary-hover);}
+.tb-btn.toggle[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--accent-subtle);}
+.icon-btn{
+  appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;
+  cursor:pointer;flex-shrink:0;
+}
+.icon-btn:hover{background:var(--surface-2);color:var(--text);}
+.hint{color:var(--text-tertiary);font-size:12px;white-space:nowrap;}
+.state-label{font-size:12px;color:var(--text-secondary);white-space:nowrap;}
+.state-select{
+  height:32px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  border-radius:var(--radius-sm);padding:0 8px;font-family:inherit;font-size:13px;cursor:pointer;
+}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+
+/* ===== LANG PICKER ===== */
+.lang-wrap{position:relative;}
+.lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:8px;padding:0 12px;
+  cursor:pointer;font-family:inherit;font-size:13px;white-space:nowrap;
+}
+.lang-btn:hover{background:var(--surface-2);}
+.lang-btn svg{width:15px;height:15px;color:var(--text-secondary);}
+.lang-panel{
+  position:absolute;inset-inline-end:0;top:calc(100% + 8px);width:280px;max-width:calc(100vw - 32px);
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;z-index:200;display:none;
+}
+.lang-panel.open{display:block;}
+.lang-search-wrap{padding:10px;border-bottom:1px solid var(--border);}
+.lang-search{
+  width:100%;height:32px;border:1px solid var(--border-strong);background:var(--surface-2);
+  color:var(--text);border-radius:var(--radius-sm);padding:0 10px;
+  font-family:inherit;font-size:13px;outline:none;
+}
+.lang-search:focus-visible{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;}
+.lang-list{max-height:280px;overflow-y:auto;padding:6px;}
+.lang-item{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:13px;text-align:start;
+}
+.lang-item:hover{background:var(--surface-2);}
+.lang-item .code{color:var(--text-tertiary);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;}
+.lang-item[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent-text);font-weight:600;}
+.lang-item[aria-selected="true"] .code{color:var(--accent-text);}
+
+/* ===== SHARED APP TOPBAR ===== */
+.app-topbar{
+  display:flex;align-items:center;gap:12px;padding:0 20px;height:var(--topbar-h);
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.app-logo{
+  width:28px;height:28px;border-radius:7px;background:var(--btn-primary-bg);
+  color:var(--btn-primary-text);display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0;
+}
+.app-theme-btn{
+  appearance:none;border:1px solid var(--border);background:transparent;color:var(--text-secondary);
+  width:32px;height:32px;border-radius:var(--radius-sm);display:grid;place-items:center;cursor:pointer;
+}
+.app-theme-btn:hover{background:var(--surface-2);color:var(--text);}
+.app-theme-btn svg{width:16px;height:16px;}
+.app-lang-btn{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:30px;border-radius:var(--radius-sm);display:flex;align-items:center;gap:6px;padding:0 10px;
+  cursor:pointer;font-family:inherit;font-size:13px;
+}
+.app-lang-btn:hover{background:var(--surface-2);}
+.app-lang-btn svg{width:14px;height:14px;color:var(--text-secondary);}
+.app-topbar-grow{flex:1;}
+
+/* ===== BOTONES COMUNES ===== */
+.btn-primary{
+  appearance:none;border:none;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;font-weight:500;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-primary:hover:not(:disabled){background:var(--btn-primary-hover);}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-secondary{
+  appearance:none;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-secondary:hover:not(:disabled){background:var(--surface-2);}
+.btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-ghost{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  height:32px;padding:0 10px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:color var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-ghost:hover{color:var(--accent-hover);}
+.btn-stop{
+  appearance:none;border:1px solid var(--danger);background:transparent;color:var(--danger);
+  height:32px;padding:0 14px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:13px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);display:inline-flex;align-items:center;gap:6px;
+}
+.btn-stop:hover{background:rgba(201,53,44,.06);}
+[data-theme="dark"] .btn-stop:hover{background:rgba(255,69,58,.10);}
+
+/* ===================================================================
+   NIVEL 1 — SHELL MANAGEMENT (AccountDetailPage)
+   ================================================================= */
+.mgmt-shell{display:flex;flex:1;min-height:0;overflow:hidden;}
+.mgmt-sidebar{
+  width:var(--sidebar-mgmt-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.mgmt-sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.mgmt-nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:14px;
+  text-align:start;width:100%;position:relative;transition:background var(--dur-fast) var(--ease);
+}
+.mgmt-nav-item:hover{background:var(--surface-2);}
+.mgmt-nav-item.active{background:var(--accent-subtle);color:var(--accent-text);font-weight:500;}
+.mgmt-nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.mgmt-nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.mgmt-sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);}
+.mgmt-content{flex:1;overflow-y:auto;padding:28px 32px;position:relative;}
+
+/* Breadcrumb */
+.breadcrumb{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);margin-bottom:20px;}
+.breadcrumb-back{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  font-family:inherit;font-size:13px;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;
+}
+.breadcrumb-back:hover{color:var(--accent-hover);}
+.breadcrumb-sep{color:var(--text-tertiary);}
+
+/* Account header */
+.account-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:32px;}
+.account-info h1{font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;margin-bottom:4px;}
+.account-info .email{font-size:14px;color:var(--text-secondary);margin-bottom:2px;}
+.account-info .created-at{font-size:12px;color:var(--text-tertiary);}
+.account-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:4px;}
+
+/* Section header */
+.section-header{display:flex;align-items:baseline;gap:8px;margin-bottom:12px;}
+.section-header h3{font-size:17px;font-weight:600;letter-spacing:-0.01em;}
+.section-count{font-size:14px;color:var(--text-secondary);}
+.section-header-grow{flex:1;}
+
+/* Data table */
+.data-table{width:100%;border-collapse:collapse;font-size:14px;}
+.data-table th{
+  background:var(--surface-2);color:var(--text-secondary);
+  font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;
+  padding:0 14px;height:34px;text-align:start;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+.data-table td{padding:0 14px;height:40px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:var(--surface-2);}
+.col-parsed{color:var(--accent-text);font-family:var(--font-mono);font-size:13px;}
+.col-server{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.col-tribe{font-size:13px;}
+.col-session{display:flex;align-items:center;gap:6px;height:40px;}
+.col-actions{white-space:nowrap;display:flex;align-items:center;gap:6px;height:40px;}
+
+/* Session status badge */
+.session-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:500;white-space:nowrap;
+}
+.session-badge .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.session-badge.active{color:var(--success);}
+.session-badge.active .dot{background:var(--success);}
+.session-badge.idle{color:var(--text-secondary);}
+.session-badge.idle .dot{background:var(--text-disabled);}
+.session-badge.error{color:var(--danger);}
+.session-badge.error .dot{background:var(--danger);}
+
+/* ===== ATTACK BADGE (Nivel 1) ===== */
+.attack-badge{
+  display:inline-flex;align-items:center;gap:3px;
+  background:color-mix(in srgb, var(--danger) 10%, transparent);
+  border:1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius:var(--radius-full);
+  padding:2px 6px;
+  color:var(--danger);font-size:11px;font-weight:500;
+  white-space:nowrap;flex-shrink:0;
+}
+.attack-badge svg{width:12px;height:12px;flex-shrink:0;}
+
+/* Action buttons in table */
+.btn-enter{
+  appearance:none;border:none;background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  height:28px;padding:0 12px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:12px;font-weight:500;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);
+}
+.btn-enter:hover{background:var(--btn-primary-hover);}
+.btn-stop-sm{
+  appearance:none;border:1px solid var(--danger);background:transparent;color:var(--danger);
+  height:28px;padding:0 10px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:12px;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease);
+}
+.btn-stop-sm:hover{background:rgba(201,53,44,.06);}
+[data-theme="dark"] .btn-stop-sm:hover{background:rgba(255,69,58,.10);}
+.btn-menu-sm{
+  appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text-secondary);
+  width:28px;height:28px;border-radius:var(--radius-sm);cursor:pointer;display:grid;place-items:center;
+}
+.btn-menu-sm:hover{background:var(--surface-2);color:var(--text);}
+
+/* ===== MOBILE CARD (< md) ===== */
+.mobile-worlds-list{display:none;flex-direction:column;gap:12px;}
+.world-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:14px 16px;
+}
+.world-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.world-card-name{font-family:var(--font-mono);font-size:15px;font-weight:600;color:var(--accent-text);}
+.world-card-secondary{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);margin-bottom:10px;flex-wrap:wrap;}
+.world-card-actions{display:flex;align-items:center;gap:8px;}
+
+@media (max-width:767px){
+  .desktop-worlds-table{display:none;}
+  .mobile-worlds-list{display:flex;}
+}
+
+/* ===================================================================
+   NIVEL 2 — SHELL WORLDSPACE
+   ================================================================= */
+.world-shell{display:flex;flex:1;min-height:0;overflow:hidden;}
+.world-sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--surface);border-inline-end:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.world-sidebar-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
+.world-nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:var(--radius-sm);cursor:pointer;border:none;
+  background:transparent;color:var(--text);font-family:inherit;font-size:14px;
+  text-align:start;width:100%;position:relative;transition:background var(--dur-fast) var(--ease);
+}
+.world-nav-item:hover:not([disabled]){background:var(--surface-2);}
+.world-nav-item[disabled]{color:var(--text-disabled);cursor:not-allowed;}
+.world-nav-item.active{background:var(--accent-subtle);color:var(--accent-text);font-weight:500;}
+.world-nav-item.active::before{
+  content:'';position:absolute;inset-block:4px;inset-inline-start:0;
+  width:3px;border-radius:var(--radius-full);background:var(--accent);
+}
+.world-nav-item svg{width:16px;height:16px;flex-shrink:0;}
+.world-nav-item .nav-label{flex:1;}
+.world-nav-item .nav-soon{font-size:10px;color:var(--text-disabled);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;}
+/* badge en el nav item */
+.world-nav-item .nav-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;border-radius:var(--radius-full);
+  background:var(--danger);color:#fff;font-size:10px;font-weight:600;
+  padding:0 4px;flex-shrink:0;
+}
+.world-nav-item.active .nav-badge{background:var(--danger);}
+.world-sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-tertiary);font-family:var(--font-mono);}
+
+/* World topbar center info */
+.world-topbar-center{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  gap:6px;font-size:13px;overflow:hidden;
+}
+.world-topbar-email{color:var(--accent-text);font-family:var(--font-mono);font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.world-topbar-sep{color:var(--text-disabled);}
+.world-topbar-status{display:flex;align-items:center;gap:4px;color:var(--success);font-size:13px;}
+.world-topbar-status .dot{width:6px;height:6px;border-radius:50%;background:var(--success);}
+.world-topbar-server{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);}
+.world-topbar-tribe{font-size:13px;color:var(--text-secondary);}
+
+/* Content area */
+.world-content{flex:1;overflow-y:auto;padding:24px;padding-bottom:72px;position:relative;}
+
+/* Bottom bar */
+.agent-bottombar{
+  position:sticky;bottom:0;inset-inline:0;height:var(--bottombar-h);z-index:200;
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;align-items:center;padding:0;flex-shrink:0;
+}
+.bottombar-status{
+  width:var(--sidebar-w);flex-shrink:0;display:flex;align-items:center;gap:8px;
+  padding:0 16px;cursor:pointer;
+}
+.bottombar-dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0;}
+.bottombar-dot.stopped{background:var(--danger);}
+.bottombar-label{font-size:13px;font-weight:500;color:var(--success);}
+.bottombar-label.stopped{color:var(--danger);}
+.bottombar-divider{width:1px;height:20px;background:var(--border);flex-shrink:0;margin-inline-end:14px;}
+.bottombar-pills{flex:1;display:flex;align-items:center;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 8px 0 0;}
+.bottombar-pills::-webkit-scrollbar{display:none;}
+.task-pill{
+  flex-shrink:0;height:28px;padding:0 10px;border-radius:var(--radius-full);
+  border:1px solid var(--border);background:var(--surface-2);
+  display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;white-space:nowrap;
+}
+.task-pill.next{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent-text);}
+.task-pill .pill-timer{font-family:var(--font-mono);font-size:12px;font-weight:600;}
+.task-pill.next .pill-timer{color:var(--accent-text);}
+
+/* ===================================================================
+   INCOMING ATTACKS PANEL
+   ================================================================= */
+.panel-header{
+  display:flex;align-items:center;gap:10px;margin-bottom:16px;
+}
+.panel-header-icon{color:var(--danger);display:flex;align-items:center;}
+.panel-header-icon svg{width:16px;height:16px;}
+.panel-header-title{font-size:15px;font-weight:600;color:var(--text);flex:1;}
+.panel-header-freshness{font-size:12px;color:var(--text-tertiary);white-space:nowrap;}
+
+/* Error inline (polling) */
+.panel-error-inline{
+  display:flex;align-items:center;gap:8px;
+  background:color-mix(in srgb, var(--danger) 6%, transparent);
+  border:1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+  border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;
+  font-size:12px;color:var(--text-secondary);
+}
+.panel-error-inline .err-icon{color:var(--danger);flex-shrink:0;}
+.panel-error-inline .err-icon svg{width:13px;height:13px;}
+.panel-error-inline button{
+  appearance:none;border:none;background:transparent;color:var(--accent-text);
+  font-family:inherit;font-size:12px;cursor:pointer;padding:0;white-space:nowrap;
+}
+.panel-error-inline button:hover{color:var(--accent-hover);}
+
+/* Empty state */
+.panel-empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:48px 24px;text-align:center;gap:12px;
+}
+.panel-empty-icon{color:var(--success);opacity:.6;}
+.panel-empty-icon svg{width:36px;height:36px;}
+.panel-empty-title{font-size:16px;font-weight:600;color:var(--text);}
+.panel-empty-desc{font-size:14px;color:var(--text-secondary);max-width:320px;}
+
+/* No session state */
+.panel-no-session{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:48px 24px;text-align:center;gap:12px;
+}
+.panel-no-session-icon{color:var(--text-tertiary);}
+.panel-no-session-icon svg{width:36px;height:36px;}
+.panel-no-session-title{font-size:15px;font-weight:500;color:var(--text-secondary);}
+
+/* Error state (first fetch) */
+.panel-error-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:48px 24px;text-align:center;gap:12px;
+}
+.panel-error-state-icon{color:var(--danger);opacity:.7;}
+.panel-error-state-icon svg{width:32px;height:32px;}
+.panel-error-state-title{font-size:15px;font-weight:500;color:var(--text);}
+
+/* Skeleton */
+.skeleton-pulse{
+  background:linear-gradient(90deg,var(--surface-2) 25%,var(--border) 50%,var(--surface-2) 75%);
+  background-size:200% 100%;
+  animation:skeleton-anim 1.4s ease infinite;
+  border-radius:var(--radius-sm);
+}
+@keyframes skeleton-anim{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+.skeleton-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-bottom:12px;}
+.skeleton-line{height:12px;margin-bottom:8px;}
+.skeleton-line.title{height:14px;width:55%;}
+.skeleton-line.short{width:35%;}
+.skeleton-line.medium{width:70%;}
+.skeleton-line.full{width:100%;}
+
+/* Village attack card */
+.village-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:14px 16px;margin-bottom:12px;
+}
+.village-card:last-child{margin-bottom:0;}
+.village-card-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:10px;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+.village-name{font-size:15px;font-weight:600;color:var(--text);}
+.village-coords{font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);}
+.village-attack-count{
+  display:inline-flex;align-items:center;gap:3px;margin-inline-start:auto;
+  background:color-mix(in srgb, var(--danger) 10%, transparent);
+  border:1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius:var(--radius-full);padding:2px 7px;
+  color:var(--danger);font-size:11px;font-weight:500;
+}
+.village-attack-count svg{width:10px;height:10px;}
+
+/* Attack row */
+.attack-row{padding:10px 0;}
+.attack-row+.attack-row{border-top:1px solid var(--border);}
+.attack-row-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;
+}
+.attack-label{
+  font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--text-secondary);
+}
+.attack-countdown{
+  font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text);
+}
+.attack-countdown.imminent{
+  color:var(--danger);
+  animation:countdown-pulse 2s ease-in-out infinite;
+}
+@keyframes countdown-pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+@media (prefers-reduced-motion:reduce){
+  .attack-countdown.imminent{animation:none;}
+}
+.attack-sep{font-size:12px;color:var(--text-disabled);margin:0 2px;}
+.attack-time{font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);}
+
+/* Detected badge */
+.detected-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-full);
+  padding:2px 8px;font-size:11px;color:var(--text-secondary);
+}
+
+/* Attacker info */
+.attacker-grid{
+  display:grid;gap:3px 16px;
+  font-size:13px;
+}
+.attacker-name{font-weight:500;color:var(--text);}
+.attacker-origin{font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);}
+.attacker-meta{font-size:12px;color:var(--text-secondary);}
+.attacker-tribe-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-full);
+  padding:1px 7px;font-size:11px;color:var(--text-secondary);
+}
+
+/* Troop chips */
+.troops-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.troop-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:2px 8px;font-size:11px;color:var(--text);white-space:nowrap;
+}
+.troop-chip .troop-count{font-family:var(--font-mono);font-weight:600;}
+
+/* ===== DRAG & DROP ===== */
+body.editing .canvas-area{
+  background-image:
+    linear-gradient(to right,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px),
+    linear-gradient(to bottom,color-mix(in srgb,var(--border) 60%,transparent) 1px,transparent 1px);
+  background-size:8px 8px;
+}
+.drag-block{position:relative;}
+body.editing .drag-block{outline:1px dashed transparent;border-radius:4px;cursor:grab;transition:outline-color var(--dur-fast);}
+body.editing .drag-block:hover{outline-color:var(--accent);}
+body.editing .drag-block.dragging{cursor:grabbing;outline:2px solid var(--accent);box-shadow:var(--shadow-md);z-index:10;}
+
+/* ===== TOAST ===== */
+.toast{
+  position:fixed;inset-inline:0;bottom:24px;margin:auto;
+  width:max-content;max-width:90vw;
+  background:var(--btn-primary-bg);color:var(--btn-primary-text);
+  padding:10px 16px;border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);
+  font-size:13px;pointer-events:none;
+  opacity:0;transform:translateY(8px);
+  transition:opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  z-index:500;
+}
+.toast.show{opacity:1;transform:translateY(0);}
+
+/* ===== VIEWS CONTAINER ===== */
+#viewLvl1,#viewLvl2{display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;}
+</style>
+</head>
+<body>
+
+<!-- ===== PLAYGROUND TOOLBAR ===== -->
+<div class="toolbar" id="toolbar">
+  <div class="brand">
+    <span class="logo">TB</span>
+    <span>Ataques</span>
+  </div>
+  <div class="sep"></div>
+  <span class="state-label">Vista:</span>
+  <select class="state-select" id="viewSelect">
+    <optgroup label="Nivel 1 — Lista de Mundos">
+      <option value="lvl1-no-attack">1 · Lista de Mundos — SIN ataques (desktop)</option>
+      <option value="lvl1-with-attack" selected>2 · Lista de Mundos — CON badge (desktop)</option>
+      <option value="lvl1-mobile">3 · Lista de Mundos — CON badge, móvil</option>
+    </optgroup>
+    <optgroup label="Nivel 2 — WorldSpace / Pestaña Ataques">
+      <option value="lvl2-empty">4 · WorldSpace — Pestaña Ataques · vacío</option>
+      <option value="lvl2-loading">5 · WorldSpace — Pestaña Ataques · cargando</option>
+      <option value="lvl2-detected">6 · WorldSpace — Pestaña Ataques · detectado sin detalle</option>
+      <option value="lvl2-full">7 · WorldSpace — Pestaña Ataques · detalle completo</option>
+      <option value="lvl2-mixed">8 · WorldSpace — Pestaña Ataques · mixto</option>
+      <option value="lvl2-imminent">9 · WorldSpace — Pestaña Ataques · impacto inminente</option>
+      <option value="lvl2-error">10 · WorldSpace — Pestaña Ataques · error polling</option>
+      <option value="lvl2-no-session">11 · WorldSpace — Pestaña Ataques · sin sesión</option>
+      <option value="lvl2-rtl">12 · WorldSpace — Pestaña Ataques · RTL árabe</option>
+    </optgroup>
+  </select>
+  <div class="grow"></div>
+  <button class="tb-btn toggle" id="editBtn" aria-pressed="false">✎ Editar</button>
+  <div class="sep"></div>
+  <button class="tb-btn" id="saveBtn">💾 Guardar</button>
+  <button class="tb-btn" id="resetBtn">↺ Restablecer</button>
+  <button class="tb-btn primary" id="exportBtn">⬇ Exportar layout</button>
+  <div class="sep"></div>
+  <!-- Theme toggle -->
+  <button class="icon-btn" id="themeBtn" title="Cambiar tema" aria-label="Cambiar tema">
+    <svg id="sunIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    <svg id="moonIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+  <!-- Lang picker -->
+  <div class="lang-wrap">
+    <button class="lang-btn" id="langBtn" aria-label="Seleccionar idioma">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"/></svg>
+      <span id="langLabel">es</span>
+    </button>
+    <div class="lang-panel" id="langPanel" role="listbox" aria-label="Seleccionar idioma">
+      <div class="lang-search-wrap">
+        <input class="lang-search" id="langSearch" type="text" placeholder="Buscar idioma…" autocomplete="off"/>
+      </div>
+      <div class="lang-list" id="langList"></div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <span class="hint" id="hint">Modo previsualización</span>
+</div>
+
+<!-- ===== VIEW: NIVEL 1 (Lista de Mundos) ===== -->
+<div id="viewLvl1" style="display:none;flex-direction:column;">
+  <!-- Topbar Management Shell -->
+  <div class="app-topbar">
+    <span class="app-logo">TB</span>
+    <span style="font-size:15px;font-weight:600;margin-inline-start:4px;">TravianBot</span>
+    <div class="app-topbar-grow"></div>
+    <button class="app-theme-btn" title="Tema" style="pointer-events:none;opacity:.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    </button>
+    <button class="app-lang-btn" style="pointer-events:none;opacity:.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"/></svg>
+      <span>es</span>
+    </button>
+  </div>
+  <!-- Body -->
+  <div class="mgmt-shell">
+    <!-- Sidebar -->
+    <div class="mgmt-sidebar">
+      <nav class="mgmt-sidebar-nav" aria-label="Navegación principal">
+        <button class="mgmt-nav-item active">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Cuentas</span>
+        </button>
+      </nav>
+      <div class="mgmt-sidebar-footer">v0.5.0</div>
+    </div>
+    <!-- Content -->
+    <div class="mgmt-content canvas-area" id="contentAreaLvl1">
+      <!-- Breadcrumb -->
+      <div class="breadcrumb drag-block" data-drag-id="breadcrumb-lvl1">
+        <button class="breadcrumb-back">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Cuentas
+        </button>
+        <span class="breadcrumb-sep">›</span>
+        <span style="color:var(--text-secondary)">jugador@example.com</span>
+      </div>
+      <!-- Account header -->
+      <div class="account-header drag-block" data-drag-id="account-header">
+        <div class="account-info">
+          <h1>jugador@example.com</h1>
+          <div class="email">Cuenta de Travian</div>
+          <div class="created-at">Creada el 12 ene 2026</div>
+        </div>
+        <div class="account-actions">
+          <button class="btn-secondary" style="font-size:13px;height:32px;">✎ Editar</button>
+          <button class="btn-secondary" style="font-size:13px;height:32px;border-color:var(--danger);color:var(--danger);">Borrar cuenta</button>
+        </div>
+      </div>
+      <!-- Worlds section -->
+      <div class="drag-block" data-drag-id="worlds-section">
+        <div class="section-header">
+          <h3>Mundos</h3>
+          <span class="section-count" id="worldsCount">2 mundos</span>
+          <div class="section-header-grow"></div>
+          <button class="btn-primary" style="font-size:13px;">+ Añadir mundo</button>
+        </div>
+        <!-- Desktop table -->
+        <div class="desktop-worlds-table" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;">
+          <table class="data-table" id="worldsTable">
+            <thead>
+              <tr>
+                <th>URL completa</th>
+                <th>Servidor</th>
+                <th>Tribu</th>
+                <th>Sesión</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="worldsTableBody"></tbody>
+          </table>
+        </div>
+        <!-- Mobile cards -->
+        <div class="mobile-worlds-list" id="worldsMobileList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VIEW: NIVEL 2 (WorldSpace con Pestaña Ataques) ===== -->
+<div id="viewLvl2" style="display:none;flex-direction:column;">
+  <!-- Topbar WorldSpace -->
+  <div class="app-topbar" id="worldTopbar">
+    <button class="app-logo" style="cursor:pointer;border:none;" title="← Volver" aria-label="Volver a Mundos">TB</button>
+    <div class="world-topbar-center">
+      <span class="world-topbar-email">jugador@example.com</span>
+      <span class="world-topbar-sep">·</span>
+      <span class="world-topbar-status" id="worldStatusTop">
+        <span class="dot"></span>
+        <span id="worldStatusLabel">Activo</span>
+      </span>
+      <span class="world-topbar-sep">·</span>
+      <span class="world-topbar-server" id="worldServerTop">tx3</span>
+      <span class="world-topbar-sep">·</span>
+      <span class="world-topbar-tribe" id="worldTribeTop">Galos</span>
+    </div>
+    <button class="app-theme-btn" style="pointer-events:none;opacity:.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+    </button>
+    <button class="app-lang-btn" style="pointer-events:none;opacity:.5">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"/></svg>
+      <span>es</span>
+    </button>
+  </div>
+  <!-- Body -->
+  <div class="world-shell" style="flex:1;min-height:0;overflow:hidden;display:flex;">
+    <!-- Sidebar -->
+    <div class="world-sidebar">
+      <nav class="world-sidebar-nav" aria-label="Navegación del mundo">
+        <button class="world-nav-item" id="navDashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="world-nav-item" id="navAgentes">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>
+          <span class="nav-label">Agentes</span>
+        </button>
+        <button class="world-nav-item" id="navFarmLists">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          <span class="nav-label">Farm Lists</span>
+        </button>
+        <!-- NUEVA PESTAÑA ATAQUES -->
+        <button class="world-nav-item active" id="navAtaques">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4M12 16h.01"/></svg>
+          <span class="nav-label">Ataques</span>
+          <span class="nav-badge" id="sidebarAttackBadge" style="display:none">2</span>
+        </button>
+        <button class="world-nav-item" id="navSesion">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span class="nav-label">Sesión</span>
+        </button>
+        <button class="world-nav-item" id="navRuido">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 10s3-3 3-8"/><path d="M22 10s-3-3-3-8"/><path d="M10 2c0 4.4-3.6 8-8 8"/><path d="M14 2c0 4.4 3.6 8 8 8"/><path d="M2 10s2 2 2 5"/><path d="M22 10s-2 2-2 5"/><path d="M8 15h8"/><path d="M2 22v-7"/><path d="M22 22v-7"/><path d="M8 22v-3"/><path d="M16 22v-3"/><path d="M12 22V17"/></svg>
+          <span class="nav-label">Ruido</span>
+        </button>
+        <button class="world-nav-item" disabled id="navCalc">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="8" x2="12" y1="14" y2="14"/><line x1="8" x2="16" y1="10" y2="10"/></svg>
+          <span class="nav-label">Calculadora</span>
+          <span class="nav-soon">PRONTO</span>
+        </button>
+      </nav>
+      <div class="world-sidebar-footer">v0.5.0</div>
+    </div>
+    <!-- Content -->
+    <div class="world-content canvas-area" id="contentAreaLvl2">
+      <!-- Panel header -->
+      <div class="drag-block" data-drag-id="panel-section-header">
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:20px;">
+          <h2 style="font-size:22px;font-weight:600;letter-spacing:-0.015em;" id="panelSectionTitle">Ataques entrantes</h2>
+        </div>
+      </div>
+      <!-- Panel content (swapped by view) -->
+      <div class="drag-block" data-drag-id="panel-content" id="panelContent"></div>
+    </div>
+  </div>
+  <!-- Agent Bottom Bar -->
+  <div class="agent-bottombar">
+    <div class="bottombar-status" id="bottombarStatus">
+      <span class="bottombar-dot" id="bbDot"></span>
+      <span class="bottombar-label" id="bbLabel">Bot activo</span>
+    </div>
+    <div class="bottombar-divider"></div>
+    <div class="bottombar-pills">
+      <div class="task-pill next">
+        <span>Farm tx3 · Aldea Norte</span>
+        <span class="pill-timer">04:17</span>
+      </div>
+      <div class="task-pill">
+        <span>Farm tx3 · Capital</span>
+        <span class="pill-timer">12:44</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+<script>
+'use strict';
+const LAYOUT_KEY = 'aviso-ataque-mundos.layout';
+
+/* ===================================================================
+   TRADUCCIONES
+   ================================================================= */
+const TRANSLATIONS = {
+  es:{
+    "hint.view":    "Modo previsualización",
+    "hint.edit":    "Arrastra los bloques y pulsa ✓ Listo",
+    "tribe.gauls":  "Galos",
+    "tribe.romans": "Romanos",
+    "tribe.teutons":"Teutones",
+    "tribe.natars": "Nátaros",
+    "tribe.egyptians":"Egipcios",
+    "session.active":"Activo",
+    "session.idle":  "Inactivo",
+    "session.error": "Error",
+    "radar.badge.aria": "ataques entrantes en este mundo",
+    "radar.panel.empty.title": "Sin ataques activos",
+    "radar.panel.empty.desc":  "El radar no detecta amenazas en este momento",
+    "radar.panel.no_session":  "Inicia el bot para monitorizar ataques entrantes",
+    "radar.panel.error.title": "No se pudo cargar la información de ataques",
+    "radar.panel.retry":       "Reintentar",
+    "radar.panel.updated":     "actualizado hace 15 s",
+    "radar.panel.error.inline":"Error al actualizar",
+    "radar.attack.detected":   "Detectado · sin detalle",
+    "radar.attack.troops":     "Tropas",
+    "radar.attack.distance":   "campos",
+    "world.stop.toast": "Deteniendo el bot…",
+  },
+  en:{
+    "hint.view":    "Preview mode",
+    "hint.edit":    "Drag the blocks and press ✓ Done",
+    "tribe.gauls":  "Gauls",
+    "tribe.romans": "Romans",
+    "tribe.teutons":"Teutons",
+    "tribe.natars": "Natars",
+    "tribe.egyptians":"Egyptians",
+    "session.active":"Active",
+    "session.idle":  "Idle",
+    "session.error": "Error",
+    "radar.badge.aria": "incoming attacks on this world",
+    "radar.panel.empty.title": "No active attacks",
+    "radar.panel.empty.desc":  "The radar detects no threats at the moment",
+    "radar.panel.no_session":  "Start the bot to monitor incoming attacks",
+    "radar.panel.error.title": "Could not load attack information",
+    "radar.panel.retry":       "Retry",
+    "radar.panel.updated":     "updated 15 s ago",
+    "radar.panel.error.inline":"Update error",
+    "radar.attack.detected":   "Detected · no detail",
+    "radar.attack.troops":     "Troops",
+    "radar.attack.distance":   "fields",
+    "world.stop.toast": "Stopping bot…",
+  },
+  ar:{
+    "hint.view":    "وضع المعاينة",
+    "hint.edit":    "اسحب الكتل واضغط ✓ تم",
+    "tribe.gauls":  "الغاليون",
+    "tribe.romans": "الرومان",
+    "tribe.teutons":"التيوتون",
+    "tribe.natars": "الناتار",
+    "tribe.egyptians":"المصريون",
+    "session.active":"نشط",
+    "session.idle":  "خامل",
+    "session.error": "خطأ",
+    "radar.badge.aria": "هجمات قادمة على هذا العالم",
+    "radar.panel.empty.title": "لا هجمات نشطة",
+    "radar.panel.empty.desc":  "الرادار لا يكشف أي تهديدات في الوقت الحالي",
+    "radar.panel.no_session":  "ابدأ البوت لمراقبة الهجمات القادمة",
+    "radar.panel.error.title": "تعذّر تحميل معلومات الهجمات",
+    "radar.panel.retry":       "إعادة المحاولة",
+    "radar.panel.updated":     "محدّث منذ 15 ث",
+    "radar.panel.error.inline":"خطأ في التحديث",
+    "radar.attack.detected":   "مكتشف · بلا تفاصيل",
+    "radar.attack.troops":     "قوات",
+    "radar.attack.distance":   "حقول",
+    "world.stop.toast": "إيقاف البوت…",
+  },
+};
+function t(lang, key){ return (TRANSLATIONS[lang]||TRANSLATIONS.es)[key] || key; }
+
+/* ===================================================================
+   LANG PICKER
+   ================================================================= */
+const LANGS = [
+  {code:"ar",name:"العربية"},{code:"bg",name:"Български"},{code:"cs",name:"Čeština"},
+  {code:"da",name:"Dansk"},{code:"de",name:"Deutsch"},{code:"el",name:"Ελληνικά"},
+  {code:"en",name:"English"},{code:"es",name:"Español"},{code:"fa",name:"فارسی"},
+  {code:"fr",name:"Français"},{code:"he",name:"עברית"},{code:"hu",name:"Magyar"},
+  {code:"it",name:"Italiano"},{code:"ja",name:"日本語"},{code:"lt",name:"Lietuvių"},
+  {code:"lv",name:"Latviešu"},{code:"nl",name:"Nederlands"},{code:"pl",name:"Polski"},
+  {code:"pt",name:"Português"},{code:"rs",name:"Srpski"},{code:"ru",name:"Русский"},
+  {code:"sl",name:"Slovenščina"},{code:"sv",name:"Svenska"},{code:"tr",name:"Türkçe"},
+  {code:"uk",name:"Українська"},
+];
+const RTL_LANGS = new Set(["ar","he","fa"]);
+let curLang = localStorage.getItem('lang') || 'es';
+
+function renderLangList(filter=''){
+  const list = document.getElementById('langList');
+  list.innerHTML = '';
+  LANGS.filter(l => !filter || l.name.toLowerCase().includes(filter.toLowerCase()) || l.code.includes(filter.toLowerCase()))
+    .forEach(l => {
+      const btn = document.createElement('button');
+      btn.className='lang-item'; btn.setAttribute('role','option');
+      btn.setAttribute('aria-selected', l.code===curLang ? 'true':'false');
+      btn.innerHTML = `<span>${l.name}</span><span class="code">${l.code}</span>`;
+      btn.addEventListener('click', () => {
+        curLang = l.code; applyLang(curLang);
+        document.getElementById('langPanel').classList.remove('open');
+      });
+      list.appendChild(btn);
+    });
+}
+document.getElementById('langBtn').addEventListener('click', () => {
+  document.getElementById('langPanel').classList.toggle('open');
+  document.getElementById('langSearch').value=''; renderLangList();
+  setTimeout(()=>document.getElementById('langSearch').focus(),80);
+});
+document.getElementById('langSearch').addEventListener('input', e => renderLangList(e.target.value));
+document.addEventListener('click', e => {
+  if(!e.target.closest('.lang-wrap')) document.getElementById('langPanel').classList.remove('open');
+});
+
+function applyLang(lang){
+  curLang = lang;
+  localStorage.setItem('lang', lang);
+  document.getElementById('langLabel').textContent = lang;
+  const isRTL = RTL_LANGS.has(lang);
+  // apply RTL to the view areas only — not the toolbar
+  document.getElementById('viewLvl1').setAttribute('dir', isRTL ? 'rtl':'ltr');
+  document.getElementById('viewLvl2').setAttribute('dir', isRTL ? 'rtl':'ltr');
+  document.getElementById('hint').textContent = t(lang, 'hint.view');
+  renderLangList();
+  // re-render the current view with the new lang
+  applyView(document.getElementById('viewSelect').value);
+}
+
+/* ===================================================================
+   THEME TOGGLE
+   ================================================================= */
+let curTheme = localStorage.getItem('theme') || 'auto';
+function applyTheme(theme){
+  curTheme = theme;
+  localStorage.setItem('theme', theme);
+  if(theme==='dark'){
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('sunIcon').style.display='none';
+    document.getElementById('moonIcon').style.display='';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    document.getElementById('sunIcon').style.display='';
+    document.getElementById('moonIcon').style.display='none';
+  }
+}
+document.getElementById('themeBtn').addEventListener('click', () => {
+  applyTheme(curTheme==='dark' ? 'light':'dark');
+});
+if(curTheme==='dark') applyTheme('dark');
+
+/* ===================================================================
+   DATA FIXTURES
+   ================================================================= */
+const WORLDS = [
+  { id:1, url:"https://tx3.travian.es", server:"tx3", tribe:"gauls",   session:"active" },
+  { id:2, url:"https://ts5.travian.es", server:"ts5", tribe:"romans",  session:"idle"   },
+];
+const WORLDS_WITH_ATTACKS = [
+  { id:1, url:"https://tx3.travian.es", server:"tx3", tribe:"gauls",   session:"active", attacks:2 },
+  { id:2, url:"https://ts5.travian.es", server:"ts5", tribe:"romans",  session:"idle",   attacks:0 },
+];
+
+/* ===================================================================
+   HELPERS SVG (inline Lucide)
+   ================================================================= */
+const SVG = {
+  shieldAlert:`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`,
+  shieldAlertLg:`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`,
+  shieldCheck:`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  lock:`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  alertCircle:`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`,
+  alertCircleSm:`<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`,
+  swords:`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" y1="19" x2="19" y2="13"/><line x1="16" y1="16" x2="20" y2="20"/><line x1="19" y1="21" x2="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" y1="14" x2="9" y2="18"/><line x1="7" y1="11" x2="11" y2="15"/></svg>`,
+};
+
+/* ===================================================================
+   RENDER NIVEL 1 — World list rows
+   ================================================================= */
+function renderWorldRow(world, showAttack){
+  const tribeLabel = t(curLang, 'tribe.' + world.tribe);
+  const sessionClass = world.session==='active'?'active':world.session==='error'?'error':'idle';
+  const sessionLabel = t(curLang, 'session.' + world.session);
+  const attackBadge = (showAttack && world.attacks > 0)
+    ? `<span class="attack-badge" aria-label="${world.attacks} ${t(curLang,'radar.badge.aria')}">${SVG.shieldAlert}<span>${world.attacks}</span></span>`
+    : '';
+  return `<tr>
+    <td><button style="color:var(--accent-text);font-family:var(--font-mono);font-size:12px;
+      text-decoration:underline;text-underline-offset:2px;background:none;border:none;cursor:pointer;
+      overflow:hidden;text-overflow:ellipsis;max-width:200px;display:block;" class="col-server">${world.url}</button></td>
+    <td class="col-parsed">${world.server}</td>
+    <td class="col-tribe">${tribeLabel}</td>
+    <td>
+      <div class="col-session">
+        <span class="session-badge ${sessionClass}">
+          <span class="dot"></span>${sessionLabel}
+        </span>
+        ${attackBadge}
+      </div>
+    </td>
+    <td>
+      <div class="col-actions">
+        ${world.session==='active' ? `<button class="btn-stop-sm">Parar</button>` : `<button class="btn-enter">Entrar</button>`}
+        <button class="btn-menu-sm" aria-label="Más opciones">⋯</button>
+      </div>
+    </td>
+  </tr>`;
+}
+function renderWorldCard(world, showAttack){
+  const tribeLabel = t(curLang, 'tribe.' + world.tribe);
+  const sessionClass = world.session==='active'?'active':world.session==='error'?'error':'idle';
+  const sessionLabel = t(curLang, 'session.' + world.session);
+  const attackBadge = (showAttack && world.attacks > 0)
+    ? `<span class="attack-badge" aria-label="${world.attacks} ${t(curLang,'radar.badge.aria')}">${SVG.shieldAlert}<span>${world.attacks}</span></span>`
+    : '';
+  return `<div class="world-card">
+    <div class="world-card-top">
+      <span class="world-card-name">${world.server}</span>
+    </div>
+    <div class="world-card-secondary">
+      <span class="session-badge ${sessionClass}"><span class="dot"></span>${sessionLabel}</span>
+      ${attackBadge}
+      <span>${tribeLabel}</span>
+    </div>
+    <div class="world-card-actions">
+      ${world.session==='active'
+        ? `<button class="btn-stop-sm">Parar</button>`
+        : `<button class="btn-enter">Entrar</button>`}
+      <button class="btn-menu-sm" aria-label="Más opciones">⋯</button>
+    </div>
+  </div>`;
+}
+
+function renderLvl1(worlds, showAttack){
+  const tbody = document.getElementById('worldsTableBody');
+  const mobileList = document.getElementById('worldsMobileList');
+  const count = document.getElementById('worldsCount');
+  count.textContent = worlds.length + ' mundo' + (worlds.length!==1?'s':'');
+  tbody.innerHTML = worlds.map(w => renderWorldRow(w, showAttack)).join('');
+  mobileList.innerHTML = worlds.map(w => renderWorldCard(w, showAttack)).join('');
+}
+
+/* ===================================================================
+   RENDER NIVEL 2 — IncomingAttacksPanel states
+   ================================================================= */
+function panelEmpty(){
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title" id="panelTitle">Ataques entrantes</span>
+  </div>
+  <div class="panel-empty">
+    <span class="panel-empty-icon">${SVG.shieldCheck}</span>
+    <p class="panel-empty-title">${t(curLang,'radar.panel.empty.title')}</p>
+    <p class="panel-empty-desc">${t(curLang,'radar.panel.empty.desc')}</p>
+  </div>`;
+}
+function panelNoSession(){
+  return `<div class="panel-header">
+    <span class="panel-header-icon" style="color:var(--text-tertiary)">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">Ataques entrantes</span>
+  </div>
+  <div class="panel-no-session">
+    <span class="panel-no-session-icon">${SVG.lock}</span>
+    <p class="panel-no-session-title">${t(curLang,'radar.panel.no_session')}</p>
+  </div>`;
+}
+function panelLoading(){
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">Ataques entrantes</span>
+  </div>
+  <div class="skeleton-card">
+    <div class="skeleton-line title skeleton-pulse"></div>
+    <div style="height:8px"></div>
+    <div class="skeleton-line medium skeleton-pulse"></div>
+    <div style="height:6px"></div>
+    <div class="skeleton-line short skeleton-pulse"></div>
+    <div style="height:6px"></div>
+    <div class="skeleton-line full skeleton-pulse"></div>
+  </div>
+  <div class="skeleton-card">
+    <div class="skeleton-line title skeleton-pulse"></div>
+    <div style="height:8px"></div>
+    <div class="skeleton-line medium skeleton-pulse"></div>
+    <div style="height:6px"></div>
+    <div class="skeleton-line short skeleton-pulse"></div>
+  </div>`;
+}
+function panelError(){
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">Ataques entrantes</span>
+  </div>
+  <div class="panel-error-state">
+    <span class="panel-error-state-icon">${SVG.alertCircle}</span>
+    <p class="panel-error-state-title">${t(curLang,'radar.panel.error.title')}</p>
+    <button class="btn-primary" style="margin-top:8px">${t(curLang,'radar.panel.retry')}</button>
+  </div>`;
+}
+function attackRowDetected(n){
+  return `<div class="attack-row">
+    <div class="attack-row-header">
+      <span class="attack-label">Ataque ${n}</span>
+      <span class="attack-sep">—</span>
+      <span class="attack-countdown">00:37:21</span>
+      <span class="attack-sep">·</span>
+      <span class="attack-time">09:31:38</span>
+    </div>
+    <span class="detected-badge">${t(curLang,'radar.attack.detected')}</span>
+  </div>`;
+}
+function attackRowFull(n, imminent){
+  const cdClass = imminent ? 'attack-countdown imminent':'attack-countdown';
+  const cdValue = imminent ? '00:00:43':'00:37:21';
+  const cdTime  = imminent ? '09:31:38':'09:31:38';
+  return `<div class="attack-row">
+    <div class="attack-row-header">
+      <span class="attack-label">Ataque ${n}</span>
+      <span class="attack-sep">—</span>
+      <span class="${cdClass}">${cdValue}</span>
+      <span class="attack-sep">·</span>
+      <span class="attack-time">${cdTime}</span>
+    </div>
+    <div class="attacker-grid">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="attacker-name">GonnaDie</span>
+        <span class="attacker-origin">Aldea origen (−63|74)</span>
+        <span class="attacker-tribe-tag">Galos</span>
+        <span class="attacker-meta" style="color:var(--text-tertiary)">[Storm]</span>
+        <span class="attacker-meta">Pob. <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums">692</span></span>
+        <span class="attacker-meta">Dist. <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums">7,62</span> ${t(curLang,'radar.attack.distance')}</span>
+      </div>
+      <div class="troops-row">
+        <span class="troop-chip">${SVG.swords} Espadachín <span class="troop-count">×2</span></span>
+      </div>
+    </div>
+  </div>`;
+}
+function villageCard(villageName, coords, content, attackCount){
+  return `<div class="village-card">
+    <div class="village-card-header">
+      <span class="village-name">${villageName}</span>
+      <span class="village-coords">(${coords})</span>
+      <span class="village-attack-count">${SVG.swords} ${attackCount} ataque${attackCount!==1?'s':''}</span>
+    </div>
+    ${content}
+  </div>`;
+}
+function panelDetected(){
+  const content = attackRowDetected(1);
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">1 ataque entrante en 1 aldea</span>
+    <span class="panel-header-freshness">${t(curLang,'radar.panel.updated')}</span>
+  </div>
+  ${villageCard('Aldea Norte','45|−12', content, 1)}`;
+}
+function panelFull(){
+  const content = attackRowFull(1, false);
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">1 ataque entrante en 1 aldea</span>
+    <span class="panel-header-freshness">${t(curLang,'radar.panel.updated')}</span>
+  </div>
+  ${villageCard('Aldea Norte','45|−12', content, 1)}`;
+}
+function panelMixed(){
+  const atk1 = attackRowDetected(1);
+  const atk2 = attackRowFull(2, false);
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">2 ataques entrantes en 1 aldea</span>
+    <span class="panel-header-freshness">${t(curLang,'radar.panel.updated')}</span>
+  </div>
+  ${villageCard('Capital Gala','10|23', atk1+atk2, 2)}`;
+}
+function panelImminent(){
+  const atk = attackRowFull(1, true);
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">1 ataque entrante en 1 aldea</span>
+    <span class="panel-header-freshness">${t(curLang,'radar.panel.updated')}</span>
+  </div>
+  <div class="panel-error-inline" style="margin-bottom:0;margin-bottom:12px;background:color-mix(in srgb,var(--danger) 6%,transparent);border-color:color-mix(in srgb,var(--danger) 20%,transparent);">
+    <span class="err-icon">${SVG.alertCircleSm}</span>
+    <span style="color:var(--danger);font-weight:500;">Impacto inminente — menos de 60 segundos</span>
+  </div>
+  ${villageCard('Aldea Norte','45|−12', atk, 1)}`;
+}
+function panelErrorPolling(){
+  const atk = attackRowFull(1, false);
+  return `<div class="panel-header">
+    <span class="panel-header-icon">${SVG.shieldAlertLg}</span>
+    <span class="panel-header-title">1 ataque entrante en 1 aldea</span>
+    <span class="panel-header-freshness" style="color:var(--danger)">Error · hace 42 s</span>
+  </div>
+  <div class="panel-error-inline">
+    <span class="err-icon">${SVG.alertCircleSm}</span>
+    <span>${t(curLang,'radar.panel.error.inline')} · </span>
+    <button>${t(curLang,'radar.panel.retry')}</button>
+  </div>
+  ${villageCard('Aldea Norte','45|−12', atk, 1)}`;
+}
+
+/* ===================================================================
+   LIVE COUNTDOWN (for mounted views)
+   ================================================================= */
+let countdownInterval = null;
+function startLiveCountdown(initialSeconds, elementId){
+  if(countdownInterval) clearInterval(countdownInterval);
+  let secs = initialSeconds;
+  const el = document.getElementById(elementId);
+  if(!el) return;
+  function fmt(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; return [h,m,sec].map(v=>String(v).padStart(2,'0')).join(':'); }
+  el.textContent = fmt(secs);
+  countdownInterval = setInterval(()=>{ if(secs>0){ secs--; if(el) el.textContent=fmt(secs); } else clearInterval(countdownInterval); },1000);
+}
+
+/* ===================================================================
+   APPLY VIEW
+   ================================================================= */
+function applyView(view){
+  if(countdownInterval){ clearInterval(countdownInterval); countdownInterval=null; }
+  // hide all
+  document.getElementById('viewLvl1').style.display='none';
+  document.getElementById('viewLvl2').style.display='none';
+
+  const isLvl1 = view.startsWith('lvl1');
+  if(isLvl1){
+    const v1 = document.getElementById('viewLvl1');
+    v1.style.display='flex';
+    const showMobile = view==='lvl1-mobile';
+    if(showMobile){
+      // simulate narrow viewport feel with a container
+      v1.querySelector('.mgmt-content').style.maxWidth='390px';
+    } else {
+      v1.querySelector('.mgmt-content').style.maxWidth='';
+    }
+    const showAttack = view !== 'lvl1-no-attack';
+    renderLvl1(WORLDS_WITH_ATTACKS, showAttack);
+  } else {
+    // Nivel 2
+    document.getElementById('viewLvl2').style.display='flex';
+    const isRTL = view==='lvl2-rtl';
+    const lang = isRTL ? 'ar' : curLang;
+    // bottom bar
+    const noSession = view==='lvl2-no-session';
+    const bbDot = document.getElementById('bbDot');
+    const bbLabel = document.getElementById('bbLabel');
+    if(noSession){
+      bbDot.className='bottombar-dot stopped';
+      bbLabel.className='bottombar-label stopped';
+      bbLabel.textContent='Bot parado';
+    } else {
+      bbDot.className='bottombar-dot';
+      bbLabel.className='bottombar-label';
+      bbLabel.textContent='Bot activo';
+    }
+    // sidebar badge
+    const sidebarBadge = document.getElementById('sidebarAttackBadge');
+    const viewsWithBadge = ['lvl2-full','lvl2-mixed','lvl2-detected','lvl2-imminent','lvl2-error'];
+    sidebarBadge.style.display = viewsWithBadge.includes(view) ? '':'none';
+    sidebarBadge.textContent = view==='lvl2-mixed'?'2':'1';
+    // RTL topbar
+    document.getElementById('worldTopbar').setAttribute('dir', isRTL?'rtl':'ltr');
+    if(isRTL){
+      document.getElementById('worldTribeTop').textContent = t('ar','tribe.gauls');
+      document.getElementById('worldStatusLabel').textContent = t('ar','session.active');
+    } else {
+      document.getElementById('worldTribeTop').textContent = t(curLang,'tribe.gauls');
+      document.getElementById('worldStatusLabel').textContent = t(curLang,'session.active');
+    }
+    // render panel
+    const pc = document.getElementById('panelContent');
+    const effectiveLang = isRTL ? 'ar' : curLang;
+    // temporarily override curLang for RTL
+    const savedLang = curLang;
+    if(isRTL) curLang='ar';
+    switch(view){
+      case 'lvl2-empty':        pc.innerHTML = panelEmpty();        break;
+      case 'lvl2-loading':      pc.innerHTML = panelLoading();      break;
+      case 'lvl2-detected':     pc.innerHTML = panelDetected();     break;
+      case 'lvl2-full':         pc.innerHTML = panelFull();         break;
+      case 'lvl2-mixed':        pc.innerHTML = panelMixed();        break;
+      case 'lvl2-imminent':     pc.innerHTML = panelImminent();     break;
+      case 'lvl2-error':        pc.innerHTML = panelErrorPolling(); break;
+      case 'lvl2-no-session':   pc.innerHTML = panelNoSession();    break;
+      case 'lvl2-rtl':          pc.innerHTML = panelFull();         break;
+      default: pc.innerHTML = panelEmpty();
+    }
+    if(isRTL) curLang=savedLang;
+    // live countdown for full/imminent
+    if(view==='lvl2-full' || view==='lvl2-mixed'){
+      // find the first .attack-countdown element and make it live
+      const cdEl = pc.querySelector('.attack-countdown');
+      if(cdEl){
+        cdEl.id='liveCountdown';
+        startLiveCountdown(37*60+21,'liveCountdown');
+      }
+    } else if(view==='lvl2-imminent'){
+      const cdEl = pc.querySelector('.attack-countdown.imminent');
+      if(cdEl){
+        cdEl.id='liveCountdown';
+        startLiveCountdown(43,'liveCountdown');
+      }
+    }
+  }
+}
+
+document.getElementById('viewSelect').addEventListener('change', e => applyView(e.target.value));
+
+/* ===================================================================
+   TOAST
+   ================================================================= */
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent=msg; toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove('show'),2200);
+}
+
+/* ===================================================================
+   DRAG & DROP (imán 8px) — idéntico a los hermanos
+   ================================================================= */
+function getActiveCanvas(){
+  const v = document.getElementById('viewSelect').value;
+  return v.startsWith('lvl1')
+    ? document.getElementById('contentAreaLvl1')
+    : document.getElementById('contentAreaLvl2');
+}
+function dragBlocks(){ return [...getActiveCanvas().querySelectorAll('.drag-block')]; }
+function snap(v){ return Math.round(v/8)*8; }
+let drag = null;
+
+document.addEventListener('pointerdown', e => {
+  if(!document.body.classList.contains('editing')) return;
+  const el = e.target.closest('.drag-block'); if(!el) return;
+  const ca = getActiveCanvas(); if(!ca.contains(el)) return;
+  e.preventDefault();
+  el.setPointerCapture(e.pointerId); el.classList.add('dragging');
+  drag={ el, ca, startX:e.clientX, startY:e.clientY, origX:el.offsetLeft, origY:el.offsetTop };
+});
+document.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY;
+  const maxX=drag.ca.clientWidth-drag.el.offsetWidth;
+  const maxY=drag.ca.scrollHeight-drag.el.offsetHeight;
+  drag.el.style.left=Math.max(0,Math.min(maxX,snap(drag.origX+dx)))+'px';
+  drag.el.style.top =Math.max(0,Math.min(maxY,snap(drag.origY+dy)))+'px';
+});
+function endDrag(e){
+  if(!drag) return;
+  drag.el.classList.remove('dragging');
+  try{ drag.el.releasePointerCapture(e.pointerId); }catch(x){}
+  drag=null;
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+/* ===================================================================
+   EDIT MODE
+   ================================================================= */
+const editBtn = document.getElementById('editBtn');
+const hintEl  = document.getElementById('hint');
+let editing   = false;
+
+editBtn.addEventListener('click', ()=>{
+  editing=!editing;
+  document.body.classList.toggle('editing',editing);
+  editBtn.setAttribute('aria-pressed',editing?'true':'false');
+  editBtn.textContent = editing ? '✓ Listo':'✎ Editar';
+  hintEl.textContent  = editing ? t(curLang,'hint.edit'):t(curLang,'hint.view');
+  const ca = getActiveCanvas();
+  if(editing){
+    dragBlocks().forEach(b=>{
+      const rect=b.getBoundingClientRect();
+      const pRect=ca.getBoundingClientRect();
+      b.style.position='absolute';
+      b.style.left=snap(rect.left-pRect.left+ca.scrollLeft)+'px';
+      b.style.top =snap(rect.top -pRect.top +ca.scrollTop )+'px';
+      b.style.width=b.offsetWidth+'px';
+    });
+    ca.style.position='relative';
+    ca.style.height  =ca.scrollHeight+'px';
+  } else {
+    dragBlocks().forEach(b=>{ b.style.position='';b.style.left='';b.style.top='';b.style.width=''; });
+    ca.style.position=''; ca.style.height='';
+  }
+});
+
+/* ===================================================================
+   GUARDAR / RESTABLECER / EXPORTAR
+   ================================================================= */
+function currentLayout(){
+  const out={};
+  dragBlocks().forEach(b=>{ if(b.style.left) out[b.dataset.dragId]={x:b.offsetLeft,y:b.offsetTop}; });
+  return out;
+}
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  localStorage.setItem(LAYOUT_KEY,JSON.stringify(currentLayout())); showToast('Layout guardado');
+});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  localStorage.removeItem(LAYOUT_KEY);
+  dragBlocks().forEach(b=>{ b.style.left='';b.style.top='';b.style.width='';b.style.position=''; });
+  const ca=getActiveCanvas(); ca.style.position=''; ca.style.height='';
+  editing=false; document.body.classList.remove('editing');
+  editBtn.setAttribute('aria-pressed','false'); editBtn.textContent='✎ Editar';
+  hintEl.textContent=t(curLang,'hint.view');
+  showToast('Layout restablecido');
+});
+document.getElementById('exportBtn').addEventListener('click', async ()=>{
+  const ca=getActiveCanvas();
+  const data={view:'aviso-ataque-mundos',state:document.getElementById('viewSelect').value,
+    canvas:{w:ca.clientWidth,h:ca.clientHeight},grid:8,blocks:currentLayout()};
+  const json=JSON.stringify(data,null,2);
+  try{ await navigator.clipboard.writeText(json); showToast('Layout copiado al portapapeles'); }
+  catch(e){ showToast('Descargando layout…'); }
+  const blob=new Blob([json],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='aviso-ataque-mundos.layout.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ===================================================================
+   RESTORE SAVED LAYOUT
+   ================================================================= */
+function restoreLayout(){
+  const saved=localStorage.getItem(LAYOUT_KEY);
+  if(!saved) return;
+  try{
+    const layout=JSON.parse(saved);
+    dragBlocks().forEach(b=>{
+      const pos=layout[b.dataset.dragId];
+      if(pos){ b.style.position='absolute';b.style.left=pos.x+'px';b.style.top=pos.y+'px'; }
+    });
+  }catch(e){}
+}
+
+/* ===================================================================
+   INIT
+   ================================================================= */
+renderLangList();
+applyLang(curLang);
+applyView('lvl1-with-attack');
+</script>
+</body>
+</html>

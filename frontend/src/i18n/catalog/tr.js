@@ -1108,6 +1108,8 @@ const tr = {
   'NATURE_8': 'Timsah',
   'NATURE_9': 'Kaplan',
   'NATURE_10': 'Fil',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Saldırılar',
 }
 
 export default tr

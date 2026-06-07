@@ -35,6 +35,9 @@
 | `GET` | `/worlds/{id}/noise/origins` | Listar anclas semilla disponibles | No |
 | `POST` | `/worlds/{id}/noise/refresh-villages` | Refrescar aldeas del village-switcher | No |
 | `POST` | `/worlds/{id}/noise/paths/{path_id}/test` | Probar ruta de navegación en vivo | No |
+| `GET` | `/game/incoming-attacks/{world_id}` | Lista ataques entrantes de un mundo (EP-RA01) | No |
+| `POST` | `/game/incoming-attacks/{world_id}/check` | Dispara lectura inmediata del radar (EP-RA02) | No |
+| `GET` | `/game/incoming-attacks/summary` | Resumen de ataques pendientes por mundo — badge (EP-RA03) | No |
 
 ---
 
@@ -2023,4 +2026,124 @@ Ambos cambios son retrocompatibles (nullable/opcional).
 
 ---
 
-🔖 Última revisión: 2026-06-06 (v2+v3: EP-RT11 cadena, EP-RT12 close-session, navigation_weight del REQUEST en EP-RT07/RT08, origin_template_id, validate_no_cycle, validate_selector, _ensure_session en EP-RT10, stop_agent cierra Chrome)
+---
+
+## Radar de ataques entrantes (EP-RA01, EP-RA02, EP-RA03)
+
+Endpoints del radar de ataques entrantes. Sin `Accept-Language` (datos numéricos y texto crudo del juego).
+Ver spec completo en `docs/specs/radar-ataques-entrantes.md §8`.
+
+### EP-RA01 — Lista ataques entrantes de un mundo
+
+**Ruta:** `GET /game/incoming-attacks/{world_id}`
+
+Lista los ataques entrantes detectados para el mundo indicado. Por defecto solo devuelve
+los pendientes (`impact_at > ahora` o sin timer). Con `include_past=true` devuelve también
+los ya impactados (útil para histórico o debug).
+
+`seconds_remaining` se calcula en el use case (no en el handler): `null` si `impact_at`
+es `null` (ataque detectado solo por el hook del sidebar, aún sin timer), o
+`max(0, int(delta.total_seconds()))` si tiene timer. Nunca negativo.
+
+**Request:**
+```bash
+curl http://localhost:8000/game/incoming-attacks/1
+curl "http://localhost:8000/game/incoming-attacks/1?include_past=true&limit=10&offset=0"
+curl "http://localhost:8000/game/incoming-attacks/1?village_game_id=12345"
+```
+
+**Response 200:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "village_game_id": 27322,
+      "village_name": "07",
+      "village_coord_x": -68,
+      "village_coord_y": 73,
+      "attack_count": 1,
+      "impact_at": "2026-06-05T14:30:18+00:00",
+      "seconds_remaining": 1818,
+      "rally_point_href": "/build.php?gid=16&tt=1&filter=1&subfilters=1",
+      "attacker_name": null,
+      "origin_village_name": null,
+      "origin_village_coord_x": null,
+      "origin_village_coord_y": null,
+      "operation_type": null,
+      "attacker_snapshot": null,
+      "source": "dorf1",
+      "detected_at": "2026-06-05T14:00:00+00:00"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Errores:** `404` mundo no encontrado · `422` query param inválido (limit=0, limit>100, offset<0) · `500` error interno.
+
+---
+
+### EP-RA02 — Dispara lectura inmediata del radar
+
+**Ruta:** `POST /game/incoming-attacks/{world_id}/check`
+
+Fuerza una lectura inmediata del radar de ataques entrantes para el mundo indicado.
+Navega `dorf1.php` con el browser autenticado, parsea los ataques con `img.att1`, los
+persiste en BD y devuelve cuántos se detectaron. Requiere sesión activa (login previo).
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/game/incoming-attacks/1/check
+```
+
+**Response 200:**
+```json
+{
+  "world_id": 1,
+  "attacks_detected": 2,
+  "message": "Check completado"
+}
+```
+
+**Errores:** `404` mundo no encontrado · `503` sin sesión activa (hacer login primero) · `500` error interno.
+
+---
+
+### EP-RA03 — Resumen de ataques pendientes por mundo (badge)
+
+**Ruta:** `GET /game/incoming-attacks/summary`
+
+Devuelve el recuento de ataques pendientes agrupado por mundo. Diseñado para badgear la
+lista de Mundos del frontend con **una sola petición HTTP**: el frontend puede inicializar
+todos los badges sin hacer una petición por mundo.
+
+Se incluyen todos los mundos conocidos en BD, incluso los de 0 ataques. Los mundos sin
+sesión activa también aparecen (el valor es solo de BD, sin invocar el browser).
+
+`pending_attacks` = filas con `impact_at IS NULL` (sidebar sin timer, postura conservadora
+RT-05) o `impact_at > datetime('now')`. Si no hay mundos → `[]`.
+
+**Nota de implementación:** la ruta literal `/summary` se declara ANTES que `/{world_id}`
+en el router FastAPI para que "summary" no sea parseado como `int` de `world_id`.
+
+**Request:**
+```bash
+curl http://localhost:8000/game/incoming-attacks/summary
+```
+
+**Response 200:**
+```json
+[
+  { "world_id": 1, "pending_attacks": 3 },
+  { "world_id": 2, "pending_attacks": 0 }
+]
+```
+
+**Errores:** `500` error interno.
+
+---
+
+🔖 Última revisión: 2026-06-07 (v2+v3: EP-RT11 cadena, EP-RT12 close-session, navigation_weight del REQUEST en EP-RT07/RT08, origin_template_id, validate_no_cycle, validate_selector, _ensure_session en EP-RT10, stop_agent cierra Chrome + EP-RA01/EP-RA02/EP-RA03 radar ataques entrantes)

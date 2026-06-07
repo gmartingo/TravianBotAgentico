@@ -34,8 +34,9 @@ import { SchedulerDashboard } from '../components/world/SchedulerDashboard.jsx'
 import { FarmListsTab }   from '../components/world/FarmListsTab.jsx'
 import { FarmListDrawer } from '../components/world/FarmListDrawer.jsx'
 import { AgentBottomBar } from '../components/world/AgentBottomBar.jsx'
-import { SessionTab }     from '../components/session/SessionTab.jsx'
-import { NoiseTab }       from '../components/world/noise/NoiseTab.jsx'
+import { SessionTab }            from '../components/session/SessionTab.jsx'
+import { NoiseTab }              from '../components/world/noise/NoiseTab.jsx'
+import { IncomingAttacksPanel }  from '../components/world/IncomingAttacksPanel.jsx'
 
 // ── Iconos sidebar ────────────────────────────────────────────────────────────
 
@@ -116,6 +117,18 @@ function IconNoise() {
   )
 }
 
+function IconAttacks() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+      style={{ width: '16px', height: '16px', flexShrink: 0 }} aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  )
+}
+
 // Constante que debe coincidir con el CSS --sidebar-w del token
 const SIDEBAR_W = 180
 
@@ -133,6 +146,15 @@ export function WorldSpacePage() {
 
   // Drill-down al SchedulerDashboard (v10): scheduler seleccionado, o null = lista
   const [schedulerDashboard, setSchedulerDashboard] = useState(null)
+
+  // Conteo de ataques entrantes (para el nav-badge de la pestaña Ataques, spec §6.2).
+  // Lo actualiza IncomingAttacksPanel vía onCountChange.
+  const [attackCount, setAttackCount] = useState(0)
+
+  // Estado de sesión activa — usado por IncomingAttacksPanel para condicionar el polling.
+  // Se considera activa si agentStatus ha respondido correctamente; simplificación válida
+  // porque WorldSpacePage solo se monta cuando hay sesión activa (spec §5.4).
+  const sessionActive = true // WorldSpacePage solo se monta con sesión; ver spec §5.4
 
   function handleNavigateToFarmList(farmListId) {
     setHighlightFarmListId(farmListId)
@@ -375,6 +397,14 @@ export function WorldSpacePage() {
       soon: false,
     },
     {
+      id: 'attacks',
+      label: t('worldnav.attacks'),
+      icon: <IconAttacks />,
+      disabled: false,
+      soon: false,
+      badge: attackCount > 0 ? attackCount : null,
+    },
+    {
       id: 'session',
       label: t('worldnav.session'),
       icon: <IconSession />,
@@ -568,6 +598,30 @@ export function WorldSpacePage() {
                   )}
                   {item.icon}
                   <span style={{ flex: 1 }}>{item.label}</span>
+                  {/* Nav-badge de ataques (fondo --danger, blanco, spec §6.2) */}
+                  {item.badge != null && (
+                    <span
+                      aria-label={String(item.badge)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minWidth: '18px',
+                        height: '18px',
+                        padding: '0 5px',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'var(--danger)',
+                        color: '#ffffff',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-mono)',
+                        fontVariantNumeric: 'tabular-nums',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                   {item.soon && (
                     <span style={{
                       fontSize: '10px',
@@ -637,6 +691,26 @@ export function WorldSpacePage() {
                 highlightId={highlightFarmListId}
                 onClearHighlight={() => setHighlightFarmListId(null)}
               />
+            )}
+
+            {/* Pestaña: Ataques entrantes (Nivel 2 — spec §6.2/§6.3) */}
+            {activeTab === 'attacks' && (
+              <ErrorBoundary onReset={() => setActiveTab('agents')} title={t('error.loadDetail')} closeLabel={t('topbar.backToWorlds')}>
+                <div>
+                  <h2 style={{
+                    fontSize: '17px', fontWeight: 600,
+                    letterSpacing: '-0.01em', color: 'var(--text)',
+                    marginBottom: '16px',
+                  }}>
+                    {t('worldnav.attacks')}
+                  </h2>
+                  <IncomingAttacksPanel
+                    worldId={worldId}
+                    sessionActive={sessionActive}
+                    onCountChange={setAttackCount}
+                  />
+                </div>
+              </ErrorBoundary>
             )}
 
             {/* Pestaña: Sesión (Human Sessions) */}

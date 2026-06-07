@@ -922,6 +922,65 @@ async def start_agent(world_id: int, request: Request) -> dict:
         account_id = await accounts_db.get_account_id_for_world(world_id)
         login_use_case = LoginUseCase(registry=session_registry, db=accounts_db, fernet=fernet)
 
+    # Callables del radar de ataques entrantes — se construyen aquí (composition root,
+    # capa de adapters) para que WorldAgent (core) no importe adapters.browser directamente.
+    # Patrón: inyección de funciones en lugar de clases concretas (frontera hexagonal).
+    incoming_db = getattr(request.app.state, "incoming_attack_port", None)
+    sidebar_attack_hook = None
+    dorf1_attack_reader = None
+    incoming_attack_browser_adapter = None
+    rally_point_parser = None
+    village_profile_parser = None
+    if incoming_db is not None:
+        from adapters.browser.incoming_attack_hook import check_sidebar_attacks  # noqa: PLC0415
+        from adapters.browser.incoming_attack_browser_adapter import IncomingAttackBrowserAdapter  # noqa: PLC0415
+        from adapters.browser.parsers.dorf1_incoming_parser import Dorf1IncomingParser  # noqa: PLC0415
+        from adapters.browser.parsers.rally_point_parser import RallyPointParser  # noqa: PLC0415
+        from adapters.browser.parsers.village_profile_parser import VillageProfileParser  # noqa: PLC0415
+
+        sidebar_attack_hook = check_sidebar_attacks
+        # Callables de parseo inyectados para que WorldAgent (core) no importe adapters.
+        rally_point_parser = RallyPointParser.parse
+        village_profile_parser = VillageProfileParser.parse
+
+        if session_registry is not None:
+            _browser_adapter = IncomingAttackBrowserAdapter(
+                get_browser=session_registry.get_browser,
+                get_world_server=session_registry.get_world_server,
+            )
+
+            async def _dorf1_reader(wid: int, _adapter=_browser_adapter) -> list:
+                html = await _adapter.get_dorf1_html(wid)
+                return Dorf1IncomingParser.parse(html)
+
+            dorf1_attack_reader = _dorf1_reader
+            # Componentes C y D: inyectar el adaptador concreto en WorldAgent.
+            # El WorldAgent lo recibe sin importar la clase (frontera hexagonal).
+            incoming_attack_browser_adapter = _browser_adapter
+
+    # page_html_provider — Componente A del radar (RN-21, §9.5).
+    # Devuelve el HTML de la página ACTUALMENTE cargada en el browser del mundo,
+    # sin hacer ninguna petición HTTP adicional (tab.get_content() es solo una
+    # lectura del DOM via CDP — coste de anti-detección CERO, RN-01/G7).
+    # Se construye aquí (adapters/, composition root) para que WorldAgent (core/)
+    # nunca importe adapters.browser.* directamente (frontera hexagonal).
+    page_html_provider = None
+    if session_registry is not None:
+        async def _page_html_provider(
+            _wid: int = world_id,
+            _registry=session_registry,
+        ) -> str | None:
+            """Lee el HTML de la página activa del browser de este mundo."""
+            browser_inst = _registry.get_browser(_wid)
+            if browser_inst is None:
+                return None
+            tab = browser_inst.main_tab
+            if tab is None:
+                return None
+            return await tab.get_content()
+
+        page_html_provider = _page_html_provider
+
     agent = WorldAgent(
         world_id=world_id,
         browser=browser,
@@ -931,6 +990,13 @@ async def start_agent(world_id: int, request: Request) -> dict:
         login_use_case=login_use_case,
         account_id=account_id,
         noise_db=noise_db,
+        incoming_db=incoming_db,
+        sidebar_attack_hook=sidebar_attack_hook,
+        dorf1_attack_reader=dorf1_attack_reader,
+        page_html_provider=page_html_provider,
+        incoming_attack_browser_adapter=incoming_attack_browser_adapter,
+        rally_point_parser=rally_point_parser,
+        village_profile_parser=village_profile_parser,
     )
     seeded = await agent.seed_from_schedulers()
     agents[world_id] = agent

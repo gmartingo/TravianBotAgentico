@@ -8,3 +8,4 @@
 - [project-animal-frequency-panel](project_animal_frequency_panel.md) — AnimalFrequencyPanel: matriz empírica animal×franja, BucketSelector pills, sticky first col, posición 4 en StatsTab
 - [project-route-templates-design](project_route_templates_design.md) — página global /rutas (ManagementShell): catálogo de RouteTemplate, mockup playground 7 vistas, bloques A–I
 - [project-category-combobox-design](project_category_combobox_design.md) — CategoryCombobox estilo Notion: typeahead+CRUD inline, paleta 12 colores, mockup 10 vistas (gate humano pendiente)
+- [project-attack-radar-design](project_attack_radar_design.md) — SUPERSEDIDO: banner global descartado. Nuevo diseño: badge en lista de mundos (S4) + IncomingAttacksPanel en WorldSpacePage (S9). Ver aviso-ataque-mundos.md

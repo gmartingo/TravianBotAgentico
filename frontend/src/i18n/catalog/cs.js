@@ -1108,6 +1108,8 @@ const cs = {
   'NATURE_8': 'Krokodýl',
   'NATURE_9': 'Tygr',
   'NATURE_10': 'Slon',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Útoky',
 }
 
 export default cs

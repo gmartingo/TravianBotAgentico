@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head><title>Sidebar con ataque — fixture radar-ataques-entrantes</title></head>
+<body>
+<!--
+  Fixture: sidebar CON ataque entrante.
+  Basado en HTML real del sidebar de Travian (GAP-01 cerrado — diff con-ataque vs sin-ataque).
+
+  Aldeas presentes:
+    - data-did=27322  → clase "listEntry village attack" → DETECTADA (bajo ataque)
+    - data-did=24341  → clase "listEntry village active"  → NO detectada (activa, sin ataque)
+    - data-did=24342  → clase "listEntry village"          → NO detectada (normal, sin ataque)
+
+  SEÑUELO confirmado (GAP-01): svg.attack dentro de span.incomingTroops está presente
+  en TODAS las entradas, con o sin ataque. El parser SOLO lee la clase del div.listEntry.
+
+  Ver spec docs/specs/radar-ataques-entrantes.md §4 RN-02, §12 UT-RA01/UT-RA02/UT-RA07.
+-->
+<div id="sidebarBoxVillageList">
+  <div class="content">
+    <ul class="villageList">
+
+      <!-- Aldea 27322 — BAJO ATAQUE: clase "attack" en div.listEntry -->
+      <li>
+        <div class="listEntry village attack" data-did="27322">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">07</span>
+          <span class="coordinateX">(−68</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">73)</span>
+          <span class="incomingTroops">
+            <!-- svg.attack es señuelo permanente: presente en TODAS las entradas -->
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+      <!-- Aldea 24341 — ACTIVA, sin ataque: clase "listEntry village active" -->
+      <li>
+        <div class="listEntry village active" data-did="24341">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">01</span>
+          <span class="coordinateX">(−63</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">65)</span>
+          <span class="incomingTroops">
+            <!-- señuelo permanente — también aquí, pero sin "attack" en el div.listEntry -->
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+      <!-- Aldea 24342 — Normal, sin ataque: clase "listEntry village" -->
+      <li>
+        <div class="listEntry village" data-did="24342">
+          <div class="dragAndDrop">
+            <svg class="handle"></svg>
+          </div>
+          <span class="name">02</span>
+          <span class="coordinateX">(10</span>
+          <span class="coordinateWrap">|</span>
+          <span class="coordinateY">−5)</span>
+          <span class="incomingTroops">
+            <!-- señuelo permanente — también aquí -->
+            <svg class="attack"></svg>
+          </span>
+        </div>
+      </li>
+
+    </ul>
+  </div>
+</div>
+</body>
+</html>

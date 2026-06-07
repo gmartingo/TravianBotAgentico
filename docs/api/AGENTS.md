@@ -1330,3 +1330,149 @@ curl -X DELETE http://localhost:8000/worlds/3/session
 **Delta EP-N04** (`POST /worlds/{id}/noise/destinations`): campo `template_id` (int|null, opcional, default null) añadido al request body para crear destinos con referencia explícita a una plantilla.
 
 **Detalle:** `docs/api/openapi.yaml` → paths `/worlds/{world_id}/noise/paths/{path_id}`
+
+---
+
+## Radar de ataques entrantes
+
+> Sin `Accept-Language` en estos endpoints: los datos son numéricos o texto crudo
+> del juego (coordenadas, nombres de aldea de Travian, conteos). Desviación consciente
+> documentada en `docs/specs/radar-ataques-entrantes.md §8`.
+
+---
+
+### EP-RA01 — Lista ataques entrantes de un mundo
+
+**Endpoint:** `GET /game/incoming-attacks/{world_id}`
+Devuelve la lista paginada de ataques entrantes detectados para el mundo. Por defecto
+solo incluye ataques pendientes (impact_at > ahora o sin timer). `include_past=true`
+para ver también ataques pasados.
+
+**Auth:** ninguna.
+
+**Headers requeridos:** ninguno (sin Accept-Language).
+
+**Query params:**
+- `include_past` (bool, default=false): incluir ataques con impact_at pasado.
+- `village_game_id` (int, ge=1, opcional): filtro por aldea (game_id de Travian).
+- `limit` (int, 1–100, default=50): máximo de items por página.
+- `offset` (int, ge=0, default=0): desplazamiento para paginación.
+
+**Response OK (200):**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "village_game_id": 12345,
+      "village_name": "Mi Aldea",
+      "village_coord_x": 100,
+      "village_coord_y": -50,
+      "attack_count": 2,
+      "impact_at": "2026-06-05T18:30:00+00:00",
+      "seconds_remaining": 3600,
+      "rally_point_href": "/build.php?gid=16&id=1",
+      "attacker_name": null,
+      "origin_village_name": null,
+      "origin_village_coord_x": null,
+      "origin_village_coord_y": null,
+      "operation_type": null,
+      "attacker_snapshot": null,
+      "source": "dorf1",
+      "detected_at": "2026-06-05T17:30:00+00:00"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+`seconds_remaining` es `null` si `impact_at` es `null` (ataque detectado sin timer).
+Nunca negativo (`max(0, delta)`). Calculado en el use case, no en el handler.
+
+**Errores:**
+- `404` → mundo no encontrado.
+- `422` → query param inválido (limit=0, limit>100, offset<0, village_game_id=0).
+- `500` → error interno.
+
+**Ejemplo:**
+```bash
+curl http://localhost:8000/game/incoming-attacks/1
+curl "http://localhost:8000/game/incoming-attacks/1?include_past=true&limit=10&offset=0"
+curl "http://localhost:8000/game/incoming-attacks/1?village_game_id=12345"
+```
+
+**Detalle:** `docs/api/openapi.yaml` → paths `/game/incoming-attacks/{world_id}`
+
+---
+
+### EP-RA02 — Dispara lectura inmediata del radar de ataques
+
+**Endpoint:** `POST /game/incoming-attacks/{world_id}/check`
+Fuerza una lectura inmediata del radar de ataques entrantes para el mundo indicado.
+Navega dorf1 con el browser autenticado, persiste los ataques encontrados y devuelve
+cuántos se detectaron. Requiere sesión activa (login previo).
+
+**Auth:** ninguna (la sesión se gestiona internamente por SessionRegistry).
+
+**Headers requeridos:** ninguno.
+
+**Request body:** ninguno.
+
+**Response OK (200):**
+```json
+{
+  "world_id": 1,
+  "attacks_detected": 3,
+  "message": "Check completado"
+}
+```
+
+**Errores:**
+- `404` → mundo no encontrado.
+- `503` → no hay sesión activa para el mundo (SessionNotActiveError). Hacer login primero.
+- `500` → error interno.
+
+**Ejemplo:**
+```bash
+curl -X POST http://localhost:8000/game/incoming-attacks/1/check
+```
+
+**Detalle:** `docs/api/openapi.yaml` → paths `/game/incoming-attacks/{world_id}/check`
+
+---
+
+### EP-RA03 — Resumen de ataques pendientes por mundo (badge)
+
+**Endpoint:** `GET /game/incoming-attacks/summary`
+Devuelve el recuento de ataques pendientes agrupado por mundo. Diseñado para
+badgear la lista de Mundos del frontend con una sola petición. Se incluyen todos
+los mundos conocidos, incluso los de 0 ataques.
+
+**Auth:** ninguna.
+
+**Headers requeridos:** ninguno (sin Accept-Language — datos numéricos).
+
+**Query params:** ninguno.
+
+**Response OK (200):**
+```json
+[
+  { "world_id": 1, "pending_attacks": 3 },
+  { "world_id": 2, "pending_attacks": 0 }
+]
+```
+
+`pending_attacks` cuenta filas con `impact_at IS NULL` (sidebar sin timer, postura
+conservadora RT-05) o `impact_at > datetime('now')`. Si no hay mundos → `[]`.
+
+**Errores:**
+- `500` → error interno.
+
+**Ejemplo:**
+```bash
+curl http://localhost:8000/game/incoming-attacks/summary
+```
+
+**Detalle:** `docs/api/openapi.yaml` → paths `/game/incoming-attacks/summary`

@@ -39,6 +39,8 @@ ERROR_HTTP_MAP: dict[str, int] = {
     "FARM_LIST_PAGE_ERROR":     502,
     # 500: el DOM devolvió datos malformados (error de parsing interno).
     "FARM_LIST_RESPONSE_ERROR": 500,
+    # --- Excepciones añadidas en la feature radar-ataques-entrantes ---
+    "INCOMING_ATTACK_PAGE_ERROR": 503,
 }
 
 DEFAULT_ERROR_STATUS: int = 500
