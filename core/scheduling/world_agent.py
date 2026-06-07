@@ -634,6 +634,13 @@ class WorldAgent:
         self._active_mode: SessionMode = SessionMode.HARDCORE  # default provisional
         self._jitter_fin: datetime = datetime.now()            # se recalcula en run()
 
+        # Vigilancia híbrida — Componente E2 (RN-33 a RN-40, §9.12).
+        # Estado de runtime: NO se persiste en BD (RN-35). Se resetea con cada reinicio.
+        # _last_sidebar_scan: momento del último piggyback (None = nunca, EC-27).
+        # _heartbeat_interval_s: intervalo nominal del latido en segundos (default 600).
+        self._last_sidebar_scan: datetime | None = None
+        self._heartbeat_interval_s: int = 600
+
         # Estado de ruido — máquina de estados burst/silence (RN-HS24bis)
         self._noise_in_burst: bool = False
         self._noise_burst_remaining: int = 0  # clicks restantes en el burst actual
@@ -1100,6 +1107,12 @@ class WorldAgent:
         llamando al provider (una sola lectura del DOM, sin navegación extra — coste
         cero anti-detección, RN-01/G7). Si el provider o el hook fallan, loggea y
         continúa: el radar nunca debe tumbar la tarea principal (EC-15).
+
+        [MODIFICADO v5]: actualiza _last_sidebar_scan = datetime.now() ANTES de invocar
+        _post_page_hook cuando obtenemos HTML válido (RN-35, RN-37, VH-04).
+        El timestamp refleja "el agente obtuvo y pasó HTML al hook", no "se detectaron
+        ataques". Esto garantiza que el latido (HEARTBEAT_SCAN) sepa que hubo actividad
+        reciente y no navegue dorf1 innecesariamente (EC-24).
         """
         if self._page_html_provider is None:
             return
@@ -1112,6 +1125,10 @@ class WorldAgent:
             return
         if html is None:
             return
+        # Actualizar timestamp del último scan SIEMPRE que se obtenga HTML válido (RN-35, RN-37).
+        # Se hace ANTES de _post_page_hook: el hook es función pura que no conoce al WorldAgent.
+        # El timestamp no depende de que el hook detecte ataques — basta con haber obtenido HTML.
+        self._last_sidebar_scan = datetime.now()
         await self._post_page_hook(html, self.world_id)
 
     async def _execute(self, task: Task) -> None:
@@ -1157,6 +1174,14 @@ class WorldAgent:
                 # Aplica delay post-procesamiento (RN-12) y límite de 3 fichas (RN-11).
                 # NO se invoca _maybe_run_page_hook.
                 await self._handle_fetch_attacker_village_profile(task)
+
+            elif task.task_type == TaskType.HEARTBEAT_SCAN:
+                # Componente E — latido de vigilancia anti-detección (v5, RN-34..RN-40).
+                # No navega si el piggyback fue reciente (RN-37, EC-24).
+                # Sí invoca _post_page_hook directamente tras cargar dorf1 (RN-33).
+                # NO llama a _maybe_run_page_hook adicionalmente (el handler ya actualiza
+                # _last_sidebar_scan y llama a _post_page_hook — evita doble scan).
+                await self._handle_heartbeat_scan()
 
             else:
                 logger.warning(
@@ -1413,6 +1438,140 @@ class WorldAgent:
             if t.task_type == TaskType.FETCH_ATTACKER_VILLAGE_PROFILE
             and t.world_id == world_id
         )
+
+    # ------------------------------------------------------------------
+    # Vigilancia híbrida — Componente E2: latido HEARTBEAT_SCAN (v5)
+    # Spec §9.12, RN-33 a RN-40, RT-15, RT-16.
+    # ------------------------------------------------------------------
+
+    def _enqueue_heartbeat(self) -> None:
+        """
+        Encola el próximo HEARTBEAT_SCAN con jitter amplio (RN-36).
+
+        Jitter: uniform(intervalo*0.5, intervalo*1.5).
+        Para intervalo=600 s → rango 300-900 s (5-15 min). NUNCA intervalo fijo.
+        El jitter amplio hace el patrón indistinguible de la actividad humana esporádica.
+
+        Solo encola si:
+        - _should_reenqueue_noise() → True (modo HARDCORE o PASIVO, no DISCONNECTED).
+        - _incoming_db is not None (el radar está activo — sin radar el latido no tiene sentido).
+
+        Patrón idéntico a _enqueue_noise (P4, P5 — import diferido de random).
+        """
+        if not self._should_reenqueue_noise():
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — modo DISCONNECTED, no reencolar", self.world_id
+            )
+            return
+        if self._incoming_db is None:
+            return  # EC-25: radar no activo, latido sin propósito
+
+        import random as _random  # import diferido — patrón del proyecto (P5)
+        # Jitter amplio: uniform(0.5x, 1.5x) → para 600 s base = entre 300 s y 900 s (5-15 min)
+        gap = _random.uniform(
+            self._heartbeat_interval_s * 0.5,
+            self._heartbeat_interval_s * 1.5,
+        )
+        execute_at = datetime.now() + timedelta(seconds=gap)
+        self._queue.add(Task(
+            task_type=TaskType.HEARTBEAT_SCAN,
+            world_id=self.world_id,
+            execute_at=execute_at,
+            priority=2,       # misma prioridad que ruido: no compite con radar urgente (0)
+            payload={},
+            recurring=False,  # se reencola manualmente en el handler
+        ))
+        logger.debug(
+            "Mundo %d: próximo HEARTBEAT_SCAN en %.0f s (jitter=%.0f-%.0f s)",
+            self.world_id, gap,
+            self._heartbeat_interval_s * 0.5,
+            self._heartbeat_interval_s * 1.5,
+        )
+
+    async def _handle_heartbeat_scan(self) -> None:
+        """
+        Componente E — Latido de vigilancia (RN-34 a RN-39, §9.12).
+
+        Lógica:
+        a) Sin sesión activa → reencolar más tarde, sin navegar (RN-39, EC-26).
+        b) Piggyback reciente (< intervalo*0.5) → reencolar sin navegar (RN-37, EC-24).
+        c) Cargar dorf1 via _incoming_attack_browser_adapter.get_dorf1_html
+           → actualizar _last_sidebar_scan y llamar a _post_page_hook (RN-33, VH-01).
+        d) Reencolar con jitter amplio SOLO si la sesión sigue activa (RN-36, RN-39).
+
+        EC-25: si _incoming_db es None → return inmediato sin reencolar.
+        EC-27: si _last_sidebar_scan es None (primer arranque) → navega directamente.
+        EC-26: en modo DISCONNECTED → _session_active() False → skip + reencolar.
+
+        Anti-detección (checklist §11, puntos 12-17):
+        - Jitter amplio uniform(0.5x, 1.5x) — NUNCA intervalo fijo.
+        - Solo navega si realmente hubo inactividad (b evita cargas innecesarias).
+        - La carga de dorf1 es deuda RT-08 (URL directa) igual que Comp. B.
+        - priority=2: no compite con radar urgente priority=0.
+        - No opera en modo DISCONNECTED.
+        """
+        # EC-25: sin radar activo, el latido no tiene propósito
+        if self._incoming_db is None:
+            return
+
+        # ── a) Sin sesión → skip + reencolar ──────────────────────────────────
+        if not self._session_active():
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — sin sesión activa, reencolar más tarde (RN-39)",
+                self.world_id,
+            )
+            self._enqueue_heartbeat()
+            return
+
+        # ── b) Piggyback reciente → reencolar sin navegar (RN-37, EC-24) ───────
+        if self._last_sidebar_scan is not None:
+            elapsed = (datetime.now() - self._last_sidebar_scan).total_seconds()
+            min_threshold = self._heartbeat_interval_s * 0.5
+            if elapsed < min_threshold:
+                logger.debug(
+                    "Mundo %d: HEARTBEAT_SCAN diferido — piggyback reciente hace %.0f s "
+                    "(umbral=%.0f s)",
+                    self.world_id, elapsed, min_threshold,
+                )
+                self._enqueue_heartbeat()
+                return
+
+        # ── c) Navegar a dorf1 y escanear ─────────────────────────────────────
+        # Verificar que el browser adapter está inyectado (VH-01).
+        if self._incoming_attack_browser_adapter is None:
+            logger.debug(
+                "Mundo %d: HEARTBEAT_SCAN — browser adapter no inyectado, skip",
+                self.world_id,
+            )
+            self._enqueue_heartbeat()
+            return
+
+        try:
+            # Reutilizar _incoming_attack_browser_adapter.get_dorf1_html (ya inyectado).
+            # La navegación usa browser.get + human_delay + wait DOM (deuda RT-08 conocida).
+            html = await self._incoming_attack_browser_adapter.get_dorf1_html(self.world_id)
+
+            # Actualizar _last_sidebar_scan y ejecutar el hook del radar.
+            # Se llama a _post_page_hook directamente (no a _maybe_run_page_hook, porque
+            # ya tenemos el HTML y no necesitamos el provider). VH-04: el timestamp se
+            # actualiza aquí, en el código del agente, no en el hook puro.
+            self._last_sidebar_scan = datetime.now()
+            await self._post_page_hook(html, self.world_id)
+
+            logger.info(
+                "Mundo %d: HEARTBEAT_SCAN completado (dorf1 cargado, sidebar escaneado)",
+                self.world_id,
+            )
+
+        except Exception as exc:
+            # Nunca bloquear el agente por un error del latido (EC-15 para heartbeat).
+            logger.warning(
+                "Mundo %d: HEARTBEAT_SCAN falló: %s",
+                self.world_id, exc,
+            )
+
+        # ── d) Reencolar siempre al final (con jitter) ────────────────────────
+        self._enqueue_heartbeat()
 
     async def _handle_fetch_rally_point_detail(self, task: Task) -> None:
         """
@@ -2334,6 +2493,11 @@ class WorldAgent:
         """
         Encola la primera NOISE_NAVIGATION al arrancar en HARDCORE o PASIVO.
         El gap inicial se calcula con _calculate_next_noise_gap.
+
+        [MODIFICADO v5]: además del ruido, encola el primer HEARTBEAT_SCAN si el radar
+        está configurado (incoming_db != None) y el modo es HARDCORE o PASIVO (RN-38).
+        El gap inicial del latido usa el mismo rango que el reencole: uniform(0.5x, 1.5x).
+        En modo DISCONNECTED o sin radar inyectado → no se encola (EC-25, EC-26, VH-08).
         """
         if self._active_mode not in (SessionMode.HARDCORE, SessionMode.PASIVO):
             return
@@ -2354,6 +2518,29 @@ class WorldAgent:
             "Mundo %d: ruido inicializado — primera NOISE_NAVIGATION en %.0f s",
             self.world_id, gap,
         )
+
+        # Encolar primer latido si el radar está configurado (RN-38, VH-08).
+        # Solo si incoming_db está inyectado (sin radar el latido carece de sentido).
+        # _should_reenqueue_noise() ya garantiza HARDCORE o PASIVO (no DISCONNECTED).
+        if self._incoming_db is not None:
+            import random as _random  # import diferido — patrón del proyecto (P5)
+            hb_gap = _random.uniform(
+                self._heartbeat_interval_s * 0.5,
+                self._heartbeat_interval_s * 1.5,
+            )
+            hb_execute_at = datetime.now() + timedelta(seconds=hb_gap)
+            self._queue.add(Task(
+                task_type=TaskType.HEARTBEAT_SCAN,
+                world_id=self.world_id,
+                execute_at=hb_execute_at,
+                priority=2,
+                payload={},
+                recurring=False,
+            ))
+            logger.info(
+                "Mundo %d: latido radar inicializado — primer HEARTBEAT_SCAN en %.0f s",
+                self.world_id, hb_gap,
+            )
 
     async def _handle_noise_navigation(self) -> None:
         """

@@ -32,6 +32,13 @@ class TaskType(str, Enum):
     # Máximo 3 fichas por evento de radar (RN-11). Idempotencia por snapshot (RN-20).
     # Ver spec docs/specs/radar-ataques-entrantes.md §9.8, §9.9.
     FETCH_ATTACKER_VILLAGE_PROFILE = "FETCH_ATTACKER_VILLAGE_PROFILE"
+    # Radar de ataques entrantes — Componente E2: latido de vigilancia híbrida.
+    # Navega a dorf1 cuando el bot lleva demasiado tiempo sin acción autónoma y pasa el
+    # HTML por _post_page_hook para escanear el sidebar. Priority=2 (igual que ruido).
+    # Jitter amplio: uniform(intervalo*0.5, intervalo*1.5) → para 600 s base = 300-900 s.
+    # NUNCA asyncio.Task paralelo — usa el scheduler para respetar _browser_lock (RT-15).
+    # Reglas: RN-33 a RN-40. Ver spec docs/specs/radar-ataques-entrantes.md §9.12.
+    HEARTBEAT_SCAN = "HEARTBEAT_SCAN"
 
 
 @dataclass

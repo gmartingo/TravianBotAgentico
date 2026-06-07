@@ -102,5 +102,9 @@ class TaskQueue:
         """
         return [t for t in self._tasks if t.priority <= max_priority]
 
+    def __iter__(self):
+        """Itera sobre una copia de la lista de tareas (snapshot seguro)."""
+        return iter(list(self._tasks))
+
     def __len__(self) -> int:
         return len(self._tasks)
