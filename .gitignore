@@ -2,6 +2,10 @@
 .venv/
 venv/
 env/
+# Sin barra final: captura también un symlink llamado .venv/venv (un patrón con '/'
+# solo matchea directorios, por eso la rama radar coló .venv como symlink-bucle).
+.venv
+venv
 
 # Perfiles de Chrome (datos sensibles y pesados)
 profiles/
@@ -48,6 +52,7 @@ Desktop.ini
 
 # Node / frontend
 frontend/node_modules/
+frontend/node_modules
 frontend/dist/
 frontend/.vite/
 
