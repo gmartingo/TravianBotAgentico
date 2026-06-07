@@ -273,19 +273,37 @@ async def check_incoming_attacks(
     # Verificar existencia del mundo en el router (patrón de session.py)
     await _verify_world(world_id, db_port)
 
-    # Obtener el browser adapter desde app.state.
-    # incoming_attack_browser_adapter puede no estar disponible si no hay sesión activa.
-    # En ese caso lanzamos SessionNotActiveError → 503.
-    browser_adapter = getattr(request.app.state, "incoming_attack_browser_adapter", None)
+    # Obtener el SessionRegistry desde app.state.world_runtime_port.
+    # Es el único punto de verdad sobre qué browsers/sesiones están activos.
+    # Si es None → el servidor no está inicializado correctamente → 503.
+    from core.exceptions import SessionNotActiveError  # noqa: PLC0415
 
-    if browser_adapter is None:
-        # Sin browser adapter → no hay sesión activa para ningún mundo.
-        # Lanzamos SessionNotActiveError para que el handler global lo mapee a 503.
-        from core.exceptions import SessionNotActiveError  # noqa: PLC0415
+    session_registry = getattr(request.app.state, "world_runtime_port", None)
+    if session_registry is None:
         raise SessionNotActiveError()
 
+    # Construir el adapter on-demand (igual que el closure _dorf1_reader de farm.py).
+    # No se guarda en app.state — se crea por petición para este mundo concreto.
+    from adapters.browser.incoming_attack_browser_adapter import (  # noqa: PLC0415
+        IncomingAttackBrowserAdapter,
+    )
+    from adapters.browser.parsers.dorf1_incoming_parser import (  # noqa: PLC0415
+        Dorf1IncomingParser,
+    )
+
+    browser_adapter = IncomingAttackBrowserAdapter(
+        get_browser=session_registry.get_browser,
+        get_world_server=session_registry.get_world_server,
+    )
+
     async def fetch_dorf1_attacks(wid: int):
-        return await browser_adapter.fetch_dorf1_attacks(wid)
+        # get_dorf1_html lanza SessionNotActiveError si get_browser(wid) → None,
+        # o IncomingAttackPageError si la página no carga.
+        # Ambas excepciones se propagan al handler global de main.py:
+        #   SessionNotActiveError → 503
+        #   IncomingAttackPageError → 500 (o el mapeo que corresponda)
+        html = await browser_adapter.get_dorf1_html(wid)
+        return Dorf1IncomingParser.parse(html)
 
     use_case = CheckIncomingAttackUseCase(db_port=incoming_attack_port)
     result = await use_case.execute(

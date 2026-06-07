@@ -50,7 +50,6 @@ _STATE_ATTRS = (
     "db_port",
     "incoming_attack_port",
     "noise_db_port",
-    "incoming_attack_browser_adapter",
 )
 
 
@@ -371,16 +370,51 @@ def test_ep_ra01_eco_x_request_id(client):
 
 
 # ---------------------------------------------------------------------------
+# Helpers para EP-RA02 — mock del SessionRegistry (world_runtime_port)
+# ---------------------------------------------------------------------------
+
+def _make_fake_registry(get_browser_return=None, get_world_server_return="https://ts1.travian.com/"):
+    """
+    Crea un fake SessionRegistry con get_browser y get_world_server.
+
+    get_browser_return:
+      - None → simula "sin sesión" (SessionNotActiveError en get_dorf1_html)
+      - cualquier otro valor → se devuelve como browser activo
+    """
+    fake = MagicMock()
+    fake.get_browser = MagicMock(return_value=get_browser_return)
+    fake.get_world_server = MagicMock(return_value=get_world_server_return)
+    return fake
+
+
+# ---------------------------------------------------------------------------
 # EP-RA02 — 503: sin sesión activa
 # ---------------------------------------------------------------------------
 
-def test_ep_ra02_sin_sesion_activa_devuelve_503(client):
-    """EP-RA02: sin browser adapter en app.state → 503 SessionNotActiveError."""
+def test_ep_ra02_sin_world_runtime_port_devuelve_503(client):
+    """EP-RA02: world_runtime_port=None en app.state → 503 SessionNotActiveError."""
     c = client
     _, world_id = _setup_world(c)
-    # Asegurar que incoming_attack_browser_adapter no está en app.state
-    if hasattr(app.state, "incoming_attack_browser_adapter"):
-        delattr(app.state, "incoming_attack_browser_adapter")
+    # El lifespan del TestClient sí setea world_runtime_port; lo forzamos a None.
+    app.state.world_runtime_port = None
+
+    r = c.post(f"/game/incoming-attacks/{world_id}/check")
+
+    assert r.status_code == 503, r.text
+    _assert_cabeceras_minimas(r)
+
+
+def test_ep_ra02_sin_sesion_activa_para_el_mundo_devuelve_503(client, monkeypatch):
+    """EP-RA02: get_browser(world_id)→None (sin sesión para ese mundo) → 503."""
+    from core.exceptions import SessionNotActiveError
+    from adapters.browser import incoming_attack_browser_adapter as _mod
+
+    c = client
+    _, world_id = _setup_world(c)
+
+    # Inyectar un registry cuyo get_browser devuelve None → el adapter lanzará SessionNotActiveError
+    fake_registry = _make_fake_registry(get_browser_return=None)
+    app.state.world_runtime_port = fake_registry
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
@@ -389,38 +423,46 @@ def test_ep_ra02_sin_sesion_activa_devuelve_503(client):
 
 
 def test_ep_ra02_mundo_no_existe_devuelve_404(client):
-    """EP-RA02: world_id inexistente → 404 (antes de llegar al browser)."""
+    """EP-RA02: world_id inexistente → 404 (se valida antes de llegar al browser)."""
     c = client
-    # Inyectar un browser adapter mock que devuelve 404 por mundo
-    # Para que llegue al 404, necesitamos un browser adapter que no lance SessionNotActiveError.
-    # Sin adapter → 503. Para probar el 404 necesitamos un adapter mock.
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(return_value=[])
-    app.state.incoming_attack_browser_adapter = mock_adapter
-
+    # El registry puede estar activo; el 404 se dispara en _verify_world antes del browser.
+    # Usamos el registry real del lifespan (ya seteado por TestClient).
     r = c.post("/game/incoming-attacks/99999/check")
 
     assert r.status_code == 404, r.text
     _assert_cabeceras_minimas(r)
 
-    # Limpiar
-    del app.state.incoming_attack_browser_adapter
 
+def test_ep_ra02_con_sesion_activa_devuelve_200(client, monkeypatch):
+    """EP-RA02: con sesión activa y browser mock → 200 con world_id, attacks_detected, message."""
+    from core.dtos.incoming_attack_dto import Dorf1AttackDTO
+    from adapters.browser import incoming_attack_browser_adapter as _mod
 
-def test_ep_ra02_con_sesion_activa_devuelve_200(client):
-    """EP-RA02: con browser adapter mock → 200 con world_id, attacks_detected, message."""
     c = client
     _, world_id = _setup_world(c)
 
-    # Simular 2 ataques detectados por el browser adapter
-    from core.dtos.incoming_attack_dto import Dorf1AttackDTO
+    # HTML con 2 ataques; parseamos con el parser real mediante monkeypatch en get_dorf1_html.
     ataques_mock = [
         Dorf1AttackDTO(attack_count=1, seconds_to_impact=3600, rally_point_href="/build.php?gid=16&id=1"),
         Dorf1AttackDTO(attack_count=2, seconds_to_impact=7200, rally_point_href="/build.php?gid=16&id=2"),
     ]
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(return_value=ataques_mock)
-    app.state.incoming_attack_browser_adapter = mock_adapter
+
+    # Monkeypatching de get_dorf1_html para que devuelva HTML ficticio
+    # y Dorf1IncomingParser.parse para que devuelva los DTOs directamente.
+    fake_html = "<html><body>mock</body></html>"
+    monkeypatch.setattr(
+        _mod.IncomingAttackBrowserAdapter,
+        "get_dorf1_html",
+        AsyncMock(return_value=fake_html),
+    )
+
+    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=ataques_mock))
+
+    # registry con get_browser devolviendo algo (no None) para que el adapter no lance 503
+    fake_browser = MagicMock()
+    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
+    app.state.world_runtime_port = fake_registry
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
@@ -431,51 +473,75 @@ def test_ep_ra02_con_sesion_activa_devuelve_200(client):
     assert "message" in data
     _assert_cabeceras_minimas(r)
 
-    del app.state.incoming_attack_browser_adapter
 
+def test_ep_ra02_check_sin_ataques_devuelve_attacks_detected_cero(client, monkeypatch):
+    """EP-RA02: browser devuelve lista vacía (sin ataques en dorf1) → attacks_detected=0."""
+    from adapters.browser import incoming_attack_browser_adapter as _mod
+    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
 
-def test_ep_ra02_check_sin_ataques_devuelve_attacks_detected_cero(client):
-    """EP-RA02: browser devuelve lista vacía → attacks_detected=0."""
     c = client
     _, world_id = _setup_world(c)
 
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(return_value=[])
-    app.state.incoming_attack_browser_adapter = mock_adapter
+    monkeypatch.setattr(
+        _mod.IncomingAttackBrowserAdapter,
+        "get_dorf1_html",
+        AsyncMock(return_value="<html></html>"),
+    )
+    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
+
+    fake_browser = MagicMock()
+    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
+    app.state.world_runtime_port = fake_registry
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
     assert r.status_code == 200, r.text
     assert r.json()["attacks_detected"] == 0
 
-    del app.state.incoming_attack_browser_adapter
 
-
-def test_ep_ra02_check_cabeceras_minimas(client):
+def test_ep_ra02_check_cabeceras_minimas(client, monkeypatch):
     """EP-RA02: respuesta 200 tiene Content-Type, X-Request-ID, X-API-Version."""
+    from adapters.browser import incoming_attack_browser_adapter as _mod
+    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+
     c = client
     _, world_id = _setup_world(c)
 
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(return_value=[])
-    app.state.incoming_attack_browser_adapter = mock_adapter
+    monkeypatch.setattr(
+        _mod.IncomingAttackBrowserAdapter,
+        "get_dorf1_html",
+        AsyncMock(return_value="<html></html>"),
+    )
+    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
+
+    fake_browser = MagicMock()
+    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
+    app.state.world_runtime_port = fake_registry
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
     assert r.status_code == 200
     _assert_cabeceras_minimas(r)
 
-    del app.state.incoming_attack_browser_adapter
 
-
-def test_ep_ra02_eco_x_request_id(client):
+def test_ep_ra02_eco_x_request_id(client, monkeypatch):
     """EP-RA02: X-Request-ID enviado en la request vuelve idéntico en la respuesta."""
+    from adapters.browser import incoming_attack_browser_adapter as _mod
+    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+
     c = client
     _, world_id = _setup_world(c)
 
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(return_value=[])
-    app.state.incoming_attack_browser_adapter = mock_adapter
+    monkeypatch.setattr(
+        _mod.IncomingAttackBrowserAdapter,
+        "get_dorf1_html",
+        AsyncMock(return_value="<html></html>"),
+    )
+    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
+
+    fake_browser = MagicMock()
+    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
+    app.state.world_runtime_port = fake_registry
 
     custom_id = "radar-check-9999"
     r = c.post(
@@ -485,26 +551,31 @@ def test_ep_ra02_eco_x_request_id(client):
 
     assert r.headers.get("x-request-id") == custom_id
 
-    del app.state.incoming_attack_browser_adapter
 
-
-def test_ep_ra02_sesion_no_activa_propaga_error_del_browser(client):
-    """EP-RA02: browser adapter lanza SessionNotActiveError → 503."""
+def test_ep_ra02_sesion_no_activa_propaga_error_del_browser(client, monkeypatch):
+    """EP-RA02: get_dorf1_html lanza SessionNotActiveError (browser se desconectó) → 503."""
     from core.exceptions import SessionNotActiveError
+    from adapters.browser import incoming_attack_browser_adapter as _mod
 
     c = client
     _, world_id = _setup_world(c)
 
-    mock_adapter = MagicMock()
-    mock_adapter.fetch_dorf1_attacks = AsyncMock(side_effect=SessionNotActiveError())
-    app.state.incoming_attack_browser_adapter = mock_adapter
+    # El browser no es None (pasa la primera guarda) pero get_dorf1_html lanza igualmente
+    # (e.g. browser se desconectó entre la guarda y la navegación).
+    monkeypatch.setattr(
+        _mod.IncomingAttackBrowserAdapter,
+        "get_dorf1_html",
+        AsyncMock(side_effect=SessionNotActiveError()),
+    )
+
+    fake_browser = MagicMock()
+    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
+    app.state.world_runtime_port = fake_registry
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
     assert r.status_code == 503, r.text
     _assert_cabeceras_minimas(r)
-
-    del app.state.incoming_attack_browser_adapter
 
 
 # ---------------------------------------------------------------------------
