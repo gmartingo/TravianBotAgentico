@@ -267,3 +267,119 @@ class IncomingAttackSQLiteAdapter(IncomingAttackDbPort):
         ]
 
         return {"total": total, "items": items}
+
+    async def get_attack_by_id(self, attack_id: int) -> dict | None:
+        """
+        Obtiene un ataque por su id primario.
+
+        Devuelve dict con todos los campos o None si no existe.
+        Usado para verificar idempotencia del snapshot (RN-20).
+        Ver spec §9.11.
+        """
+        async with self._conn.execute(
+            """
+            SELECT
+                id, world_id, village_game_id, village_name,
+                village_coord_x, village_coord_y,
+                attack_count, impact_at, rally_point_href,
+                attacker_name, origin_village_name,
+                origin_village_coord_x, origin_village_coord_y,
+                operation_type, origin_village_href,
+                attacker_snapshot_json,
+                detected_at, source, updated_at
+            FROM incoming_attacks
+            WHERE id = ?
+            """,
+            (attack_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            "id":                     row["id"],
+            "world_id":               row["world_id"],
+            "village_game_id":        row["village_game_id"],
+            "village_name":           row["village_name"],
+            "village_coord_x":        row["village_coord_x"],
+            "village_coord_y":        row["village_coord_y"],
+            "attack_count":           row["attack_count"],
+            "impact_at":              row["impact_at"],
+            "rally_point_href":       row["rally_point_href"],
+            "attacker_name":          row["attacker_name"],
+            "origin_village_name":    row["origin_village_name"],
+            "origin_village_coord_x": row["origin_village_coord_x"],
+            "origin_village_coord_y": row["origin_village_coord_y"],
+            "operation_type":         row["operation_type"],
+            "origin_village_href":    row["origin_village_href"],
+            "attacker_snapshot_json": row["attacker_snapshot_json"],
+            "detected_at":            row["detected_at"],
+            "source":                 row["source"],
+            "updated_at":             row["updated_at"],
+        }
+
+    async def update_snapshot(
+        self,
+        attack_id: int,
+        snapshot_json: str,
+        updated_at: str,
+    ) -> None:
+        """
+        Actualiza attacker_snapshot_json y updated_at para un ataque existente.
+
+        Si attack_id no existe → no-op con WARNING.
+        Ver spec §9.11.
+        """
+        async with self._conn.execute(
+            """
+            UPDATE incoming_attacks
+               SET attacker_snapshot_json = ?,
+                   updated_at = ?
+             WHERE id = ?
+            """,
+            (snapshot_json, updated_at, attack_id),
+        ) as cursor:
+            rows_affected = cursor.rowcount
+
+        await self._conn.commit()
+
+        if rows_affected == 0:
+            logger.warning(
+                "update_snapshot: attack_id=%d no existe en incoming_attacks — no-op",
+                attack_id,
+            )
+
+    async def summary_by_world(self) -> list[dict]:
+        """
+        Devuelve [{world_id, pending_attacks}] para todos los mundos.
+
+        pending_attacks = COUNT WHERE impact_at IS NULL OR impact_at > datetime('now').
+        Se incluyen TODOS los mundos (incluso con 0 ataques).
+
+        Ver spec §8 EP-RA03, §9.11.
+        """
+        sql = """
+            SELECT w.id AS world_id,
+                   COALESCE(SUM(
+                     CASE
+                       -- ia.id IS NULL → fila de LEFT JOIN sin correspondencia (no hay ataques)
+                       -- Distinguimos de ia.impact_at IS NULL que es un ataque del sidebar.
+                       WHEN ia.id IS NOT NULL AND (
+                            ia.impact_at IS NULL
+                            OR datetime(ia.impact_at) > datetime('now')
+                       )
+                       THEN 1 ELSE 0 END
+                   ), 0) AS pending_attacks
+              FROM worlds w
+              LEFT JOIN incoming_attacks ia ON ia.world_id = w.id
+             GROUP BY w.id
+             ORDER BY w.id
+        """
+        async with self._conn.execute(sql) as cursor:
+            rows = await cursor.fetchall()
+
+        return [
+            {"world_id": row["world_id"], "pending_attacks": row["pending_attacks"]}
+            for row in rows
+        ]

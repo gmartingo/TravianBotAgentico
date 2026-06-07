@@ -25,8 +25,8 @@ import pytest
 
 from adapters.browser.parsers.incoming_attack_sidebar_parser import (
     IncomingAttackSidebarParser,
-    _parse_coord,
 )
+from adapters.browser.parsers._common import parse_coord as _parse_coord
 from adapters.browser.parsers.dorf1_incoming_parser import Dorf1IncomingParser
 from adapters.db.incoming_attack_sqlite_adapter import IncomingAttackSQLiteAdapter
 from core.dtos.incoming_attack_dto import VillageUnderAttackDTO, Dorf1AttackDTO

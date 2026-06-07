@@ -93,3 +93,43 @@ class IncomingAttackDbPort(ABC):
         Devuelve: { total: int, items: list[dict] }
         Cada item incluye todos los campos de incoming_attacks.
         """
+
+    @abstractmethod
+    async def get_attack_by_id(self, attack_id: int) -> dict | None:
+        """
+        Obtiene un ataque por su id primario.
+
+        Devuelve dict con todos los campos del registro, o None si no existe.
+        Necesario para verificar idempotencia del snapshot antes de encolar Comp. D (RN-20).
+        Ver spec §9.11.
+        """
+
+    @abstractmethod
+    async def update_snapshot(
+        self,
+        attack_id: int,
+        snapshot_json: str,
+        updated_at: str,
+    ) -> None:
+        """
+        Actualiza attacker_snapshot_json y updated_at para un ataque existente.
+
+        Si attack_id no existe → no-op silencioso (loggea WARNING).
+        Llamado desde el handler de Comp. D tras parsear VillageProfileDTO.
+        Ver spec §9.11.
+        """
+
+    @abstractmethod
+    async def summary_by_world(self) -> list[dict]:
+        """
+        Devuelve [{world_id, pending_attacks}] para todos los mundos conocidos.
+
+        pending_attacks = COUNT de filas con:
+          impact_at IS NULL (sidebar sin timer, postura conservadora RT-05)
+          OR impact_at > datetime('now') (ataque todavía en el futuro).
+
+        Se incluyen todos los mundos (incluso con 0 ataques) para que el frontend
+        pueda inicializar badges sin una segunda petición.
+
+        Ver spec §8 EP-RA03, §9.11.
+        """

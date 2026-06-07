@@ -23,6 +23,15 @@ class TaskType(str, Enum):
     # Encolado desde WorldAgent._post_page_hook con retraso variable 3-15 s (RN-22).
     # Ver spec docs/specs/radar-ataques-entrantes.md §9.5.
     CHECK_INCOMING_ATTACK_DETAIL = "CHECK_INCOMING_ATTACK_DETAIL"
+    # Radar de ataques entrantes — Componente C: click en rally point y parseo de tropas.
+    # Ruta reactiva prioridad-0 (RT-10). Payload: {village_game_id, rally_point_href}.
+    # Ver spec docs/specs/radar-ataques-entrantes.md §9.7, §9.9.
+    FETCH_RALLY_POINT_DETAIL = "FETCH_RALLY_POINT_DETAIL"
+    # Radar de ataques entrantes — Componente D: click en aldea atacante y ficha.
+    # Ruta reactiva prioridad-0 (RT-10). Payload: {incoming_attack_id, origin_village_href}.
+    # Máximo 3 fichas por evento de radar (RN-11). Idempotencia por snapshot (RN-20).
+    # Ver spec docs/specs/radar-ataques-entrantes.md §9.8, §9.9.
+    FETCH_ATTACKER_VILLAGE_PROFILE = "FETCH_ATTACKER_VILLAGE_PROFILE"
 
 
 @dataclass

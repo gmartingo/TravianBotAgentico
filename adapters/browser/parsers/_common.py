@@ -120,3 +120,42 @@ def extract_unit_class(img_tag: Tag) -> str | None:
         if _UNIT_CLASS_RE.match(cls):
             return cls
     return None
+
+
+# ---------------------------------------------------------------------------
+# parse_coord — helper compartido para spans de coordenadas de Travian (RN-30)
+# ---------------------------------------------------------------------------
+
+# Patrón para parseo de coordenadas: guion ASCII o guion Unicode menos (U+2212).
+_COORD_RE = re.compile(r"[-−]?\d+")
+
+# Tabla de eliminación bidi: U+202D (Left-to-Right Override) y
+# U+202C (Pop Directional Formatting) que Travian inyecta entre signo y dígitos.
+# Mismo enfoque que core/utils/parsing.py (_BIDI_CHARS).
+_COORD_BIDI_STRIP = str.maketrans("", "", "‭‬")
+
+def parse_coord(el):
+    """
+    Extrae el entero de un span de coordenada de Travian (RN-30).
+
+    El texto puede incluir paréntesis, barras, el guion Unicode menos (U+2212)
+    y caracteres bidi de control (U+202D, U+202C) que Travian inyecta:
+      text="(\u202d\u2212\u202d63\u202c\u202c"  -> -63
+      text="(\u221268"                              -> -68
+      text="(10"                                    -> 10
+
+    Usa str.translate para eliminar bidi; regex busca [-minus]?digitos.
+    Devuelve 0 si no hay match o el elemento es None.
+
+    Funcion centralizada (RN-30): usada por IncomingAttackSidebarParser,
+    RallyPointParser y VillageProfileParser.
+    Aniadida en radar-ataques-entrantes v4 (2026-06-07).
+    """
+    if el is None:
+        return 0
+    text = el.get_text(strip=True)
+    text = text.translate(_COORD_BIDI_STRIP)
+    m = _COORD_RE.search(text)
+    if not m:
+        return 0
+    return int(m.group().replace("\u2212", "-"))

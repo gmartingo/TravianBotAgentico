@@ -17,39 +17,18 @@ SEÑUELOS A IGNORAR (presentes en TODAS las entradas, con o sin ataque):
 
 Ver spec docs/specs/radar-ataques-entrantes.md §4 RN-02, §9.2.
 Añadido en la feature radar-ataques-entrantes (2026-06-05).
+Ajuste RN-30 (2026-06-07): _parse_coord movida a _common.py; se importa desde allí.
 """
 from __future__ import annotations
 
 import logging
-import re
 
 from bs4 import BeautifulSoup
 
+from adapters.browser.parsers._common import parse_coord as _parse_coord
 from core.dtos.incoming_attack_dto import VillageUnderAttackDTO
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_coord(el) -> int:
-    """
-    Extrae el entero de un span de coordenada.
-
-    El texto puede incluir paréntesis, barras y el guion Unicode menos (−):
-      "(−68"  → -68
-      "(10"   → 10
-      "73)"   → 73
-
-    Usa regex r'[-−]?\\d+' (guion ASCII + guion Unicode menos U+2212).
-    Devuelve 0 si no hay match o el elemento es None.
-    """
-    if el is None:
-        return 0
-    text = el.get_text(strip=True)
-    m = re.search(r"[-−]?\d+", text)
-    if not m:
-        return 0
-    # Reemplazar el guion Unicode menos por el guion ASCII antes de int()
-    return int(m.group().replace("−", "-"))
 
 
 class IncomingAttackSidebarParser:

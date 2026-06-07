@@ -588,6 +588,20 @@ class WorldAgent:
         # de la página actualmente cargada en el browser sin hacer ninguna petición extra.
         # Implementación: lambda que llama a tab.get_content() del tab activo.
         # No se importa adapters.browser.* aquí — la frontera hexagonal se mantiene (RN-21).
+        incoming_attack_browser_adapter=None,
+        # IncomingAttackBrowserAdapter | None — inyectado desde el composition root.
+        # Patrón idéntico a noise_db: se pasa como objeto sin importar la clase concreta
+        # en el core (frontera hexagonal). Contiene navigate_to_village_dorf1,
+        # click_rally_point_link, click_origin_village_link, get_active_tab.
+        # Ver spec §9.9, §9.10. Requerido para Componentes C y D del radar.
+        rally_point_parser=None,
+        # Callable[str → list[RallyPointAttackDTO]] | None.
+        # Inyectado desde el composition root para no importar adapters desde core.
+        # Valor: RallyPointParser.parse (de adapters.browser.parsers.rally_point_parser).
+        village_profile_parser=None,
+        # Callable[str → VillageProfileDTO | None] | None.
+        # Inyectado desde el composition root para no importar adapters desde core.
+        # Valor: VillageProfileParser.parse (de adapters.browser.parsers.village_profile_parser).
     ) -> None:
         self.world_id    = world_id
         self._browser    = browser
@@ -603,6 +617,9 @@ class WorldAgent:
         self._sidebar_attack_hook = sidebar_attack_hook   # Comp. A
         self._dorf1_attack_reader = dorf1_attack_reader   # Comp. B
         self._page_html_provider = page_html_provider     # () -> Awaitable[str|None]
+        self._incoming_attack_browser_adapter = incoming_attack_browser_adapter  # Comp. C/D
+        self._rally_point_parser = rally_point_parser       # Callable: html → list[DTO]
+        self._village_profile_parser = village_profile_parser  # Callable: html → DTO|None
 
         self._queue: TaskQueue = queue or TaskQueue()
         self._stop_event   = asyncio.Event()
@@ -1129,6 +1146,18 @@ class WorldAgent:
                 # (detección en dorf1 → nueva tarea CHECK → hook en dorf1 → bucle).
                 await self._handle_check_incoming_attack_detail()
 
+            elif task.task_type == TaskType.FETCH_RALLY_POINT_DETAIL:
+                # Componente C — ruta reactiva prioridad-0 (RT-10, RN-23).
+                # NO pasa por el scheduler de ruido ni por NoiseDestination.
+                # NO se invoca _maybe_run_page_hook (ya es parte del radar).
+                await self._handle_fetch_rally_point_detail(task)
+
+            elif task.task_type == TaskType.FETCH_ATTACKER_VILLAGE_PROFILE:
+                # Componente D — ruta reactiva prioridad-0 (RT-10, RN-23).
+                # Aplica delay post-procesamiento (RN-12) y límite de 3 fichas (RN-11).
+                # NO se invoca _maybe_run_page_hook.
+                await self._handle_fetch_attacker_village_profile(task)
+
             else:
                 logger.warning(
                     "Tipo de tarea desconocido en mundo %d: %s",
@@ -1372,6 +1401,266 @@ class WorldAgent:
             t.task_type == TaskType.CHECK_INCOMING_ATTACK_DETAIL and t.world_id == world_id
             for t in self._queue
         )
+
+    def _count_pending_profile_tasks(self, world_id: int) -> int:
+        """
+        Cuenta tareas FETCH_ATTACKER_VILLAGE_PROFILE pendientes para el mundo.
+        Usado para garantizar el límite de 3 fichas por evento de radar (RN-11).
+        """
+        return sum(
+            1
+            for t in self._queue
+            if t.task_type == TaskType.FETCH_ATTACKER_VILLAGE_PROFILE
+            and t.world_id == world_id
+        )
+
+    async def _handle_fetch_rally_point_detail(self, task: Task) -> None:
+        """
+        Handler de TaskType.FETCH_RALLY_POINT_DETAIL — Componente C del radar.
+
+        Ruta reactiva prioridad-0 (RT-10, RN-23). NO pasa por el scheduler de ruido.
+        Targets dinámicos en el payload: {'village_game_id': int, 'rally_point_href': str}.
+
+        Pasos:
+          1. Navegar a dorf1 de la aldea atacada (click sidebar > fallback URL — RN-24).
+          2. Click humano en el rally point (a[href*='gid=16'][href*='tt=1'] — RN-25).
+          3. Parsear table.troop_details.inAttack con RallyPointParser (§9.7).
+          4. Upsert en BD con attacker_name, coords, href, operation_type, tribe.
+          5. Encolar FETCH_ATTACKER_VILLAGE_PROFILE (RN-31) si origin_village_href.
+             Máximo 3 fichas por evento (RN-11).
+
+        Anti-detección:
+          - SIEMPRE human_click(element, tab) — PROHIBIDO tab.evaluate('...click()').
+          - navigate_to_village_dorf1 intenta click en sidebar antes de URL directa.
+
+        Ver spec §9.9, §9.10.
+        """
+        if self._incoming_db is None:
+            return
+
+        village_game_id = task.payload.get("village_game_id")
+        if not village_game_id:
+            logger.warning(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL sin village_game_id en payload",
+                self.world_id,
+            )
+            return
+
+        browser = self._incoming_attack_browser_adapter
+        if browser is None:
+            logger.warning(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL: incoming_attack_browser_adapter no disponible",
+                self.world_id,
+            )
+            return
+
+        try:
+            async with self._browser_lock:
+                # Paso 1: navegar a dorf1 de la aldea atacada
+                tab = await browser.navigate_to_village_dorf1(
+                    world_id=self.world_id,
+                    village_game_id=village_game_id,
+                )
+                # Paso 2: click en el rally point
+                html = await browser.click_rally_point_link(tab)
+
+            # Paso 3: parseo via callable inyectado (frontera hexagonal — P5)
+            if self._rally_point_parser is None:
+                logger.warning(
+                    "Mundo %d: FETCH_RALLY_POINT_DETAIL: rally_point_parser no inyectado",
+                    self.world_id,
+                )
+                return
+            dtos = self._rally_point_parser(html)
+
+            if not dtos:
+                logger.info(
+                    "Mundo %d: rally point sin filas de ataque activo (EC-11)",
+                    self.world_id,
+                )
+                return
+
+            from datetime import timezone as _tz  # noqa: PLC0415
+            now = datetime.now(_tz.utc)
+            now_iso = now.isoformat()
+
+            from core.ports.incoming_attack_db_port import IncomingAttackRecord  # noqa: PLC0415
+            for dto in dtos:
+                record = IncomingAttackRecord(
+                    world_id=self.world_id,
+                    village_game_id=village_game_id,
+                    source="rally_point",
+                    detected_at=now_iso,
+                    updated_at=now_iso,
+                    attacker_name=dto.attacker_name,
+                    origin_village_coord_x=dto.origin_village_coord_x,
+                    origin_village_coord_y=dto.origin_village_coord_y,
+                    origin_village_href=dto.origin_village_href,
+                    operation_type=dto.operation_type,
+                    attacker_snapshot_json=None,  # se poblará en Comp. D
+                )
+                attack_id = await self._incoming_db.upsert_attack(record)
+
+                # Paso 5: encolar Comp. D si tenemos href (RN-31, EC-23)
+                if dto.origin_village_href:
+                    n_pending = self._count_pending_profile_tasks(self.world_id)
+                    if n_pending >= 3:  # RN-11: máximo 3 fichas por evento
+                        logger.info(
+                            "Mundo %d: límite de 3 fichas alcanzado — "
+                            "no se encola FETCH_ATTACKER_VILLAGE_PROFILE (RN-11)",
+                            self.world_id,
+                        )
+                        continue
+
+                    import random as _rnd  # noqa: PLC0415 — import diferido (P5)
+                    delay_ms = _rnd.uniform(500, 900)
+                    execute_at = datetime.now(_tz.utc).replace(tzinfo=None) + timedelta(
+                        milliseconds=delay_ms
+                    )
+                    self._queue.add(Task(
+                        task_type=TaskType.FETCH_ATTACKER_VILLAGE_PROFILE,
+                        world_id=self.world_id,
+                        priority=0,
+                        execute_at=execute_at,
+                        recurring=False,
+                        payload={
+                            "incoming_attack_id": attack_id,
+                            "origin_village_href": dto.origin_village_href,
+                        },
+                    ))
+                    logger.info(
+                        "Mundo %d: encolando FETCH_ATTACKER_VILLAGE_PROFILE "
+                        "para attack_id=%d en %.0fms (RN-31)",
+                        self.world_id, attack_id, delay_ms,
+                    )
+                else:
+                    logger.warning(
+                        "Mundo %d: origin_village_href vacío en Comp.C — "
+                        "no se encola FETCH_ATTACKER_VILLAGE_PROFILE (EC-23)",
+                        self.world_id,
+                    )
+
+            logger.info(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL completado — %d DTO(s) procesados",
+                self.world_id, len(dtos),
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: FETCH_RALLY_POINT_DETAIL: error inesperado: %s",
+                self.world_id, exc,
+            )
+
+    async def _handle_fetch_attacker_village_profile(self, task: Task) -> None:
+        """
+        Handler de TaskType.FETCH_ATTACKER_VILLAGE_PROFILE — Componente D del radar.
+
+        Ruta reactiva prioridad-0 (RT-10, RN-23). NO pasa por el scheduler de ruido.
+        Payload: {'incoming_attack_id': int, 'origin_village_href': str}.
+
+        Pasos:
+          1. Verificar idempotencia (RN-20): si snapshot ya existe → skip silencioso.
+          2. Click humano en a[href*='d=NNN'] (RN-29).
+          3. Esperar div#tileDetails.
+          4. Parsear con VillageProfileParser (§9.8).
+          5. update_snapshot en BD con el JSON del DTO.
+          6. human_delay(4000, 9000) DESPUÉS del procesamiento (RN-12).
+
+        Anti-detección:
+          - SIEMPRE human_click(element, tab) — PROHIBIDO tab.evaluate('...click()').
+          - human_delay(4000, 9000) después de cada ficha (rango de lectura humana).
+
+        Ver spec §9.9, §9.10.
+        """
+        if self._incoming_db is None:
+            return
+
+        attack_id = task.payload.get("incoming_attack_id")
+        origin_village_href = task.payload.get("origin_village_href")
+        if not attack_id or not origin_village_href:
+            logger.warning(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE con payload incompleto: %s",
+                self.world_id, task.payload,
+            )
+            return
+
+        # Paso 1: verificar idempotencia (RN-20)
+        try:
+            existing = await self._incoming_db.get_attack_by_id(attack_id)
+            if existing and existing.get("attacker_snapshot_json") is not None:
+                logger.info(
+                    "Mundo %d: snapshot ya existe para attack_id=%d — skip (RN-20)",
+                    self.world_id, attack_id,
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "Mundo %d: error verificando idempotencia attack_id=%d: %s",
+                self.world_id, attack_id, exc,
+            )
+
+        browser = self._incoming_attack_browser_adapter
+        if browser is None:
+            logger.warning(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: browser adapter no disponible",
+                self.world_id,
+            )
+            return
+
+        try:
+            async with self._browser_lock:
+                # Paso 2+3: click en href de la aldea atacante + espera div#tileDetails
+                tab = browser.get_active_tab(self.world_id)
+                html = await browser.click_origin_village_link(tab, origin_village_href)
+
+            # Paso 4: parseo via callable inyectado (frontera hexagonal — P5)
+            if self._village_profile_parser is None:
+                logger.warning(
+                    "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: "
+                    "village_profile_parser no inyectado",
+                    self.world_id,
+                )
+                return
+            dto = self._village_profile_parser(html)
+
+            if dto is None:
+                logger.warning(
+                    "Mundo %d: #tileDetails no encontrado para href=%r (EC-12)",
+                    self.world_id, origin_village_href,
+                )
+            else:
+                # Paso 5: persistir snapshot
+                import json as _json  # noqa: PLC0415
+                snapshot = _json.dumps({
+                    "village_name":  dto.village_name,
+                    "coord_x":       dto.coord_x,
+                    "coord_y":       dto.coord_y,
+                    "player_name":   dto.player_name,
+                    "player_href":   dto.player_href,
+                    "alliance_name": dto.alliance_name,
+                    "alliance_href": dto.alliance_href,
+                    "tribe":         dto.tribe,
+                    "population":    dto.population,
+                })
+                from datetime import timezone as _tz  # noqa: PLC0415
+                now_iso = datetime.now(_tz.utc).isoformat()
+                await self._incoming_db.update_snapshot(attack_id, snapshot, now_iso)
+                logger.info(
+                    "Mundo %d: snapshot guardado para attack_id=%d (player=%r)",
+                    self.world_id, attack_id, dto.player_name,
+                )
+
+            # Paso 6: delay de lectura humana DESPUÉS del procesamiento (RN-12).
+            # human_delay(4000, 9000) = asyncio.sleep(random.uniform(4.0, 9.0)).
+            # Se replica aquí con stdlib para no importar adapters.browser desde core/
+            # (frontera hexagonal). El comportamiento es idéntico.
+            await asyncio.sleep(random.uniform(4.0, 9.0))
+
+        except Exception as exc:
+            logger.exception(
+                "Mundo %d: FETCH_ATTACKER_VILLAGE_PROFILE: error inesperado: %s",
+                self.world_id, exc,
+            )
 
     # ------------------------------------------------------------------
     # Ruido Humano de Navegación — §9.7-9.10 (Human Sessions v2.2)
