@@ -529,6 +529,8 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
   const [pollingError, setPollingError] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null) // Date.now() al recibir datos
   const [secondsSinceUpdate, setSecondsSinceUpdate] = useState(0)
+  const [checking, setChecking] = useState(false)      // botón debug: forzar /check
+  const [checkMsg, setCheckMsg] = useState(null)
 
   const hasLoadedOnce = useRef(false)
   const isMounted = useRef(true)
@@ -572,6 +574,34 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
     }
   }, [worldId, sessionActive])
 
+  // ── DEBUG: forzar detección inmediata (POST /check) ───────────────────────
+  const forceCheck = useCallback(async () => {
+    setChecking(true)
+    setCheckMsg(null)
+    try {
+      const res = await api.checkIncomingAttacks(worldId)
+      if (!isMounted.current) return
+      const n = res?.attacks_detected ?? 0
+      setCheckMsg(`✓ ${n} ataque(s) detectado(s)`)
+      await fetchAttacks()
+    } catch (err) {
+      if (!isMounted.current) return
+      const isTimeout = err?.detail === 'timeout' || err?.status === 0
+      if (isTimeout) {
+        setCheckMsg('✕ timeout — el check tardó más de 15 s')
+      } else if (err?.status === 409) {
+        // 409 = el WorldAgent no está RUNNING (distinto de "sin sesión"): el
+        // radar manual depende del agente, no solo del login. Guiar al toggle.
+        setCheckMsg('✕ el Agente no está activo — arráncalo con el toggle «Agente»')
+      } else {
+        const code = err?.status ? ` (${err.status})` : ''
+        setCheckMsg(`✕ error${code} — ¿sesión activa en el mundo?`)
+      }
+    } finally {
+      if (isMounted.current) setChecking(false)
+    }
+  }, [worldId, fetchAttacks])
+
   // ── Ciclo de polling 20 s ─────────────────────────────────────────────────
   useEffect(() => {
     isMounted.current = true
@@ -601,8 +631,52 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
     return () => clearInterval(id)
   }, [lastUpdated])
 
+  // ── DEBUG: barra con botón "Forzar detección" — visible en TODOS los estados ─
+  const debugBar = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        onClick={forceCheck}
+        disabled={checking}
+        style={{
+          fontSize: '13px', fontWeight: 500, padding: '6px 12px',
+          borderRadius: '8px', border: '1px solid var(--border)',
+          background: 'var(--surface)', color: 'var(--text)',
+          cursor: checking ? 'wait' : 'pointer', fontFamily: 'inherit',
+        }}
+      >
+        {checking ? '⏳ Detectando…' : '🛡 Forzar detección (debug)'}
+      </button>
+      {checkMsg && (
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{checkMsg}</span>
+      )}
+    </div>
+  )
+
   // ── RENDER: sin sesión ────────────────────────────────────────────────────
   if (phase === 'no-session') {
+    return (
+      <>
+        {debugBar}
+        <div
+          style={{
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: '12px', padding: '32px 24px', textAlign: 'center',
+            color: 'var(--text-tertiary)',
+          }}
+        >
+          <IconLock size={36} />
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '280px' }}>
+            {t('radar.panel.no_session')}
+          </p>
+        </div>
+      </>
+    )
+  }
+
+  // ── RENDER: sin sesión (variante antigua, ya sustituida arriba) ────────────
+  if (false) {
     return (
       <div
         style={{
@@ -623,16 +697,21 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
   // ── RENDER: cargando (primer fetch) ──────────────────────────────────────
   if (phase === 'loading') {
     return (
-      <div aria-busy="true" aria-label={t('radar.panel.empty.title')}>
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
+      <>
+        {debugBar}
+        <div aria-busy="true" aria-label={t('radar.panel.empty.title')}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </>
     )
   }
 
   // ── RENDER: error primer fetch ────────────────────────────────────────────
   if (phase === 'error-initial') {
     return (
+      <>
+      {debugBar}
       <div
         style={{
           display: 'flex', flexDirection: 'column',
@@ -670,6 +749,7 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
           {t('radar.panel.retry')}
         </button>
       </div>
+      </>
     )
   }
 
@@ -679,6 +759,8 @@ export function IncomingAttacksPanel({ worldId, sessionActive = true, onCountCha
 
   return (
     <div aria-live="polite" aria-atomic="false">
+
+      {debugBar}
 
       {/* Cabecera del panel */}
       {!isEmpty && (

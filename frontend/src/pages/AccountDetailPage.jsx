@@ -453,6 +453,19 @@ export function AccountDetailPage() {
     try {
       await api.startSession(account.id, worldId)
       setSession(worldId, 'active')
+      // Arrancar también el WorldAgent: el radar manual de ataques y los
+      // schedulers dependen de que el agente esté RUNNING, no solo de la sesión
+      // (son dos ciclos de vida distintos). Sin esto, "Forzar detección" devuelve
+      // 409 aunque la sesión esté activa. Best-effort: si falla, la sesión sigue
+      // activa y entramos igual; el toggle "Agente" del Espacio del mundo permite
+      // reintentar. 409 = el agente ya estaba corriendo → es éxito, no error.
+      try {
+        await api.startAgent(worldId)
+      } catch (agentErr) {
+        if (!(agentErr instanceof ApiError && agentErr.status === 409)) {
+          showToast(t('agent.error.startFailed'))
+        }
+      }
       showToast(t('world.session.started.toast').replace('{world}', parsed))
       // Navegar al Espacio del mundo (spec §8: solo tras 200 OK)
       navigate(`/mundos/${worldId}`)

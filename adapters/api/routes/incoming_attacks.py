@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 
+from core.scheduling.world_agent import AgentState
 from core.use_cases.incoming_attack_use_cases import (
-    CheckIncomingAttackUseCase,
     ListIncomingAttacksUseCase,
     SummaryIncomingAttacksUseCase,
 )
@@ -259,56 +259,37 @@ async def check_incoming_attacks(
     """
     EP-RA02 — Dispara la lectura del radar para el mundo indicado.
 
-    Lanza HTTP 404 si el mundo no existe (validado en el router, antes del use case).
-    Lanza SessionNotActiveError → 503 si no hay sesión activa.
+    Reescrito (spec radar-check-boton-sidebar §9.2): delega en
+    WorldAgent.check_incoming_sidebar() en lugar de construir un adapter ad-hoc
+    y navegar a dorf1.php. Esto elimina la contención de CDP (causa raíz 2) y
+    usa el parser correcto del sidebar en T4.6 (causa raíz 1).
 
-    El callable fetch_dorf1_attacks se construye aquí en el handler a partir
-    del IncomingAttackBrowserAdapter inyectado en app.state. Si el adaptador
-    no está disponible (app aún no ha inicializado un WorldAgent para ese mundo),
-    SessionNotActiveError se propaga al handler global → 503.
+    Lanza HTTP 404 si el mundo no existe.
+    Lanza HTTP 409 si el WorldAgent no existe o no está en estado RUNNING.
     """
-    incoming_attack_port = _get_incoming_attack_port(request)
     db_port = _get_db_port(request)
 
-    # Verificar existencia del mundo en el router (patrón de session.py)
+    # Verificar existencia del mundo (comportamiento existente)
     await _verify_world(world_id, db_port)
 
-    # Obtener el SessionRegistry desde app.state.world_runtime_port.
-    # Es el único punto de verdad sobre qué browsers/sesiones están activos.
-    # Si es None → el servidor no está inicializado correctamente → 503.
-    from core.exceptions import SessionNotActiveError  # noqa: PLC0415
+    # Obtener el WorldAgent en marcha (RN-B02, RN-B05, EC-B01)
+    agents: dict = getattr(request.app.state, "world_agents", {})
+    agent = agents.get(world_id)
 
-    session_registry = getattr(request.app.state, "world_runtime_port", None)
-    if session_registry is None:
-        raise SessionNotActiveError()
+    if agent is None or agent.state != AgentState.RUNNING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"El agente del mundo {world_id} no está activo "
+                "— inicia la sesión para usar el radar manual."
+            ),
+        )
 
-    # Construir el adapter on-demand (igual que el closure _dorf1_reader de farm.py).
-    # No se guarda en app.state — se crea por petición para este mundo concreto.
-    from adapters.browser.incoming_attack_browser_adapter import (  # noqa: PLC0415
-        IncomingAttackBrowserAdapter,
-    )
-    from adapters.browser.parsers.dorf1_incoming_parser import (  # noqa: PLC0415
-        Dorf1IncomingParser,
-    )
+    # Delegar al agente (serializa con su _browser_lock interno — RN-B03)
+    attacks_detected = await agent.check_incoming_sidebar()
 
-    browser_adapter = IncomingAttackBrowserAdapter(
-        get_browser=session_registry.get_browser,
-        get_world_server=session_registry.get_world_server,
-    )
-
-    async def fetch_dorf1_attacks(wid: int):
-        # get_dorf1_html lanza SessionNotActiveError si get_browser(wid) → None,
-        # o IncomingAttackPageError si la página no carga.
-        # Ambas excepciones se propagan al handler global de main.py:
-        #   SessionNotActiveError → 503
-        #   IncomingAttackPageError → 500 (o el mapeo que corresponda)
-        html = await browser_adapter.get_dorf1_html(wid)
-        return Dorf1IncomingParser.parse(html)
-
-    use_case = CheckIncomingAttackUseCase(db_port=incoming_attack_port)
-    result = await use_case.execute(
-        world_id=world_id,
-        fetch_dorf1_attacks=fetch_dorf1_attacks,
-        db_port_for_world_check=None,  # ya verificado arriba
-    )
-    return result
+    return {
+        "world_id": world_id,
+        "attacks_detected": attacks_detected,
+        "message": "Check completado",
+    }

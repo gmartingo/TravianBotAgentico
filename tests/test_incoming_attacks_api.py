@@ -370,153 +370,111 @@ def test_ep_ra01_eco_x_request_id(client):
 
 
 # ---------------------------------------------------------------------------
-# Helpers para EP-RA02 — mock del SessionRegistry (world_runtime_port)
+# Helpers para EP-RA02 — mock de WorldAgent
 # ---------------------------------------------------------------------------
 
-def _make_fake_registry(get_browser_return=None, get_world_server_return="https://ts1.travian.com/"):
+def _make_fake_agent(state_value, check_result: int = 0):
     """
-    Crea un fake SessionRegistry con get_browser y get_world_server.
+    Crea un fake WorldAgent con .state y .check_incoming_sidebar().
 
-    get_browser_return:
-      - None → simula "sin sesión" (SessionNotActiveError en get_dorf1_html)
-      - cualquier otro valor → se devuelve como browser activo
+    state_value: AgentState enum (RUNNING / STOPPED).
+    check_result: int devuelto por check_incoming_sidebar (nº de ataques).
     """
     fake = MagicMock()
-    fake.get_browser = MagicMock(return_value=get_browser_return)
-    fake.get_world_server = MagicMock(return_value=get_world_server_return)
+    fake.state = state_value
+    fake.check_incoming_sidebar = AsyncMock(return_value=check_result)
     return fake
 
 
 # ---------------------------------------------------------------------------
-# EP-RA02 — 503: sin sesión activa
+# EP-RA02 — UT-B06..B09 + cabeceras + eco (spec radar-check-boton-sidebar §12)
 # ---------------------------------------------------------------------------
 
-def test_ep_ra02_sin_world_runtime_port_devuelve_503(client):
-    """EP-RA02: world_runtime_port=None en app.state → 503 SessionNotActiveError."""
+# UT-B06 — WorldAgent no existe → 409
+def test_ep_ra02_ut_b06_agente_no_existe_devuelve_409(client):
+    """UT-B06: world_agents vacío (sin WorldAgent) → 409 con detail 'no está activo'."""
+    from core.scheduling.world_agent import AgentState  # noqa: F401 — solo para que la clase se importe
+
     c = client
     _, world_id = _setup_world(c)
-    # El lifespan del TestClient sí setea world_runtime_port; lo forzamos a None.
-    app.state.world_runtime_port = None
+    app.state.world_agents = {}
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
-    assert r.status_code == 503, r.text
+    assert r.status_code == 409, r.text
+    assert "no está activo" in r.json()["detail"]
     _assert_cabeceras_minimas(r)
 
 
-def test_ep_ra02_sin_sesion_activa_para_el_mundo_devuelve_503(client, monkeypatch):
-    """EP-RA02: get_browser(world_id)→None (sin sesión para ese mundo) → 503."""
-    from core.exceptions import SessionNotActiveError
-    from adapters.browser import incoming_attack_browser_adapter as _mod
+# UT-B07 — WorldAgent en estado STOPPED → 409
+def test_ep_ra02_ut_b07_agente_stopped_devuelve_409(client):
+    """UT-B07: WorldAgent con state=STOPPED → 409."""
+    from core.scheduling.world_agent import AgentState
 
     c = client
     _, world_id = _setup_world(c)
-
-    # Inyectar un registry cuyo get_browser devuelve None → el adapter lanzará SessionNotActiveError
-    fake_registry = _make_fake_registry(get_browser_return=None)
-    app.state.world_runtime_port = fake_registry
+    app.state.world_agents = {world_id: _make_fake_agent(AgentState.STOPPED)}
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
-    assert r.status_code == 503, r.text
+    assert r.status_code == 409, r.text
     _assert_cabeceras_minimas(r)
 
 
-def test_ep_ra02_mundo_no_existe_devuelve_404(client):
-    """EP-RA02: world_id inexistente → 404 (se valida antes de llegar al browser)."""
-    c = client
-    # El registry puede estar activo; el 404 se dispara en _verify_world antes del browser.
-    # Usamos el registry real del lifespan (ya seteado por TestClient).
-    r = c.post("/game/incoming-attacks/99999/check")
-
-    assert r.status_code == 404, r.text
-    _assert_cabeceras_minimas(r)
-
-
-def test_ep_ra02_con_sesion_activa_devuelve_200(client, monkeypatch):
-    """EP-RA02: con sesión activa y browser mock → 200 con world_id, attacks_detected, message."""
-    from core.dtos.incoming_attack_dto import Dorf1AttackDTO
-    from adapters.browser import incoming_attack_browser_adapter as _mod
+# UT-B08 — WorldAgent RUNNING, sidebar sin ataques → 200 con attacks_detected=0
+def test_ep_ra02_ut_b08_agente_running_sin_ataques_devuelve_200(client):
+    """UT-B08: WorldAgent RUNNING, check_incoming_sidebar → 0 → 200 attacks_detected=0."""
+    from core.scheduling.world_agent import AgentState
 
     c = client
     _, world_id = _setup_world(c)
-
-    # HTML con 2 ataques; parseamos con el parser real mediante monkeypatch en get_dorf1_html.
-    ataques_mock = [
-        Dorf1AttackDTO(attack_count=1, seconds_to_impact=3600, rally_point_href="/build.php?gid=16&id=1"),
-        Dorf1AttackDTO(attack_count=2, seconds_to_impact=7200, rally_point_href="/build.php?gid=16&id=2"),
-    ]
-
-    # Monkeypatching de get_dorf1_html para que devuelva HTML ficticio
-    # y Dorf1IncomingParser.parse para que devuelva los DTOs directamente.
-    fake_html = "<html><body>mock</body></html>"
-    monkeypatch.setattr(
-        _mod.IncomingAttackBrowserAdapter,
-        "get_dorf1_html",
-        AsyncMock(return_value=fake_html),
-    )
-
-    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
-    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=ataques_mock))
-
-    # registry con get_browser devolviendo algo (no None) para que el adapter no lance 503
-    fake_browser = MagicMock()
-    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
-    app.state.world_runtime_port = fake_registry
+    app.state.world_agents = {world_id: _make_fake_agent(AgentState.RUNNING, check_result=0)}
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
     assert r.status_code == 200, r.text
     data = r.json()
+    assert data["attacks_detected"] == 0
+    assert data["message"] == "Check completado"
     assert data["world_id"] == world_id
-    assert data["attacks_detected"] == 2
-    assert "message" in data
     _assert_cabeceras_minimas(r)
 
 
-def test_ep_ra02_check_sin_ataques_devuelve_attacks_detected_cero(client, monkeypatch):
-    """EP-RA02: browser devuelve lista vacía (sin ataques en dorf1) → attacks_detected=0."""
-    from adapters.browser import incoming_attack_browser_adapter as _mod
-    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+# UT-B09 — WorldAgent RUNNING, sidebar con 1 ataque → 200 con attacks_detected=1
+def test_ep_ra02_ut_b09_agente_running_con_ataque_devuelve_200(client):
+    """UT-B09: WorldAgent RUNNING, check_incoming_sidebar → 1 → 200 attacks_detected=1."""
+    from core.scheduling.world_agent import AgentState
 
     c = client
     _, world_id = _setup_world(c)
-
-    monkeypatch.setattr(
-        _mod.IncomingAttackBrowserAdapter,
-        "get_dorf1_html",
-        AsyncMock(return_value="<html></html>"),
-    )
-    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
-
-    fake_browser = MagicMock()
-    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
-    app.state.world_runtime_port = fake_registry
+    app.state.world_agents = {world_id: _make_fake_agent(AgentState.RUNNING, check_result=1)}
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
     assert r.status_code == 200, r.text
-    assert r.json()["attacks_detected"] == 0
+    data = r.json()
+    assert data["attacks_detected"] == 1
+    assert data["world_id"] == world_id
+    _assert_cabeceras_minimas(r)
 
 
-def test_ep_ra02_check_cabeceras_minimas(client, monkeypatch):
+# 404 — mundo no existe (comportamiento existente, no cambia)
+def test_ep_ra02_mundo_no_existe_devuelve_404(client):
+    """EP-RA02: world_id inexistente → 404."""
+    c = client
+    r = c.post("/game/incoming-attacks/99999/check")
+    assert r.status_code == 404, r.text
+    _assert_cabeceras_minimas(r)
+
+
+# Cabeceras mínimas — 200 con agente RUNNING
+def test_ep_ra02_check_cabeceras_minimas(client):
     """EP-RA02: respuesta 200 tiene Content-Type, X-Request-ID, X-API-Version."""
-    from adapters.browser import incoming_attack_browser_adapter as _mod
-    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+    from core.scheduling.world_agent import AgentState
 
     c = client
     _, world_id = _setup_world(c)
-
-    monkeypatch.setattr(
-        _mod.IncomingAttackBrowserAdapter,
-        "get_dorf1_html",
-        AsyncMock(return_value="<html></html>"),
-    )
-    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
-
-    fake_browser = MagicMock()
-    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
-    app.state.world_runtime_port = fake_registry
+    app.state.world_agents = {world_id: _make_fake_agent(AgentState.RUNNING, check_result=0)}
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
@@ -524,58 +482,34 @@ def test_ep_ra02_check_cabeceras_minimas(client, monkeypatch):
     _assert_cabeceras_minimas(r)
 
 
-def test_ep_ra02_eco_x_request_id(client, monkeypatch):
+# Eco de X-Request-ID — 200 con agente RUNNING
+def test_ep_ra02_eco_x_request_id(client):
     """EP-RA02: X-Request-ID enviado en la request vuelve idéntico en la respuesta."""
-    from adapters.browser import incoming_attack_browser_adapter as _mod
-    from adapters.browser.parsers import dorf1_incoming_parser as _parser_mod
+    from core.scheduling.world_agent import AgentState
 
     c = client
     _, world_id = _setup_world(c)
-
-    monkeypatch.setattr(
-        _mod.IncomingAttackBrowserAdapter,
-        "get_dorf1_html",
-        AsyncMock(return_value="<html></html>"),
-    )
-    monkeypatch.setattr(_parser_mod.Dorf1IncomingParser, "parse", MagicMock(return_value=[]))
-
-    fake_browser = MagicMock()
-    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
-    app.state.world_runtime_port = fake_registry
+    app.state.world_agents = {world_id: _make_fake_agent(AgentState.RUNNING, check_result=0)}
 
     custom_id = "radar-check-9999"
     r = c.post(
         f"/game/incoming-attacks/{world_id}/check",
         headers={"X-Request-ID": custom_id},
     )
-
     assert r.headers.get("x-request-id") == custom_id
 
 
-def test_ep_ra02_sesion_no_activa_propaga_error_del_browser(client, monkeypatch):
-    """EP-RA02: get_dorf1_html lanza SessionNotActiveError (browser se desconectó) → 503."""
-    from core.exceptions import SessionNotActiveError
-    from adapters.browser import incoming_attack_browser_adapter as _mod
-
+# world_agents no existe en app.state (EC-B01) → 409 (getattr devuelve {} → agente None)
+def test_ep_ra02_world_agents_ausente_devuelve_409(client):
+    """EP-RA02: EC-B01 — world_agents no existe en app.state → 409."""
     c = client
     _, world_id = _setup_world(c)
-
-    # El browser no es None (pasa la primera guarda) pero get_dorf1_html lanza igualmente
-    # (e.g. browser se desconectó entre la guarda y la navegación).
-    monkeypatch.setattr(
-        _mod.IncomingAttackBrowserAdapter,
-        "get_dorf1_html",
-        AsyncMock(side_effect=SessionNotActiveError()),
-    )
-
-    fake_browser = MagicMock()
-    fake_registry = _make_fake_registry(get_browser_return=fake_browser)
-    app.state.world_runtime_port = fake_registry
+    if hasattr(app.state, "world_agents"):
+        delattr(app.state, "world_agents")
 
     r = c.post(f"/game/incoming-attacks/{world_id}/check")
 
-    assert r.status_code == 503, r.text
-    _assert_cabeceras_minimas(r)
+    assert r.status_code == 409, r.text
 
 
 # ---------------------------------------------------------------------------

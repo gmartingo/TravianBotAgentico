@@ -1417,6 +1417,39 @@ class WorldAgent:
                 world_id, exc,
             )
 
+    async def check_incoming_sidebar(self) -> int:
+        """
+        Comprobación inmediata del sidebar — invocado desde el handler EP-RA02.
+
+        Adquiere _browser_lock para no interleavear con el radar autónomo ni con
+        execute_path_test. Lee el HTML actualmente cargado en el browser (sin
+        navegación nueva — RN-B01, RN-B03). Llama check_sidebar_attacks y retorna
+        el conteo de aldeas bajo ataque detectadas.
+
+        Devuelve 0 si el browser no tiene HTML disponible (RN-B04).
+
+        NO propaga excepciones: cualquier error en check_sidebar_attacks ya queda
+        capturado dentro de esa función (RN-19 del spec base, EC-B05).
+        NO actualiza _last_sidebar_scan (RN-B11).
+        NO encola CHECK_INCOMING_ATTACK_DETAIL (RN-B10).
+
+        Frontera hexagonal: solo usa callables inyectados (_page_html_provider,
+        _sidebar_attack_hook, _incoming_db). No importa adapters.browser.*.
+
+        Ver spec docs/specs/radar-check-boton-sidebar.md §9.1.
+        """
+        if self._incoming_db is None or self._sidebar_attack_hook is None:
+            return 0
+
+        async with self._browser_lock:
+            if self._page_html_provider is None:
+                return 0
+            html = await self._page_html_provider()
+            if html is None:
+                return 0
+            attacks = await self._sidebar_attack_hook(html, self.world_id, self._incoming_db)
+            return len(attacks)
+
     def _has_pending_radar_task(self, world_id: int) -> bool:
         """
         Comprueba si ya hay una tarea CHECK_INCOMING_ATTACK_DETAIL encolada para el mundo.

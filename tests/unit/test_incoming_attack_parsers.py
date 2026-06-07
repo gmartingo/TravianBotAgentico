@@ -825,3 +825,139 @@ class TestWorldAgentPageHookWiring:
             # Si llegamos aquí sin excepción, la tarea no fue tumbada
 
         asyncio.run(_run())
+
+
+# ===========================================================================
+# UT-B01..UT-B05 — check_incoming_sidebar y check_sidebar_attacks
+# (spec docs/specs/radar-check-boton-sidebar.md §12)
+# ===========================================================================
+
+_SIDEBAR_REAL_DID24498 = _FIXTURES_DIR / "sidebar_real_con_ataque_did24498.html"
+
+
+class TestCheckIncomingSidebarAndHook:
+    """
+    UT-B01..B05: tests de check_sidebar_attacks (hook de parseo+persistencia)
+    y de WorldAgent.check_incoming_sidebar() (método público delegado por EP-RA02).
+    """
+
+    # UT-B01 — caso feliz: ataque detectado (fixture canónico did=27322)
+    def test_b01_detects_attack_did27322(self):
+        """
+        check_sidebar_attacks con sidebar_with_attack.html detecta did=27322
+        y llama upsert_attack con source='sidebar', impact_at=None.
+        """
+        from unittest.mock import AsyncMock
+        from adapters.browser.incoming_attack_hook import check_sidebar_attacks
+
+        html = _read(_SIDEBAR_WITH_ATTACK)
+        db_mock = AsyncMock()
+        db_mock.upsert_attack = AsyncMock(return_value=1)
+
+        async def _run():
+            result = await check_sidebar_attacks(html, world_id=1, db_port=db_mock)
+            assert len(result) == 1
+            assert result[0].village_game_id == 27322
+            assert db_mock.upsert_attack.call_count == 1
+            # Verificar que el upsert se hizo con source='sidebar' e impact_at=None
+            record = db_mock.upsert_attack.call_args[0][0]
+            assert record.source == "sidebar"
+            assert record.impact_at is None
+
+        asyncio.run(_run())
+
+    # UT-B02 — sin ataques: lista vacía, upsert no llamado
+    def test_b02_no_attacks_returns_empty(self):
+        """
+        check_sidebar_attacks con sidebar_without_attack.html devuelve []
+        y upsert_attack NO se llama.
+        """
+        from unittest.mock import AsyncMock
+        from adapters.browser.incoming_attack_hook import check_sidebar_attacks
+
+        html = _read(_SIDEBAR_WITHOUT_ATTACK)
+        db_mock = AsyncMock()
+        db_mock.upsert_attack = AsyncMock()
+
+        async def _run():
+            result = await check_sidebar_attacks(html, world_id=1, db_port=db_mock)
+            assert result == []
+            db_mock.upsert_attack.assert_not_called()
+
+        asyncio.run(_run())
+
+    # UT-B03 — regresión con HTML real del usuario (fixture did=24498)
+    def test_b03_regression_real_html_did24498(self):
+        """
+        Fixture real del usuario (sidebar_real_con_ataque_did24498.html):
+        9 aldeas; solo la 05 (did=24498) tiene clase 'attack' en div.listEntry.
+        check_sidebar_attacks debe detectar exactamente 1 aldea con village_game_id=24498.
+        """
+        from unittest.mock import AsyncMock
+        from adapters.browser.incoming_attack_hook import check_sidebar_attacks
+
+        html = _read(_SIDEBAR_REAL_DID24498)
+        db_mock = AsyncMock()
+        db_mock.upsert_attack = AsyncMock(return_value=1)
+
+        async def _run():
+            result = await check_sidebar_attacks(html, world_id=1, db_port=db_mock)
+            assert len(result) == 1, (
+                f"Se esperaba exactamente 1 aldea bajo ataque (did=24498), "
+                f"pero se obtuvieron {len(result)}: {[r.village_game_id for r in result]}"
+            )
+            assert result[0].village_game_id == 24498
+            assert db_mock.upsert_attack.call_count == 1
+
+        asyncio.run(_run())
+
+    # UT-B04 — check_incoming_sidebar con _page_html_provider que devuelve None
+    def test_b04_check_incoming_sidebar_provider_returns_none(self):
+        """
+        WorldAgent.check_incoming_sidebar() con _page_html_provider = async lambda: None
+        debe retornar 0 sin excepciones (RN-B04).
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from core.scheduling.world_agent import WorldAgent
+
+        async def _run():
+            async def _hook(html, world_id, db_port):
+                return []
+
+            agent = WorldAgent(
+                world_id=1,
+                browser=AsyncMock(),
+                db=AsyncMock(),
+                incoming_db=MagicMock(),
+                sidebar_attack_hook=_hook,
+                page_html_provider=AsyncMock(return_value=None),
+            )
+            agent._send_group = AsyncMock()
+            result = await agent.check_incoming_sidebar()
+            assert result == 0
+
+        asyncio.run(_run())
+
+    # UT-B05 — check_incoming_sidebar con _incoming_db = None
+    def test_b05_check_incoming_sidebar_incoming_db_none(self):
+        """
+        WorldAgent.check_incoming_sidebar() con _incoming_db=None debe retornar 0
+        inmediatamente por la guarda de entrada (RN-B05).
+        """
+        from unittest.mock import AsyncMock
+        from core.scheduling.world_agent import WorldAgent
+
+        async def _run():
+            agent = WorldAgent(
+                world_id=1,
+                browser=AsyncMock(),
+                db=AsyncMock(),
+                incoming_db=None,   # <-- sin incoming_db
+                sidebar_attack_hook=None,
+                page_html_provider=AsyncMock(return_value="<html/>"),
+            )
+            agent._send_group = AsyncMock()
+            result = await agent.check_incoming_sidebar()
+            assert result == 0
+
+        asyncio.run(_run())
