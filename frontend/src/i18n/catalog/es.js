@@ -1332,6 +1332,48 @@ const es = {
   // Notas contextuales
   'ar.freq.cereal_note':          'Los oasis de cereal tienen los patrones de animales más variados. Los datos aquí son estimaciones más amplias.',
   'ar.freq.unclassified_note':    'Estos oasis no tienen suficientes ataques exitosos para determinar su tipo de recurso. Pueden ser de cualquier recurso.',
+
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ──────────────────────
+  // Spec: docs/design/aviso-ataque-mundos.md §9
+
+  // Sidebar WorldSpacePage
+  'worldnav.attacks':                   'Ataques',
+
+  // Badge Nivel 1 (AccountDetailPage) — aria-label dinámico
+  'radar.badge.aria_one':               '1 ataque entrante en este mundo',
+  'radar.badge.aria_other':             '{count} ataques entrantes en este mundo',
+
+  // Panel Nivel 2 (IncomingAttacksPanel) — cabecera
+  'radar.panel.title_one':              '1 ataque entrante en {villages} aldea',
+  'radar.panel.title_other':            '{count} ataques entrantes en {villages} aldeas',
+  'radar.panel.updated':                'actualizado hace {n}s',
+
+  // Panel — estado vacío
+  'radar.panel.empty.title':            'Sin ataques activos',
+  'radar.panel.empty.desc':             'El radar no detecta amenazas en este momento',
+
+  // Panel — estado sin sesión
+  'radar.panel.no_session':             'Inicia el bot para monitorizar ataques entrantes',
+
+  // Panel — estado error
+  'radar.panel.error.title':            'No se pudo cargar la información de ataques',
+  'radar.panel.error.inline':           'Error al actualizar ·',
+  'radar.panel.retry':                  'Reintentar',
+
+  // Etiquetas de ataque individual
+  'radar.attack.label':                 'Ataque {n}',
+  'radar.attack.detected':              'Detectado · sin detalle',
+  'radar.attack.attacker':              'Atacante',
+  'radar.attack.from':                  'Desde',
+  'radar.attack.tribe':                 'Tribu',
+  'radar.attack.alliance':              'Alianza',
+  'radar.attack.population':            'Pob.',
+  'radar.attack.troops':                'Tropas',
+  'radar.attack.distance':              'campos',
+
+  // Badge dentro de VillageAttackCard
+  'radar.village.attacks_one':          '1 ataque',
+  'radar.village.attacks_other':        '{count} ataques',
 }
 
 export default es

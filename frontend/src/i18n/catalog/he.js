@@ -1109,6 +1109,8 @@ const he = {
   'NATURE_8': 'תנין',
   'NATURE_9': 'נמר',
   'NATURE_10': 'פיל',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'התקפות',
 }
 
 export default he

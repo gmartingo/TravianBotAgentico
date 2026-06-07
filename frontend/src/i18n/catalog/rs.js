@@ -1108,6 +1108,8 @@ const rs = {
   'NATURE_8': 'Крокодил',
   'NATURE_9': 'Тигар',
   'NATURE_10': 'Слон',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Напади',
 }
 
 export default rs

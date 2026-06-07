@@ -1108,6 +1108,8 @@ const hu = {
   'NATURE_8': 'Krokodil',
   'NATURE_9': 'Tigris',
   'NATURE_10': 'Elefánt',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Támadások',
 }
 
 export default hu

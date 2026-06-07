@@ -1109,6 +1109,8 @@ const fr = {
   'NATURE_8': 'Crocodile',
   'NATURE_9': 'Tigre',
   'NATURE_10': 'Eléphant',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Attaques',
 }
 
 export default fr

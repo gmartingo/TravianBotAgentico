@@ -1109,6 +1109,8 @@ const nl = {
   'NATURE_8': 'Krokodil',
   'NATURE_9': 'Tijger',
   'NATURE_10': 'Olifant',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Aanvallen',
 }
 
 export default nl

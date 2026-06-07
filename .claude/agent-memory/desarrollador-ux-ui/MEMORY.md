@@ -15,3 +15,4 @@
 - [patterns-category-combobox](patterns-category-combobox.md) — CategoryCombobox CRUD inline, CategoryBadge dinámico, ColorSwatchPicker, integración RouteTemplatesPage + NoiseCategoryBadge dual
 - [patterns-route-templates](patterns-route-templates.md) — RouteTemplatesPage /rutas: sin peso en plantilla, origen=desplegable, InheritedStepsPanel EP-RT11, TestRoutePanel v3 sesión+cierre
 - [patterns-route-test-interaction](patterns-route-test-interaction.md) — ▶ inline por fila + WorldBottomBar (barra J sticky) + TestExpandRow: mundo global, sesión global, resultado inline sin path_index
+- [patterns-radar-ataques](patterns-radar-ataques.md) — AttackBadge (S4) + IncomingAttacksPanel+pestaña Ataques (S9), polling 20s, nav-badge danger, pulso CSS, RTL, i18n radar.*, API summary

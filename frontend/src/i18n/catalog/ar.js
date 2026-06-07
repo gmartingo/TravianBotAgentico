@@ -1109,6 +1109,8 @@ const ar = {
   'NATURE_8': 'التمساح',
   'NATURE_9': 'النمر',
   'NATURE_10': 'الفيل',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'هجمات',
 }
 
 export default ar

@@ -1108,6 +1108,8 @@ const el = {
   'NATURE_8': 'Κροκόδειλος',
   'NATURE_9': 'Τίγρη',
   'NATURE_10': 'Ελέφαντας',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Επιθέσεις',
 }
 
 export default el

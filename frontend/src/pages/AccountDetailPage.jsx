@@ -37,6 +37,7 @@ import { api, ApiError } from '../api/client.js'
 import { parseServerUrl, BadgeSpinner, showToast } from '../components/ui/uiUtils.jsx'
 import { AddWorldModal }       from '../components/ui/AddWorldModal.jsx'
 import { ConfirmDeleteModal }  from '../components/ui/ConfirmDeleteModal.jsx'
+import { AttackBadge }         from '../components/world/AttackBadge.jsx'
 
 // ─── Iconos inline ───────────────────────────────────────────────────────────
 
@@ -363,6 +364,11 @@ export function AccountDetailPage() {
   // Estado de sesión por world id: Map<id, state>
   const [sessions, setSessions] = useState({})
 
+  // Conteo de ataques por world id (Nivel 1 — badge).
+  // Se puebla con GET /game/incoming-attacks/summary (una sola petición).
+  // Si el fetch falla: {} → sin badges (fallo silencioso, spec §7.1).
+  const [attackCounts, setAttackCounts] = useState({})
+
   // ── Modales ───────────────────────────────────────────────────────────────
   const [showAddWorld,setShowAddWorld]= useState(false)
   const [deleteWorld, setDeleteWorld] = useState(null) // { id, parsed } | null
@@ -389,6 +395,8 @@ export function AccountDetailPage() {
         setLoadState('ok')
         // Consultar el estado de sesión de cada mundo (silencioso: 404/501 → idle)
         w.forEach(world => fetchSessionState(data.id, world.id))
+        // Consultar ataques entrantes de todos los mundos (Nivel 1 — una sola petición)
+        fetchAttacksSummary()
       } catch (err) {
         if (cancelled) return
         if (err instanceof ApiError && err.status === 404) {
@@ -411,6 +419,25 @@ export function AccountDetailPage() {
       setSession(worldId, data?.active ? 'active' : 'idle')
     } catch {
       // 404/501/cualquier error → dejar como idle (no romper la UI)
+    }
+  }
+
+  // ── Consulta de ataques entrantes — Nivel 1 (silenciosa) ─────────────────
+  // Una sola petición para todos los mundos con sesión activa.
+  // Si falla → {} → sin badges. No degrada la UI de la fila (spec §5.5, §7.1).
+  async function fetchAttacksSummary() {
+    try {
+      const summary = await api.getIncomingAttacksSummary()
+      if (!Array.isArray(summary)) return
+      const map = {}
+      summary.forEach(item => {
+        if (item.attack_count > 0) {
+          map[item.world_id] = item.attack_count
+        }
+      })
+      setAttackCounts(map)
+    } catch {
+      // Fallo silencioso: sin badges (spec §7.1 "Error de fetch")
     }
   }
 
@@ -724,10 +751,16 @@ export function AccountDetailPage() {
                           role="cell">
                           {t(`tribe.${world.tribe}`)}
                         </td>
-                        {/* Sesión */}
+                        {/* Sesión — SessionStatusBadge + AttackBadge (Nivel 1, P1) */}
                         <td className="px-[14px] h-10 border-b border-[var(--border)] align-middle whitespace-nowrap"
                           role="cell">
-                          <SessionStatusBadge state={state} t={t} />
+                          <span className="inline-flex items-center gap-[8px]">
+                            <SessionStatusBadge state={state} t={t} />
+                            {/* AttackBadge solo cuando hay sesión activa (spec §7.1) */}
+                            {state === 'active' && (
+                              <AttackBadge count={attackCounts[world.id] ?? 0} t={t} />
+                            )}
+                          </span>
                         </td>
                         {/* Acciones */}
                         <td className="px-[14px] h-10 border-b border-[var(--border)] align-middle w-[160px]"
@@ -791,8 +824,13 @@ export function AccountDetailPage() {
                       <div className="text-[12px] text-[var(--text-secondary)] mt-[2px]">
                         {t(`tribe.${world.tribe}`)}
                       </div>
-                      <div className="mt-[6px]">
+                      {/* Línea secundaria: tribu · • Activo  ⚔ N (spec §6.1 móvil, P1) */}
+                      <div className="mt-[6px] flex items-center gap-[8px]">
                         <SessionStatusBadge state={state} t={t} />
+                        {/* AttackBadge solo cuando hay sesión activa (spec §7.1) */}
+                        {state === 'active' && (
+                          <AttackBadge count={attackCounts[world.id] ?? 0} t={t} />
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">

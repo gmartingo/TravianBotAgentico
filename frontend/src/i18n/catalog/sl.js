@@ -1108,6 +1108,8 @@ const sl = {
   'NATURE_8': 'Krokodil',
   'NATURE_9': 'Tiger',
   'NATURE_10': 'Slon',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Napadi',
 }
 
 export default sl

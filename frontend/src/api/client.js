@@ -611,6 +611,41 @@ export const api = {
   closeWorldSession: (worldId) =>
     request('DELETE', `/worlds/${worldId}/session`),
 
+  // ── Radar de ataques entrantes ────────────────────────────────────────────
+
+  /**
+   * GET /game/incoming-attacks/summary
+   * Devuelve un array con el conteo de ataques por mundo con sesión activa.
+   * Response: [{ world_id: number, attack_count: number }]
+   * Se usa en AccountDetailPage para badgear N mundos con una sola petición.
+   */
+  getIncomingAttacksSummary: () =>
+    request('GET', '/game/incoming-attacks/summary'),
+
+  /**
+   * GET /game/incoming-attacks/:worldId
+   * Devuelve los ataques entrantes sobre las aldeas propias del mundo.
+   * Response: { items: VillageAttacks[] }
+   *   VillageAttacks: {
+   *     village_name: string, coords_x: number, coords_y: number,
+   *     attacks: Attack[]
+   *   }
+   *   Attack: {
+   *     arrival_iso: string,   // ISO datetime de llegada
+   *     seconds_remaining: number,
+   *     attacker_name: string|null,
+   *     origin_village_name: string|null,
+   *     origin_x: number|null, origin_y: number|null,
+   *     attacker_tribe: string|null,  // clave: "gauls"|"romans"|...
+   *     alliance: string|null,
+   *     population: number|null,
+   *     distance: number|null,
+   *     troops: { type: string, count: number }[]|null,
+   *   }
+   */
+  getIncomingAttacks: (worldId) =>
+    request('GET', `/game/incoming-attacks/${worldId}`),
+
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
 

@@ -1108,6 +1108,8 @@ const uk = {
   'NATURE_8': 'Крокодил',
   'NATURE_9': 'Тигр',
   'NATURE_10': 'Слон',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Атаки',
 }
 
 export default uk

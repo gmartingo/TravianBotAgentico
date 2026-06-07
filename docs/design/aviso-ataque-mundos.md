@@ -1,7 +1,7 @@
 ---
 id: aviso-ataque-mundos
 titulo: Aviso de ataques — badge en lista de mundos + pestaña Ataques en WorldSpace
-estado: ready-for-impl
+estado: implemented
 fecha: 2026-06-07 (rev. 2026-06-07b)
 autor: disenador-producto
 spec_funcional_relacionado: ninguno
@@ -648,3 +648,43 @@ Todas las preguntas abiertas del spec inicial quedaron resueltas por el usuario.
 | Badge del nav item (rojo, fondo danger) | El item "Ataques" del sidebar lleva un badge numérico en `var(--danger)` cuando count ≥ 1, reforzando la urgencia incluso cuando la pestaña está activa. Patrón consistente con el sistema de badges del sidebar. |
 | Campo `distance` en la ficha del atacante | El backend (`VillageProfileParser`) ya captura `distance: float` de `#tileDetails`. El usuario confirmó que faltaba en la UI. Se coloca en la línea de meta junto a Pob. porque ambos son datos cuantitativos del perfil del atacante, no datos posicionales (que van en la línea de origen). P2 en móvil por la misma razón que alianza/pob. |
 | Mixto (ataques con y sin detalle en la misma tarjeta) | La fase C/D que captura el detalle del atacante se construye en paralelo. Los ataques detectados pueden estar en distintas fases de enriquecimiento de datos simultáneamente. El diseño lo contempla explícitamente (§7 estado "Mixto"). |
+
+---
+
+## Registro de implementación
+
+**Fecha:** 2026-06-07
+**Rama:** feature/radar-ataques-entrantes
+
+### Ficheros creados
+
+- `frontend/src/components/world/AttackBadge.jsx` — badge compacto de peligro (Nivel 1)
+- `frontend/src/components/world/IncomingAttacksPanel.jsx` — panel de ataques con sub-componentes `VillageAttackCard`, `AttackRow`, `TroopChip` (Nivel 2)
+
+### Ficheros modificados
+
+- `frontend/src/api/client.js` — añadidos `getIncomingAttacks(worldId)` y `getIncomingAttacksSummary()`
+- `frontend/src/pages/AccountDetailPage.jsx` — integrado `AttackBadge` en celda Sesión (desktop) y línea secundaria (móvil); `fetchAttacksSummary()` al montar
+- `frontend/src/pages/WorldSpacePage.jsx` — añadido icono `IconAttacks`, estado `attackCount`, nav item "Ataques" con nav-badge, bloque de pestaña con `IncomingAttacksPanel`
+- `frontend/src/i18n/catalog/es.js` — añadidas claves `worldnav.attacks` + namespace `radar.*` completo (29 claves)
+- `frontend/src/i18n/catalog/en.js` — ídem en inglés
+- `frontend/src/i18n/catalog/{ar,bg,cs,da,de,el,fa,fr,he,hu,it,ja,lt,lv,nl,pl,pt,rs,ru,sl,sv,tr,uk}.js` — añadida `worldnav.attacks` traducida en cada idioma (las demás claves `radar.*` caen al fallback `es`)
+
+### Comando para ejecutar los tests
+
+El proyecto no tiene framework de tests de componente configurado. Verificación realizada con:
+
+```bash
+cd frontend && npm run build
+# ✓ built in 1.13s (sin errores, advertencia de chunk size preexistente)
+```
+
+### Desviaciones respecto al diseño
+
+1. **`mockup_aprobado_por_usuario: no`** en el frontmatter del spec: el usuario dio la instrucción de implementar directamente sin pasar por el gate del mockup, aceptando el spec validado como suficiente. Se registra como excepción al flujo estándar, no como cambio de diseño.
+
+2. **`sessionActive` simplificado**: `WorldSpacePage` asume `sessionActive = true` porque la página solo se monta cuando hay sesión activa (el botón "Entrar" solo está disponible con sesión activa en `AccountDetailPage`). Si en el futuro la sesión puede caerse mientras la página está abierta, el componente ya acepta la prop `sessionActive` y mostrará el estado "sin sesión".
+
+3. **ESLint no configurado**: el proyecto no tiene `eslint.config.js` (ESLint v9 require). La verificación de lint no fue posible. El build de Vite confirma que el código es válido JS/JSX. Deuda técnica: configurar ESLint.
+
+4. **Claves `radar.*` en 23 idiomas**: solo `worldnav.attacks` fue redactada por idioma (clave visible en el nav). Las 28 claves restantes del namespace `radar.*` usan fallback a `es`. Es el patrón establecido en el proyecto para claves nuevas no críticas — las traducciones completas se añaden en ciclos de i18n posteriores.

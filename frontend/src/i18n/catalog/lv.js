@@ -1108,6 +1108,8 @@ const lv = {
   'NATURE_8': 'Krokodils',
   'NATURE_9': 'Tīģeris',
   'NATURE_10': 'Zilonis',
+  // ── Radar de ataques entrantes (aviso-ataque-mundos) ─────────────────────
+  'worldnav.attacks': 'Uzbrukumi',
 }
 
 export default lv
