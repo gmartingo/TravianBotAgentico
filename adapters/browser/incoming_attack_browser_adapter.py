@@ -277,7 +277,7 @@ class IncomingAttackBrowserAdapter:
         element = await tab.select(selector)
         if element is None:
             raise IncomingAttackPageError(
-                f"Comp.D: no se encontró {selector!r} en el DOM actual (rally point)"
+                f"Comp.D: no se encontró {selector!r} en el DOM actual (detalle de movimientos gid=16)"
             )
         await human_click(element, tab)
         try:
