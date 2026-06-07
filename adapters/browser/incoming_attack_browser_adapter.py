@@ -55,7 +55,12 @@ _RALLY_POINT_TABLE_SELECTOR = "table.troop_details.inAttack"
 _TILE_DETAILS_SELECTOR = "div#tileDetails"
 
 # JS para localizar el bounding rect del link del sidebar de una aldea (RN-24)
-# Devuelve {left, top, width, height} o null si no se encuentra.
+# Devuelve {x, y, width, height} o null si no se encuentra.
+# IMPORTANTE: las claves DEBEN ser x/y (no left/top) — human_click_at_rect
+# consume rect["x"]/rect["y"] (driver._sample_click_point / _is_offscreen).
+# Si se devolvieran left/top, human_click_at_rect lanzaría KeyError ANTES del
+# click y la ruta de click humano del sidebar (RN-24) quedaría muerta, cayendo
+# siempre a la URL directa (deuda RT-08) o abortando el handler. Anti-detección.
 _JS_FIND_SIDEBAR_LINK = """
 (function(did) {{
     var span = document.querySelector('span.name[data-did="' + did + '"]');
@@ -63,7 +68,7 @@ _JS_FIND_SIDEBAR_LINK = """
     var a = span.closest('a') || (span.parentElement && span.parentElement.closest('a'));
     if (!a) return null;
     var rect = a.getBoundingClientRect();
-    return {{left: rect.left, top: rect.top, width: rect.width, height: rect.height}};
+    return {{x: rect.left, y: rect.top, width: rect.width, height: rect.height}};
 }})('{village_game_id}')
 """
 
@@ -173,18 +178,30 @@ class IncomingAttackBrowserAdapter:
             rect = None
 
         if rect:
-            # Click humano en el bounding rect del sidebar (anti-detección RN-24)
-            await human_click_at_rect(rect, tab)
-            await tab.wait_for(_DORF1_LOADED_SELECTOR, timeout=_PAGE_TIMEOUT)
-            await human_delay(500, 900)
-            return tab
-
-        # Fallback — URL directa (deuda RT-08 — ya documentada)
-        logger.warning(
-            "Comp.C: navigate_to_village_dorf1: sidebar link no encontrado "
-            "para did=%d — fallback URL directa (RT-08 deuda anti-detección)",
-            village_game_id,
-        )
+            # Click humano en el bounding rect del sidebar (anti-detección RN-24).
+            # Si el click humano falla (rect 0x0, sidebar colapsado, offscreen sin
+            # scroll posible...), NO abortamos: degradamos a la URL directa
+            # documentada como deuda (RT-08). Abortar dejaría sin capturar el
+            # ataque; el fallback es el comportamiento previsto en RN-24.
+            try:
+                await human_click_at_rect(rect, tab)
+                await tab.wait_for(_DORF1_LOADED_SELECTOR, timeout=_PAGE_TIMEOUT)
+                await human_delay(500, 900)
+                return tab
+            except Exception as exc:
+                logger.warning(
+                    "Comp.C: navigate_to_village_dorf1: click humano en sidebar "
+                    "falló para did=%d (%s) — fallback URL directa "
+                    "(RT-08 deuda anti-detección)",
+                    village_game_id, exc,
+                )
+        else:
+            # Fallback — URL directa (deuda RT-08 — ya documentada)
+            logger.warning(
+                "Comp.C: navigate_to_village_dorf1: sidebar link no encontrado "
+                "para did=%d — fallback URL directa (RT-08 deuda anti-detección)",
+                village_game_id,
+            )
         server = self._get_world_server(world_id)
         url = build_url(server, f"dorf1.php?newdid={village_game_id}")
         try:

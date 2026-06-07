@@ -1430,7 +1430,7 @@ class WorldAgent:
              Máximo 3 fichas por evento (RN-11).
 
         Anti-detección:
-          - SIEMPRE human_click(element, tab) — PROHIBIDO tab.evaluate('...click()').
+          - SIEMPRE human_click(element, tab) — PROHIBIDO el click sintetico por JS (tab.evaluate).
           - navigate_to_village_dorf1 intenta click en sidebar antes de URL directa.
 
         Ver spec §9.9, §9.10.
@@ -1567,7 +1567,7 @@ class WorldAgent:
           6. human_delay(4000, 9000) DESPUÉS del procesamiento (RN-12).
 
         Anti-detección:
-          - SIEMPRE human_click(element, tab) — PROHIBIDO tab.evaluate('...click()').
+          - SIEMPRE human_click(element, tab) — PROHIBIDO el click sintetico por JS (tab.evaluate).
           - human_delay(4000, 9000) después de cada ficha (rango de lectura humana).
 
         Ver spec §9.9, §9.10.
