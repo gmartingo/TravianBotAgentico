@@ -1,22 +1,26 @@
 """
-Tests de la API de farm lists — cambios del contrato v2.
+Tests de la API de farm lists.
 
 Cubre:
   - Aliases de FarmListSendEvent: sent_at, slots_sent, deactivated_slots
   - Agregados de FarmList: total_bounty, avg_bounty_per_send, last_send_time
   - Toggle scheduler: habilita/deshabilita (200) y 404 para scheduler inexistente
   - Filtro por scheduler_id en GET /worlds/{id}/slot-events
+  - Mapeo de BrowserError/ElementNotClickableError → 502 en endpoints con browser
+  - Regresión: SessionNotActiveError → 503 y FarmListPageError → 502 siguen funcionando
 
 Estrategia:
   - Tests 1-3 (serialización): unidad pura — se importan y llaman las helpers directamente.
   - Tests 4-6 (toggle): TestClient con BD temporal, datos creados vía HTTP.
   - Test 7 (filtro): TestClient + BD en archivo temporal compartido con asyncio.run()
     para insertar datos de prueba que no tienen endpoint de escritura disponible.
+  - Tests BrowserError: monkeypatching de use cases para lanzar la excepción sin browser real.
 """
 from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
@@ -26,6 +30,12 @@ from adapters.api.main import app
 from adapters.api.routes.farm import _serialize_farm_list, _serialize_send_event
 from core.entities.farm_list import FarmList, FarmSlot
 from core.entities.farm_list_send_event import FarmListSendEvent
+from core.exceptions import (
+    BrowserError,
+    ElementNotClickableError,
+    FarmListPageError,
+    SessionNotActiveError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -251,3 +261,134 @@ def test_slot_events_filter_by_scheduler(client):
     data = r.json()
     assert data["total"] == 2
     assert all(ev["farm_list_id"] == 101 for ev in data["items"])
+
+
+# ---------------------------------------------------------------------------
+# Tests BrowserError → 502 en endpoints con browser
+# ---------------------------------------------------------------------------
+# Estrategia: se parchea el método `execute` del use case con un AsyncMock que
+# lanza la excepción deseada. Así el test no necesita browser real ni sesión
+# de Chrome, y cubre exactamente el bloque except que añadimos.
+# El fixture `client` ya levanta el lifespan de FastAPI y registra `farm_db_port`
+# y `get_or_create_farm_browser` en app.state; los tests que inyectan una
+# excepción de browser parchean el use case ANTES de que el handler lo cree.
+
+
+def test_read_farm_lists_browser_error_devuelve_502(client):
+    """POST /farm/worlds/{id}/farm-lists/read con BrowserError → 502 con detail legible."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.ReadFarmListsUseCase.execute",
+        new=AsyncMock(side_effect=BrowserError("rect inválido")),
+    ):
+        r = c.post(f"/farm/worlds/{world_id}/farm-lists/read")
+
+    assert r.status_code == 502
+    detail = r.json()["detail"]
+    assert "Travian" in detail or "rect" in detail
+
+
+def test_read_farm_lists_element_not_clickable_devuelve_502(client):
+    """POST /farm/worlds/{id}/farm-lists/read con ElementNotClickableError → 502.
+    ElementNotClickableError hereda de BrowserError: el mismo handler lo captura.
+    """
+    c, _ = client
+    world_id = _setup_world(c)
+
+    exc = ElementNotClickableError(element_tag="button.startButton", reason="width=0")
+    with patch(
+        "adapters.api.routes.farm.ReadFarmListsUseCase.execute",
+        new=AsyncMock(side_effect=exc),
+    ):
+        r = c.post(f"/farm/worlds/{world_id}/farm-lists/read")
+
+    assert r.status_code == 502
+    # El detail debe contener el mensaje de la excepción, no un stack trace
+    assert "500" not in str(r.status_code)
+    assert "detail" in r.json()
+
+
+def test_read_farm_lists_session_not_active_devuelve_503(client):
+    """Regresión: SessionNotActiveError sigue mapeando a 503 tras los cambios."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.ReadFarmListsUseCase.execute",
+        new=AsyncMock(side_effect=SessionNotActiveError()),
+    ):
+        r = c.post(f"/farm/worlds/{world_id}/farm-lists/read")
+
+    assert r.status_code == 503
+
+
+def test_read_farm_lists_page_error_devuelve_502(client):
+    """Regresión: FarmListPageError sigue mapeando a 502 (no es BrowserError)."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.ReadFarmListsUseCase.execute",
+        new=AsyncMock(side_effect=FarmListPageError("plaza de reuniones no cargó")),
+    ):
+        r = c.post(f"/farm/worlds/{world_id}/farm-lists/read")
+
+    assert r.status_code == 502
+    assert "plaza" in r.json()["detail"] or "farm" in r.json()["detail"].lower()
+
+
+def test_activate_slot_browser_error_devuelve_502(client):
+    """POST /farm/slots/{id}/activate con BrowserError → 502 con detail legible."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.ActivateSlotInTravianUseCase.execute",
+        new=AsyncMock(side_effect=BrowserError("elemento fuera de pantalla")),
+    ):
+        r = c.post(
+            "/farm/slots/999/activate",
+            json={"farm_list_id": 1, "world_id": world_id},
+        )
+
+    assert r.status_code == 502
+    assert "Travian" in r.json()["detail"] or "elemento" in r.json()["detail"]
+
+
+def test_deactivate_slot_browser_error_devuelve_502(client):
+    """POST /farm/slots/{id}/deactivate con BrowserError → 502."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.DeactivateSlotInTravianUseCase.execute",
+        new=AsyncMock(side_effect=ElementNotClickableError("checkbox", "height=0")),
+    ):
+        r = c.post(
+            "/farm/slots/999/deactivate",
+            json={"farm_list_id": 1, "world_id": world_id},
+        )
+
+    assert r.status_code == 502
+    assert "detail" in r.json()
+
+
+def test_send_farm_list_browser_error_devuelve_502(client):
+    """POST /farm/farm-lists/{id}/send con BrowserError → 502."""
+    c, _ = client
+    world_id = _setup_world(c)
+
+    with patch(
+        "adapters.api.routes.farm.SendFarmListUseCase.execute",
+        new=AsyncMock(side_effect=BrowserError("botón Start no visible")),
+    ):
+        r = c.post(
+            "/farm/farm-lists/1/send",
+            json={"world_id": world_id},
+        )
+
+    assert r.status_code == 502
+    detail = r.json()["detail"]
+    assert "Travian" in detail or "Start" in detail

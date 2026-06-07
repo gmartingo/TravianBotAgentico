@@ -55,6 +55,7 @@ from core.entities.farm_list import BotSlotStatus, FarmList, FarmSlot, SlotEvent
 from core.entities.farm_list_send_event import FarmListSendEvent
 from core.entities.farm_scheduler import FarmScheduler
 from core.exceptions import (
+    BrowserError,
     FarmListNotFoundError,
     FarmListPageError,
     FarmListSendError,
@@ -474,13 +475,22 @@ async def read_farm_lists(world_id: int, request: Request) -> list[dict]:
     Navega a la plaza de reuniones, lee las farm lists del DOM y sincroniza en BD.
     Operación lenta — implica navegación del browser.
 
-    503 si no hay sesión activa; 502 si FarmListPageError.
+    503 si no hay sesión activa; 502 si FarmListPageError o BrowserError.
     """
     db = _get_farm_db(request)
     browser = _get_farm_browser(request, world_id)
     uc = ReadFarmListsUseCase(browser=browser, db=db)
     try:
         farm_lists = await uc.execute(world_id)
+        # Gap A: poblar last_send_time también en la respuesta del POST /read.
+        # La llamada a BD está dentro del try para que un fallo aquí produzca
+        # un 500 con detail legible en lugar de un 500 desnudo sin contexto.
+        farm_list_ids = [fl.id for fl in farm_lists]
+        last_send_times = await db.get_last_send_times_by_world(world_id, farm_list_ids)
+        return [
+            _serialize_farm_list(fl, last_send_time=last_send_times.get(fl.id))
+            for fl in farm_lists
+        ]
     except SessionNotActiveError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -491,14 +501,22 @@ async def read_farm_lists(world_id: int, request: Request) -> list[dict]:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al leer farm lists del DOM: {e}",
         )
-
-    # Gap A: poblar last_send_time también en la respuesta del POST /read
-    farm_list_ids = [fl.id for fl in farm_lists]
-    last_send_times = await db.get_last_send_times_by_world(world_id, farm_list_ids)
-    return [
-        _serialize_farm_list(fl, last_send_time=last_send_times.get(fl.id))
-        for fl in farm_lists
-    ]
+    except BrowserError as e:
+        logger.exception(
+            "read_farm_lists: BrowserError no esperado (world_id=%d): %s", world_id, e
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
+        )
+    except Exception as e:
+        logger.exception(
+            "read_farm_lists: error inesperado en BD/serialización (world_id=%d): %s", world_id, e
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al procesar farm lists: {e}",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +555,15 @@ async def activate_slot(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al activar slot en Travian: {e}",
         )
+    except BrowserError as e:
+        logger.exception(
+            "activate_slot: BrowserError (slot_id=%d, world_id=%d): %s",
+            slot_id, body.world_id, e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
+        )
     return _serialize_slot(slot)
 
 
@@ -567,6 +594,15 @@ async def deactivate_slot(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al desactivar slot en Travian: {e}",
+        )
+    except BrowserError as e:
+        logger.exception(
+            "deactivate_slot: BrowserError (slot_id=%d, world_id=%d): %s",
+            slot_id, body.world_id, e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
         )
     return _serialize_slot(slot)
 
@@ -599,6 +635,15 @@ async def bot_disable_slot(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al bot-disable slot en Travian: {e}",
         )
+    except BrowserError as e:
+        logger.exception(
+            "bot_disable_slot: BrowserError (slot_id=%d, world_id=%d): %s",
+            slot_id, body.world_id, e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
+        )
     return _serialize_slot(slot)
 
 
@@ -629,6 +674,15 @@ async def bot_enable_slot(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al bot-enable slot en Travian: {e}",
+        )
+    except BrowserError as e:
+        logger.exception(
+            "bot_enable_slot: BrowserError (slot_id=%d, world_id=%d): %s",
+            slot_id, body.world_id, e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
         )
     return _serialize_slot(slot)
 
@@ -710,6 +764,15 @@ async def send_farm_list(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Error al enviar farm list: {e}",
+        )
+    except BrowserError as e:
+        logger.exception(
+            "send_farm_list: BrowserError (farm_list_id=%d, world_id=%d): %s",
+            farm_list_id, body.world_id, e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Error de interacción con Travian: {e}",
         )
     return _serialize_send_event(event)
 
