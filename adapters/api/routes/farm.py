@@ -862,7 +862,7 @@ async def start_agent(world_id: int, request: Request) -> dict:
     # Callables del radar de ataques entrantes — se construyen aquí (composition root,
     # capa de adapters) para que WorldAgent (core) no importe adapters.browser directamente.
     # Patrón: inyección de funciones en lugar de clases concretas (frontera hexagonal).
-    incoming_db = getattr(request.app.state, "incoming_attack_db_port", None)
+    incoming_db = getattr(request.app.state, "incoming_attack_port", None)
     sidebar_attack_hook = None
     dorf1_attack_reader = None
     incoming_attack_browser_adapter = None
