@@ -529,3 +529,168 @@ def test_ep_ra01_seconds_remaining_no_negativo_para_impacto_ya_pasado(client):
     assert len(items) == 1
     # El use case garantiza max(0, ...) → nunca negativo
     assert items[0]["seconds_remaining"] == 0
+
+
+# ---------------------------------------------------------------------------
+# EP-RA03 — GET /game/incoming-attacks/summary
+# ---------------------------------------------------------------------------
+
+def test_ep_ra03_sin_mundos_devuelve_lista_vacia(client):
+    """EP-RA03: sin mundos en BD → 200 con lista vacía []."""
+    c = client
+    r = c.get("/game/incoming-attacks/summary")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data == []
+
+
+def test_ep_ra03_un_mundo_sin_ataques_devuelve_pending_cero(client):
+    """EP-RA03: un mundo sin ataques → [{world_id, pending_attacks: 0}]."""
+    c = client
+    _, world_id = _setup_world(c)
+
+    r = c.get("/game/incoming-attacks/summary")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    entry = data[0]
+    assert entry["world_id"] == world_id
+    assert entry["pending_attacks"] == 0
+
+
+def test_ep_ra03_cuenta_ataques_pendientes_correctamente(client):
+    """EP-RA03: con ataques pendientes → pending_attacks con recuento correcto."""
+    c = client
+    _, world_id = _setup_world(c)
+    # Ataque pendiente con timer futuro
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    _insert_attack(c, world_id, village_game_id=11111, impact_at=future)
+    # Ataque pendiente sin timer (sidebar)
+    _insert_attack(c, world_id, village_game_id=22222, impact_at=None)
+
+    r = c.get("/game/incoming-attacks/summary")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert len(data) == 1
+    entry = data[0]
+    assert entry["world_id"] == world_id
+    assert entry["pending_attacks"] == 2
+
+
+def test_ep_ra03_no_cuenta_ataques_pasados(client):
+    """EP-RA03: ataques con impact_at en el pasado no se cuentan en pending_attacks."""
+    c = client
+    _, world_id = _setup_world(c)
+    past = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    _insert_attack(c, world_id, village_game_id=99999, impact_at=past)
+
+    r = c.get("/game/incoming-attacks/summary")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["pending_attacks"] == 0
+
+
+def test_ep_ra03_incluye_todos_los_mundos_aunque_tengan_cero_ataques(client):
+    """EP-RA03: todos los mundos aparecen en la respuesta, incluso los de 0 ataques."""
+    c = client
+    # Crear dos mundos
+    r = c.post(
+        "/accounts",
+        json={
+            "email": "summary_multi@example.com",
+            "username": "multiworld",
+            "password": "pass123",
+        },
+    )
+    assert r.status_code == 201
+    account_id = r.json()["id"]
+
+    r1 = c.post(
+        f"/accounts/{account_id}/worlds",
+        json={"server": "https://ts1.travian.com/", "tribe": "romans"},
+    )
+    r2 = c.post(
+        f"/accounts/{account_id}/worlds",
+        json={"server": "https://ts2.travian.com/", "tribe": "gauls"},
+    )
+    world_id_1 = r1.json()["id"]
+    world_id_2 = r2.json()["id"]
+
+    # Solo el mundo 1 tiene ataques
+    future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    _insert_attack(c, world_id_1, village_game_id=11111, impact_at=future)
+
+    r = c.get("/game/incoming-attacks/summary")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert len(data) == 2
+
+    world_ids_en_respuesta = {entry["world_id"] for entry in data}
+    assert world_id_1 in world_ids_en_respuesta
+    assert world_id_2 in world_ids_en_respuesta
+
+    by_world = {entry["world_id"]: entry["pending_attacks"] for entry in data}
+    assert by_world[world_id_1] == 1
+    assert by_world[world_id_2] == 0
+
+
+def test_ep_ra03_shape_correcto_de_cada_item(client):
+    """EP-RA03: cada item tiene exactamente los campos world_id y pending_attacks."""
+    c = client
+    _, world_id = _setup_world(c)
+
+    r = c.get("/game/incoming-attacks/summary")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert len(data) == 1
+    entry = data[0]
+    assert set(entry.keys()) == {"world_id", "pending_attacks"}
+    assert isinstance(entry["world_id"], int)
+    assert isinstance(entry["pending_attacks"], int)
+
+
+def test_ep_ra03_cabeceras_minimas(client):
+    """EP-RA03: respuesta 200 tiene Content-Type, X-Request-ID, X-API-Version."""
+    c = client
+    r = c.get("/game/incoming-attacks/summary")
+    assert r.status_code == 200
+    _assert_cabeceras_minimas(r)
+
+
+def test_ep_ra03_eco_x_request_id(client):
+    """EP-RA03: X-Request-ID enviado en la request vuelve idéntico en la respuesta."""
+    c = client
+    custom_id = "summary-badge-test-001"
+    r = c.get("/game/incoming-attacks/summary", headers={"X-Request-ID": custom_id})
+    assert r.status_code == 200
+    assert r.headers.get("x-request-id") == custom_id
+
+
+def test_ep_ra03_sin_accept_language_no_falla(client):
+    """EP-RA03: sin Accept-Language → 200 sin problema (endpoint no localizado)."""
+    c = client
+    _, world_id = _setup_world(c)
+    # No enviar Accept-Language explícitamente
+    r = c.get("/game/incoming-attacks/summary")
+    assert r.status_code == 200, r.text
+
+
+def test_ep_ra03_no_confunde_summary_con_world_id_int(client):
+    """
+    EP-RA03: GET /game/incoming-attacks/summary no devuelve 422 (FastAPI no intenta
+    parsear 'summary' como int de world_id). Verifica el orden de declaración de rutas.
+    """
+    c = client
+    r = c.get("/game/incoming-attacks/summary")
+    # Si la ruta está mal ordenada, FastAPI intentaría parsear 'summary' como int → 422.
+    # El resultado correcto es 200 (o como mínimo NOT 422).
+    assert r.status_code != 422, (
+        "FastAPI intentó parsear 'summary' como int — revisar el orden de declaración de rutas."
+    )

@@ -2,7 +2,7 @@
 id: aviso-ataque-mundos
 titulo: Aviso de ataques — badge en lista de mundos + pestaña Ataques en WorldSpace
 estado: ready-for-impl
-fecha: 2026-06-07
+fecha: 2026-06-07 (rev. 2026-06-07b)
 autor: disenador-producto
 spec_funcional_relacionado: ninguno
 mockup_editable: frontend/mockups/aviso-ataque-mundos.playground.html
@@ -32,6 +32,13 @@ CHANGELOG
                    `t(\`tribe.${attack.attacker_tribe}\`)`.
             Mockup editable generado: frontend/mockups/aviso-ataque-mundos.playground.html
             Gate humano: pendiente aprobación del usuario sobre el mockup.
+
+2026-06-07b Añadido campo `distance` (Distancia) en la ficha del atacante (Nivel 2,
+            detalle completo). El backend (`VillageProfileParser`) ya captura el valor
+            como `distance: float` ("7.62 fields"). Se muestra en la misma línea de
+            meta del atacante, junto a Pob., como "Dist. 7,62 campos".
+            Clave i18n añadida: `radar.attack.distance` (es/en/ar).
+            Mockup actualizado: vistas 7, 8, 9.
 -->
 
 # Aviso de ataques — badge en lista de mundos + panel de detalle en WorldSpace
@@ -322,7 +329,7 @@ urgencia). Se oculta en estado "sin sesión" o "sin ataques".
 | Badge de nº de ataques por aldea | fondo `color-mix(var(--danger) 10%, transparent)`, borde `color-mix(var(--danger) 25%, transparent)`, texto `var(--danger)` 12px/500 |
 | Etiqueta de ataque | "ATAQUE N —" 11px uppercase `var(--text-secondary)` tracking 0.04em, luego `Countdown` HH:MM:SS (font-mono 13px/600 `var(--danger)` cuando ≤60s, `var(--text)` resto) + "·" + `ExactTime` 12px font-mono `var(--text-tertiary)` |
 | Atacante desconocido | Badge gris 11px "Detectado · sin detalle" — fondo `var(--surface-2)`, texto `var(--text-secondary)`. No se muestran filas de atacante vacías. |
-| Atacante conocido | `attacker_name` 13px/500, `origin_village_name` + coords origen 12px font-mono, tribu + alianza + población 12px `var(--text-secondary)`, tropas en chips compactos 11px. |
+| Atacante conocido | `attacker_name` 13px/500, `origin_village_name` + coords origen 12px font-mono, tribu + alianza + población + distancia 12px `var(--text-secondary)`, tropas en chips compactos 11px. La distancia se muestra como "Dist. X,XX campos" (p. ej. "Dist. 7,62 campos") en la misma línea de meta, junto a Pob. Si `distance` es `null`, el campo se omite (sin placeholder). |
 | Chip de tropa | icono (NatureIcon o SVG de tribu) + tipo + "×" + cantidad. Separados por espacio, no por coma. |
 | Tarjeta de aldea | padding 12–16px, borde 1px `var(--border)`, radius `var(--radius-md)`, fondo `var(--surface)` |
 | Separador entre ataques de la misma aldea | hairline `var(--border)` |
@@ -450,6 +457,7 @@ Los valores de referencia son en español.
 | `radar.attack.alliance` | "Alianza" | Label alianza |
 | `radar.attack.population` | "Pob." | Abreviatura de población |
 | `radar.attack.troops` | "Tropas" | Label de la sección de tropas |
+| `radar.attack.distance` | "campos" | Unidad de la distancia; el valor numérico va delante: "Dist. 7,62 campos" |
 | `radar.village.attacks_one` | "1 ataque" | Badge dentro de VillageAttackCard, singular |
 | `radar.village.attacks_other` | "{{count}} ataques" | Badge plural |
 
@@ -506,6 +514,7 @@ nunca se oculta en móvil.
 | Coordenadas de aldea propia | P2 | Ocultas en `< md` |
 | Coordenadas de origen del atacante | P2 | Ocultas en `< md`, visible en `≥ md` |
 | Alianza, población | P2 | Ocultas en `< md` |
+| Distancia (`distance`) | P2 | Oculta en `< md`, visible en `≥ md` (misma línea que alianza/pob.) |
 | Tribu del atacante | P1 | Siempre visible |
 
 **RTL (ar, he, fa):** propiedades lógicas CSS en el badge y en el panel.
@@ -556,7 +565,10 @@ permanecen en LTR (son datos de juego, no texto narrativo).
 - [ ] Para cada aldea propia atacada: tarjeta con nombre de aldea, coords (P2), badge de nº de ataques.
 - [ ] Para cada ataque: etiqueta "ATAQUE N", countdown (Countdown.jsx, aria-live="off"), hora exacta (ExactTime).
 - [ ] Ataque sin detalle (`attacker_name: null`): badge "Detectado · sin detalle", sin filas de atacante vacías.
-- [ ] Ataque con detalle: muestra atacante, aldea de origen, tribu, alianza, población, tropas en chips.
+- [ ] Ataque con detalle: muestra atacante, aldea de origen, tribu, alianza, población, distancia y tropas en chips.
+- [ ] Campo `distance` presente (`≥ 0.0`): se muestra como "Dist. X,XX campos" en la línea de meta del atacante, junto a Pob.
+- [ ] Campo `distance` ausente (`null`): el campo no aparece (sin guión ni texto vacío).
+- [ ] En móvil (< md): distancia oculta junto al resto de campos P2 (alianza/pob.).
 - [ ] Ataques mixtos (con y sin detalle en la misma tarjeta de aldea): conviven correctamente.
 - [ ] Countdown ≤ 60 s: pulsa suavemente (si `prefers-reduced-motion: no-preference`).
 - [ ] Countdown en cero: se queda en `00:00:00` hasta que el polling lo retire.
@@ -634,4 +646,5 @@ Todas las preguntas abiertas del spec inicial quedaron resueltas por el usuario.
 | Endpoint summary — CONFIRMADO por usuario | El badge de S4 se alimenta de `GET /game/incoming-attacks/summary` (una sola petición para N mundos). Escalable y semánticamente correcto. PA-2 cerrada. |
 | Tribe como clave — CONFIRMADO por usuario | `attacker_tribe` llega en minúsculas como clave; el frontend localiza con `t("tribe.<key>")`. Sin conversiones en el componente. PA-3 cerrada. |
 | Badge del nav item (rojo, fondo danger) | El item "Ataques" del sidebar lleva un badge numérico en `var(--danger)` cuando count ≥ 1, reforzando la urgencia incluso cuando la pestaña está activa. Patrón consistente con el sistema de badges del sidebar. |
+| Campo `distance` en la ficha del atacante | El backend (`VillageProfileParser`) ya captura `distance: float` de `#tileDetails`. El usuario confirmó que faltaba en la UI. Se coloca en la línea de meta junto a Pob. porque ambos son datos cuantitativos del perfil del atacante, no datos posicionales (que van en la línea de origen). P2 en móvil por la misma razón que alianza/pob. |
 | Mixto (ataques con y sin detalle en la misma tarjeta) | La fase C/D que captura el detalle del atacante se construye en paralelo. Los ataques detectados pueden estar en distintas fases de enriquecimiento de datos simultáneamente. El diseño lo contempla explícitamente (§7 estado "Mixto"). |

@@ -1189,6 +1189,49 @@ components:
             $ref: "#/components/schemas/NavigationStepResponse"
           description: Pasos de la ruta ordenados por step_order ASC.
 
+    IncomingAttackItem:
+      type: object
+      description: Un ataque entrante detectado por el radar.
+      required: [id, village_game_id, attack_count, source, detected_at]
+      properties:
+        id: { type: integer }
+        village_game_id: { type: integer, description: "game_id de la aldea propia atacada (data-did del sidebar)." }
+        village_name: { type: [string, "null"] }
+        village_coord_x: { type: [integer, "null"] }
+        village_coord_y: { type: [integer, "null"] }
+        attack_count: { type: integer, minimum: 1 }
+        impact_at: { type: [string, "null"], description: "ISO-8601 UTC; null si solo viene del sidebar sin timer." }
+        seconds_remaining: { type: [integer, "null"], minimum: 0, description: "Segundos hasta el impacto. Null si impact_at es null. Nunca negativo (max(0, delta))." }
+        rally_point_href: { type: [string, "null"] }
+        attacker_name: { type: [string, "null"] }
+        origin_village_name: { type: [string, "null"] }
+        origin_village_coord_x: { type: [integer, "null"] }
+        origin_village_coord_y: { type: [integer, "null"] }
+        operation_type:
+          type: [string, "null"]
+          enum: [attack, raid, spy, reinforce, null]
+        attacker_snapshot: { type: [string, "null"], description: "JSON opaco del VillageProfileDTO de Componente D; null hasta que se obtenga." }
+        source:
+          type: string
+          enum: [sidebar, dorf1, rally_point]
+        detected_at: { type: string, description: "ISO-8601 UTC del momento de la detección." }
+
+    IncomingAttackSummaryItem:
+      type: object
+      description: Recuento de ataques pendientes para un mundo (badge de la lista de Mundos).
+      required: [world_id, pending_attacks]
+      properties:
+        world_id:
+          type: integer
+          minimum: 1
+          description: ID del mundo en la BD local.
+        pending_attacks:
+          type: integer
+          minimum: 0
+          description: |
+            Recuento de ataques con impact_at IS NULL (sidebar sin timer, postura
+            conservadora RT-05) o impact_at > datetime('now'). Siempre >= 0.
+
 paths:
   /attack-reports/stats/global:
     get:
@@ -3741,7 +3784,174 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetailError' }
 
+  # -------------------------------------------------------------------------
+  # EP-RA01 — Lista ataques entrantes de un mundo
+  # -------------------------------------------------------------------------
+  /game/incoming-attacks/{world_id}:
+    get:
+      summary: "EP-RA01 — Lista ataques entrantes de un mundo"
+      description: |
+        Devuelve la lista paginada de ataques entrantes detectados para el mundo.
+        Por defecto solo incluye ataques pendientes (impact_at > ahora o sin timer).
+        `include_past=true` para ver también ataques pasados.
+
+        `seconds_remaining` se calcula en el use case: null si impact_at es null
+        (sidebar sin timer), max(0, delta.total_seconds()) si no es null. Nunca negativo.
+
+        Sin Accept-Language — datos numéricos y texto crudo del juego (no localizado).
+      tags: [incoming-attacks]
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo en la BD local.
+        - name: include_past
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: "Si true, incluye ataques con impact_at ya pasado."
+        - name: village_game_id
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+          description: Filtro opcional por aldea (game_id de Travian).
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+          description: Máximo de items por página (1–100).
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: Desplazamiento para paginación.
+      responses:
+        "200":
+          description: Lista paginada de ataques entrantes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IncomingAttackItem'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "422":
+          description: Parámetro de query inválido.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  # -------------------------------------------------------------------------
+  # EP-RA02 — Dispara lectura inmediata del radar
+  # -------------------------------------------------------------------------
+  /game/incoming-attacks/{world_id}/check:
+    post:
+      summary: "EP-RA02 — Dispara lectura inmediata del radar de ataques"
+      description: |
+        Fuerza una lectura inmediata del radar de ataques entrantes para el mundo indicado.
+        Navega dorf1 con el browser autenticado, persiste los ataques encontrados y devuelve
+        cuántos se detectaron. Requiere sesión activa (login previo). Sin body ni Accept-Language.
+      tags: [incoming-attacks]
+      parameters:
+        - name: world_id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+          description: ID del mundo en la BD local.
+      responses:
+        "200":
+          description: Resultado de la lectura del radar.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [world_id, attacks_detected, message]
+                properties:
+                  world_id: { type: integer }
+                  attacks_detected: { type: integer, minimum: 0 }
+                  message: { type: string }
+              example:
+                world_id: 1
+                attacks_detected: 2
+                message: "Check completado"
+        "404":
+          description: Mundo no encontrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "503":
+          description: "No hay sesión activa para el mundo (SessionNotActiveError). Hacer login primero."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
+  # -------------------------------------------------------------------------
+  # EP-RA03 — Resumen de ataques pendientes por mundo (badge de la lista de Mundos)
+  # NOTA: esta ruta literal debe declararse ANTES que /incoming-attacks/{world_id}
+  # en el router FastAPI para que "summary" no se parse como un int de world_id.
+  # -------------------------------------------------------------------------
+  /game/incoming-attacks/summary:
+    get:
+      summary: "EP-RA03 — Resumen de ataques pendientes por mundo (badge)"
+      description: |
+        Devuelve el recuento de ataques pendientes agrupado por mundo. Diseñado para
+        badgear la lista de Mundos del frontend con una sola petición HTTP.
+
+        Se incluyen todos los mundos conocidos, incluso los de 0 ataques, para que el
+        frontend pueda inicializar badges sin una segunda petición.
+
+        `pending_attacks` = filas con `impact_at IS NULL` (sidebar sin timer,
+        postura conservadora RT-05) o `impact_at > datetime('now')`.
+
+        Sin query params. Sin Accept-Language (datos numéricos).
+        Si no hay mundos → `[]`.
+      tags: [incoming-attacks]
+      responses:
+        "200":
+          description: Recuento de ataques pendientes por mundo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IncomingAttackSummaryItem'
+              example:
+                - world_id: 1
+                  pending_attacks: 3
+                - world_id: 2
+                  pending_attacks: 0
+        "500":
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetailError' }
+
 # -------------------------------------------------------------------------
 # Schemas adicionales para EP-RT (se añaden a components/schemas existentes)
 # Los schemas base (DetailError, PathTestResponse, etc.) ya están arriba.
 # -------------------------------------------------------------------------
+# Schemas para EP-RA (incoming-attacks)
+# IncomingAttackItem y IncomingAttackSummaryItem se añaden a components/schemas.
+# (Inline en la sección paths arriba; también referenciados por $ref para reutilización)

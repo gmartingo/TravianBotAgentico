@@ -843,6 +843,7 @@ const TRANSLATIONS = {
     "radar.panel.error.inline":"Error al actualizar",
     "radar.attack.detected":   "Detectado · sin detalle",
     "radar.attack.troops":     "Tropas",
+    "radar.attack.distance":   "campos",
     "world.stop.toast": "Deteniendo el bot…",
   },
   en:{
@@ -866,6 +867,7 @@ const TRANSLATIONS = {
     "radar.panel.error.inline":"Update error",
     "radar.attack.detected":   "Detected · no detail",
     "radar.attack.troops":     "Troops",
+    "radar.attack.distance":   "fields",
     "world.stop.toast": "Stopping bot…",
   },
   ar:{
@@ -889,6 +891,7 @@ const TRANSLATIONS = {
     "radar.panel.error.inline":"خطأ في التحديث",
     "radar.attack.detected":   "مكتشف · بلا تفاصيل",
     "radar.attack.troops":     "قوات",
+    "radar.attack.distance":   "حقول",
     "world.stop.toast": "إيقاف البوت…",
   },
 };
@@ -1152,6 +1155,7 @@ function attackRowFull(n, imminent){
         <span class="attacker-tribe-tag">Galos</span>
         <span class="attacker-meta" style="color:var(--text-tertiary)">[Storm]</span>
         <span class="attacker-meta">Pob. <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums">692</span></span>
+        <span class="attacker-meta">Dist. <span style="font-family:var(--font-mono);font-variant-numeric:tabular-nums">7,62</span> ${t(curLang,'radar.attack.distance')}</span>
       </div>
       <div class="troops-row">
         <span class="troop-chip">${SVG.swords} Espadachín <span class="troop-count">×2</span></span>

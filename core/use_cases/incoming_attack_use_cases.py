@@ -117,6 +117,35 @@ class ListIncomingAttacksUseCase:
         }
 
 
+class SummaryIncomingAttacksUseCase:
+    """
+    Devuelve el recuento de ataques pendientes agrupado por mundo (EP-RA03).
+
+    Diseñado para el badge de la lista de Mundos del frontend: una sola petición
+    HTTP devuelve todos los mundos, incluso los que tienen 0 ataques, para que el
+    frontend pueda inicializar badges sin una segunda petición.
+
+    pending_attacks = filas con impact_at IS NULL (sidebar sin timer) OR
+                      impact_at > datetime('now') (ataque todavía en el futuro).
+    Postura conservadora (RT-05): los ataques sin timer se cuentan como pendientes.
+
+    Ver spec docs/specs/radar-ataques-entrantes.md §8 EP-RA03.
+    """
+
+    def __init__(self, db_port: "IncomingAttackDbPort") -> None:
+        self._db = db_port
+
+    async def execute(self) -> list[dict]:
+        """
+        Devuelve [{world_id: int, pending_attacks: int}] para todos los mundos.
+
+        El orden es por world_id ascendente (estable y predecible para el frontend).
+        Si no hay mundos, devuelve lista vacía [].
+        No lanza WorldNotFoundError: si no hay mundos la respuesta es [].
+        """
+        return await self._db.summary_by_world()
+
+
 class CheckIncomingAttackUseCase:
     """
     Dispara manualmente la lectura del radar de ataques entrantes para un mundo.

@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request, status
 from core.use_cases.incoming_attack_use_cases import (
     CheckIncomingAttackUseCase,
     ListIncomingAttacksUseCase,
+    SummaryIncomingAttacksUseCase,
 )
 
 router = APIRouter(prefix="/game", tags=["incoming-attacks"])
@@ -66,6 +67,52 @@ async def _verify_world(world_id: int, db_port) -> None:
         raise HTTPException(status_code=404, detail="Mundo no encontrado.")
     if world is None:
         raise HTTPException(status_code=404, detail="Mundo no encontrado.")
+
+
+# ---------------------------------------------------------------------------
+# EP-RA03 — GET /game/incoming-attacks/summary
+#
+# ORDEN OBLIGATORIO: esta ruta literal DEBE declararse ANTES que la ruta
+# dinámica /incoming-attacks/{world_id} para que FastAPI no intente parsear
+# el segmento "summary" como un int de world_id.
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/incoming-attacks/summary",
+    summary="Resumen de ataques pendientes por mundo (badge)",
+    description=(
+        "Devuelve el recuento de ataques pendientes agrupado por mundo. "
+        "Diseñado para badgear la lista de Mundos del frontend con una sola petición. "
+        "Se incluyen todos los mundos conocidos, incluso los de 0 ataques. "
+        "pending_attacks cuenta filas con impact_at IS NULL (sidebar sin timer) "
+        "o impact_at > ahora. Sin Accept-Language: datos numéricos."
+    ),
+    responses={
+        200: {
+            "description": "Recuento de ataques pendientes por mundo",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {"world_id": 1, "pending_attacks": 3},
+                        {"world_id": 2, "pending_attacks": 0},
+                    ]
+                }
+            },
+        },
+        500: {"description": "Error interno del servidor"},
+    },
+)
+async def summary_incoming_attacks(request: Request):
+    """
+    EP-RA03 — Resumen de ataques pendientes agrupado por mundo.
+
+    Sin world_id en la ruta: no hay 404. Si no hay mundos → lista vacía [].
+    Lógica de negocio en SummaryIncomingAttacksUseCase; el handler solo valida,
+    llama al use case y serializa.
+    """
+    incoming_attack_port = _get_incoming_attack_port(request)
+    use_case = SummaryIncomingAttacksUseCase(db_port=incoming_attack_port)
+    return await use_case.execute()
 
 
 # ---------------------------------------------------------------------------

@@ -1440,3 +1440,39 @@ curl -X POST http://localhost:8000/game/incoming-attacks/1/check
 ```
 
 **Detalle:** `docs/api/openapi.yaml` → paths `/game/incoming-attacks/{world_id}/check`
+
+---
+
+### EP-RA03 — Resumen de ataques pendientes por mundo (badge)
+
+**Endpoint:** `GET /game/incoming-attacks/summary`
+Devuelve el recuento de ataques pendientes agrupado por mundo. Diseñado para
+badgear la lista de Mundos del frontend con una sola petición. Se incluyen todos
+los mundos conocidos, incluso los de 0 ataques.
+
+**Auth:** ninguna.
+
+**Headers requeridos:** ninguno (sin Accept-Language — datos numéricos).
+
+**Query params:** ninguno.
+
+**Response OK (200):**
+```json
+[
+  { "world_id": 1, "pending_attacks": 3 },
+  { "world_id": 2, "pending_attacks": 0 }
+]
+```
+
+`pending_attacks` cuenta filas con `impact_at IS NULL` (sidebar sin timer, postura
+conservadora RT-05) o `impact_at > datetime('now')`. Si no hay mundos → `[]`.
+
+**Errores:**
+- `500` → error interno.
+
+**Ejemplo:**
+```bash
+curl http://localhost:8000/game/incoming-attacks/summary
+```
+
+**Detalle:** `docs/api/openapi.yaml` → paths `/game/incoming-attacks/summary`
