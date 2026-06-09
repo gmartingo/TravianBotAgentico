@@ -161,7 +161,8 @@ export function CombatCalculator() {
   // ── Optimizador ─────────────────────────────────────────────────────────────
   const [optimizing, setOptimizing] = useState(false)
   const [optResult, setOptResult] = useState(null)
-  const [optimizerInputMode, setOptimizerInputMode] = useState('A') // 'A' | 'B' | 'C'
+  const [optimizerInputMode, setOptimizerInputMode] = useState('multi_troop') // 'multi_troop' | 'army_sim' | 'multi_raid'
+  const [optimizerMinNetGainPct, setOptimizerMinNetGainPct] = useState(20) // default multi_troop
   // Tribu del atacante compartida entre simulador y optimizador
   // (el optimizador usa atkTribe y puede cambiarlo con onAtkTribeChange)
 
@@ -589,12 +590,14 @@ export function CombatCalculator() {
             onOptimize={handleOptimize}
             optimizing={optimizing}
             onInputModeChange={setOptimizerInputMode}
+            onMinNetGainPctChange={setOptimizerMinNetGainPct}
           />
           <OptimizerResult
             result={optResult}
             troopMeta={troopsMap[atkTribe] ?? []}
             natureTroops={troopsMap['nature'] ?? []}
             inputMode={optimizerInputMode}
+            minNetGainPct={optimizerMinNetGainPct}
           />
         </>
       )}

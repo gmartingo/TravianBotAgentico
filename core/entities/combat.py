@@ -225,29 +225,21 @@ class CombatResult:
 
 
 @dataclass
-class OptimizationWeights:
-    """Pesos de los objetivos del optimizador multi-objetivo."""
-    resources_gained: float = 1.0  # maximizar recursos de animales
-    total_losses: float = 1.0      # minimizar coste en recursos de bajas
-    troops_sent: float = 0.5       # minimizar tropas enviadas
-    travel_time: float = 0.0       # minimizar tiempo de marcha
-    balance: float = 0.0           # minimizar desequilibrio de uso del inventario (0.0 = sin efecto)
-
-
-@dataclass
 class OptimizationConfig:
-    """Configuración del optimizador. K se calcula dinámicamente, igual que en CombatConfig."""
+    """Configuración del optimizador.
+
+    Rediseñado en 2026-06-09: se eliminan los 5 pesos (OptimizationWeights) y se
+    introduce min_net_gain_pct como suelo de ganancia neta.
+    Ver spec optimizadores-oasis-rediseno §7.
+    """
     server_speed: float = 1.0
     distance_fields: float | None = None
-    top_n: int = 3                   # 1..10
-    optimization_weights: OptimizationWeights = field(
-        default_factory=OptimizationWeights
-    )
-    # scoring_mode (RN-04): "single" puntúa cada alternativa por-raid (compatible);
-    # "aggregate" multiplica los términos de loot/pérdidas/tropas/tiempo por N efectivo.
-    # Solo Modo C lo activa.
-    scoring_mode: str = "single"     # "single" | "aggregate"
-    # n_min/n_max (RN-05): acotan N efectivo en modo aggregate. None = sin límite.
+    top_n: int = 3                    # 1..10
+    # Suelo de ganancia neta en % (0=sin suelo; equivalente al comportamiento anterior).
+    min_net_gain_pct: float = 0.0
+    # scoring_mode: "single" (Multi-Tropa/Simulador) | "aggregate" (Multi-Raid).
+    scoring_mode: str = "single"
+    # n_min/n_max: internos al dominio; n_min se alimenta de n_min_raids en el handler.
     n_min: int | None = None
     n_max: int | None = None
 
@@ -290,6 +282,9 @@ class OptimizationAlternative:
     attacker_cavalry_power: float = 0.0
     defender_infantry_power: float = 0.0
     defender_cavalry_power: float = 0.0
+    # Ganancia neta % = 100×(saqueo − valor_bajas_atacante)/saqueo.
+    # None cuando saqueo=0 o sin datos de drops NATURE (spec §4/§7).
+    net_gain_pct: float | None = None
 
 
 @dataclass

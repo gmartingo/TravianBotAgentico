@@ -648,26 +648,29 @@ const en = {
   'calc.mode.simulator':                   'Simulator',
   'calc.mode.optimizer':                   'Optimizer',
 
-  'calc.optimizer.inputMode':              'Input mode',
-  'calc.optimizer.modeA':                  'Multi-troop',
-  'calc.optimizer.modeB':                  'Army simulator',
-  'calc.optimizer.mode.tabC':              'Multi-raid',
+  'calc.optimizer.inputMode':              'Tool',
+  // Tab names (spec §14.8)
+  'calc.optimizer.modeMultiTroop':         'Multi-Troop',
+  'calc.optimizer.modeArmySim':            'Simulator',
+  'calc.optimizer.modeMultiRaid':          'Multi-Raid',
+  // Mode hints (descriptive line below selector)
   'calc.optimizer.modeAHint':              'Select which troop types are available',
   'calc.optimizer.modeBHint':              'Enter the available quantity of each troop',
-  'calc.optimizer.modeCHint':              'Optimise repeated parallel raids with acceptable losses',
+  'calc.optimizer.modeCHint':              'Optimise repeated parallel raids — enter your troop inventory',
+
+  // Net gain control (replaces the 5 weight sliders)
+  'calc.optimizer.minNetGainPct.label':    '% minimum net gain',
+  'calc.optimizer.minNetGainPct.tooltip':  'Minimum net gain percentage per attack: (loot − value of losses) / loot × 100. Only alternatives meeting this threshold are shown. If none qualify, the best available are shown with a warning.',
+
+  // Multi-Raid — minimum oases
+  'calc.optimizer.nMinRaids.label':        'Minimum oases',
+  'calc.optimizer.nMinRaids.placeholder':  'Auto',
 
   'calc.optimizer.oasisDefense':           'Oasis defense',
   'calc.optimizer.config':                 'Configuration',
   'calc.optimizer.topN':                   'Top N results',
-  'calc.optimizer.weights':                'Optimization weights',
-  'calc.optimizer.weight.resources':       'Resources gained',
-  'calc.optimizer.weight.losses':          'Resource losses',
-  'calc.optimizer.weight.troops':          'Troops sent',
-  'calc.optimizer.weight.travel':          'Travel time',
-  'calc.optimizer.weight.balance':         'Balance',
-  'calc.optimizer.weight.balance.hint':    'Penalises using one troop type far more than others',
 
-  // Mode C — optional raid range
+  // Mode C — optional raid range (legacy keys kept to avoid breaking anything)
   'calc.optimizer.nRange.title':           'Raid range (optional)',
   'calc.optimizer.nRange.hint':            'Leave empty to let the optimizer decide how many oases to raid.',
   'calc.optimizer.nRange.min':             'Min',
@@ -679,8 +682,8 @@ const en = {
   'calc.optimizer.optimizing':             'Optimizing…',
   'calc.optimizer.error':                  'Optimization error. Check your input and try again.',
   'calc.optimizer.errorNoOasis':           'Add at least one animal to the oasis defense.',
-  'calc.optimizer.errorNoTroopTypes':      'Select at least one troop type in Mode A.',
-  'calc.optimizer.errorNoVillageTroops':   'Add at least one available troop in Mode B.',
+  'calc.optimizer.errorNoTroopTypes':      'Select at least one troop type in Multi-Troop.',
+  'calc.optimizer.errorNoVillageTroops':   'Add at least one available troop.',
 
   'calc.optimizer.result.title':           'Optimizer results',
   'calc.optimizer.result.found':           '{n} winning combinations found',
@@ -689,6 +692,7 @@ const en = {
   'calc.optimizer.result.col.losses':      'Losses (R)',
   'calc.optimizer.result.col.gained':      'Res. gained',
   'calc.optimizer.result.col.net':         'Net',
+  'calc.optimizer.result.col.netGainPct':  'Net gain %',
   'calc.optimizer.result.col.raids':       'Oases',
   'calc.optimizer.noDetail':              'Detail not available',
 
@@ -1254,6 +1258,11 @@ const en = {
   'radar.panel.empty.title':            'No active attacks',
   'radar.panel.empty.desc':             'The radar does not detect any threats at the moment',
 
+  // Panel — collapsible past-attacks section
+  'radar.panel.past.title':             'Past attacks',
+  'radar.panel.past.show':              'Show past attacks',
+  'radar.panel.past.hide':              'Hide past attacks',
+
   'radar.panel.no_session':             'Start the bot to monitor incoming attacks',
 
   'radar.panel.error.title':            'Could not load attack information',
@@ -1272,6 +1281,57 @@ const en = {
 
   'radar.village.attacks_one':          '1 attack',
   'radar.village.attacks_other':        '{count} attacks',
+
+  // ── AttackRow expandible (aviso-ataque-tarjeta-expandible Rev 4) ──────────
+  // Spec: docs/design/aviso-ataque-tarjeta-expandible.md §9
+
+  // OperationBadge
+  'radar.attack.operation.attack':      'Attack',
+  'radar.attack.operation.raid':        'Raid',
+
+  // Accessibility — expandable button
+  'radar.attack.expand':                'See attack detail',
+  'radar.attack.collapse':              'Hide attack detail',
+
+  // Accessibility — troop chips
+  'radar.attack.count_unknown':         'unknown quantity',
+  'radar.troop.count_zero':             'none',
+  'radar.troop.hero_fallback':          'Hero',
+
+  // Expanded zone — first line (distance)
+  'radar.attack.distance_label':        'Dist. {value} fields',
+
+  // Expanded zone — second line (detected_at)
+  'radar.attack.detected_at':           'Detected: {time}',
+
+  // Travian link aria-labels
+  'radar.attack.link_attacker':         'View {name}\'s profile on Travian',
+  'radar.attack.link_village_origin':   'View {name} on the map',
+  'radar.attack.link_alliance':         'View alliance {tag} on Travian',
+  'radar.attack.link_my_village':       'Go to {name} on Travian',
+
+  // Siege block (SiegeBlock) — warning texts
+  'radar.siege.confirmed_with_troops':  'Confirmed siege: {troops}',
+  'radar.siege.confirmed_none':         'No siege (confirmed)',
+  'radar.siege.high':                   'Likely siege: {troops}',
+  'radar.siege.possible':               'Possible siege: {troops}',
+  'radar.siege.none':                   'No apparent siege',
+
+  // Localized siege troop types
+  'radar.siege.troops.catapult':        'catapults',
+  'radar.siege.troops.ram':             'rams',
+  'radar.siege.troops.separator':       ' and ',
+  'radar.siege.troops.separator_or':   ' and/or ',
+
+  // Certainty/estimation pills
+  'radar.siege.label_confirmed':        'confirmed',
+  'radar.siege.label_estimated':        'estimated',
+
+  // Low precision note
+  'radar.siege.low_precision_suffix':   'low-precision estimate · >20 fields',
+
+  // Compact siege micro-badge
+  'radar.siege.compact_aria':           'Confirmed siege possible',
 }
 
 export default en

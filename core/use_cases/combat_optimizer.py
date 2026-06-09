@@ -1,18 +1,17 @@
 """
-Optimizador de ataque a oasis — frente de Pareto multi-objetivo.
+Optimizador de ataque a oasis — herramientas especializadas con ganancia neta %.
 
-Estrategia principal: NSGA-II via pymoo.
-Fallback (si pymoo no disponible o N <= 5): búsqueda por muestreo con comparación de dominancia.
-
-Ver spec §RN-09, §RN-10 y §9 (Algoritmo optimizador).
-Añadido en la feature simulador-combate (2026-05-29).
+Rediseñado en 2026-06-09: se eliminan NSGA-II (pymoo), frente de Pareto y los 5 pesos.
+Se introduce net_gain_pct como fitness escalar y tres herramientas (multi_troop,
+army_sim, multi_raid) con ordenamiento explícito.
+Ver spec optimizadores-oasis-rediseno §4, §9, §14.
 """
 from __future__ import annotations
 
 import asyncio
 import itertools
 import logging
-from typing import Any
+from typing import Literal
 
 from core.entities.combat import (
     AnimalResourceDrop,
@@ -35,74 +34,18 @@ from core.entities.combat import (
 from core.entities.tribe import Tribe
 from core.ports.game_data_port import GameDataPort
 from core.ports.translation_port import TranslationPort
-from core.use_cases.combat_engine import simulate_combat
+from core.use_cases.combat_engine import simulate_combat, valor_de_tropa
 
 logger = logging.getLogger(__name__)
 
-# Intentar importar pymoo; si falla, usar fallback por muestreo
-try:
-    import numpy as np
-    from pymoo.algorithms.moo.nsga2 import NSGA2
-    from pymoo.core.problem import ElementwiseProblem
-    from pymoo.optimize import minimize
-    from pymoo.termination import get_termination
-
-    _PYMOO_AVAILABLE = True
-except ImportError:
-    _PYMOO_AVAILABLE = False
-    logger.info(
-        "pymoo no disponible — el optimizador usará fallback por muestreo (N<=5 tipos de tropas)."
-    )
-
-# Número máximo de tipos de tropas para el fallback por muestreo
-_FALLBACK_MAX_N = 5
+# Cap máximo de N para el barrido automático en Multi-Raid sin n_max explícito.
+# Evita que un inventario enorme (ej. 50 000 tropas) genere un producto cartesiano
+# inmanejable en la Fase 3. 200 oleadas cubre cualquier caso real de juego.
+_MULTI_RAID_N_CAP: int = 200
 
 
 # ---------------------------------------------------------------------------
-# Helpers de dominancia de Pareto
-# ---------------------------------------------------------------------------
-
-def _dominates(a: dict, b: dict) -> bool:
-    """
-    True si la solución 'a' domina a 'b' en el espacio de objetivos.
-
-    a domina b si:
-      - es mejor o igual en TODOS los objetivos
-      - es estrictamente mejor en AL MENOS uno
-
-    Objetivos (todos a minimizar):
-      - neg_resources_gained (negativo de recursos ganados → minimizar)
-      - total_resource_losses (minimizar)
-      - troops_sent_count    (minimizar)
-      - travel_time_h        (minimizar, 0 si sin distancia)
-    """
-    keys = ["neg_resources", "total_resource_losses", "troops_sent_count", "travel_time_h"]
-    better_in_all = all(a.get(k, 0) <= b.get(k, 0) for k in keys)
-    strictly_better = any(a.get(k, 0) < b.get(k, 0) for k in keys)
-    return better_in_all and strictly_better
-
-
-def _compute_pareto_front(candidates: list[dict]) -> list[dict]:
-    """
-    Devuelve el subconjunto de candidatos que forman el frente de Pareto.
-    Una solución está en el frente si ninguna otra la domina.
-    """
-    pareto: list[dict] = []
-    for candidate in candidates:
-        dominated = False
-        for other in candidates:
-            if other is candidate:
-                continue
-            if _dominates(other, candidate):
-                dominated = True
-                break
-        if not dominated:
-            pareto.append(candidate)
-    return pareto
-
-
-# ---------------------------------------------------------------------------
-# Balance score (Modo B/C — inventario)
+# Helper: N natural para Multi-Raid
 # ---------------------------------------------------------------------------
 
 def _compute_n_natural(ev: dict, available_map: dict) -> int | None:
@@ -125,30 +68,6 @@ def _compute_n_natural(ev: dict, available_map: dict) -> int | None:
     if not ratios:
         return None
     return min(ratios)
-
-
-def _balance_score(ev: dict, available_map: dict) -> float:
-    """
-    Mide el desequilibrio relativo del uso del inventario.
-    Retorna stdev(sent_i / available_i) para los tipos con sent > 0 y available > 0.
-    Un score bajo = uso más equilibrado entre tipos de tropa.
-
-    available_map: {(tribe, ordinal): quantity_available}
-    ev["troops_sent"]: lista de TroopResult con quantity_initial = enviadas.
-
-    Retorna 0.0 si hay 0 o 1 tipo activo (sin stdev definido), o si available_map vacío.
-    """
-    import statistics
-    ratios: list[float] = []
-    for t in ev.get("troop_entries", []):
-        key = (t.tribe, t.ordinal)
-        avail = available_map.get(key, 0)
-        sent = t.quantity
-        if sent > 0 and avail > 0:
-            ratios.append(sent / avail)
-    if len(ratios) <= 1:
-        return 0.0
-    return statistics.stdev(ratios)
 
 
 # ---------------------------------------------------------------------------
@@ -291,6 +210,25 @@ async def _evaluate_combination(
     if result.loot.resources_gained_from_animals:
         resources_gained_total = result.loot.resources_gained_from_animals.total
 
+    # NUEVO §9.2/§9.3: calcular net_gain_pct para el atacante.
+    # IMPORTANTE: se usa EXCLUSIVAMENTE con bajas del ejército ATACANTE.
+    # Los animales defensores (NATURE) NUNCA se pasan a valor_de_tropa;
+    # solo contribuyen al saqueo (resources_gained_total).
+    net_gain_pct: float | None = None
+    if resources_gained_total > 0:
+        # Construir mapa (tribe, ordinal) → spec para buscar cost_sum y train_time_s
+        spec_map = {(s["tribe"], s["ordinal"]): s for s in troop_specs}
+        valor_bajas = 0.0
+        for tr in result.attacker_troops:
+            if tr.quantity_lost <= 0:
+                continue
+            key = (tr.tribe, tr.ordinal)
+            spec = spec_map.get(key, {})
+            cost_s = spec.get("cost_sum") or 0
+            tt_s = spec.get("train_time_s") or 0.0
+            valor_bajas += tr.quantity_lost * valor_de_tropa(cost_s, tt_s)
+        net_gain_pct = 100.0 * (resources_gained_total - valor_bajas) / resources_gained_total
+
     return {
         "quantities": quantities,
         "troop_entries": troop_entries,
@@ -302,7 +240,9 @@ async def _evaluate_combination(
         "total_losses": total_losses,
         "resources_gained_total": resources_gained_total,
         "travel_time_h": travel_time_h,
-        # Objetivos para dominancia (todos a minimizar)
+        # net_gain_pct (spec §4/§7): None si saqueo=0
+        "net_gain_pct": net_gain_pct,
+        # Objetivos auxiliares para ordenamiento
         "neg_resources": -resources_gained_total,
         "travel_time_h_obj": travel_time_h,
     }
@@ -327,11 +267,8 @@ async def _optimize_by_sampling(
     game_data_port: GameDataPort,
     translation_port: TranslationPort,
     top_n: int,
-    weights: dict,
     server_version: str = "1.45",
-    # RN-05: cuando se reciben, el muestreo añade una fase dirigida a producir
-    # oleadas con N ∈ [n_min, n_max] (la fase fina por sí sola no alcanza el
-    # tramo grande de Espadas+TT necesario para esos N).
+    # Fase 3 dirigida por rango N (Multi-Raid): solo activa en Modo C agregado
     n_min: int | None = None,
     n_max: int | None = None,
 ) -> list[dict]:
@@ -400,51 +337,51 @@ async def _optimize_by_sampling(
         seen.add(combo)
         combos_to_eval.append(list(combo))
 
-    # ── Fase 3 — dirigida por rango N (RN-05) ────────────────────────────────
-    # Solo activa si el usuario pidió un rango y hay inventario real (Modo C).
-    # Genera oleadas tales que floor(min_i avail_i / sent_i) ∈ [n_min, n_max].
-    # Esencial porque las fases gruesa+fina nunca evalúan combos donde un tipo
-    # vaya a ~13 unidades y otro a ~90 a la vez (la fina tope ~21).
+    # ── Fase 3 — dirigida por N (Multi-Raid) ─────────────────────────────────
+    # Activa en modo aggregate (Multi-Raid) cuando hay inventario real.
+    # Con campo "mínimo de oasis" vacío usa n_min=1, n_max=_MULTI_RAID_N_CAP.
+    # Estrategia: muestrear N directamente (barrido denso en N) y derivar
+    # sent_i = max(1, round(avail_i / N)) para cada N candidato.
+    # Esto garantiza cobertura uniforme del espacio N, incluyendo N altos donde
+    # sent_i < paso_grueso (hueco que Fases 1+2 no cubren). Esencial para que
+    # subir min_net_gain_pct reduzca N (oleadas mayores, más limpias) y bajarlo
+    # lo aumente. Ver spec RN-03 y §9.
     if (n_min is not None or n_max is not None) and all(m > 0 for m in max_quantities):
-        # Rango por tipo: sent_i debe estar en [ceil(avail/n_max), floor(avail/n_min)]
-        # para que N quede en [n_min, n_max]. Si solo se da uno de los dos, el otro
-        # extremo queda abierto.
-        range_lo_hi: list[tuple[int, int]] = []
-        for i, avail in enumerate(max_quantities):
-            if avail <= 0:
-                range_lo_hi.append((0, 0))
-                continue
-            lo = (avail + n_max - 1) // n_max if n_max else 1
-            hi = avail // n_min if n_min else avail
-            lo = max(0, min(avail, lo))
-            hi = max(lo, min(avail, hi))
-            range_lo_hi.append((lo, hi))
+        _n_lo = max(1, n_min if n_min is not None else 1)
+        _n_hi = max(_n_lo, n_max if n_max is not None else min(max_quantities))
 
-        # Cada tipo se muestrea con paso 1 si el rango es pequeño; si es grande,
-        # se reparte uniformemente con un máximo de ~8 puntos por tipo para
-        # mantener el producto cartesiano dentro del presupuesto.
-        range_samples: list[list[int]] = []
-        for lo, hi in range_lo_hi:
-            if hi <= lo:
-                range_samples.append([lo])
-                continue
-            span = hi - lo + 1
-            if span <= 8:
-                pts = list(range(lo, hi + 1))
-            else:
-                step = max(1, span // 8)
-                pts = list(range(lo, hi + 1, step))
-                if hi not in pts:
-                    pts.append(hi)
-            range_samples.append(pts)
+        # Muestrear N con hasta _N3_BUDGET valores; N=1..pequeño siempre incluido.
+        _N3_BUDGET = 200
+        n_span = _n_hi - _n_lo + 1
+        if n_span <= _N3_BUDGET:
+            n_candidates = list(range(_n_lo, _n_hi + 1))
+        else:
+            step = max(1, n_span // _N3_BUDGET)
+            n_candidates = list(range(_n_lo, _n_hi + 1, step))
+            if _n_hi not in n_candidates:
+                n_candidates.append(_n_hi)
 
-        for combo in itertools.product(*range_samples):
+        for n_target in n_candidates:
+            # Oleada "natural" para este N: cada tipo envía round(avail/N)
+            combo = tuple(max(1, round(avail / n_target)) for avail in max_quantities)
             if all(q == 0 for q in combo):
                 continue
             if combo in seen:
                 continue
             seen.add(combo)
             combos_to_eval.append(list(combo))
+
+            # Variaciones: desplazar sent de cada tipo ±1 para capturar
+            # combinaciones mixtas que maximicen N (inf baja, cav alta).
+            for delta in (-1, 1):
+                for i in range(n):
+                    varied = list(combo)
+                    varied[i] = max(1, combo[i] + delta)
+                    t = tuple(varied)
+                    if t in seen:
+                        continue
+                    seen.add(t)
+                    combos_to_eval.append(varied)
 
     # Salvaguarda dura por si la combinación de fases dispara el total
     HARD_CAP = 30_000
@@ -481,126 +418,13 @@ async def _optimize_by_sampling(
 
 
 # ---------------------------------------------------------------------------
-# Optimizador con pymoo NSGA-II
-# ---------------------------------------------------------------------------
-
-async def _optimize_with_nsga2(
-    troop_specs: list[dict],
-    max_quantities: list[int],
-    attacker_tribe: Tribe,
-    hero_attack_points: float,
-    hero_attack_bonus_percent: float,
-    alliance_bonus: float,
-    artifacts: AttackerArtifacts,
-    oasis_defenders: list[TroopEntry],
-    server_speed: float,
-    distance_fields: float | None,
-    lang: str,
-    game_data_port: GameDataPort,
-    translation_port: TranslationPort,
-    top_n: int,
-    weights: dict,
-    server_version: str = "1.45",
-) -> list[dict]:
-    """
-    Optimización con NSGA-II de pymoo.
-
-    Ejecuta la búsqueda en el executor de asyncio para no bloquear el event loop.
-    """
-    import numpy as np
-    from pymoo.algorithms.moo.nsga2 import NSGA2
-    from pymoo.core.problem import ElementwiseProblem
-    from pymoo.optimize import minimize
-    from pymoo.termination import get_termination
-
-    n = len(troop_specs)
-    upper_bounds = [
-        (max_q if max_q > 0 else 1000)
-        for max_q in max_quantities
-    ]
-
-    # Cache de evaluaciones para evitar re-simular combinaciones idénticas
-    _cache: dict[tuple, dict | None] = {}
-
-    # Lista para acumular resultados evaluados desde el callback
-    evaluated_results: list[dict] = []
-
-    # Referencia al event loop para llamar await dentro del executor
-    loop = asyncio.get_event_loop()
-
-    class CombatProblem(ElementwiseProblem):
-        def __init__(self):
-            xl = np.zeros(n)
-            xu = np.array(upper_bounds, dtype=float)
-            super().__init__(n_var=n, n_obj=4, n_ieq_constr=1, xl=xl, xu=xu)
-
-        def _evaluate(self, x, out, *args, **kwargs):
-            quantities = [max(0, int(round(v))) for v in x]
-            key = tuple(quantities)
-
-            if key in _cache:
-                ev = _cache[key]
-            else:
-                # Llamar evaluate en el event loop
-                future = asyncio.run_coroutine_threadsafe(
-                    _evaluate_combination(
-                        quantities=quantities,
-                        troop_specs=troop_specs,
-                        attacker_tribe=attacker_tribe,
-                        hero_attack_points=hero_attack_points,
-                        hero_attack_bonus_percent=hero_attack_bonus_percent,
-                        alliance_bonus=alliance_bonus,
-                        artifacts=artifacts,
-                        oasis_defenders=oasis_defenders,
-                        server_speed=server_speed,
-                        distance_fields=distance_fields,
-                        lang=lang,
-                        game_data_port=game_data_port,
-                        translation_port=translation_port,
-                        server_version=server_version,
-                    ),
-                    loop,
-                )
-                ev = future.result(timeout=30)
-                _cache[key] = ev
-
-            if ev is None:
-                out["F"] = [1e9, 1e9, 1e9, 1e9]
-                out["G"] = [1.0]  # infeasible: restricción no cumplida
-                return
-
-            evaluated_results.append(ev)
-
-            f1 = float(ev["neg_resources"])
-            f2 = float(ev["total_resource_losses"])
-            f3 = float(ev["troops_sent_count"])
-            f4 = float(ev["travel_time_h"])
-
-            out["F"] = [f1, f2, f3, f4]
-            # Restricción: al menos 1 tropa enviada (G <= 0 para ser feasible)
-            out["G"] = [-1.0]  # siempre feasible si llegamos aquí
-
-    def _run_nsga2():
-        problem = CombatProblem()
-        algorithm = NSGA2(pop_size=50)
-        termination = get_termination("n_gen", 30)
-        result = minimize(problem, algorithm, termination, seed=42, verbose=False)
-        return result
-
-    # Ejecutar en thread pool para no bloquear el event loop
-    result = await asyncio.get_event_loop().run_in_executor(None, _run_nsga2)
-
-    return evaluated_results
-
-
-# ---------------------------------------------------------------------------
 # Función principal: find_optimal_attack
 # ---------------------------------------------------------------------------
 
 async def find_optimal_attack(
     attacker_tribe: Tribe,
-    troop_types: list[TroopTypeSpec] | None,      # Modo A
-    village_troops: list[TroopAvailability] | None,  # Modo B
+    troop_types: list[TroopTypeSpec] | None,         # Modo A (sin inventario)
+    village_troops: list[TroopAvailability] | None,  # Modo B (con inventario)
     hero_attack_points: float,
     hero_attack_bonus_percent: float,
     alliance_bonus: float,
@@ -610,20 +434,23 @@ async def find_optimal_attack(
     lang: str,
     game_data_port: GameDataPort,
     translation_port: TranslationPort,
+    tool: str = "multi_troop",    # "multi_troop" | "army_sim" | "multi_raid"
     server_version: str = "1.45",
 ) -> OptimizationResult:
     """
     Encuentra la combinación óptima de tropas para atacar un oasis.
 
-    Modo A (troop_types): tipos de tropas sin cantidad máxima.
-    Modo B (village_troops): tropas disponibles con cantidad máxima.
+    Herramientas:
+      multi_troop — Modo A: minimiza tropas enviadas, suelo min_net_gain_pct.
+      army_sim    — Modo B: maximiza net_gain_pct.
+      multi_raid  — Modo B agregado: maximiza N raids, suelo min_net_gain_pct.
 
-    Ver spec §RN-10 y §9 (Algoritmo optimizador).
+    Ver spec optimizadores-oasis-rediseno §9 y §14.
     """
     warnings: list[str] = []
 
     # -----------------------------------------------------------------------
-    # Construir troop_specs con speeds (para cálculo de travel_time_h)
+    # Construir troop_specs con speed, cost_sum y train_time_s
     # -----------------------------------------------------------------------
     troop_specs: list[dict] = []
     max_quantities: list[int] = []
@@ -637,11 +464,19 @@ async def find_optimal_attack(
                 raise ValueError(
                     f"Sin stats en BD para {attacker_tribe.value} ordinal={ts.ordinal}."
                 )
+            cost_s = stats.get("cost_sum") or 0
+            if cost_s == 0:
+                warnings.append(
+                    f"cost_sum=0 para {attacker_tribe.value} ordinal={ts.ordinal} "
+                    f"— dato posiblemente corrupto en BD."
+                )
             troop_specs.append({
                 "tribe": attacker_tribe,
                 "ordinal": ts.ordinal,
                 "smithy_level": ts.smithy_level,
                 "speed": stats.get("speed") or 1,
+                "cost_sum": cost_s,
+                "train_time_s": stats.get("train_time_s") or 0.0,
             })
             max_quantities.append(0)  # Modo A: libre
     else:
@@ -653,11 +488,19 @@ async def find_optimal_attack(
                 raise ValueError(
                     f"Sin stats en BD para {attacker_tribe.value} ordinal={tv.ordinal}."
                 )
+            cost_s = stats.get("cost_sum") or 0
+            if cost_s == 0:
+                warnings.append(
+                    f"cost_sum=0 para {attacker_tribe.value} ordinal={tv.ordinal} "
+                    f"— dato posiblemente corrupto en BD."
+                )
             troop_specs.append({
                 "tribe": attacker_tribe,
                 "ordinal": tv.ordinal,
                 "smithy_level": tv.smithy_level,
                 "speed": stats.get("speed") or 1,
+                "cost_sum": cost_s,
+                "train_time_s": stats.get("train_time_s") or 0.0,
             })
             max_quantities.append(tv.quantity_available)
 
@@ -674,8 +517,7 @@ async def find_optimal_attack(
         for t in oasis_defenders
     ]
 
-    # Construir defender_troops de referencia (para el response)
-    # Inicialmente con todos los animales vivos (se actualizará en cada alternativa)
+    # Construir defender_troops de referencia (inicialmente animales intactos)
     defender_result_list: list[TroopResult] = []
     for entry in nature_troop_entries:
         name = translation_port.get_troop_name(Tribe.NATURE, entry.ordinal, lang)
@@ -688,7 +530,7 @@ async def find_optimal_attack(
             name=name,
             icon_url=icon_url,
             quantity_initial=entry.quantity,
-            quantity_survived=entry.quantity,  # valor provisional
+            quantity_survived=entry.quantity,  # provisional
             quantity_lost=0,
         ))
 
@@ -700,74 +542,47 @@ async def find_optimal_attack(
     has_nature_drops = any(o in NATURE_DROPS for o in oasis_ordinales)
     if oasis_defenders and not has_nature_drops:
         warnings.append(
-            "No hay datos de drops de animales de naturaleza. "
-            "El objetivo 'recursos ganados' se ignoró en la optimización."
+            "Sin datos de drops de animales de naturaleza; ganancia neta no disponible."
         )
 
     # -----------------------------------------------------------------------
-    # Elegir estrategia de optimización
+    # Muestreo (único camino — NSGA-II y Pareto eliminados en rediseño 2026-06-09)
     # -----------------------------------------------------------------------
-    n = len(troop_specs)
-    use_sampling = (not _PYMOO_AVAILABLE) or (n <= _FALLBACK_MAX_N)
+    # En modo aggregate (Multi-Raid), la Fase 3 SIEMPRE se activa para barrer N.
+    # El campo "mínimo de oasis" (n_min) solo ACOTA, no HABILITA, el barrido.
+    # Ver spec §9 RN-03/RN-05: "en aggregate el muestreo barre N siempre".
+    _sampling_n_min: int | None = None
+    _sampling_n_max: int | None = None
+    if opt_config.scoring_mode == "aggregate" and all(m > 0 for m in max_quantities):
+        # n_min: usa el valor del usuario si está presente; sino 1 (barrer desde 1 oleada)
+        _sampling_n_min = opt_config.n_min if opt_config.n_min is not None else 1
+        # n_max: usa el valor del usuario si está presente; sino el N máximo natural
+        # capado a _MULTI_RAID_N_CAP para no explotar el presupuesto de combos.
+        if opt_config.n_max is not None:
+            _sampling_n_max = opt_config.n_max
+        else:
+            _natural_n_max = min(max_quantities)  # máximo N posible con 1 tropa/oleada
+            _sampling_n_max = min(_natural_n_max, _MULTI_RAID_N_CAP)
 
-    if use_sampling:
-        # RN-05: pasamos n_min/n_max al muestreo SOLO si Modo C agregado
-        # (en single los campos se ignoran de extremo a extremo).
-        _sampling_n_min = opt_config.n_min if opt_config.scoring_mode == "aggregate" else None
-        _sampling_n_max = opt_config.n_max if opt_config.scoring_mode == "aggregate" else None
-        evaluated = await _optimize_by_sampling(
-            troop_specs=troop_specs,
-            max_quantities=max_quantities,
-            attacker_tribe=attacker_tribe,
-            hero_attack_points=hero_attack_points,
-            hero_attack_bonus_percent=hero_attack_bonus_percent,
-            alliance_bonus=alliance_bonus,
-            artifacts=artifacts,
-            oasis_defenders=oasis_defenders,
-            server_speed=opt_config.server_speed,
-            distance_fields=opt_config.distance_fields,
-            lang=lang,
-            game_data_port=game_data_port,
-            translation_port=translation_port,
-            top_n=opt_config.top_n,
-            weights={
-                "resources_gained": opt_config.optimization_weights.resources_gained,
-                "total_losses": opt_config.optimization_weights.total_losses,
-                "troops_sent": opt_config.optimization_weights.troops_sent,
-                "travel_time": opt_config.optimization_weights.travel_time,
-            },
-            server_version=server_version,
-            n_min=_sampling_n_min,
-            n_max=_sampling_n_max,
-        )
-    else:
-        warnings.append(
-            f"N={n} tipos de tropas → usando NSGA-II (pymoo). "
-            f"El cálculo puede tardar varios segundos."
-        )
-        evaluated = await _optimize_with_nsga2(
-            troop_specs=troop_specs,
-            max_quantities=max_quantities,
-            attacker_tribe=attacker_tribe,
-            hero_attack_points=hero_attack_points,
-            hero_attack_bonus_percent=hero_attack_bonus_percent,
-            alliance_bonus=alliance_bonus,
-            artifacts=artifacts,
-            oasis_defenders=oasis_defenders,
-            server_speed=opt_config.server_speed,
-            distance_fields=opt_config.distance_fields,
-            lang=lang,
-            game_data_port=game_data_port,
-            translation_port=translation_port,
-            top_n=opt_config.top_n,
-            weights={
-                "resources_gained": opt_config.optimization_weights.resources_gained,
-                "total_losses": opt_config.optimization_weights.total_losses,
-                "troops_sent": opt_config.optimization_weights.troops_sent,
-                "travel_time": opt_config.optimization_weights.travel_time,
-            },
-            server_version=server_version,
-        )
+    evaluated = await _optimize_by_sampling(
+        troop_specs=troop_specs,
+        max_quantities=max_quantities,
+        attacker_tribe=attacker_tribe,
+        hero_attack_points=hero_attack_points,
+        hero_attack_bonus_percent=hero_attack_bonus_percent,
+        alliance_bonus=alliance_bonus,
+        artifacts=artifacts,
+        oasis_defenders=oasis_defenders,
+        server_speed=opt_config.server_speed,
+        distance_fields=opt_config.distance_fields,
+        lang=lang,
+        game_data_port=game_data_port,
+        translation_port=translation_port,
+        top_n=opt_config.top_n,
+        server_version=server_version,
+        n_min=_sampling_n_min,
+        n_max=_sampling_n_max,
+    )
 
     if not evaluated:
         raise ValueError("No se pudo evaluar ninguna combinación de tropas.")
@@ -776,20 +591,11 @@ async def find_optimal_attack(
     # Separar ganadoras de no-ganadoras
     # -----------------------------------------------------------------------
     winning = [e for e in evaluated if e["is_winning"]]
-    losing = [e for e in evaluated if not e["is_winning"]]
-
     has_winning = len(winning) > 0
-    pool = winning if has_winning else losing
+    pool = winning if has_winning else evaluated
 
     # -----------------------------------------------------------------------
-    # Calcular frente de Pareto del pool (con pesos para ordenar)
-    # -----------------------------------------------------------------------
-    pareto = _compute_pareto_front(pool)
-    if not pareto:
-        pareto = pool  # fallback: si todos se dominan entre sí, tomar todos
-
-    # -----------------------------------------------------------------------
-    # Construir available_map para balance_score (solo en Modo B/C)
+    # Construir available_map (solo en Modo B/C — con inventario)
     # -----------------------------------------------------------------------
     available_map: dict = {}
     if village_troops:
@@ -797,63 +603,84 @@ async def find_optimal_attack(
             available_map[(tv.tribe, tv.ordinal)] = tv.quantity_available
 
     # -----------------------------------------------------------------------
-    # Ordenar por score ponderado
+    # Filtrar por suelo min_net_gain_pct (spec §9.2)
     # -----------------------------------------------------------------------
-    w = opt_config.optimization_weights
-    all_w = w.resources_gained + w.total_losses + w.troops_sent + w.travel_time + w.balance
-    if all_w == 0:
-        # Todos los pesos en 0: usar pesos iguales con warning
-        warnings.append(
-            "Todos los pesos de optimización son 0 — aplicando pesos iguales."
-        )
-        w_res, w_loss, w_troops, w_time, w_balance = 1.0, 1.0, 1.0, 0.0, 0.0
-    else:
-        w_res = w.resources_gained
-        w_loss = w.total_losses
-        w_troops = w.troops_sent
-        w_time = w.travel_time
-        w_balance = w.balance
+    min_ngp = opt_config.min_net_gain_pct
+    suelo_aplicable = [
+        e for e in pool
+        if e["net_gain_pct"] is None or e["net_gain_pct"] >= min_ngp
+    ]
+    suelo_inalcanzable = False
+    if not suelo_aplicable and pool:
+        # El suelo no se puede cumplir con NINGUNA combinación. El usuario puso un
+        # suelo alto porque quiere LIMPIEZA; si es inalcanzable le mostramos lo MÁS
+        # LIMPIO posible (mayor net_gain_pct), nunca la opción de más oasis (que es
+        # justo la que más sangra). Ver spec §5 flujo D / RN-01/02/03.
+        suelo_inalcanzable = True
+        suelo_aplicable = pool
 
-    # RN-04 / RN-05: scoring agregado opcional + acotación de N por rango usuario.
+    # -----------------------------------------------------------------------
+    # Ordenar según la herramienta (spec §9.2)
+    # -----------------------------------------------------------------------
     scoring_mode = opt_config.scoring_mode
     n_min_cfg = opt_config.n_min
     n_max_cfg = opt_config.n_max
 
-    # Constante de penalización para infactibles (RN-05). Suficientemente
-    # grande para empujar TODA infactible por debajo de cualquier factible
-    # razonable, pero finita para que el ranking entre infactibles dependa de
-    # la distancia a n_min (lo más cerca, mejor).
-    _INFEASIBLE_BASE = 1e15
+    def _ngp_desc(e: dict) -> float:
+        # Clave para ordenar por ganancia neta DESCENDENTE (None al fondo).
+        return -(e["net_gain_pct"] if e["net_gain_pct"] is not None else -1e15)
 
-    def _score(e: dict) -> float:
-        # Menor es mejor para todos (recursos se invierten con neg_resources)
-        bs = _balance_score(e, available_map) if available_map else 0.0
-        # n_factor multiplica los términos por-raid cuando el usuario optimiza
-        # por agregado de N raids (Modo C). En "single" siempre es 1.
-        n_factor = 1
-        infeasibility = 0.0
-        if scoring_mode == "aggregate" and available_map:
-            n_nat = _compute_n_natural(e, available_map)
-            if n_nat is not None and n_nat > 0:
-                if n_min_cfg is not None and n_nat < n_min_cfg:
-                    # Infactible. Devolvemos puntuación base alta + distancia
-                    # ponderada para que entre infactibles gane el que MÁS se
-                    # acerca a n_min (RN-05 refinado tras prueba de usuario).
-                    n_factor = n_nat
-                    infeasibility = _INFEASIBLE_BASE + (n_min_cfg - n_nat) * 1e9
-                else:
-                    n_factor = n_nat if n_max_cfg is None else min(n_nat, n_max_cfg)
-        return (
-            infeasibility
-            + w_res * n_factor * e.get("neg_resources", 0)
-            + w_loss * n_factor * e.get("total_resource_losses", 0)
-            + w_troops * n_factor * e.get("troops_sent_count", 0)
-            + w_time * n_factor * e.get("travel_time_h", 0)
-            + w_balance * bs
+    if suelo_inalcanzable:
+        # Suelo inalcanzable → lo MÁS LIMPIO primero, para CUALQUIER herramienta.
+        suelo_aplicable.sort(key=_ngp_desc)
+    elif tool == "multi_troop":
+        # Minimizar ejército; desempate por recurso de bajas
+        suelo_aplicable.sort(
+            key=lambda e: (e["troops_sent_count"], e["total_resource_losses"])
+        )
+    elif tool == "army_sim":
+        # Maximizar net_gain_pct; fallback a resources_gained_total si None
+        suelo_aplicable.sort(
+            key=lambda e: (_ngp_desc(e), -e.get("resources_gained_total", 0))
+        )
+    elif tool == "multi_raid":
+        # Maximizar N; desempate por net_gain_pct
+        suelo_aplicable.sort(
+            key=lambda e: (-(_compute_n_natural(e, available_map) or 0), _ngp_desc(e))
+        )
+    else:
+        # Desconocido: comportamiento seguro, igual que multi_troop
+        suelo_aplicable.sort(
+            key=lambda e: (e["troops_sent_count"], e["total_resource_losses"])
         )
 
-    pareto.sort(key=_score)
-    top = pareto[: opt_config.top_n]
+    # Aviso de suelo inalcanzable, enriquecido con el máximo REAL alcanzable
+    # (la lista ya está ordenada de más limpio a menos).
+    if suelo_inalcanzable and suelo_aplicable:
+        best = suelo_aplicable[0]
+        best_ngp = best["net_gain_pct"]
+        best_n = _compute_n_natural(best, available_map)
+        if best_ngp is not None:
+            detalle = f"lo más limpio posible es {best_ngp:.0f}% de ganancia neta"
+            if best_n:
+                detalle += f" atacando {best_n} oasis"
+        else:
+            detalle = "no hay datos de ganancia neta para estas combinaciones"
+        warnings.append(
+            f"El suelo de ganancia neta ({min_ngp:.0f}%) es inalcanzable con tu "
+            f"ejército contra este oasis; {detalle}. Se muestra de más limpio a menos."
+        )
+
+    # Advertencia por n_min cuando el mejor N no alcanza el mínimo pedido
+    if scoring_mode == "aggregate" and n_min_cfg is not None and suelo_aplicable:
+        best_n = _compute_n_natural(suelo_aplicable[0], available_map) or 0
+        if best_n < n_min_cfg:
+            warnings.append(
+                f"Ninguna combinación alcanza el mínimo de {n_min_cfg} raids con el "
+                f"inventario disponible (mejor: {best_n})."
+            )
+
+    top = suelo_aplicable[: opt_config.top_n]
 
     # -----------------------------------------------------------------------
     # Construir OptimizationAlternative para cada resultado del top
@@ -878,8 +705,6 @@ async def find_optimal_attack(
         aggregate: MultiRaidAggregate | None = None
 
         if village_troops is not None:
-            # Calcular raids_possible = min_i floor(available_i / sent_i)
-            # para todos los tipos con sent_i > 0
             sent_entries = [t for t in result.attacker_troops if t.quantity_initial > 0]
             if sent_entries:
                 n_raids_natural = min(
@@ -888,15 +713,10 @@ async def find_optimal_attack(
                     if t.quantity_initial > 0
                 )
                 n_raids = max(0, n_raids_natural)
-                # RN-05: n_max cappea el N visible al usuario solo en modo aggregate.
-                # En "single" se mantiene el N natural.
                 if scoring_mode == "aggregate" and n_max_cfg is not None:
                     n_raids = min(n_raids, n_max_cfg)
-                # RN-05: si el N natural no alcanza el mínimo pedido, dejamos el N visible
-                # como el natural (el dato real) y emitimos el warning global más abajo.
                 raids_possible = n_raids
 
-                # remaining_troops: available_i - n_raids × sent_i (clamp 0)
                 remaining_troops_list = []
                 for t in result.attacker_troops:
                     avail = available_map.get((t.tribe, t.ordinal), 0)
@@ -912,7 +732,6 @@ async def find_optimal_attack(
                         quantity_lost=avail - remaining,
                     ))
 
-                # aggregate: N × métricas de esta oleada
                 oleada_drop = result.loot.resources_gained_from_animals
                 if oleada_drop is not None:
                     agg_wood  = raids_possible * oleada_drop.wood
@@ -941,7 +760,6 @@ async def find_optimal_attack(
                     ),
                 )
             else:
-                # Sin tropas enviadas en el resultado: valores vacíos
                 raids_possible = 0
                 remaining_troops_list = []
                 aggregate = MultiRaidAggregate(
@@ -954,7 +772,7 @@ async def find_optimal_attack(
                     total_travel_time_h=None,
                 )
 
-        # Desglose por recurso de las bajas (POR-RAID), reusa AnimalResourceDrop.
+        # Desglose por recurso de las bajas (POR-RAID)
         bd = ev.get("resource_losses_breakdown") or {}
         rlb = AnimalResourceDrop(
             wood=int(bd.get("wood", 0)),
@@ -975,12 +793,13 @@ async def find_optimal_attack(
             defender_power=result.defender_power,
             ratio=result.ratio if result.ratio is not None else 0.0,
             resources_gained=result.loot.resources_gained_from_animals,
-            loot=None,  # loot es null en el optimizador (sin village_resources)
+            loot=None,
             travel_time_h=travel_time_h,
             raids_possible=raids_possible,
             remaining_troops=remaining_troops_list,
             aggregate=aggregate,
             resource_losses_breakdown=rlb,
+            net_gain_pct=ev.get("net_gain_pct"),
             attacker_infantry_power=result.attacker_infantry_power,
             attacker_cavalry_power=result.attacker_cavalry_power,
             defender_infantry_power=result.defender_infantry_power,
@@ -991,27 +810,9 @@ async def find_optimal_attack(
     # Actualizar defender_troops según el resultado
     # -----------------------------------------------------------------------
     if has_winning and alternatives and top:
-        # Ganadoras: mostrar estado real de los defensores tras el combate ganador
         best_result = top[0]["result"]
         defender_result_list = best_result.defender_troops
-    else:
-        # Sin ganadoras: el oasis NO fue destruido.
-        # Todos los animales "sobreviven" con quantity_survived = quantity_initial.
-        # Ver spec §8 nota crítica: "la defensa del oasis no fue atacada con éxito".
-        for dt in defender_result_list:
-            # Forzar estado intacto (quantity_survived ya fue inicializado como quantity_initial)
-            pass  # defender_result_list ya tiene quantity_survived = quantity_initial
-
-    # RN-05: si el usuario pidió n_min y ninguna alternativa del top lo alcanza,
-    # avisar para que la UI lo refleje (las alternativas infactibles ya quedaron
-    # al fondo del ranking por el +inf en _score).
-    if scoring_mode == "aggregate" and n_min_cfg is not None and alternatives:
-        best_n = alternatives[0].raids_possible or 0
-        if best_n < n_min_cfg:
-            warnings.append(
-                f"Ninguna combinación alcanza el mínimo de {n_min_cfg} raids con el "
-                f"inventario disponible (mejor: {best_n})."
-            )
+    # else: defender_result_list ya tiene todos los animales intactos (quantity_survived=qty_initial)
 
     message: str | None = None
     if not has_winning:

@@ -30,6 +30,13 @@ const DEFAULT_TIMEOUT_MS = 15_000
 // falso (era la causa del bug "login da error pero al recargar entro").
 const BROWSER_OP_TIMEOUT_MS = 120_000
 
+// Timeout para el optimizador de ataque multi-raid (POST /combat/optimize).
+// NO toca el browser: es cálculo local puro, pero evalúa hasta ~30 000
+// combinaciones de tropas simulando combate, lo que supera con facilidad los
+// 15 s de DEFAULT_TIMEOUT_MS y disparaba un "timeout" falso aunque el backend
+// completara y devolviera el ranking correcto.
+const OPTIMIZE_TIMEOUT_MS = 180_000
+
 // Error tipado para distinguir errores de API de otros
 export class ApiError extends Error {
   constructor(message, status, detail) {
@@ -665,9 +672,14 @@ export const api = {
    *     distance: number|null,
    *     troops: { type: string, count: number }[]|null,
    *   }
+   *
+   * @param {number}  worldId
+   * @param {boolean} includePast  Si true, añade ?include_past=true para que el
+   *   backend devuelva también los ataques cuyo impact_at ya pasó (sección
+   *   "Ataques pasados" del panel). Por defecto el backend solo devuelve pendientes.
    */
-  getIncomingAttacks: (worldId) =>
-    request('GET', `/game/incoming-attacks/${worldId}`),
+  getIncomingAttacks: (worldId, includePast = false) =>
+    request('GET', `/game/incoming-attacks/${worldId}${includePast ? '?include_past=true' : ''}`),
 
   /**
    * POST /game/incoming-attacks/:worldId/check
@@ -695,6 +707,6 @@ export const api = {
      * Response: CombatOptimizeResponse
      */
     optimize: (body) =>
-      request('POST', '/combat/optimize', body),
+      request('POST', '/combat/optimize', body, undefined, OPTIMIZE_TIMEOUT_MS),
   },
 }

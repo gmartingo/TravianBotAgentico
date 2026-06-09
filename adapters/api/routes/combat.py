@@ -32,7 +32,6 @@ from core.entities.combat import (
     DefenderFormation,
     MultiRaidAggregate,
     OptimizationConfig,
-    OptimizationWeights,
     RamSpec,
     TroopAvailability,
     TroopEntry,
@@ -234,36 +233,26 @@ class OasisDefenseRequest(BaseModel):
     troops: list[OasisDefenseTroopRequest] = Field(..., min_length=1)
 
 
-class OptimizationWeightsRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    resources_gained: float = Field(default=1.0, ge=0.0)
-    total_losses: float = Field(default=1.0, ge=0.0)
-    troops_sent: float = Field(default=0.5, ge=0.0)
-    travel_time: float = Field(default=0.0, ge=0.0)
-    balance: float = Field(default=0.0, ge=0.0)  # 0.0 = sin efecto (default retrocompatible)
-
-
 class OptimizationConfigRequest(BaseModel):
+    """Configuración del optimizador (rediseño 2026-06-09).
+
+    Campos eliminados: optimization_weights (5 pesos), n_min, n_max.
+    Campos nuevos: tool, min_net_gain_pct, n_min_raids.
+    scoring_mode conservado como deprecado (retrocompat; ignorado cuando tool llega).
+    """
     model_config = ConfigDict(extra="forbid")
 
+    # NUEVO — discriminador de herramienta
+    tool: Literal["multi_troop", "army_sim", "multi_raid"] = "multi_troop"
     server_speed: float = Field(default=1.0, ge=1.0, le=10.0)
     distance_fields: float | None = Field(default=None, gt=0)
     top_n: int = Field(default=3, ge=1, le=10)
-    optimization_weights: OptimizationWeightsRequest = Field(
-        default_factory=OptimizationWeightsRequest
-    )
-    # RN-04: "single" (default, comportamiento previo) | "aggregate" (Modo C).
+    # NUEVO — suelo de ganancia neta (default 0.0 = sin suelo, retrocompat)
+    min_net_gain_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    # NUEVO — mínimo de raids (único campo de rango expuesto al cliente)
+    n_min_raids: int | None = Field(default=None, ge=1)
+    # DEPRECADO — conservado para retrocompat; ignorado cuando tool llega
     scoring_mode: Literal["single", "aggregate"] = "single"
-    # RN-05: rango de raids opcional. Solo aplica en aggregate.
-    n_min: int | None = Field(default=None, ge=1)
-    n_max: int | None = Field(default=None, ge=1)
-
-    @model_validator(mode="after")
-    def _check_n_range(self) -> "OptimizationConfigRequest":
-        if self.n_min is not None and self.n_max is not None and self.n_min > self.n_max:
-            raise ValueError("n_min cannot be greater than n_max")
-        return self
 
 
 class OptimizeRequest(BaseModel):
@@ -274,6 +263,16 @@ class OptimizeRequest(BaseModel):
     config: OptimizationConfigRequest = Field(
         default_factory=OptimizationConfigRequest
     )
+
+    @model_validator(mode="after")
+    def _check_multi_raid_needs_inventory(self) -> "OptimizeRequest":
+        """multi_raid requiere village_troops (inventario) para calcular N."""
+        if self.config.tool == "multi_raid" and self.attacker.troop_types is not None:
+            raise ValueError(
+                "tool='multi_raid' requiere village_troops (con inventario); "
+                "troop_types (sin inventario) no permite calcular el número de oleadas."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +420,8 @@ class OptimizationAlternativeResponse(BaseModel):
     attacker_cavalry_power: float = 0.0
     defender_infantry_power: float = 0.0
     defender_cavalry_power: float = 0.0
+    # NUEVO — ganancia neta %. Null si saqueo=0 o sin drops NATURE.
+    net_gain_pct: float | None = None
 
 
 class OptimizeResponse(BaseModel):
@@ -686,14 +687,14 @@ async def post_combat_simulate(
 @router.post(
     "/combat/optimize",
     response_model=OptimizeResponse,
-    summary="Optimizador de ataque a oasis (frente de Pareto multi-objetivo)",
+    summary="Optimizador de ataque a oasis (3 herramientas especializadas)",
     description=(
-        "Dado un conjunto de tipos de tropas (Modo A: sin límite, Modo B: con cantidades "
-        "máximas) y la defensa de un oasis, encuentra las mejores combinaciones según "
-        "criterio multi-objetivo (recursos de animales, pérdidas en recursos, tropas enviadas, "
-        "tiempo de marcha). Siempre devuelve alternativas (ganadoras si existen, no-ganadoras si no). "
-        "Idioma obligatorio: Accept-Language o ?lang= (400 si falta o no soportado). "
-        "Cache-Control: no-store."
+        "Dado un conjunto de tipos de tropas y la defensa de un oasis, encuentra las "
+        "mejores combinaciones según la herramienta elegida: "
+        "multi_troop (minimizar ejército), army_sim (maximizar ganancia neta), "
+        "multi_raid (maximizar oleadas). "
+        "Parámetro obligatorio: Accept-Language o ?lang= (400 si falta). "
+        "Cache-Control: no-store. Vary: Accept-Language."
     ),
 )
 async def post_combat_optimize(
@@ -704,7 +705,9 @@ async def post_combat_optimize(
     translation_port: TranslationPort = Depends(get_translation_port),
 ) -> OptimizeResponse:
     """Handler de POST /combat/optimize."""
+    # §8: ambas cabeceras de caché son obligatorias
     response.headers["Cache-Control"] = "no-store"
+    response.headers["Vary"] = "Accept-Language"
 
     if lang is None:
         raise HTTPException(
@@ -714,6 +717,13 @@ async def post_combat_optimize(
                 f"Valores válidos: {sorted(SUPPORTED_LANGUAGES)}"
             ),
         )
+
+    # Inferir scoring_mode desde tool (§9.1: tool gana sobre scoring_mode legacy)
+    tool = body.config.tool
+    scoring_mode = "aggregate" if tool == "multi_raid" else "single"
+
+    # Mapear n_min_raids → n_min del dominio (§8: solo n_min_raids se expone al cliente)
+    n_min_domain = body.config.n_min_raids
 
     # Construir troop_types o village_troops
     troop_types_domain = None
@@ -753,16 +763,10 @@ async def post_combat_optimize(
         server_speed=body.config.server_speed,
         distance_fields=body.config.distance_fields,
         top_n=body.config.top_n,
-        optimization_weights=OptimizationWeights(
-            resources_gained=body.config.optimization_weights.resources_gained,
-            total_losses=body.config.optimization_weights.total_losses,
-            troops_sent=body.config.optimization_weights.troops_sent,
-            travel_time=body.config.optimization_weights.travel_time,
-            balance=body.config.optimization_weights.balance,
-        ),
-        scoring_mode=body.config.scoring_mode,
-        n_min=body.config.n_min,
-        n_max=body.config.n_max,
+        min_net_gain_pct=body.config.min_net_gain_pct,
+        scoring_mode=scoring_mode,
+        n_min=n_min_domain,
+        n_max=None,  # n_max no se expone al cliente (§8)
     )
 
     artifacts = AttackerArtifacts(
@@ -784,11 +788,19 @@ async def post_combat_optimize(
             lang=lang,
             game_data_port=game_data_port,
             translation_port=translation_port,
+            tool=tool,
         )
     except ValueError as e:
+        # ValueError intencionado del use case = entrada inválida del usuario (§8)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
+        )
+    except Exception:
+        # Error inesperado del motor: nunca exponer detalles internos al cliente (§8)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del motor de optimización",
         )
 
     return OptimizeResponse(
@@ -823,6 +835,7 @@ async def post_combat_optimize(
                 attacker_cavalry_power=alt.attacker_cavalry_power,
                 defender_infantry_power=alt.defender_infantry_power,
                 defender_cavalry_power=alt.defender_cavalry_power,
+                net_gain_pct=alt.net_gain_pct,
             )
             for alt in result.alternatives
         ],
