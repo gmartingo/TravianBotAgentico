@@ -415,7 +415,7 @@ function DetailPanel({ alternative, defenderTroops, troopMeta, natureTroops, lan
         defenderTribeTroops={natureTroops}
         animalLoot={alternative.resources_gained ?? null}
         attackerCostLoss={alternative.resource_losses_breakdown ?? null}
-        raidsCount={inputMode === 'C' ? alternative.raids_possible : null}
+        raidsCount={inputMode === 'multi_raid' ? alternative.raids_possible : null}
       />
 
       {/* Tiempo de marcha (no encaja en el report, lo dejamos como anotación) */}
@@ -436,8 +436,8 @@ function DetailPanel({ alternative, defenderTroops, troopMeta, natureTroops, lan
         </div>
       )}
 
-      {/* Multi-raid block (totales agregados N raids) — solo en Modo C */}
-      {inputMode === 'C' && alternative.raids_possible != null && (
+      {/* Multi-raid block (totales agregados N raids) — solo en Multi-Raid */}
+      {inputMode === 'multi_raid' && alternative.raids_possible != null && (
         <div style={{ marginTop: '14px' }}>
           <MultiRaidBlock
             alternative={alternative}
@@ -453,7 +453,7 @@ function DetailPanel({ alternative, defenderTroops, troopMeta, natureTroops, lan
 
 // ── OptimizerResult ────────────────────────────────────────────────────────────
 
-export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = 'A' }) {
+export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = 'multi_troop', minNetGainPct = 0 }) {
   const { t, lang } = useI18n()
   const [expandedRank, setExpandedRank] = useState(null)
 
@@ -526,16 +526,16 @@ export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = '
       {/* ── Tabla de ranking ── */}
       {/* Se pinta SIEMPRE que haya alternatives, aunque ninguna gane.
           Columnas:
-            # | tropas enviadas (chips) | pérdidas (R) | saqueo (R) | NETO (R) | (Modo C: N raids)
+            # | tropas enviadas (chips) | pérdidas (R) | saqueo (R) | NETO (R) | Ganancia % | (Multi-Raid: N raids)
           Click en una fila → expande con el informe Travian completo. */}
       {hasAlternatives && (
         <div>
-          {/* Cabecera de la tabla — añadimos columna NETO (siempre) y N raids (solo Modo C) */}
+          {/* Cabecera de la tabla */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: inputMode === 'C'
-              ? '36px 1fr auto auto auto auto'
-              : '36px 1fr auto auto auto',
+            gridTemplateColumns: inputMode === 'multi_raid'
+              ? '36px 1fr auto auto auto auto auto'
+              : '36px 1fr auto auto auto auto',
             gap: '10px',
             padding: '7px 14px',
             background: 'var(--surface-2)',
@@ -551,10 +551,13 @@ export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = '
             <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '80px' }}>
               {t('calc.optimizer.result.col.gained')}
             </span>
-            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '60px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '52px' }}>
               {t('calc.optimizer.result.col.net')}
             </span>
-            {inputMode === 'C' && (
+            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '64px' }}>
+              {t('calc.optimizer.result.col.netGainPct')}
+            </span>
+            {inputMode === 'multi_raid' && (
               <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', textAlign: 'end', minWidth: '52px' }}>
                 {t('calc.optimizer.result.col.raids')}
               </span>
@@ -577,9 +580,9 @@ export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = '
                   onBlur={e => { e.currentTarget.style.outline = 'none' }}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: inputMode === 'C'
-                      ? '36px 1fr auto auto auto auto'
-                      : '36px 1fr auto auto auto',
+                    gridTemplateColumns: inputMode === 'multi_raid'
+                      ? '36px 1fr auto auto auto auto auto'
+                      : '36px 1fr auto auto auto auto',
                     gap: '10px',
                     padding: '9px 14px',
                     cursor: 'pointer',
@@ -627,7 +630,7 @@ export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = '
                     <ResourceLine resources={combo.resources_gained} lang={lang} />
                   </span>
 
-                  {/* Neto = botín − coste */}
+                  {/* Neto = botín − coste (en recursos absolutos) */}
                   {(() => {
                     const loot = combo.resources_gained?.total ?? 0
                     const cost = combo.total_resource_losses ?? 0
@@ -642,15 +645,52 @@ export function OptimizerResult({ result, troopMeta, natureTroops, inputMode = '
                         color,
                         textAlign: 'end',
                         whiteSpace: 'nowrap',
-                        minWidth: '60px',
+                        minWidth: '52px',
                       }}>
                         {net === 0 ? '0' : (net > 0 ? '+' : '−') + fmt(Math.abs(net), lang)}
                       </span>
                     )
                   })()}
 
-                  {/* N raids (solo en Modo C) */}
-                  {inputMode === 'C' && (
+                  {/* Ganancia neta % — verde si ≥ umbral, rojo si < 0, "N/A" si null */}
+                  {(() => {
+                    const ngp = combo.net_gain_pct
+                    if (ngp == null) {
+                      return (
+                        <span style={{
+                          fontSize: '11px',
+                          color: 'var(--text-tertiary)',
+                          textAlign: 'end',
+                          whiteSpace: 'nowrap',
+                          minWidth: '64px',
+                        }}>
+                          N/A
+                        </span>
+                      )
+                    }
+                    const pctColor = ngp < 0
+                      ? 'var(--danger)'
+                      : ngp >= minNetGainPct
+                        ? 'var(--success)'
+                        : 'var(--text-secondary)'
+                    return (
+                      <span style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: pctColor,
+                        textAlign: 'end',
+                        whiteSpace: 'nowrap',
+                        minWidth: '64px',
+                      }}>
+                        {ngp > 0 ? '+' : ''}{ngp.toFixed(1)}%
+                      </span>
+                    )
+                  })()}
+
+                  {/* N raids (solo en Multi-Raid) */}
+                  {inputMode === 'multi_raid' && (
                     <span style={{
                       fontFamily: 'var(--font-mono)',
                       fontVariantNumeric: 'tabular-nums',

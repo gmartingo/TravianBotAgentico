@@ -835,3 +835,54 @@ async def simulate_combat(
         defender_infantry_power=round(D_inf_total, 2),
         defender_cavalry_power=round(D_cav_total, 2),
     )
+
+
+# ---------------------------------------------------------------------------
+# Función pura de valoración de tropa para el optimizador (spec §4, §7)
+# ---------------------------------------------------------------------------
+
+import math as _math  # alias para no contaminar el espacio de nombres global
+
+# Constantes del factor logarítmico de train_time (Opción B — elegida por el usuario)
+# Ver spec §4 (tabla de constantes) y §13 RT-01.
+TRAIN_TIME_WEIGHT_K: float = 0.3         # escala del logaritmo (curva empinada, k=0.3)
+TRAIN_TIME_TAU_S: float = 600.0          # tiempo de referencia en segundos
+TRAIN_TIME_MAX_LOG_FACTOR: float = 0.78  # cap superior → factor máximo = 1.78
+
+
+def valor_de_tropa(cost_sum: int, train_time_s: float = 0.0) -> float:
+    """
+    Valor económico ajustado de una tropa para el optimizador.
+    Penaliza más las tropas lentas de entrenar, con una curva logarítmica capada.
+
+    ÁMBITO: aplicar EXCLUSIVAMENTE a bajas del ejército ATACANTE.
+    Los animales defensores del oasis (tropas NATURE) NUNCA se pasan a esta función;
+    solo aportan recursos al `saqueo` (via resources_gained_from_animals), no como
+    bajas valoradas. La llamada a valor_de_tropa está en el bucle de losses_by_type
+    del atacante únicamente.
+
+    Fórmula:
+        log_increment = k × ln(1 + train_time_s / tau)
+        factor = 1.0 + min(log_increment, MAX_LOG_FACTOR)
+        valor = cost_sum × factor
+
+    Constantes (spec §4):
+        k   = TRAIN_TIME_WEIGHT_K   = 0.3
+        tau = TRAIN_TIME_TAU_S      = 600.0 s
+        cap = TRAIN_TIME_MAX_LOG_FACTOR = 0.78  → factor_max = 1.78
+
+    Edge cases:
+        train_time_s = 0 o ausente → factor = 1.0 (sin penalización)
+        train_time_s → ∞           → factor = 1.78 (cap nunca superado)
+
+    Ejemplos con tropas JUGABLES (T4.5 aproximado):
+        Falange gala        (~100 r,  ~480 s) → factor ≈ 1.18 → valor ≈  118
+        Espada Teutona      (~185 r,  ~600 s) → factor ≈ 1.21 → valor ≈  223
+        TT Teutón           (~600 r, ~1800 s) → factor ≈ 1.42 → valor ≈  849
+        Caballero pesado    (~1200 r, ~3600 s) → factor ≈ 1.58 → valor ≈ 1900
+    """
+    if train_time_s <= 0.0:
+        return float(cost_sum)
+    log_increment = TRAIN_TIME_WEIGHT_K * _math.log(1.0 + train_time_s / TRAIN_TIME_TAU_S)
+    factor = 1.0 + min(log_increment, TRAIN_TIME_MAX_LOG_FACTOR)
+    return cost_sum * factor

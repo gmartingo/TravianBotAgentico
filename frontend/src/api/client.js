@@ -16,6 +16,27 @@
 
 const BASE = '/api'
 
+// Timeout por defecto de una petición HTTP. Cubre los endpoints "rápidos"
+// (lecturas de BD, CRUD) y el radar manual: si el backend se cuelga, el botón
+// no gira eternamente (spec radar-check-boton-sidebar §9.3 / RN-B08).
+const DEFAULT_TIMEOUT_MS = 15_000
+
+// Timeout para operaciones que mueven el BROWSER REAL de Travian: login,
+// arranque del agente, lectura/envío de farm lists, pruebas de ruta. Estas
+// operaciones abren Chrome en frío, cargan Travian y aplican delays
+// anti-detección (80–220 ms/carácter + 500–900 ms entre acciones), por lo que
+// superan con facilidad los 15 s. Aplicarles DEFAULT_TIMEOUT_MS aborta el fetch
+// aunque el backend SÍ complete la operación → el frontend ve un "timeout"
+// falso (era la causa del bug "login da error pero al recargar entro").
+const BROWSER_OP_TIMEOUT_MS = 120_000
+
+// Timeout para el optimizador de ataque multi-raid (POST /combat/optimize).
+// NO toca el browser: es cálculo local puro, pero evalúa hasta ~30 000
+// combinaciones de tropas simulando combate, lo que supera con facilidad los
+// 15 s de DEFAULT_TIMEOUT_MS y disparaba un "timeout" falso aunque el backend
+// completara y devolviera el ranking correcto.
+const OPTIMIZE_TIMEOUT_MS = 180_000
+
 // Error tipado para distinguir errores de API de otros
 export class ApiError extends Error {
   constructor(message, status, detail) {
@@ -84,11 +105,15 @@ async function parseResponse(res) {
   throw new ApiError(detail, res.status, detail)
 }
 
-async function request(method, path, body, extraHeaders) {
+async function request(method, path, body, extraHeaders, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timerId = setTimeout(() => controller.abort(), timeoutMs)
+
   try {
     const opts = {
       method,
       headers: buildHeaders(extraHeaders),
+      signal: controller.signal,
     }
     if (body !== undefined) {
       opts.body = JSON.stringify(body)
@@ -97,8 +122,13 @@ async function request(method, path, body, extraHeaders) {
     return parseResponse(res)
   } catch (err) {
     if (err instanceof ApiError) throw err
+    if (err.name === 'AbortError') {
+      throw new ApiError('timeout', 0, 'timeout')
+    }
     // Error de red (fetch rechazado)
     throw new ApiError('error.network', 0, 'error.network')
+  } finally {
+    clearTimeout(timerId)
   }
 }
 
@@ -141,9 +171,9 @@ export const api = {
   getSession: (accountId, worldId) =>
     request('GET', `/accounts/${accountId}/worlds/${worldId}/session`),
 
-  /** POST /accounts/:id/worlds/:worldId/session → arrancar */
+  /** POST /accounts/:id/worlds/:worldId/session → arrancar (login real: abre Chrome, ~10-60 s) */
   startSession: (accountId, worldId) =>
-    request('POST', `/accounts/${accountId}/worlds/${worldId}/session`),
+    request('POST', `/accounts/${accountId}/worlds/${worldId}/session`, undefined, undefined, BROWSER_OP_TIMEOUT_MS),
 
   /** DELETE /accounts/:id/worlds/:worldId/session → parar */
   stopSession: (accountId, worldId) =>
@@ -179,9 +209,9 @@ export const api = {
   getFarmLists: (worldId) =>
     request('GET', `/farm/worlds/${worldId}/farm-lists`),
 
-  /** POST /farm/worlds/:worldId/farm-lists/read → sincronizar desde Travian */
+  /** POST /farm/worlds/:worldId/farm-lists/read → sincronizar desde Travian (navega el browser real) */
   readFarmLists: (worldId) =>
-    request('POST', `/farm/worlds/${worldId}/farm-lists/read`),
+    request('POST', `/farm/worlds/${worldId}/farm-lists/read`, undefined, undefined, BROWSER_OP_TIMEOUT_MS),
 
   // ── Farm — Slots ──────────────────────────────────────────────────────────
 
@@ -203,9 +233,9 @@ export const api = {
 
   // ── Farm — Envío manual ───────────────────────────────────────────────────
 
-  /** POST /farm/farm-lists/:farmListId/send */
+  /** POST /farm/farm-lists/:farmListId/send (envía desde el browser real → puede tardar) */
   sendFarmList: (farmListId, worldId) =>
-    request('POST', `/farm/farm-lists/${farmListId}/send`, { world_id: worldId }),
+    request('POST', `/farm/farm-lists/${farmListId}/send`, { world_id: worldId }, undefined, BROWSER_OP_TIMEOUT_MS),
 
   // ── Farm — Historial ──────────────────────────────────────────────────────
 
@@ -296,9 +326,9 @@ export const api = {
   getAgentStatus: (worldId) =>
     request('GET', `/farm/worlds/${worldId}/agent/status`),
 
-  /** POST /farm/worlds/:worldId/agent/start */
+  /** POST /farm/worlds/:worldId/agent/start (cablea el browser real del mundo → puede tardar) */
   startAgent: (worldId) =>
-    request('POST', `/farm/worlds/${worldId}/agent/start`),
+    request('POST', `/farm/worlds/${worldId}/agent/start`, undefined, undefined, BROWSER_OP_TIMEOUT_MS),
 
   /** POST /farm/worlds/:worldId/agent/stop */
   stopAgent: (worldId) =>
@@ -472,9 +502,9 @@ export const api = {
   refreshNoiseVillages: (worldId) =>
     request('POST', `/worlds/${worldId}/noise/refresh-villages`, {}),
 
-  /** EP-N14 POST /worlds/:worldId/noise/paths/:pathId/test → ejecuta ruta en vivo y devuelve reporte */
+  /** EP-N14 POST /worlds/:worldId/noise/paths/:pathId/test → ejecuta ruta en vivo (browser real → puede tardar) */
   testNoisePath: (worldId, pathId) =>
-    request('POST', `/worlds/${worldId}/noise/paths/${pathId}/test`),
+    request('POST', `/worlds/${worldId}/noise/paths/${pathId}/test`, undefined, undefined, BROWSER_OP_TIMEOUT_MS),
 
   // ── Plantillas de rutas (Portal del desarrollador /rutas) ────────────────
   // EP-RT01..EP-RT10 — /route-templates/...
@@ -547,7 +577,7 @@ export const api = {
    * data: { world_id, path_index? }
    */
   testRouteTemplate: (id, data) =>
-    request('POST', `/route-templates/${id}/test`, data),
+    request('POST', `/route-templates/${id}/test`, data, undefined, BROWSER_OP_TIMEOUT_MS),
 
   // ── Categorías de rutas ───────────────────────────────────────────────────
   // EP-CAT01..EP-CAT05 — /route-categories/
@@ -642,9 +672,22 @@ export const api = {
    *     distance: number|null,
    *     troops: { type: string, count: number }[]|null,
    *   }
+   *
+   * @param {number}  worldId
+   * @param {boolean} includePast  Si true, añade ?include_past=true para que el
+   *   backend devuelva también los ataques cuyo impact_at ya pasó (sección
+   *   "Ataques pasados" del panel). Por defecto el backend solo devuelve pendientes.
    */
-  getIncomingAttacks: (worldId) =>
-    request('GET', `/game/incoming-attacks/${worldId}`),
+  getIncomingAttacks: (worldId, includePast = false) =>
+    request('GET', `/game/incoming-attacks/${worldId}${includePast ? '?include_past=true' : ''}`),
+
+  /**
+   * POST /game/incoming-attacks/:worldId/check
+   * Fuerza una lectura inmediata de dorf1 (Componente B) y persiste los ataques.
+   * Requiere sesión activa para el mundo. Response: { world_id, attacks_detected, message }
+   */
+  checkIncomingAttacks: (worldId) =>
+    request('POST', `/game/incoming-attacks/${worldId}/check`),
 
   // ── Combate ───────────────────────────────────────────────────────────────
   // Restaurado desde feature/optimizador-balance-multiraid (calculadora de combate).
@@ -664,6 +707,6 @@ export const api = {
      * Response: CombatOptimizeResponse
      */
     optimize: (body) =>
-      request('POST', '/combat/optimize', body),
+      request('POST', '/combat/optimize', body, undefined, OPTIMIZE_TIMEOUT_MS),
   },
 }

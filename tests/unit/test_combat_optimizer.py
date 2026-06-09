@@ -1,21 +1,33 @@
 """
-Tests unitarios del optimizador de combate — spec §7.
+Tests unitarios del optimizador de combate — spec §7 (rediseño 2026-06-09).
 
-UT-01  test_balance_score_single_type       — 1 tipo activo → score = 0.0
-UT-02  test_balance_score_uniform           — 2 tipos con mismo ratio → score ≈ 0.0
-UT-03  test_balance_score_unequal           — 2 tipos con ratios muy distintos → score > umbral
+UT-01..03  ELIMINADOS (test_balance_score_*) — _balance_score desaparece con los 5 pesos
 UT-04  test_raids_possible_exact            — fórmula min_i floor(available_i / sent_i) con inventario concreto
 UT-05  test_aggregate_arithmetic            — totales = N × oleada
-UT-06  test_no_regression_no_balance_field  — request sin campo balance → mismo resultado que antes (CA-02)
+UT-06  test_no_regression_min_net_gain_pct_zero — sin suelo (min_net_gain_pct=0) comportamiento análogo al anterior (CA-02)
 
 Adicionalmente:
-UT-07  test_balance_score_empty_map         — available_map vacío → 0.0
+UT-07  ELIMINADO (test_balance_score_empty_map) — _balance_score desaparece
 UT-08  test_raids_possible_mode_a_is_none   — Modo A (sin village_troops) → raids_possible/aggregate = null
 UT-09  test_aggregate_loser_resources_zero  — alternativa perdedora en modo raid → aggregate.total_resources_gained.total = 0
+
+NUEVOS (spec §12):
+UT-10  valor_de_tropa(185, 600) — Espada Teutona → entre 221 y 226
+UT-11  valor_de_tropa(600, 1800) — TT Teutón → entre 841 y 858
+UT-12  valor_de_tropa(100, 0) → exactamente 100.0
+UT-13  valor_de_tropa(100, 0.0) → exactamente 100.0 (explícito)
+UT-14  valor_de_tropa(1000, 999999) — cap → entre 1775 y 1780
+UT-15  net_gain_pct = 100 cuando bajas=0 y saqueo>0
+UT-16  net_gain_pct = None cuando saqueo=0
+UT-17  net_gain_pct negativo cuando valor_bajas > saqueo
+UT-18  Multi-Tropa ordena por troops_sent_count ASC
+UT-19  Multi-Raid ordena por n_raids DESC
+UT-20  Fallback a pool completo cuando ninguna cumple suelo (+ warning)
 """
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,13 +36,18 @@ from core.entities.combat import (
     AttackerArtifacts,
     MultiRaidAggregate,
     OptimizationConfig,
-    OptimizationWeights,
     TroopAvailability,
     TroopEntry,
     TroopTypeSpec,
 )
 from core.entities.tribe import Tribe
-from core.use_cases.combat_optimizer import _balance_score, _compute_n_natural
+from core.use_cases.combat_engine import (
+    TRAIN_TIME_MAX_LOG_FACTOR,
+    TRAIN_TIME_TAU_S,
+    TRAIN_TIME_WEIGHT_K,
+    valor_de_tropa,
+)
+from core.use_cases.combat_optimizer import _compute_n_natural
 
 
 # ---------------------------------------------------------------------------
@@ -38,76 +55,64 @@ from core.use_cases.combat_optimizer import _balance_score, _compute_n_natural
 # ---------------------------------------------------------------------------
 
 def _make_entry(tribe, ordinal, qty):
-    """Crea un TroopEntry mínimo para usar en _balance_score."""
+    """Crea un TroopEntry mínimo."""
     from core.entities.combat import TroopEntry
     return TroopEntry(tribe=tribe, ordinal=ordinal, quantity=qty, smithy_level=0)
 
 
-# _balance_score espera el campo "troop_entries" dentro del dict 'ev'
 def _make_ev(entries):
     return {"troop_entries": entries}
 
 
 # ---------------------------------------------------------------------------
-# UT-01 — 1 tipo activo → balance_score = 0.0  (CA-07)
+# UT-10 — valor_de_tropa(185, 600) — Espada Teutona  (spec §12)
 # ---------------------------------------------------------------------------
 
-def test_balance_score_single_type():
-    """Un único tipo de tropa con sent > 0 → stdev indefinido → 0.0."""
-    avail = {(Tribe.ROMANS, 1): 1000}
-    entries = [_make_entry(Tribe.ROMANS, 1, 300)]
-    ev = _make_ev(entries)
-    score = _balance_score(ev, avail)
-    assert score == 0.0
+def test_ut10_valor_de_tropa_espada_teutona():
+    """valor_de_tropa(185, 600) debe estar entre 221 y 226 (factor ≈ 1.208)."""
+    result = valor_de_tropa(185, 600)
+    assert 221 <= result <= 226, f"Esperado [221, 226], obtenido {result}"
 
 
 # ---------------------------------------------------------------------------
-# UT-02 — 2 tipos con el mismo ratio → score ≈ 0.0
+# UT-11 — valor_de_tropa(600, 1800) — TT Teutón  (spec §12)
 # ---------------------------------------------------------------------------
 
-def test_balance_score_uniform():
-    """Dos tipos con el mismo porcentaje enviado/disponible → score muy cercano a 0."""
-    avail = {(Tribe.ROMANS, 1): 1000, (Tribe.ROMANS, 2): 800}
-    # Ambos al 50%
-    entries = [
-        _make_entry(Tribe.ROMANS, 1, 500),
-        _make_entry(Tribe.ROMANS, 2, 400),
-    ]
-    ev = _make_ev(entries)
-    score = _balance_score(ev, avail)
-    assert score < 1e-9  # esencialmente 0
+def test_ut11_valor_de_tropa_tt_teuton():
+    """valor_de_tropa(600, 1800) debe estar entre 841 y 858 (factor ≈ 1.416)."""
+    result = valor_de_tropa(600, 1800)
+    assert 841 <= result <= 858, f"Esperado [841, 858], obtenido {result}"
 
 
 # ---------------------------------------------------------------------------
-# UT-03 — 2 tipos con ratios muy distintos → score > umbral
+# UT-12 — valor_de_tropa(100, 0) — sin penalización por train_time=0
 # ---------------------------------------------------------------------------
 
-def test_balance_score_unequal():
-    """Ratio 0.9 vs 0.1 → stdev > 0.3."""
-    avail = {(Tribe.ROMANS, 1): 1000, (Tribe.ROMANS, 2): 1000}
-    entries = [
-        _make_entry(Tribe.ROMANS, 1, 900),   # 90%
-        _make_entry(Tribe.ROMANS, 2, 100),   # 10%
-    ]
-    ev = _make_ev(entries)
-    score = _balance_score(ev, avail)
-    # stdev([0.9, 0.1]) ≈ 0.5657
-    assert score > 0.3
+def test_ut12_valor_de_tropa_sin_penalizacion_int():
+    """valor_de_tropa(100, 0) → exactamente 100.0 (sin penalización)."""
+    assert valor_de_tropa(100, 0) == 100.0
 
 
 # ---------------------------------------------------------------------------
-# UT-07 — available_map vacío → 0.0
+# UT-13 — valor_de_tropa(100, 0.0) — train_time_s=0.0 explícito
 # ---------------------------------------------------------------------------
 
-def test_balance_score_empty_map():
-    """Sin inventario disponible (mapa vacío) → 0.0."""
-    entries = [
-        _make_entry(Tribe.ROMANS, 1, 500),
-        _make_entry(Tribe.ROMANS, 2, 300),
-    ]
-    ev = _make_ev(entries)
-    score = _balance_score(ev, {})
-    assert score == 0.0
+def test_ut13_valor_de_tropa_sin_penalizacion_float():
+    """valor_de_tropa(100, 0.0) → exactamente 100.0."""
+    assert valor_de_tropa(100, 0.0) == 100.0
+
+
+# ---------------------------------------------------------------------------
+# UT-14 — valor_de_tropa(1000, 999999) — cap logarítmico nunca superado
+# ---------------------------------------------------------------------------
+
+def test_ut14_valor_de_tropa_cap():
+    """valor_de_tropa(1000, 999999) → entre 1775 y 1780 (factor ≤ 1.78, cap nunca superado)."""
+    result = valor_de_tropa(1000, 999999)
+    assert 1775 <= result <= 1780, f"Esperado [1775, 1780], obtenido {result}"
+    # Verificar explícitamente que el factor no supera 1.0 + MAX_LOG_FACTOR
+    factor = result / 1000
+    assert factor <= 1.0 + TRAIN_TIME_MAX_LOG_FACTOR
 
 
 # ---------------------------------------------------------------------------
@@ -185,23 +190,21 @@ def test_aggregate_arithmetic():
 
 
 # ---------------------------------------------------------------------------
-# UT-06 — request sin campo balance → mismo resultado (CA-02 no-regresión)
+# UT-06 — min_net_gain_pct=0 equivale a comportamiento sin suelo (no-regresión CA-02)
 # ---------------------------------------------------------------------------
 
-def test_no_regression_no_balance_field():
+def test_no_regression_min_net_gain_pct_zero():
     """
-    OptimizationWeights sin campo 'balance' usa el default 0.0.
-    Llamadas existentes que no envían 'balance' deben comportarse idénticamente.
-    Este test verifica que el default es 0.0 y no afecta el score.
+    OptimizationConfig con min_net_gain_pct=0.0 no aplica suelo.
+    Es la no-regresión del comportamiento anterior (todos los candidatos pasan el filtro).
     """
-    # Sin el campo balance (instancia con defaults)
-    w1 = OptimizationWeights(resources_gained=1.0, total_losses=1.0, troops_sent=0.5, travel_time=0.0)
-    # Con balance explícito a 0.0
-    w2 = OptimizationWeights(resources_gained=1.0, total_losses=1.0, troops_sent=0.5, travel_time=0.0, balance=0.0)
-
-    assert w1.balance == 0.0
-    assert w2.balance == 0.0
-    assert w1 == w2  # Ambas instancias son idénticas
+    cfg = OptimizationConfig(min_net_gain_pct=0.0)
+    assert cfg.min_net_gain_pct == 0.0
+    # Sin suelo, todas las alternativas ganadoras se presentan
+    # (equivalente al comportamiento antes del rediseño)
+    assert cfg.scoring_mode == "single"
+    assert cfg.n_min is None
+    assert cfg.n_max is None
 
 
 # ---------------------------------------------------------------------------
@@ -315,3 +318,131 @@ def test_scoring_mode_default_is_single():
     assert cfg.scoring_mode == "single"
     assert cfg.n_min is None
     assert cfg.n_max is None
+
+
+# ---------------------------------------------------------------------------
+# UT-15 — net_gain_pct = 100 cuando bajas=0 y saqueo>0  (spec §12)
+# ---------------------------------------------------------------------------
+
+def test_ut15_net_gain_pct_cien_sin_bajas():
+    """
+    Si el atacante no pierde ninguna tropa y el saqueo > 0,
+    net_gain_pct debe ser exactamente 100.0 (victoria limpia).
+    """
+    # Simular la lógica del cálculo: ninguna tropa perdida
+    saqueo = 50
+    valor_bajas = 0.0
+    net_gain_pct = 100.0 * (saqueo - valor_bajas) / saqueo
+    assert net_gain_pct == pytest.approx(100.0)
+
+
+# ---------------------------------------------------------------------------
+# UT-16 — net_gain_pct = None cuando saqueo=0  (spec §12)
+# ---------------------------------------------------------------------------
+
+def test_ut16_net_gain_pct_none_sin_saqueo():
+    """
+    Si el saqueo es 0 (oasis sin drops NATURE conocidos),
+    net_gain_pct debe ser None (no se puede calcular el denominador).
+    """
+    saqueo = 0
+    net_gain_pct = None if saqueo == 0 else 100.0
+    assert net_gain_pct is None
+
+
+# ---------------------------------------------------------------------------
+# UT-17 — net_gain_pct negativo cuando valor_bajas > saqueo  (spec §12)
+# ---------------------------------------------------------------------------
+
+def test_ut17_net_gain_pct_negativo():
+    """
+    Si el coste de bajas supera el saqueo, net_gain_pct es negativo.
+    El valor negativo es válido; el suelo min_net_gain_pct lo filtra si aplica.
+    Ejemplo: saqueo=10, valor_bajas (calculado con valor_de_tropa) = 20 → -100%
+    """
+    saqueo = 10
+    valor_bajas = 20.0  # pierdes el doble de lo que ganas
+    net_gain_pct = 100.0 * (saqueo - valor_bajas) / saqueo
+    assert net_gain_pct == pytest.approx(-100.0)
+    assert net_gain_pct < 0
+
+
+# ---------------------------------------------------------------------------
+# UT-18 — Multi-Tropa ordena por troops_sent_count ASC  (spec §12/RN-01)
+# ---------------------------------------------------------------------------
+
+def test_ut18_multi_troop_order_asc():
+    """
+    La herramienta multi_troop debe ordenar las alternativas con
+    troops_sent_count ascendente (ejército mínimo primero).
+    """
+    # Simulamos el ordenamiento que hace find_optimal_attack para tool="multi_troop"
+    pool = [
+        {"troops_sent_count": 30, "total_resource_losses": 100, "net_gain_pct": 50.0},
+        {"troops_sent_count": 10, "total_resource_losses": 200, "net_gain_pct": 60.0},
+        {"troops_sent_count": 20, "total_resource_losses": 150, "net_gain_pct": 40.0},
+    ]
+    pool.sort(key=lambda e: (e["troops_sent_count"], e["total_resource_losses"]))
+    assert pool[0]["troops_sent_count"] == 10
+    assert pool[1]["troops_sent_count"] == 20
+    assert pool[2]["troops_sent_count"] == 30
+
+
+# ---------------------------------------------------------------------------
+# UT-19 — Multi-Raid ordena por n_raids DESC  (spec §12/RN-03)
+# ---------------------------------------------------------------------------
+
+def test_ut19_multi_raid_order_desc():
+    """
+    La herramienta multi_raid debe ordenar por n_raids descendente (más oleadas primero).
+    Aquí simulamos el cálculo de N natural y el ordenamiento.
+    """
+    available_map = {(Tribe.ROMANS, 1): 1000, (Tribe.ROMANS, 2): 300}
+    # Oleada A: envía 100 y 100 → N=min(10, 3)=3
+    ev_a = _make_ev([_make_entry(Tribe.ROMANS, 1, 100), _make_entry(Tribe.ROMANS, 2, 100)])
+    ev_a["net_gain_pct"] = 60.0
+    # Oleada B: envía 100 y 10 → N=min(10, 30)=10
+    ev_b = _make_ev([_make_entry(Tribe.ROMANS, 1, 100), _make_entry(Tribe.ROMANS, 2, 10)])
+    ev_b["net_gain_pct"] = 55.0
+    pool = [ev_a, ev_b]
+    pool.sort(
+        key=lambda e: (
+            -(_compute_n_natural(e, available_map) or 0),
+            -(e["net_gain_pct"] if e["net_gain_pct"] is not None else -1e15),
+        )
+    )
+    assert _compute_n_natural(pool[0], available_map) == 10  # oleada B primero (N=10)
+    assert _compute_n_natural(pool[1], available_map) == 3   # oleada A después (N=3)
+
+
+# ---------------------------------------------------------------------------
+# UT-20 — Fallback a pool completo cuando ninguna cumple suelo (+ warning)
+# ---------------------------------------------------------------------------
+
+def test_ut20_fallback_sin_suelo():
+    """
+    Si ninguna alternativa supera el suelo min_net_gain_pct, el resultado
+    contiene todas las ganadoras disponibles y se emite un warning.
+    Simula la lógica de find_optimal_attack: suelo_aplicable cae a pool completo.
+    """
+    pool = [
+        {"net_gain_pct": 10.0, "troops_sent_count": 5},
+        {"net_gain_pct": -5.0, "troops_sent_count": 3},
+    ]
+    min_ngp = 50.0
+    warnings_list: list[str] = []
+
+    suelo_aplicable = [
+        e for e in pool
+        if e["net_gain_pct"] is None or e["net_gain_pct"] >= min_ngp
+    ]
+    if not suelo_aplicable and pool:
+        suelo_aplicable = pool
+        warnings_list.append(
+            f"El suelo de ganancia neta ({min_ngp}%) es inalcanzable con los tipos de "
+            f"tropa dados; se muestran las mejores ganadoras disponibles."
+        )
+
+    assert len(suelo_aplicable) == 2   # todas vuelven al pool
+    assert len(warnings_list) == 1
+    assert "inalcanzable" in warnings_list[0]

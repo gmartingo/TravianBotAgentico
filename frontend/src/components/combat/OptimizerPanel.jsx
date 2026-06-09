@@ -1,23 +1,23 @@
 /**
  * OptimizerPanel — Formulario del optimizador de combate contra oasis.
  *
- * Dos modos de entrada:
- *   Modo A — el usuario elige qué tipos de tropa puede enviar (checkboxes)
- *             + nivel de herrería por tipo
- *   Modo B — el usuario introduce las cantidades disponibles de cada tropa
- *             (mismo grid de TroopGrid pero con máximos, no objetivo)
+ * Tres herramientas (pestañas):
+ *   multi_troop  — el usuario elige qué tipos de tropa puede enviar (checkboxes)
+ *                  + nivel de herrería por tipo
+ *   army_sim     — el usuario introduce las cantidades disponibles de cada tropa
+ *   multi_raid   — igual que army_sim pero optimiza para N raids en serie
  *
  * Sección DEFENSA: siempre tribu NATURE, 10 tipos de animal.
- * Sección CONFIGURACIÓN: colapsable. top_n + sliders de pesos.
+ * Sección CONFIGURACIÓN: colapsable. top_n + % ganancia neta mínima + tooltip ⓘ.
  *
  * Props:
  *   atkTribe           — string (tribu seleccionada del atacante)
+ *   onAtkTribeChange   — (tribe) => void
  *   troops             — [{ ordinal, name, iconUrl? }] de la tribu del atacante
  *   natureTroops       — [{ ordinal, name, iconUrl? }] de NATURE (para la defensa)
  *   onOptimize         — (body) => void — lanza la petición al padre
  *   optimizing         — boolean
- *
- * No gestiona estado externo, es autocontenido.
+ *   onInputModeChange  — (mode) => void — callback opcional para notificar al padre del cambio de modo
  */
 import { useState } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
@@ -41,21 +41,72 @@ function IconChevronDown({ size = 14, rotated = false }) {
   )
 }
 
+// ⓘ tooltip inline — icono + popover con la descripción completa
+function InfoTooltip({ text }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <button
+        type="button"
+        aria-label={text}
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        style={{
+          background: 'none',
+          border: 'none',
+          padding: '0 0 0 4px',
+          cursor: 'pointer',
+          color: 'var(--text-secondary)',
+          fontSize: '13px',
+          lineHeight: 1,
+          outline: 'none',
+        }}
+        onKeyDown={e => { if (e.key === 'Escape') setVisible(false) }}
+      >
+        ⓘ
+      </button>
+      {visible && (
+        <span role="tooltip" style={{
+          position: 'absolute',
+          insetInlineStart: '100%',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          marginInlineStart: '8px',
+          zIndex: 50,
+          width: '260px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)',
+          boxShadow: 'var(--shadow-md)',
+          padding: '8px 10px',
+          fontSize: '11px',
+          lineHeight: 1.5,
+          color: 'var(--text-secondary)',
+          pointerEvents: 'none',
+        }}>
+          {text}
+        </span>
+      )}
+    </span>
+  )
+}
+
 // ── Constantes ─────────────────────────────────────────────────────────────────
 
+// IDs de herramienta: alineados con el discriminador `tool` del contrato HTTP
 const MODES = [
-  { id: 'A', labelKey: 'calc.optimizer.modeA' },
-  { id: 'B', labelKey: 'calc.optimizer.modeB' },
-  { id: 'C', labelKey: 'calc.optimizer.mode.tabC' },
+  { id: 'multi_troop', labelKey: 'calc.optimizer.modeMultiTroop' },
+  { id: 'army_sim',    labelKey: 'calc.optimizer.modeArmySim' },
+  { id: 'multi_raid',  labelKey: 'calc.optimizer.modeMultiRaid' },
 ]
 
-// Preset de pesos para Modo C
-const MODE_C_PRESET = {
-  resources_gained: 1.0,
-  total_losses: 1.5,
-  troops_sent: 0.5,
-  travel_time: 0.0,
-  balance: 1.5,
+// Defaults semánticos de ganancia neta por herramienta (spec §8, nota al pie)
+const DEFAULT_MIN_NET_GAIN_PCT = {
+  multi_troop: 20,
+  army_sim:    50,
+  multi_raid:  30,
 }
 
 const ATTACKER_TRIBES = [
@@ -70,7 +121,7 @@ const ATTACKER_TRIBES = [
 
 // ── Componentes internos ───────────────────────────────────────────────────────
 
-// Input numérico compacto reutilizable
+// Input numérico compacto reutilizable (sin permitir decimales)
 function NumInput({ value, onChange, min = 0, max = 9999, placeholder = '0', ariaLabel, width = 52 }) {
   return (
     <input
@@ -107,7 +158,54 @@ function NumInput({ value, onChange, min = 0, max = 9999, placeholder = '0', ari
   )
 }
 
-// Celda de tropa para el Modo A (checkbox + icono + smithy si marcado)
+// Input de porcentaje (0–100) con símbolo % a la derecha
+function PctInput({ value, onChange, ariaLabel, width = 60 }) {
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={value === 0 ? '' : value}
+        placeholder="0"
+        aria-label={ariaLabel}
+        onChange={e => {
+          const raw = e.target.value.replace(/\D/g, '')
+          const n = raw === '' ? 0 : Math.min(100, Math.max(0, Number(raw)))
+          onChange(n)
+        }}
+        onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+        onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-strong)' }}
+        style={{
+          width: `${width}px`,
+          height: '28px',
+          padding: '0 20px 0 6px',   /* espacio para el % */
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '13px',
+          fontFamily: 'var(--font-mono)',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--text)',
+          textAlign: 'end',
+          outline: 'none',
+          transition: 'border-color var(--dur-fast) var(--ease)',
+          boxSizing: 'border-box',
+        }}
+      />
+      <span style={{
+        position: 'absolute',
+        insetInlineEnd: '6px',
+        fontSize: '12px',
+        color: 'var(--text-tertiary)',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}>%</span>
+    </div>
+  )
+}
+
+// Celda de tropa para Multi-Tropa (checkbox + icono + smithy si marcado)
 function TroopCheckCell({ troop, checked, smithy, onToggle, onSmithy }) {
   const { t } = useI18n()
   return (
@@ -189,7 +287,7 @@ function TroopCheckCell({ troop, checked, smithy, onToggle, onSmithy }) {
   )
 }
 
-// Celda de tropa para el Modo B (cantidad disponible + smithy)
+// Celda de tropa para Simulador / Multi-Raid (cantidad disponible + smithy)
 function TroopAvailCell({ troop, qty, smithy, onChange }) {
   const { t } = useI18n()
   const isActive = Number(qty) > 0
@@ -327,105 +425,6 @@ function AnimalCell({ troop, qty, onChange }) {
   )
 }
 
-// Slider de peso con valor visible
-// Etiqueta semántica del valor actual del peso.
-// 0 = ignorar este criterio, ~1 = importancia normal, 2 = doble prioridad.
-function weightLabel(value, t) {
-  if (value <= 0.05) return t('calc.optimizer.weight.value.ignore')
-  if (value < 0.85)  return t('calc.optimizer.weight.value.low')
-  if (value <= 1.15) return t('calc.optimizer.weight.value.normal')
-  if (value < 1.85)  return t('calc.optimizer.weight.value.high')
-  return t('calc.optimizer.weight.value.max')
-}
-
-// Slider de peso con doble nivel de ayuda:
-//  - Cabecera: label + slider + valor numérico + "etiqueta semántica" del valor
-//  - Pie:      "← ignorar"  ·  hint específico ("Más alto = X")  ·  "doble →"
-// hintKey es la frase concreta para ESTE criterio (qué significa subirlo).
-function WeightSlider({ labelKey, hintKey, value, onChange }) {
-  const { t } = useI18n()
-  // Pista para lectores de pantalla: el aria-valuetext describe el peso de
-  // forma comprensible ("normal", "ignorar", etc.) en vez de solo el número.
-  const semantic = weightLabel(value, t)
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-      {/* Fila principal: label + slider + valor + etiqueta semántica */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '160px' }}>
-          {t(labelKey)}
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={2}
-          step={0.1}
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          aria-label={t(labelKey)}
-          aria-valuetext={`${value.toFixed(1)} — ${semantic}`}
-          list={`ticks-${labelKey}`}
-          style={{ flex: 2, accentColor: 'var(--accent)', cursor: 'pointer' }}
-        />
-        {/* Marcas nativas a 0 / 1 / 2 — el navegador las pinta debajo del slider */}
-        <datalist id={`ticks-${labelKey}`}>
-          <option value="0" />
-          <option value="1" />
-          <option value="2" />
-        </datalist>
-        <span style={{
-          minWidth: '64px',
-          textAlign: 'end',
-          fontSize: '11px',
-          color: 'var(--text)',
-          display: 'inline-flex',
-          alignItems: 'baseline',
-          justifyContent: 'flex-end',
-          gap: '4px',
-        }}>
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontVariantNumeric: 'tabular-nums',
-            fontSize: '12px',
-            fontWeight: 600,
-          }}>
-            {value.toFixed(1)}
-          </span>
-          <span style={{ color: 'var(--text-tertiary)', fontSize: '10px', whiteSpace: 'nowrap' }}>
-            {semantic}
-          </span>
-        </span>
-      </div>
-
-      {/* Pie de ayuda: extremos + frase específica del criterio.
-          Span completo del ancho para evitar problemas de alineación con la
-          columna del slider en distintos tamaños de panel. */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        paddingInlineStart: '4px',
-      }}>
-        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-          ← {t('calc.optimizer.weight.endLeft')}
-        </span>
-        <span style={{
-          flex: 1,
-          fontSize: '11px',
-          color: 'var(--text-secondary)',
-          fontStyle: 'italic',
-          textAlign: 'center',
-          lineHeight: 1.35,
-        }}>
-          {t(hintKey)}
-        </span>
-        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-          {t('calc.optimizer.weight.endRight')} →
-        </span>
-      </div>
-    </div>
-  )
-}
-
 // ── Cabecera de sección ────────────────────────────────────────────────────────
 function SectionHeader({ icon, titleKey, children }) {
   const { t } = useI18n()
@@ -459,20 +458,19 @@ function SectionHeader({ icon, titleKey, children }) {
 export function OptimizerPanel({
   atkTribe,
   onAtkTribeChange,
-  troops,           // tropas del atacante (tribu seleccionada)
-  natureTroops,     // tropas de NATURE para la defensa
+  troops,               // tropas del atacante (tribu seleccionada)
+  natureTroops,         // tropas de NATURE para la defensa
   onOptimize,
   optimizing,
-  onInputModeChange,  // callback opcional para notificar al padre del cambio de modo
+  onInputModeChange,    // callback opcional: (mode) => void
+  onMinNetGainPctChange, // callback opcional: (pct) => void
 }) {
   const { t } = useI18n()
 
-  // ── Modo A/B/C ────────────────────────────────────────────────────────────
-  const [inputMode, setInputMode] = useState('A') // 'A' | 'B' | 'C'
-  // Rastrea si el usuario ha tocado los pesos en esta sesión (para no pisar sus cambios)
-  const [weightsUserTouched, setWeightsUserTouched] = useState(false)
+  // ── Herramienta activa ─────────────────────────────────────────────────────
+  const [inputMode, setInputMode] = useState('multi_troop') // 'multi_troop' | 'army_sim' | 'multi_raid'
 
-  // ── Modo A: set de ordinales marcados + smithy por tipo ────────────────────
+  // ── Multi-Tropa: set de ordinales marcados + smithy por tipo ───────────────
   const [checkedOrdinals, setCheckedOrdinals] = useState(new Set())
   const [smithyA, setSmithyA] = useState({}) // { ordinal: level }
 
@@ -489,7 +487,7 @@ export function OptimizerPanel({
     setSmithyA(prev => ({ ...prev, [ordinal]: level }))
   }
 
-  // ── Modo B: cantidades disponibles + smithy por tropa ─────────────────────
+  // ── Simulador / Multi-Raid: cantidades disponibles + smithy ───────────────
   const [troopValues, setTroopValues] = useState({}) // { ordinal: { qty, smithy } }
 
   function handleTroopChange(ordinal, field, value) {
@@ -507,71 +505,58 @@ export function OptimizerPanel({
   }
 
   // ── Configuración ──────────────────────────────────────────────────────────
-  // Sección de configuración colapsada por defecto — los pesos y artefactos
-  // son ajuste fino, no input frecuente. El usuario los despliega cuando los
-  // necesita (regla del usuario 2026-05-29).
+  // Sección de configuración colapsada por defecto — es ajuste fino.
   const [configExpanded, setConfigExpanded] = useState(false)
   const [topN, setTopN] = useState(3)
-  const [wResources, setWResources] = useState(1.0)
-  const [wLosses, setWLosses] = useState(1.0)
-  const [wTroops, setWTroops] = useState(0.5)
-  const [wTravel, setWTravel] = useState(0.0)
-  const [wBalance, setWBalance] = useState(0.0)
-  // Modo C: rango opcional de vacas a atracar. null = el optimizador decide.
-  const [nMin, setNMin] = useState(null)
-  const [nMax, setNMax] = useState(null)
 
-  // Handler de cambio de modo: aplica preset al entrar al Modo C si el usuario
-  // no ha tocado los sliders en esta sesión. Notifica al padre si hay callback.
+  // % ganancia neta mínima — default semántico por herramienta (spec §8)
+  // Se reinicia al default del nuevo modo al cambiar de pestaña.
+  const [minNetGainPct, setMinNetGainPct] = useState(DEFAULT_MIN_NET_GAIN_PCT['multi_troop'])
+
+  // Multi-Raid: mínimo de oasis (n_min_raids). null = el optimizador decide.
+  const [nMinRaids, setNMinRaids] = useState(null)
+
+  // Handler de cambio de herramienta: aplica el default de % al entrar a cada pestaña.
   function handleModeChange(mode) {
     setInputMode(mode)
+    const defaultPct = DEFAULT_MIN_NET_GAIN_PCT[mode]
+    setMinNetGainPct(defaultPct)
     onInputModeChange?.(mode)
-    if (mode === 'C' && !weightsUserTouched) {
-      setWResources(MODE_C_PRESET.resources_gained)
-      setWLosses(MODE_C_PRESET.total_losses)
-      setWTroops(MODE_C_PRESET.troops_sent)
-      setWTravel(MODE_C_PRESET.travel_time)
-      setWBalance(MODE_C_PRESET.balance)
-    }
+    onMinNetGainPctChange?.(defaultPct)
   }
 
-  // Wrappers que marcan weightsUserTouched al primer cambio manual
-  function handleWResources(v) { setWeightsUserTouched(true); setWResources(v) }
-  function handleWLosses(v)    { setWeightsUserTouched(true); setWLosses(v) }
-  function handleWTroops(v)    { setWeightsUserTouched(true); setWTroops(v) }
-  function handleWTravel(v)    { setWeightsUserTouched(true); setWTravel(v) }
-  function handleWBalance(v)   { setWeightsUserTouched(true); setWBalance(v) }
+  // Handler de cambio del % ganancia neta: notifica al padre si hay callback.
+  function handleMinNetGainPctChange(pct) {
+    setMinNetGainPct(pct)
+    onMinNetGainPctChange?.(pct)
+  }
 
   // ── Construir body ─────────────────────────────────────────────────────────
   function buildBody() {
     const oasisTroops = natureTroops
-      .filter(t => Number(animalQty[t.ordinal] ?? 0) > 0)
-      .map(t => ({ ordinal: t.ordinal, quantity: Number(animalQty[t.ordinal]) }))
+      .filter(tr => Number(animalQty[tr.ordinal] ?? 0) > 0)
+      .map(tr => ({ ordinal: tr.ordinal, quantity: Number(animalQty[tr.ordinal]) }))
+
+    // scoring_mode se infiere desde tool en el handler del backend,
+    // pero lo enviamos igualmente para retrocompatibilidad explícita.
+    const scoring_mode = inputMode === 'multi_raid' ? 'aggregate' : 'single'
 
     const baseConfig = {
+      tool: inputMode,
       server_speed: 1.0,
       top_n: topN,
-      optimization_weights: {
-        resources_gained: wResources,
-        total_losses: wLosses,
-        troops_sent: wTroops,
-        travel_time: wTravel,
-        balance: wBalance,
-      },
-      // Modo C optimiza por agregado (N × por-raid). Modos A y B mantienen
-      // el comportamiento per-raid clásico (no-regresión vs antes del fix).
-      scoring_mode: inputMode === 'C' ? 'aggregate' : 'single',
-      // Rango de N solo se envía en Modo C cuando el usuario lo ha rellenado.
-      ...(inputMode === 'C' && nMin != null ? { n_min: nMin } : {}),
-      ...(inputMode === 'C' && nMax != null ? { n_max: nMax } : {}),
+      min_net_gain_pct: minNetGainPct,
+      scoring_mode,
+      // n_min_raids solo se envía en Multi-Raid y si el usuario lo ha rellenado
+      ...(inputMode === 'multi_raid' && nMinRaids != null ? { n_min_raids: nMinRaids } : {}),
     }
 
-    if (inputMode === 'A') {
+    if (inputMode === 'multi_troop') {
       const troop_types = troops
-        .filter(t => checkedOrdinals.has(t.ordinal))
-        .map(t => ({
-          ordinal: t.ordinal,
-          smithy_level: Number(smithyA[t.ordinal] ?? 0),
+        .filter(tr => checkedOrdinals.has(tr.ordinal))
+        .map(tr => ({
+          ordinal: tr.ordinal,
+          smithy_level: Number(smithyA[tr.ordinal] ?? 0),
         }))
 
       return {
@@ -586,13 +571,13 @@ export function OptimizerPanel({
         config: baseConfig,
       }
     } else {
-      // Modo B y Modo C usan village_troops (mismo formulario)
+      // army_sim y multi_raid usan village_troops (mismo formulario)
       const village_troops = troops
-        .filter(t => Number(troopValues[t.ordinal]?.qty ?? 0) > 0)
-        .map(t => ({
-          ordinal: t.ordinal,
-          quantity_available: Number(troopValues[t.ordinal]?.qty ?? 0),
-          smithy_level: Number(troopValues[t.ordinal]?.smithy ?? 0),
+        .filter(tr => Number(troopValues[tr.ordinal]?.qty ?? 0) > 0)
+        .map(tr => ({
+          ordinal: tr.ordinal,
+          quantity_available: Number(troopValues[tr.ordinal]?.qty ?? 0),
+          smithy_level: Number(troopValues[tr.ordinal]?.smithy ?? 0),
         }))
 
       return {
@@ -611,31 +596,25 @@ export function OptimizerPanel({
 
   function handleOptimize() {
     // Validar defensa del oasis: al menos un animal con cantidad > 0
-    const hasOasis = natureTroops.some(t => Number(animalQty[t.ordinal] ?? 0) > 0)
+    const hasOasis = natureTroops.some(tr => Number(animalQty[tr.ordinal] ?? 0) > 0)
     if (!hasOasis) {
       showToast(t('calc.optimizer.errorNoOasis'))
       return
     }
 
-    // Validar tropas atacantes según el modo
-    if (inputMode === 'A') {
+    // Validar tropas atacantes según la herramienta
+    if (inputMode === 'multi_troop') {
       if (checkedOrdinals.size === 0) {
         showToast(t('calc.optimizer.errorNoTroopTypes'))
         return
       }
     } else {
-      // Modo B y Modo C
-      const hasVillage = troops.some(t => Number(troopValues[t.ordinal]?.qty ?? 0) > 0)
+      // army_sim y multi_raid
+      const hasVillage = troops.some(tr => Number(troopValues[tr.ordinal]?.qty ?? 0) > 0)
       if (!hasVillage) {
         showToast(t('calc.optimizer.errorNoVillageTroops'))
         return
       }
-    }
-
-    // Modo C: validar rango n_min/n_max
-    if (inputMode === 'C' && nMin != null && nMax != null && nMin > nMax) {
-      showToast(t('calc.optimizer.nRange.invalid'))
-      return
     }
 
     onOptimize(buildBody())
@@ -661,7 +640,7 @@ export function OptimizerPanel({
         }}
       >
         <SectionHeader icon="⚔" titleKey="calc.attacker">
-          {/* Toggle Modo A / Modo B / Modo C */}
+          {/* Toggle de herramienta: Multi-Tropa / Simulador / Multi-Raid */}
           <div
             role="radiogroup"
             aria-label={t('calc.optimizer.inputMode')}
@@ -683,7 +662,7 @@ export function OptimizerPanel({
                   onClick={() => handleModeChange(id)}
                   style={{
                     height: '26px',
-                    padding: '0 12px',
+                    padding: '0 10px',
                     border: 'none',
                     background: isActive ? 'var(--btn-primary-bg)' : 'var(--surface-2)',
                     color: isActive ? 'var(--btn-primary-text)' : 'var(--text-secondary)',
@@ -691,6 +670,7 @@ export function OptimizerPanel({
                     fontWeight: isActive ? 600 : 400,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
+                    whiteSpace: 'nowrap',
                     transition: 'background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease)',
                   }}
                 >
@@ -710,8 +690,8 @@ export function OptimizerPanel({
             label={t('calc.tribe.select')}
           />
 
-          {/* Hint de modo C */}
-          {inputMode === 'C' && (
+          {/* Hint de Multi-Raid */}
+          {inputMode === 'multi_raid' && (
             <div style={{
               fontSize: '12px',
               color: 'var(--accent-text)',
@@ -725,8 +705,8 @@ export function OptimizerPanel({
             </div>
           )}
 
-          {/* Modo A — checkboxes de tipos de tropa */}
-          {inputMode === 'A' && (
+          {/* Multi-Tropa — checkboxes de tipos de tropa */}
+          {inputMode === 'multi_troop' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>
                 {t('calc.optimizer.modeAHint')}
@@ -748,11 +728,11 @@ export function OptimizerPanel({
             </div>
           )}
 
-          {/* Modo B / Modo C — cantidades disponibles (mismo formulario) */}
-          {(inputMode === 'B' || inputMode === 'C') && (
+          {/* Simulador / Multi-Raid — cantidades disponibles (mismo formulario) */}
+          {(inputMode === 'army_sim' || inputMode === 'multi_raid') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                {t(inputMode === 'C' ? 'calc.optimizer.modeBHint' : 'calc.optimizer.modeBHint')}
+                {t('calc.optimizer.modeBHint')}
               </div>
               <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 <div style={{ display: 'flex', gap: '6px', minWidth: 'max-content' }}>
@@ -773,82 +753,50 @@ export function OptimizerPanel({
             </div>
           )}
 
-          {/* Modo C — rango opcional de vacas a atracar (n_min / n_max) */}
-          {inputMode === 'C' && (
+          {/* Multi-Raid — campo opcional "Mínimo de oasis" (n_min_raids) */}
+          {inputMode === 'multi_raid' && (
             <div style={{
               display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
+              alignItems: 'center',
+              gap: '8px',
               padding: '8px 10px',
               background: 'var(--surface-2)',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--border)',
             }}>
-              <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                {t('calc.optimizer.nRange.title')}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-                {t('calc.optimizer.nRange.hint')}
-              </div>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)' }}>
-                  <span>{t('calc.optimizer.nRange.min')}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
-                    value={nMin == null ? '' : nMin}
-                    placeholder={t('calc.optimizer.nRange.placeholder')}
-                    aria-label={t('calc.optimizer.nRange.min')}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/\D/g, '')
-                      setNMin(raw === '' ? null : Math.max(1, Number(raw)))
-                    }}
-                    style={{
-                      width: '64px', height: '26px', padding: '0 6px',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '12px', fontFamily: 'var(--font-mono)',
-                      fontVariantNumeric: 'tabular-nums',
-                      color: 'var(--text)', textAlign: 'center',
-                      outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
-                </label>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)' }}>
-                  <span>{t('calc.optimizer.nRange.max')}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
-                    value={nMax == null ? '' : nMax}
-                    placeholder={t('calc.optimizer.nRange.placeholder')}
-                    aria-label={t('calc.optimizer.nRange.max')}
-                    onChange={e => {
-                      const raw = e.target.value.replace(/\D/g, '')
-                      setNMax(raw === '' ? null : Math.max(1, Number(raw)))
-                    }}
-                    style={{
-                      width: '64px', height: '26px', padding: '0 6px',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '12px', fontFamily: 'var(--font-mono)',
-                      fontVariantNumeric: 'tabular-nums',
-                      color: 'var(--text)', textAlign: 'center',
-                      outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
-                </label>
-                {nMin != null && nMax != null && nMin > nMax && (
-                  <span style={{ fontSize: '11px', color: 'var(--danger)' }}>
-                    {t('calc.optimizer.nRange.invalid')}
-                  </span>
-                )}
-              </div>
+              <label
+                htmlFor="opt-n-min-raids"
+                style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1 }}
+              >
+                {t('calc.optimizer.nMinRaids.label')}
+              </label>
+              <input
+                id="opt-n-min-raids"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={nMinRaids == null ? '' : nMinRaids}
+                placeholder={t('calc.optimizer.nMinRaids.placeholder')}
+                aria-label={t('calc.optimizer.nMinRaids.label')}
+                onChange={e => {
+                  const raw = e.target.value.replace(/\D/g, '')
+                  setNMinRaids(raw === '' ? null : Math.max(1, Number(raw)))
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-strong)' }}
+                style={{
+                  width: '64px', height: '26px', padding: '0 6px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px', fontFamily: 'var(--font-mono)',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--text)', textAlign: 'center',
+                  outline: 'none', boxSizing: 'border-box',
+                  transition: 'border-color var(--dur-fast) var(--ease)',
+                }}
+              />
             </div>
           )}
         </div>
@@ -934,10 +882,10 @@ export function OptimizerPanel({
         </div>
 
         {configExpanded && (
-          <div id={configBodyId} style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div id={configBodyId} style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Top N */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '160px' }}>
+              <span style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '140px' }}>
                 {t('calc.optimizer.topN')}
               </span>
               <NumInput
@@ -951,53 +899,23 @@ export function OptimizerPanel({
             </div>
 
             {/* Separador */}
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>
-                {t('calc.optimizer.weights')}
-              </div>
-              {/* Explicación de la escala 0..2 para todos los pesos */}
-              <div style={{
-                fontSize: '11px',
-                color: 'var(--text-tertiary)',
-                marginBottom: '10px',
-                lineHeight: 1.4,
-              }}>
-                {t('calc.optimizer.weights.intro')}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <WeightSlider
-                  labelKey="calc.optimizer.weight.resources"
-                  hintKey="calc.optimizer.weight.resources.hint"
-                  value={wResources}
-                  onChange={handleWResources}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+              {/* % Ganancia neta mínima — control único que reemplaza los 5 pesos */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label
+                  htmlFor="opt-min-net-gain"
+                  style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)', minWidth: '140px' }}
+                >
+                  {t('calc.optimizer.minNetGainPct.label')}
+                </label>
+                <PctInput
+                  value={minNetGainPct}
+                  onChange={handleMinNetGainPctChange}
+                  ariaLabel={t('calc.optimizer.minNetGainPct.label')}
+                  width={68}
                 />
-                <WeightSlider
-                  labelKey="calc.optimizer.weight.losses"
-                  hintKey="calc.optimizer.weight.losses.hint"
-                  value={wLosses}
-                  onChange={handleWLosses}
-                />
-                <WeightSlider
-                  labelKey="calc.optimizer.weight.troops"
-                  hintKey="calc.optimizer.weight.troops.hint"
-                  value={wTroops}
-                  onChange={handleWTroops}
-                />
-                <WeightSlider
-                  labelKey="calc.optimizer.weight.travel"
-                  hintKey="calc.optimizer.weight.travel.hint"
-                  value={wTravel}
-                  onChange={handleWTravel}
-                />
-                {/* Slider balance — solo visible en Modo C */}
-                {inputMode === 'C' && (
-                  <WeightSlider
-                    labelKey="calc.optimizer.weight.balance"
-                    hintKey="calc.optimizer.weight.balance.hint"
-                    value={wBalance}
-                    onChange={handleWBalance}
-                  />
-                )}
+                {/* id para el label + accesibilidad del input */}
+                <InfoTooltip text={t('calc.optimizer.minNetGainPct.tooltip')} />
               </div>
             </div>
           </div>

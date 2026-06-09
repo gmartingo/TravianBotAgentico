@@ -695,26 +695,29 @@ const es = {
   'calc.mode.simulator':                   'Simulador',
   'calc.mode.optimizer':                   'Optimizador',
 
-  'calc.optimizer.inputMode':              'Modo de entrada',
-  'calc.optimizer.modeA':                  'Multi-tropa',
-  'calc.optimizer.modeB':                  'Simulador ejército',
-  'calc.optimizer.mode.tabC':              'Multi-raid',
+  'calc.optimizer.inputMode':              'Herramienta',
+  // Nombres de pestaña (spec §14.8: modeMultiTroop / modeArmySim / modeMultiRaid)
+  'calc.optimizer.modeMultiTroop':         'Multi-Tropa',
+  'calc.optimizer.modeArmySim':            'Simulador',
+  'calc.optimizer.modeMultiRaid':          'Multi-Raid',
+  // Hints de modo (se mantienen para la línea descriptiva bajo el selector)
   'calc.optimizer.modeAHint':              'Selecciona los tipos de tropa disponibles',
   'calc.optimizer.modeBHint':              'Introduce las cantidades disponibles de cada tropa',
-  'calc.optimizer.modeCHint':              'Optimiza series de raids paralelas con pérdida aceptable',
+  'calc.optimizer.modeCHint':              'Optimiza series de raids paralelas — indica tu inventario de tropas',
+
+  // Control de ganancia neta mínima (nuevo — reemplaza los 5 pesos)
+  'calc.optimizer.minNetGainPct.label':    '% ganancia neta mínima',
+  'calc.optimizer.minNetGainPct.tooltip':  'Porcentaje mínimo de ganancia neta por ataque: (saqueo − valor de bajas) / saqueo × 100. Solo se muestran alternativas que superen este umbral. Si ninguna lo cumple, se muestran las mejores disponibles con un aviso.',
+
+  // Multi-Raid — mínimo de oasis
+  'calc.optimizer.nMinRaids.label':        'Mínimo de oasis',
+  'calc.optimizer.nMinRaids.placeholder':  'Auto',
 
   'calc.optimizer.oasisDefense':           'Defensa del oasis',
   'calc.optimizer.config':                 'Configuración',
   'calc.optimizer.topN':                   'Top N resultados',
-  'calc.optimizer.weights':                'Pesos de optimización',
-  'calc.optimizer.weight.resources':       'Recursos ganados',
-  'calc.optimizer.weight.losses':          'Pérdidas en recursos',
-  'calc.optimizer.weight.troops':          'Tropas enviadas',
-  'calc.optimizer.weight.travel':          'Tiempo de marcha',
-  'calc.optimizer.weight.balance':         'Balance',
-  'calc.optimizer.weight.balance.hint':    'Penaliza usar un tipo de tropa mucho más que otros',
 
-  // Modo C — rango opcional de raids
+  // Modo C — rango opcional de raids (legacy, mantenidas para no romper claves referenciadas)
   'calc.optimizer.nRange.title':           'Rango de raids (opcional)',
   'calc.optimizer.nRange.hint':            'Déjalos vacíos para que el optimizador decida cuántas vacas atracar.',
   'calc.optimizer.nRange.min':             'Mín',
@@ -726,8 +729,8 @@ const es = {
   'calc.optimizer.optimizing':             'Optimizando…',
   'calc.optimizer.error':                  'Error al optimizar. Comprueba los datos e inténtalo de nuevo.',
   'calc.optimizer.errorNoOasis':           'Introduce al menos un animal en la defensa del oasis.',
-  'calc.optimizer.errorNoTroopTypes':      'Selecciona al menos un tipo de tropa en el Modo A.',
-  'calc.optimizer.errorNoVillageTroops':   'Introduce al menos una tropa disponible en el Modo B.',
+  'calc.optimizer.errorNoTroopTypes':      'Selecciona al menos un tipo de tropa en Multi-Tropa.',
+  'calc.optimizer.errorNoVillageTroops':   'Introduce al menos una tropa disponible.',
 
   'calc.optimizer.result.title':           'Resultados del optimizador',
   'calc.optimizer.result.found':           '{n} combinaciones ganadoras encontradas',
@@ -736,6 +739,7 @@ const es = {
   'calc.optimizer.result.col.losses':      'Bajas (R)',
   'calc.optimizer.result.col.gained':      'Rec. ganados',
   'calc.optimizer.result.col.net':         'Neto',
+  'calc.optimizer.result.col.netGainPct':  'Ganancia neta %',
   'calc.optimizer.result.col.raids':       'Vacas',
   'calc.optimizer.noDetail':              'Detalle no disponible',
 
@@ -1352,6 +1356,11 @@ const es = {
   'radar.panel.empty.title':            'Sin ataques activos',
   'radar.panel.empty.desc':             'El radar no detecta amenazas en este momento',
 
+  // Panel — sección colapsable de ataques pasados
+  'radar.panel.past.title':             'Ataques pasados',
+  'radar.panel.past.show':              'Mostrar ataques pasados',
+  'radar.panel.past.hide':              'Ocultar ataques pasados',
+
   // Panel — estado sin sesión
   'radar.panel.no_session':             'Inicia el bot para monitorizar ataques entrantes',
 
@@ -1374,6 +1383,57 @@ const es = {
   // Badge dentro de VillageAttackCard
   'radar.village.attacks_one':          '1 ataque',
   'radar.village.attacks_other':        '{count} ataques',
+
+  // ── AttackRow expandible (aviso-ataque-tarjeta-expandible Rev 4) ──────────
+  // Spec: docs/design/aviso-ataque-tarjeta-expandible.md §9
+
+  // OperationBadge — badge de tipo de operación
+  'radar.attack.operation.attack':      'Ataque',
+  'radar.attack.operation.raid':        'Raid',
+
+  // Accesibilidad — botón expandible
+  'radar.attack.expand':                'Ver detalle del ataque',
+  'radar.attack.collapse':              'Ocultar detalle del ataque',
+
+  // Accesibilidad — chips de tropa
+  'radar.attack.count_unknown':         'cantidad desconocida',
+  'radar.troop.count_zero':             'ninguna',
+  'radar.troop.hero_fallback':          'Héroe',
+
+  // Zona expandida — primera línea (distancia)
+  'radar.attack.distance_label':        'Dist. {value} campos',
+
+  // Zona expandida — segunda línea (detected_at)
+  'radar.attack.detected_at':           'Detectado: {time}',
+
+  // Aria-labels de enlaces Travian
+  'radar.attack.link_attacker':         'Ver perfil de {name} en Travian',
+  'radar.attack.link_village_origin':   'Ver {name} en el mapa',
+  'radar.attack.link_alliance':         'Ver alianza {tag} en Travian',
+  'radar.attack.link_my_village':       'Ir a {name} en Travian',
+
+  // Bloque de asedio (SiegeBlock) — textos del aviso
+  'radar.siege.confirmed_with_troops':  'Asedio confirmado: {troops}',
+  'radar.siege.confirmed_none':         'Sin asedio (confirmado)',
+  'radar.siege.high':                   'Probable asedio: {troops}',
+  'radar.siege.possible':               'Posible asedio: {troops}',
+  'radar.siege.none':                   'Sin asedio aparente',
+
+  // Tipos de tropas de asedio localizados
+  'radar.siege.troops.catapult':        'catapultas',
+  'radar.siege.troops.ram':             'arietes',
+  'radar.siege.troops.separator':       ' y ',
+  'radar.siege.troops.separator_or':   ' y/o ',
+
+  // Pills de certeza/estimación
+  'radar.siege.label_confirmed':        'confirmado',
+  'radar.siege.label_estimated':        'estimado',
+
+  // Matiz low_precision
+  'radar.siege.low_precision_suffix':   'estimación poco fiable · >20 campos',
+
+  // Micro-badge compacto de asedio
+  'radar.siege.compact_aria':           'Posible asedio confirmado',
 }
 
 export default es
